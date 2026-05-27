@@ -17,9 +17,9 @@ class OperationResult:
 @dataclass(frozen=True, slots=True)
 class OperationReport:
     """Collection of operation results with aggregate pass/fail state."""
-
+    name: str
     checks: list[OperationResult] = field(default_factory=list)
-
+    message: str = ""
     @property
     def ok(self) -> bool:
         return all(check.ok for check in self.checks)
@@ -57,3 +57,24 @@ class OperationReport:
 
         if self.ok and success_summary:
             log.info(success_summary)
+
+    def print(self, indent: int = 0) -> None:
+        prefix = "  " * indent
+        # if self.ok:
+        #     print(f"{prefix}✅ {self.name}: {self.message or 'OK'}")
+        # else:
+        #     if self.error:
+        #         print(f"{prefix}🛑 {self.name} runtime error: {self.error}")
+        #     print(f"{prefix}🛑 {self.name}: {self.message}")
+        # if self.details:
+        #     print(f"{prefix}  details: {self.details}")
+        # if self.duration is not None:
+        #     print(f"{prefix}  duration: {self.duration:.2f}s")
+        
+        print("----------------------------------------------------------------------------------------------")
+        print(f"{prefix} {self.name}: {self.message}")
+        for child in self.checks:
+            print(f"{prefix}  {child.name}: {child.message}")
+            if child.details:
+                print(f"{prefix}    details: {child.details}")
+        print("----------------------------------------------------------------------------------------------")

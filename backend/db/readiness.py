@@ -174,7 +174,7 @@ async def is_ready(
         # check if required extensions are installed
         checks.append(await _check_table_extensions(session))
 
-    return ReadinessReport(checks=checks)
+    return ReadinessReport(name="readiness", checks=checks, message="Database is ready.")
 
 
 # -----------------------------------------------------------------------------

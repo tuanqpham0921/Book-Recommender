@@ -42,7 +42,7 @@ async def load_books() -> None:
             table=table,
             min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT,
         )
-        ready_report.log()
+        ready_report.print()
         # TODO: check embedding coverage and skip embed when already done
         if not ready_report.ok:
             print("Storing Books into PostgreSQL")
