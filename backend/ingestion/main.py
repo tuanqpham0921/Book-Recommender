@@ -22,10 +22,10 @@ from ingestion.embeddings import embed_missing_books
 from ingestion.store import store_books
 
 from common.context import AppContext
-from common.operation import task
+from common.operation import OperationResult, task
 
 @task
-async def load_books(ctx: AppContext) -> None:
+async def load_books(ctx: AppContext) -> OperationResult:
     """Load books from CSV into PostgreSQL and embed any missing vectors."""
 
     schema = DatabaseConstants.SCHEMA
@@ -33,22 +33,15 @@ async def load_books(ctx: AppContext) -> None:
     csv_path = Path(FilesLocationConstants.DATA_DIR) / FilesLocationConstants.CSV_FILE
     print(f"Running ingestion for schema: {schema} and table: {table}")
     
-    await bootstrap_schema(ctx.session_factory)
-
-    ready_report = await is_ready(
-        ctx.session_factory,
-        schema=schema,
-        table=table,
-        min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT,
-    )
-    ready_report.print()
-    # TODO: check embedding coverage and skip embed when already done
-    if not ready_report.ok:
-        print("Storing Books into PostgreSQL")
-        await store_books(ctx.session_factory, csv_path)
-
-    print("Embedding missing books")
-    await embed_missing_books(ctx.session_factory, ctx.openai_client)
+    checks = []
+    checks.append(await is_ready(ctx.session_factory, schema=schema, table=table, min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT))
+    if not checks[-1].ok:
+        checks.append(await bootstrap_schema(ctx.session_factory))
+        
+    checks.append(await store_books(ctx.session_factory, csv_path))
+    checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
+    
+    return OperationResult(name="load_books", ok=all(check.ok for check in checks), message="Books loaded successfully.", steps=checks)
 
 async def main() -> None:
     """Entry point for the ingestion pipeline."""

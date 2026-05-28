@@ -22,11 +22,11 @@ async def update_book_embedding(
     )
     await session.execute(stmt)
 
-
+from common.operation import OperationResult
 async def embed_missing_books(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
-) -> int:
+) -> OperationResult:
     """Backfill embeddings for rows where embedding IS NULL."""
     
     async with session_factory() as session:
@@ -34,9 +34,11 @@ async def embed_missing_books(
         num_missing = await book_store.get_num_book_missing_embeddings()
         if num_missing == 0:
             print("No books missing embeddings")
-            return 0
+            return OperationResult(name="embed_missing_books", 
+                               ok=True, 
+                               message="No books missing embeddings.")
         
-        print(f"🔍 Embedding {num_missing} books")
+        # print(f"🔍 Embedding {num_missing} books")
         batch_isbn13 = []
         batch_text = []
         count = 0
@@ -54,7 +56,7 @@ async def embed_missing_books(
                     await session_write.commit()
                     
                 count += len(batch_isbn13)
-                print(f"✅ BATCH: Embedded {len(batch_isbn13)} books")
+                # print(f"✅ BATCH: Embedded {len(batch_isbn13)} books")
                 
                 batch_isbn13 = []
                 batch_text = []
@@ -72,10 +74,12 @@ async def embed_missing_books(
             await session.commit()
             
             count += len(batch_isbn13)
-            print(f"✅ FINAL LEFT OVER: Embedded {count} books")
+            # print(f"✅ FINAL LEFT OVER: Embedded {count} books")
 
         if count != num_missing:
             raise ValueError(f"X Expected to embed {num_missing} books, but only embedded {count} books")
         
-        print(f"✅ Embedded {count} books")
-        return count
+        # print(f"✅ Embedded {count} books")
+        return OperationResult(name="embed_missing_books", 
+                               ok=True, 
+                               message=f"Embedded {count} books out of {num_missing}.")

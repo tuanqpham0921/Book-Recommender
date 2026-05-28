@@ -36,22 +36,25 @@ async def insert_batch(
         print(f"❌ Error committing batch: {e}")
         return 0
 
+from common.operation import OperationResult
 
 async def store_books(
     session_factory: async_sessionmaker[AsyncSession],
     csv_path: Path,
-) -> int:
+) -> OperationResult:
     """Load books from CSV into the database."""
     total_books_stored = 0
     total_books = 0
     csv_row_count = count_csv_data_rows(csv_path)
-    print(f"🔍 Storing {csv_row_count} books")
     for batch in iter_books_from_csv(csv_path):
         total_books += len(batch)
         total_books_stored += await insert_batch(batch, session_factory)
-        print(f"✅ Stored {total_books_stored} books")
+        # print(f"✅ Stored {total_books_stored} books")
         
     if total_books_stored != total_books:
         raise ValueError(f"❌ Expected to store {total_books} books, but only stored {total_books_stored} books")
     
-    return total_books_stored
+    return OperationResult(name=
+                           "store_books", 
+                           ok=True, 
+                           message=f"Stored {total_books_stored} books out of {total_books}.")

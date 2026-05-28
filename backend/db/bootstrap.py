@@ -10,7 +10,7 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 from config.constants import FilesLocationConstants
 
 logger = logging.getLogger(__name__)
-
+from common.operation import OperationResult
 
 def _sql_statements(sql: str) -> list[str]:
     """Split the SQL file into individual statements."""
@@ -26,13 +26,13 @@ def _sql_statements(sql: str) -> list[str]:
     return statements
 
 
-async def _execute_sql_file(session: AsyncSession, path: Path) -> None:
+async def _execute_sql_file(session: AsyncSession, path: Path) -> OperationResult:
     """Execute the SQL file."""
     for statement in _sql_statements(path.read_text(encoding="utf-8")):
         await session.execute(text(statement))
+    return OperationResult(name="execute_sql_file", ok=True, message="SQL file executed successfully.", steps=[])
 
-
-async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Install required PostgreSQL extensions."""
     async with session_factory() as session:
         await _execute_sql_file(
@@ -40,29 +40,37 @@ async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -
         )
         await session.commit()
     logger.info("Installed PostgreSQL extensions: %s", ", ".join(REQUIRED_EXTENSIONS))
+    return OperationResult(name="enable_extensions", ok=True, message="PostgreSQL extensions installed successfully.", steps=[])
 
-
-async def init_tables(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def init_tables(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Create application tables from schema SQL."""
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_TABLES_FILE)
         await session.commit()
     logger.info("Ensured books table exists.")
+    return OperationResult(name="init_tables", ok=True, message="Tables created successfully.", steps=[])
 
-
-async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Create database indexes from schema SQL."""
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_INDEXES_FILE)
         await session.commit()
     logger.info("Ensured books indexes exist.")
+    return OperationResult(name="create_indexes", ok=True, message="Indexes created successfully.", steps=[])
 
-
-async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession]) -> None:
+async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Apply extensions, tables, and indexes in order."""
+    checks = []
     await enable_extensions(session_factory)
+    checks.append(await enable_extensions(session_factory))
+    
     await init_tables(session_factory)
+    checks.append(await init_tables(session_factory))
+    
     await create_indexes(session_factory)
+    checks.append(await create_indexes(session_factory))
+    
+    return OperationResult(name="bootstrap_schema", ok=all(check.ok for check in checks), message="Bootstrap schema completed.", steps=checks)
 
 # -----------------------------------------------------------------------------
 # For testing purposes
