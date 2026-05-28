@@ -10,11 +10,11 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 from config.constants import FilesLocationConstants
 from db.readiness import ReadinessResult
 
-logger = logging.getLogger(__name__)
 from common.operation import OperationResult, task
 
 def _sql_statements(sql: str) -> list[str]:
     """Split the SQL file into individual statements."""
+    # TODO: this might be blocking
     statements: list[str] = []
     for chunk in sql.split(";"):
         lines = [
@@ -27,14 +27,10 @@ def _sql_statements(sql: str) -> list[str]:
     return statements
 
 
-async def _execute_sql_file(session: AsyncSession, path: Path) -> OperationResult:
+async def _execute_sql_file(session: AsyncSession, path: Path) -> None:
     """Execute the SQL file."""
     for statement in _sql_statements(path.read_text(encoding="utf-8")):
         await session.execute(text(statement))
-    return OperationResult(
-        name="execute_sql_file", ok=True, 
-        message="SQL file executed successfully."
-    )
 
 async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Install required PostgreSQL extensions."""
@@ -43,9 +39,9 @@ async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -
             session, FilesLocationConstants.SCHEMA_EXTENSIONS_FILE
         )
         await session.commit()
-    logger.info("Installed PostgreSQL extensions: %s", ", ".join(REQUIRED_EXTENSIONS))
+
     return OperationResult(
-        name="enable_extensions", ok=True, 
+        ok=True, 
         message="PostgreSQL extensions installed successfully."
     )
 
@@ -54,9 +50,8 @@ async def init_tables(session_factory: async_sessionmaker[AsyncSession]) -> Oper
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_TABLES_FILE)
         await session.commit()
-    logger.info("Ensured books table exists.")
+
     return OperationResult(
-        name="init_tables", 
         ok=True, 
         message="Tables created successfully."
     )
@@ -66,9 +61,8 @@ async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> O
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_INDEXES_FILE)
         await session.commit()
-    logger.info("Ensured books indexes exist.")
+
     return OperationResult(
-        name="create_indexes", 
         ok=True, 
         message="Indexes created successfully."
     )
