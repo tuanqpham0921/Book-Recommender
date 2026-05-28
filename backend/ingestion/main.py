@@ -35,11 +35,11 @@ async def load_books(ctx: AppContext) -> OperationResult:
     
     checks = []
     checks.append(await is_ready(ctx.session_factory, schema=schema, table=table, min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT))
-    if not checks[-1].ok:
-        checks.append(await bootstrap_schema(ctx.session_factory))
+    # if not checks[-1].ok:
+    #     checks.append(await bootstrap_schema(ctx.session_factory))
         
-    checks.append(await store_books(ctx.session_factory, csv_path))
-    checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
+    # checks.append(await store_books(ctx.session_factory, csv_path))
+    # checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
     
     return OperationResult(name="load_books", ok=all(check.ok for check in checks), message="Books loaded successfully.", steps=checks)
 
@@ -47,9 +47,11 @@ async def main() -> None:
     """Entry point for the ingestion pipeline."""
     from config import Settings
     async with AppContext(Settings()) as ctx:
-        await load_books(ctx)
+        result = await load_books(ctx)
         
-
+        print("-----------FINAL RESULT-----------------")
+        result.print()
+        print("--------------------------------")
 
 if __name__ == "__main__":
     asyncio.run(main())

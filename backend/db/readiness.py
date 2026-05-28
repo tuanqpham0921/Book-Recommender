@@ -4,13 +4,13 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from common import OperationResult
 from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
+from common.operation import OperationResult, task
 
-
+@task
 async def _check_table(
     session: AsyncSession,
     *,
@@ -26,28 +26,20 @@ async def _check_table(
     """
 
     fqtn = f"{schema}.{table}"
-    try:
-        result = await session.execute(
-            text("SELECT to_regclass(:fqtn) IS NOT NULL"),
-            {"fqtn": fqtn},
-        )
-        exists = bool(result.scalar())
-        return OperationResult(
-            name="table",
-            ok=exists,
-            message=f"Table {fqtn} exists." if exists else f"Table {fqtn} not found.",
-            details={"schema": schema, "table": table},
-        )
-    except Exception as exc:
-        logger.exception("Table check failed for %s", fqtn)
-        return OperationResult(
-            name="table",
-            ok=False,
-            message=f"Table check failed for {fqtn}.",
-            details={"schema": schema, "table": table, "error": repr(exc)},
-        )
+    result = await session.execute(
+        text("SELECT toclass(:fqtn) IS NOT NULL"),
+        {"fqtn": fqtn},
+    )
+    exists = bool(result.scalar())
+    
+    return OperationResult(
+        name="table",
+        ok=exists,
+        message=f"Table {fqtn} exists." if exists else f"Table {fqtn} not found.",
+        details={"schema": schema, "table": table},
+    )
 
-
+@task
 async def has_minimum_books(
     session: AsyncSession,
     *,
@@ -83,7 +75,7 @@ async def has_minimum_books(
             details={"min_rows": min_rows, "error": repr(exc)},
         )
 
-
+@task
 async def _check_table_extensions(session: AsyncSession) -> OperationResult:
     """Check if the required PostgreSQL extensions are installed.
 
@@ -114,7 +106,6 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
             },
         )
     except Exception as exc:
-        logger.exception("Extension check failed")
         return OperationResult(
             name="extensions",
             ok=False,
@@ -122,7 +113,7 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
             details={"required": required_extensions, "error": repr(exc)},
         )
 
-
+@task
 async def is_ready(
     session_factory: async_sessionmaker[AsyncSession],
     schema: str,
@@ -148,7 +139,8 @@ async def is_ready(
         # check if table exists and schema is correct
         table_check = await _check_table(session, schema=schema, table=table)
         checks.append(table_check)
-
+        
+    async with session_factory() as session:
         # check if table has rows
         rows = await has_minimum_books(
             session,
@@ -157,11 +149,19 @@ async def is_ready(
             min_rows=min_rows,
         )
         checks.append(rows)
-
+    
+    async with session_factory() as session:
         # check if required extensions are installed
-        checks.append(await _check_table_extensions(session))
+        extensions = await _check_table_extensions(session)
+        checks.append(extensions)
+        
 
-    return OperationResult(name="readiness", ok=all(check.ok for check in checks), message="Database is ready.", steps=checks)
+    return OperationResult(
+        name="is_ready", 
+        ok=all(check.ok for check in checks), 
+        message="Database is ready.", 
+        steps=checks
+    )
 
 
 # -----------------------------------------------------------------------------

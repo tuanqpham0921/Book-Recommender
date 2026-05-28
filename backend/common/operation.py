@@ -14,6 +14,8 @@ class OperationResult:
     details: dict[str, Any] | None = None
     duration: float | None = None
     
+    run_time_error: Exception | None = None
+    
     def print(self, indent: int = 0) -> None:
         prefix = "    " * indent
         print(f"{prefix}{'✅' if self.ok else '❌'} {self.name}: {self.message}")
@@ -31,16 +33,15 @@ def task(func: Callable[..., Any]) -> Callable[..., Any]:
             time_end = time.perf_counter()
             result.duration = time_end - time_start
         except Exception as e:
-            raise e
+            # raise e
             result = OperationResult(
                 name=func.__name__,
                 ok=False,
-                message=f"❌ Task {func.__name__} failed: {e}",
+                message=f"Task {func.__name__} failed: {e}",
                 duration=0,
+                run_time_error=e,
             )
         finally:
-            if result:
-                result.print()
             return result
         
     return wrapper
