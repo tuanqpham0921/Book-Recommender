@@ -34,12 +34,16 @@ async def load_books(ctx: AppContext) -> OperationResult:
     print(f"Running ingestion for schema: {schema} and table: {table}")
     
     checks = []
-    checks.append(await is_ready(
-        ctx.session_factory, schema=schema, 
+    
+    readiness = await is_ready(
+        ctx.session_factory, 
+        schema=schema, 
         table=table, 
-    min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT))
-    # if not checks[-1].ok:
-    #     checks.append(await bootstrap_schema(ctx.session_factory))
+        min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT
+    )
+    checks.append(readiness)
+    
+    checks.append(await bootstrap_schema(ctx.session_factory, readiness.result))
         
     # checks.append(await store_books(ctx.session_factory, csv_path))
     # checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))

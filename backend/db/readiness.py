@@ -9,6 +9,8 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 from common.operation import OperationResult, task
+from dataclasses import dataclass
+from dataclasses import field
 
 @task
 async def _check_table(
@@ -40,7 +42,7 @@ async def _check_table(
     )
 
 @task
-async def has_minimum_books(
+async def _check_table_rows(
     session: AsyncSession,
     *,
     schema: str,
@@ -103,6 +105,15 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
     )
     
 
+
+@dataclass(slots=True)
+class ReadinessResult:
+    database_connected: bool = False
+    table_exists: bool = False
+    extensions_installed: bool = False
+    extensions_missing: list[str] = field(default_factory=list)
+    total_rows: int = 0
+    
 @task
 async def is_ready(
     session_factory: async_sessionmaker[AsyncSession],
@@ -120,37 +131,47 @@ async def is_ready(
         min_rows: The minimum number of rows the table should have.
     """
     checks: list[OperationResult] = []
-
+    result = ReadinessResult()
+    
     async with session_factory() as session:
         # simple test connection (must be first and pass)
         if not await check_connection(session):
             raise ValueError("Database connection failed")
+        
+        result.database_connected = True
 
+    async with session_factory() as session:
         # check if table exists and schema is correct
         table_check = await _check_table(session, schema=schema, table=table)
         checks.append(table_check)
         
+        result.table_exists = table_check.ok
+        
     async with session_factory() as session:
         # check if table has rows
-        rows = await has_minimum_books(
+        rows = await _check_table_rows(
             session,
             schema=schema,
             table=table,
             min_rows=min_rows,
         )
         checks.append(rows)
+        result.total_rows = rows.result
     
     async with session_factory() as session:
         # check if required extensions are installed
         extensions = await _check_table_extensions(session)
         checks.append(extensions)
         
-
+        result.extensions_installed = extensions.ok
+        result.extensions_missing = extensions.result["missing"]
+        
     return OperationResult(
         name="is_ready", 
         ok=all(check.ok for check in checks), 
         message="Database is ready.", 
-        steps=checks
+        steps=checks,
+        result=result,
     )
 
 

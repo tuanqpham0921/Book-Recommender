@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 from config.constants import FilesLocationConstants
+from db.readiness import ReadinessResult
 
 logger = logging.getLogger(__name__)
-from common.operation import OperationResult
+from common.operation import OperationResult, task
 
 def _sql_statements(sql: str) -> list[str]:
     """Split the SQL file into individual statements."""
@@ -58,19 +59,35 @@ async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> O
     logger.info("Ensured books indexes exist.")
     return OperationResult(name="create_indexes", ok=True, message="Indexes created successfully.", steps=[])
 
-async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
+
+async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], readiness: ReadinessResult | None = None) -> OperationResult:
     """Apply extensions, tables, and indexes in order."""
-    checks = []
-    await enable_extensions(session_factory)
-    checks.append(await enable_extensions(session_factory))
+    checks: list[OperationResult] = []
     
-    await init_tables(session_factory)
-    checks.append(await init_tables(session_factory))
+    if not readiness.table_exists:
+        await init_tables(session_factory)
+        checks.append(await init_tables(session_factory))
+        
+        await create_indexes(session_factory)
+        checks.append(await create_indexes(session_factory))
     
-    await create_indexes(session_factory)
-    checks.append(await create_indexes(session_factory))
+    if readiness.extensions_missing:
+        checks.append(await enable_extensions(session_factory))
     
-    return OperationResult(name="bootstrap_schema", ok=all(check.ok for check in checks), message="Bootstrap schema completed.", steps=checks)
+    if not checks:
+        return OperationResult(
+            name="bootstrap_schema", 
+            ok=True, 
+            message="No actions required.", 
+            steps=checks
+        )
+
+    return OperationResult(
+        name="bootstrap_schema", 
+        ok=all(check.ok for check in checks), 
+        message="Bootstrap schema completed.", 
+        steps=checks
+    )
 
 # -----------------------------------------------------------------------------
 # For testing purposes
