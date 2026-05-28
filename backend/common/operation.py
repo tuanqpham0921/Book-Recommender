@@ -27,6 +27,8 @@ class OperationResult:
             print(f"{prefix}Details: {self.details}")
         if self.result:
             print(f"{prefix}Result: {self.result}")
+        if self.duration:
+            print(f"{prefix}Duration: {self.duration} seconds")
 
 
 def task(func: Callable[..., Any]) -> Callable[..., Any]:
