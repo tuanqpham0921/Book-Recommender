@@ -26,12 +26,12 @@ def _sql_statements(sql: str) -> list[str]:
         statements.append("\n".join(lines))
     return statements
 
-
 async def _execute_sql_file(session: AsyncSession, path: Path) -> None:
     """Execute the SQL file."""
     for statement in _sql_statements(path.read_text(encoding="utf-8")):
         await session.execute(text(statement))
 
+@task
 async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Install required PostgreSQL extensions."""
     async with session_factory() as session:
@@ -45,6 +45,7 @@ async def enable_extensions(session_factory: async_sessionmaker[AsyncSession]) -
         message="PostgreSQL extensions installed successfully."
     )
 
+@task
 async def init_tables(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Create application tables from schema SQL."""
     async with session_factory() as session:
@@ -56,6 +57,7 @@ async def init_tables(session_factory: async_sessionmaker[AsyncSession]) -> Oper
         message="Tables created successfully."
     )
 
+@task
 async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
     """Create database indexes from schema SQL."""
     async with session_factory() as session:
@@ -70,6 +72,9 @@ async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> O
 @task
 async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], readiness: ReadinessResult | None = None) -> OperationResult:
     """Apply extensions, tables, and indexes in order."""
+    if not readiness:
+        readiness = ReadinessResult()
+    
     checks: list[OperationResult] = []
     
     if not readiness.table_exists:
@@ -80,7 +85,6 @@ async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], re
     if not readiness.extensions_installed:
         checks.append(await enable_extensions(session_factory))
         readiness.extensions_installed = True
-    
     
     if not checks:
         return OperationResult(

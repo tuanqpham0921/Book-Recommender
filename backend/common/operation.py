@@ -7,12 +7,13 @@ from typing import Callable
 @dataclass(slots=True)
 class OperationResult:
     """Outcome of a single named check or step."""
-    name: str
+    
     ok: bool
     message: str
     steps: list["OperationResult"] | None = None
     details: dict[str, Any] | None = None
     duration: float | None = None
+    name: str | None = None
     
     run_time_error: Exception | None = None
     result: Any | None = None
