@@ -4,24 +4,11 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from common import OperationReport, OperationResult
+from common import OperationResult
 from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
-
-CheckResult = OperationResult
-
-
-class ReadinessReport(OperationReport):
-    """Database readiness report with domain-specific logging."""
-
-    def log(self, logger: logging.Logger | None = None) -> None:
-        super().log(
-            logger or logging.getLogger(__name__),
-            success_summary="Database readiness checks passed.",
-            check_label="Readiness check",
-        )
 
 
 async def _check_table(
@@ -142,7 +129,7 @@ async def is_ready(
     table: str,
     *,
     min_rows: int,
-) -> ReadinessReport:
+) -> OperationResult:
     """Run database readiness checks and return a structured report.
 
     Args:
@@ -174,7 +161,7 @@ async def is_ready(
         # check if required extensions are installed
         checks.append(await _check_table_extensions(session))
 
-    return ReadinessReport(name="readiness", checks=checks, message="Database is ready.")
+    return OperationResult(name="readiness", ok=all(check.ok for check in checks), message="Database is ready.", steps=checks)
 
 
 # -----------------------------------------------------------------------------

@@ -22,8 +22,9 @@ from ingestion.embeddings import embed_missing_books
 from ingestion.store import store_books
 
 from common.context import AppContext
+from common.operation import task
 
-
+@task
 async def load_books(ctx: AppContext) -> None:
     """Load books from CSV into PostgreSQL and embed any missing vectors."""
 
@@ -51,14 +52,10 @@ async def load_books(ctx: AppContext) -> None:
 
 async def main() -> None:
     """Entry point for the ingestion pipeline."""
-    start = time.perf_counter()
     from config import Settings
     async with AppContext(Settings()) as ctx:
         await load_books(ctx)
         
-        
-    elapsed = time.perf_counter() - start
-    print(f"Ingestion finished in {elapsed:.2f} seconds")
 
 
 if __name__ == "__main__":
