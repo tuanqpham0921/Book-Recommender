@@ -27,7 +27,7 @@ async def _check_table(
 
     fqtn = f"{schema}.{table}"
     result = await session.execute(
-        text("SELECT toclass(:fqtn) IS NOT NULL"),
+        text("SELECT to_regclass(:fqtn) IS NOT NULL"),
         {"fqtn": fqtn},
     )
     exists = bool(result.scalar())
@@ -56,24 +56,18 @@ async def has_minimum_books(
         min_rows: The minimum number of rows the table should have.
     """
     fqtn = f"{schema}.{table}"
-    try:
-        result = await session.execute(text(f"SELECT COUNT(*) FROM {schema}.{table}"))
-        row_count = int(result.scalar() or 0)
-        ok = row_count >= min_rows
-        return OperationResult(
-            name="rows",
-            ok=ok,
-            message=(f"Table {fqtn} has {row_count} rows (need at least {min_rows})."),
-            details={"row_count": row_count, "min_rows": min_rows},
-        )
-    except Exception as exc:
-        logger.exception("Row count check failed for %s", fqtn)
-        return OperationResult(
-            name="rows",
-            ok=False,
-            message=f"Row count check failed for {fqtn}.",
-            details={"min_rows": min_rows, "error": repr(exc)},
-        )
+    
+    result = await session.execute(text(f"SELECT COUNT(*) FROM {schema}.{table}"))
+    row_count = int(result.scalar() or 0)
+    ok = row_count >= min_rows
+    return OperationResult(
+        name="rows",
+        ok=ok,
+        message=(f"Table {fqtn} has {row_count} rows (need at least {min_rows})."),
+        details={"row_count": row_count, "min_rows": min_rows},
+        result=row_count,
+    )
+    
 
 @task
 async def _check_table_extensions(session: AsyncSession) -> OperationResult:
@@ -83,35 +77,31 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
         session: An async session.
     """
     required_extensions = list(REQUIRED_EXTENSIONS)
-    try:
-        result = await session.execute(
-            text("SELECT extname FROM pg_extension WHERE extname = ANY(:extensions)"),
-            {"extensions": required_extensions},
-        )
-        found = {row[0] for row in result.fetchall()}
-        missing = [ext for ext in required_extensions if ext not in found]
-        ok = not missing
-        return OperationResult(
-            name="extensions",
-            ok=ok,
-            message=(
-                "Required PostgreSQL extensions are installed."
-                if ok
-                else f"Missing PostgreSQL extensions: {', '.join(missing)}."
+    result = await session.execute(
+        text(
+            "SELECT extname FROM pg_extension WHERE extname = ANY(:extensions)"
             ),
-            details={
-                "required": required_extensions,
-                "installed": sorted(found),
-                "missing": missing,
-            },
-        )
-    except Exception as exc:
-        return OperationResult(
-            name="extensions",
-            ok=False,
-            message="Extension check failed.",
-            details={"required": required_extensions, "error": repr(exc)},
-        )
+        {"extensions": required_extensions},
+    )
+    found = {row[0] for row in result.fetchall()}
+    missing = [ext for ext in required_extensions if ext not in found]
+    ok = not missing
+    result = {
+        "required": required_extensions,
+        "installed": sorted(found),
+        "missing": missing,
+    }
+    return OperationResult(
+        name="extensions",
+        ok=ok,
+        message=(
+            "Required PostgreSQL extensions are installed."
+            if ok
+            else f"Missing PostgreSQL extensions: {', '.join(missing)}."
+        ),
+        result=result,
+    )
+    
 
 @task
 async def is_ready(
