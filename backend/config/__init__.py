@@ -1,4 +1,4 @@
-from .settings import settings
+from .settings import settings, Settings
 from .constants import (
     AppConfig,
     BookConstraints,
@@ -12,6 +12,7 @@ from .logging_config import get_logger, setup_logging
 
 __all__ = [
     "settings",
+    "Settings",
     "AppConfig",
     "BookConstraints",
     "BookGuides",
