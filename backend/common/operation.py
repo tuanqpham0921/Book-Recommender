@@ -15,6 +15,7 @@ class OperationResult:
     duration: float | None = None
     
     run_time_error: Exception | None = None
+    result: Any | None = None
     
     def print(self, indent: int = 0) -> None:
         prefix = "    " * indent
@@ -22,7 +23,10 @@ class OperationResult:
         if self.steps:
             for step in self.steps:
                 step.print(indent + 1)
-                
+        if self.details:
+            print(f"{prefix}Details: {self.details}")
+        if self.result:
+            print(f"{prefix}Result: {self.result}")
 
 
 def task(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -32,6 +36,7 @@ def task(func: Callable[..., Any]) -> Callable[..., Any]:
             result = await func(*args, **kwargs)
             time_end = time.perf_counter()
             result.duration = time_end - time_start
+            result.name = func.__name__
         except Exception as e:
             # raise e
             result = OperationResult(
