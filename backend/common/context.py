@@ -7,6 +7,7 @@ from clients import OpenAIClient
 from config import Settings
 from db.async_engine import close_async_engine, get_async_engine, get_session_factory
 
+from config.logging_config import setup_logging
 
 class AppContext:
     engine: AsyncEngine
@@ -17,6 +18,7 @@ class AppContext:
         self.engine = get_async_engine(settings.sqlalchemy)
         self.openai_client = OpenAIClient(settings.openai)
         self.session_factory = get_session_factory(self.engine)
+        self.logger = setup_logging()
         
     async def __aenter__(self) -> "AppContext":
         return self
