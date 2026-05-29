@@ -3,18 +3,18 @@ from dataclasses import dataclass, field
 from typing import Any
 import time
 from typing import Callable
+from pathlib import Path
+import json
 
 @dataclass(slots=True)
 class OperationResult:
     """Outcome of a single named check or step."""
-    
-    ok: bool
-    message: str
+    name: str | None = None
+    ok: bool = True
+    message: str | None = None
     steps: list["OperationResult"] | None = None
     details: dict[str, Any] | None = None
     duration: float | None = None
-    name: str | None = None
-    
     run_time_error: Exception | None = None
     result: Any | None = None
     
@@ -30,8 +30,7 @@ class OperationResult:
             print(f"{prefix}Result: {self.result}")
         if self.duration:
             print(f"{prefix}Duration: {self.duration} seconds")
-
-
+            
 def task(func: Callable[..., Any]) -> Callable[..., Any]:
     async def wrapper(*args: Any, **kwargs: Any) -> OperationResult:
         try:
@@ -39,17 +38,18 @@ def task(func: Callable[..., Any]) -> Callable[..., Any]:
             result = await func(*args, **kwargs)
             time_end = time.perf_counter()
             result.duration = time_end - time_start
-            result.name = func.__name__
+            result.name = f"{func.__module__}.{func.__qualname__}"
             return result
         except Exception as e:
-            raise e
+            # raise e
             result = OperationResult(
-                name=func.__name__,
+                name=f"{func.__module__}.{func.__qualname__}",
                 ok=False,
-                message=f"Task {func.__name__} failed: {e}",
+                message=f"Task {func.__qualname__} failed: {e}",
                 duration=0,
                 run_time_error=e,
             )
-        
+            return result
+            
         
     return wrapper

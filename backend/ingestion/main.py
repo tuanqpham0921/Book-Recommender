@@ -23,6 +23,7 @@ from ingestion.store import store_books
 
 from common.context import AppContext
 from common.operation import OperationResult, task
+from common.save_file import save_file
 
 @task
 async def load_books(ctx: AppContext) -> OperationResult:
@@ -62,6 +63,8 @@ async def main() -> None:
         print("-----------FINAL RESULT-----------------")
         result.print()
         print("--------------------------------")
+        
+        save_file(result, file_name="operation_result")
 
 if __name__ == "__main__":
     asyncio.run(main())
