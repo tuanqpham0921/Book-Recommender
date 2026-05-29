@@ -5,6 +5,10 @@ import os
 from pathlib import Path
 from rich.logging import RichHandler
 
+"""
+DEBUG, INFO, WARNING, ERROR, CRITICAL
+"""
+
 FILE_LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
 RICH_LOG_FORMAT = "| %(name)s | %(funcName)s:%(lineno)d | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"

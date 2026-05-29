@@ -46,6 +46,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
         ctx.session_factory, ctx.openai_client))
     
     if not readiness.ok:
+        logger.info(f"Readiness check failed first time, retrying after ingestion...")
         retry_readiness = await is_ready(
             ctx.session_factory, 
             schema=schema, 
