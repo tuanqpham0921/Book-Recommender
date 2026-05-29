@@ -3,8 +3,10 @@
 import logging
 import os
 from pathlib import Path
+from rich.logging import RichHandler
 
-LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+FILE_LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+RICH_LOG_FORMAT = "| %(name)s | %(funcName)s:%(lineno)d | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 LOG_FILE = "logs/dev_log.log"
@@ -14,17 +16,27 @@ def setup_logging(environment: str, log_file: Path | str = LOG_FILE, overwrite: 
     
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
-    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    handlers: list[logging.Handler] = []
+    
+    console_handler = RichHandler(
+        rich_tracebacks=True,
+        show_time=True,
+        show_level=True,
+        show_path=False,
+    )
+    console_handler.setFormatter(logging.Formatter(RICH_LOG_FORMAT, datefmt=DATE_FORMAT))
+    handlers.append(console_handler)
+    
     if environment.lower() == "development":
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         file_mode = "w" if overwrite else "a"
-        handlers.append(logging.FileHandler(log_path, mode=file_mode, encoding="utf-8"))
+        file_handler = logging.FileHandler(log_path, mode=file_mode, encoding="utf-8")
+        file_handler.setFormatter(logging.Formatter(FILE_LOG_FORMAT, datefmt=DATE_FORMAT))
+        handlers.append(file_handler)
     
     logging.basicConfig(
         level=getattr(logging, log_level, logging.INFO),
-        format=LOG_FORMAT,
-        datefmt=DATE_FORMAT,
         handlers=handlers,
         force=True,
     )

@@ -5,6 +5,7 @@ import time
 from typing import Callable
 from pathlib import Path
 import json
+from functools import wraps
 
 @dataclass(slots=True)
 class OperationResult:
@@ -32,20 +33,36 @@ class OperationResult:
             print(f"{prefix}Duration: {self.duration} seconds")
             
 def task(func: Callable[..., Any]) -> Callable[..., Any]:
+    
+    
+    @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> OperationResult:
+        logger = logging.getLogger(func.__module__)
+        func_ref = f"{func.__module__}.{func.__qualname__}"
         try:
             time_start = time.perf_counter()
+            
+            logger.info(f"Running task: {func_ref}")
+            
             result = await func(*args, **kwargs)
             time_end = time.perf_counter()
             result.duration = time_end - time_start
-            result.name = f"{func.__module__}.{func.__qualname__}"
+            result.name = func_ref
+            
+            if not result.ok:
+                # runtime failure, app still runs
+                logger.warning(f"Task {func_ref} failed: {result.message}")
+            else:
+                logger.info(f"Task {func_ref} completed successfully in {result.duration:.3f}s")
+            
             return result
         except Exception as e:
-            # raise e
+            logger.exception(f"Task {func_ref} failed: {e}")
+            
             result = OperationResult(
-                name=f"{func.__module__}.{func.__qualname__}",
+                name=func_ref,
                 ok=False,
-                message=f"Task {func.__qualname__} failed: {e}",
+                message=f"Task {func_ref} failed: {e}",
                 duration=0,
                 run_time_error=e,
             )
