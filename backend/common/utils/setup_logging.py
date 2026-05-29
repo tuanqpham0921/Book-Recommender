@@ -1,3 +1,5 @@
+"""Bootstrap logging for the application."""
+
 import logging
 import os
 from pathlib import Path
@@ -8,6 +10,8 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 LOG_FILE = "logs/dev_log.log"
 
 def setup_logging(environment: str) -> None:
+    """Setup logging for the application."""
+    
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     log_file = os.getenv("LOG_FILE", LOG_FILE)
 

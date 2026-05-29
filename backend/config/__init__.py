@@ -8,16 +8,12 @@ from .constants import (
     IngestionConstants,
 )
 
-from .logging_config import setup_logging
-
-
 __all__ = [
     "settings",
     "Settings",
     "AppConfig",
     "BookConstraints",
     "BookGuides",
-    "setup_logging",
     "IngestionConstants",
     "DatabaseConstants",
     "FilesLocationConstants",

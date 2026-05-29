@@ -8,8 +8,8 @@ from config import (
     FilesLocationConstants,
     IngestionConstants,
     Settings,
-    setup_logging,
 )
+from common.utils import save_file, setup_logging
 from db import bootstrap_schema, is_ready
 
 from db.schema import BookModel
@@ -18,7 +18,6 @@ from ingestion.store import store_books
 
 from common.context import AppContext
 from common.operation import OperationResult, task
-from common.save_file import save_file
 
 logger = logging.getLogger(__name__)
 
