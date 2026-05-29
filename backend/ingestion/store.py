@@ -7,6 +7,7 @@ from sqlalchemy import select
 from db.schema import BookModel
 from ingestion.csv_source import count_csv_data_rows, iter_books_from_csv
 from common.operation import OperationResult, task
+from db.readiness import ReadinessResult
 
 @task
 async def insert_batch(
@@ -46,8 +47,15 @@ async def insert_batch(
 async def store_books(
     session_factory: async_sessionmaker[AsyncSession],
     csv_path: Path,
+    readiness: ReadinessResult | None = None,
 ) -> OperationResult:
     """Load books from CSV into the database."""
+    if readiness and readiness.enough_rows:
+        return OperationResult(
+            ok=True, 
+            message="Already have enough rows to start applications.", 
+            steps=[]
+        )
     
     # TODO: good place to do and test retries
     
