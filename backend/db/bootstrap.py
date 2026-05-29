@@ -70,21 +70,14 @@ async def create_indexes(session_factory: async_sessionmaker[AsyncSession]) -> O
     )
 
 @task
-async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], readiness: ReadinessResult | None = None) -> OperationResult:
-    """Apply extensions, tables, and indexes in order."""
-    if not readiness:
-        readiness = ReadinessResult()
-    
+async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession]) -> OperationResult:
+    """Apply extensions, tables, and indexes in order (idempotent and safe to call multiple times)."""
+
     checks: list[OperationResult] = []
     
-    if not readiness.table_exists:
-        checks.append(await init_tables(session_factory))
-        checks.append(await create_indexes(session_factory))
-        readiness.table_exists = True
-    
-    if not readiness.extensions_installed:
-        checks.append(await enable_extensions(session_factory))
-        readiness.extensions_installed = True
+    checks.append(await init_tables(session_factory))
+    checks.append(await create_indexes(session_factory))
+    checks.append(await enable_extensions(session_factory))
     
     if not checks:
         return OperationResult(

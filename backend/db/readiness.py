@@ -109,10 +109,11 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
 @dataclass(slots=True)
 class ReadinessResult:
     database_connected: bool = False
-    table_exists: bool = False
-    extensions_installed: bool = False
-    extensions_missing: list[str] = field(default_factory=list)
-    total_rows: int = 0
+    need_db_bootstrap: bool = False
+    enough_rows: bool = False
+    need_extensions: bool = False
+    
+    missing_extensions: list[str] = field(default_factory=list)
     
 @task
 async def is_ready(
@@ -145,7 +146,7 @@ async def is_ready(
         table_check = await _check_table(session, schema=schema, table=table)
         checks.append(table_check)
         
-        result.table_exists = table_check.ok
+        result.need_db_bootstrap = not table_check.ok
         
     async with session_factory() as session:
         # check if table has rows
@@ -156,15 +157,14 @@ async def is_ready(
             min_rows=min_rows,
         )
         checks.append(rows)
-        result.total_rows = rows.result
+        result.enough_rows = rows.ok
     
     async with session_factory() as session:
         # check if required extensions are installed
         extensions = await _check_table_extensions(session)
         checks.append(extensions)
-        
-        result.extensions_installed = extensions.ok
-        result.extensions_missing = extensions.result["missing"]
+        result.need_extensions = not extensions.ok
+        result.missing_extensions = extensions.result["missing"]
         
     return OperationResult(
         name="is_ready", 

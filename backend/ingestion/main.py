@@ -43,12 +43,19 @@ async def load_books(ctx: AppContext) -> OperationResult:
     )
     checks.append(readiness)
     
-    checks.append(await bootstrap_schema(ctx.session_factory, readiness.result))
+    if readiness.result.need_db_bootstrap:
+        checks.append(await bootstrap_schema(ctx.session_factory))
+    
+    if not readiness.result.enough_rows:
+        checks.append(await store_books(ctx.session_factory, csv_path))
         
-    # checks.append(await store_books(ctx.session_factory, csv_path))
     # checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
     
-    return OperationResult(name="load_books", ok=all(check.ok for check in checks), message="Books loaded successfully.", steps=checks)
+    return OperationResult(
+        name="load_books", 
+        ok=all(check.ok for check in checks), 
+        message="Books loaded successfully.", steps=checks
+    )
 
 async def main() -> None:
     """Entry point for the ingestion pipeline."""
