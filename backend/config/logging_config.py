@@ -63,12 +63,3 @@ def setup_logging(
 
     root_logger.info(f"📋 Logging initialized ({environment}) — level: {log_level}")
     return root_logger
-
-
-def get_logger(name: Optional[str] = None) -> logging.Logger:
-    """
-    Get a named logger (child of root).
-    Example:
-        logger = get_logger(__name__)
-    """
-    return logging.getLogger(name or "app")
