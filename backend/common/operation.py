@@ -40,8 +40,9 @@ def task(func: Callable[..., Any]) -> Callable[..., Any]:
             time_end = time.perf_counter()
             result.duration = time_end - time_start
             result.name = func.__name__
+            return result
         except Exception as e:
-            # raise e
+            raise e
             result = OperationResult(
                 name=func.__name__,
                 ok=False,
@@ -49,7 +50,6 @@ def task(func: Callable[..., Any]) -> Callable[..., Any]:
                 duration=0,
                 run_time_error=e,
             )
-        finally:
-            return result
+        
         
     return wrapper
