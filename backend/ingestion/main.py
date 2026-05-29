@@ -29,7 +29,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
     table = BookModel.__tablename__
     csv_path = Path(FilesLocationConstants.DATA_DIR) / FilesLocationConstants.CSV_FILE
     logger.info(f"Running ingestion for schema: {schema} and table: {table}")
-    
+    # TODO: add a connection check to the database (because it will continue even if the database is not on)
     checks = []
     readiness = await is_ready(
         ctx.session_factory, 
@@ -47,17 +47,17 @@ async def load_books(ctx: AppContext) -> OperationResult:
     
     if not readiness.ok:
         logger.info(f"Readiness check failed first time, retrying after ingestion...")
-        retry_readiness = await is_ready(
+        readiness = await is_ready(
             ctx.session_factory, 
             schema=schema, 
             table=table, 
             min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT
         )
-        retry_readiness.name += "---retry"
-        retry_readiness.details = {"retry_reason": "Readiness check failed first time."}
-        checks.append(retry_readiness)
+        readiness.name += "---retry"
+        readiness.details = {"retry_reason": "Readiness check failed first time."}
+        checks.append(readiness)
     
-    ok = all(check.ok for check in checks) or retry_readiness.ok
+    ok = all(check.ok for check in checks) or readiness.ok
     return OperationResult(
         ok=ok, 
         message="Books loaded successfully." if ok else "Books loading failed.", 
