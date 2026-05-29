@@ -35,7 +35,6 @@ async def load_books(ctx: AppContext) -> OperationResult:
     print(f"Running ingestion for schema: {schema} and table: {table}")
     
     checks = []
-    
     readiness = await is_ready(
         ctx.session_factory, 
         schema=schema, 
@@ -45,8 +44,10 @@ async def load_books(ctx: AppContext) -> OperationResult:
     checks.append(readiness)
     
     checks.append(await bootstrap_schema(ctx.session_factory, readiness.result))
-    checks.append(await store_books(ctx.session_factory, csv_path, readiness.result))
-    checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
+    checks.append(await store_books(
+        ctx.session_factory, csv_path, readiness.result, logger=ctx.logger))
+    checks.append(await embed_missing_books(
+        ctx.session_factory, ctx.openai_client, logger=ctx.logger))
     
     return OperationResult(
         name="load_books", 
@@ -60,11 +61,16 @@ async def main() -> None:
     async with AppContext(Settings()) as ctx:
         result = await load_books(ctx)
         
-        print("-----------FINAL RESULT-----------------")
-        result.print()
-        print("--------------------------------")
-        
+        # print("-----------FINAL RESULT-----------------")
+        # result.print()
+        # print("--------------------------------")
+        if result.ok:
+            ctx.logger.info("✅ Books loaded successfully.")
+        else:
+            ctx.logger.error("❌ Books loading failed.")
+
         save_file(result, file_name="operation_result")
+        ctx.logger.info(f"📋 Operation result saved to {FilesLocationConstants.EXPORT_DIR}/operation_result.json")
 
 if __name__ == "__main__":
     asyncio.run(main())

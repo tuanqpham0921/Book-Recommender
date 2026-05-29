@@ -8,6 +8,7 @@ from db.schema import BookModel
 from ingestion.csv_source import count_csv_data_rows, iter_books_from_csv
 from common.operation import OperationResult, task
 from db.readiness import ReadinessResult
+import logging
 
 @task
 async def insert_batch(
@@ -48,6 +49,7 @@ async def store_books(
     session_factory: async_sessionmaker[AsyncSession],
     csv_path: Path,
     readiness: ReadinessResult | None = None,
+    logger: logging.Logger | None = None,
 ) -> OperationResult:
     """Load books from CSV into the database."""
     if readiness and readiness.enough_rows:
@@ -67,6 +69,8 @@ async def store_books(
     i = 0
     for batch in iter_books_from_csv(csv_path):
         total_books += len(batch)
+        logger.info(f"📋 Inserting batch {i} of {total_books} books...")
+        
         batch_result = await insert_batch(batch, session_factory)
         total_books_stored += batch_result.result
         batch_result.name += f"--batch-{i}"

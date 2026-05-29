@@ -6,6 +6,7 @@ from clients.openai_client import OpenAIClient
 from db.stores.book_store import BookStore
 from db.schema import BookModel
 from common.operation import OperationResult, task
+import logging
 
 def embedding_text(book: dict) -> str:
     """Canonical text used for book description embeddings."""
@@ -76,6 +77,7 @@ async def _embed_batch(
 async def embed_missing_books(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
+    logger: logging.Logger | None = None,
 ) -> OperationResult:
     """Backfill embeddings for rows where embedding IS NULL."""
     
@@ -83,14 +85,15 @@ async def embed_missing_books(
         book_store = BookStore(session)
         num_missing = await book_store.get_num_book_missing_embeddings()
         if num_missing == 0:
-            print("No books missing embeddings")
-            return OperationResult(name="embed_missing_books", 
+            return OperationResult(
                                ok=True, 
                                message="No books missing embeddings.")
     
     batch_isbn13 = []
     batch_text = []
     
+    
+    logger.info(f"📋 Embedding {num_missing} books missing embeddings...")
     count = 0
     token_count = 0
     steps = []
@@ -102,6 +105,8 @@ async def embed_missing_books(
             embeddings = await openai_client.get_embeddings_batch(batch_text)
             
             batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)
+            logger.info(f"📋 Embedded {len(batch_isbn13)} books...")
+            
             batch_result.name = f"embed_batch_{count}"
             steps.append(batch_result)
             
@@ -118,13 +123,14 @@ async def embed_missing_books(
     if len(batch_isbn13) > 0:
         embeddings = await openai_client.get_embeddings_batch(batch_text)
         batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)
+        logger.info(f"📋 Embedded {len(batch_isbn13)} books...")
+        
         batch_result.name = f"embed_batch_{batch_count}"
         steps.append(batch_result)
         batch_count += 1
         count += len(batch_isbn13)
         
     return OperationResult(
-        name="embed_missing_books",
         ok=count == num_missing,
         message= f"Embedded {count} books out of {num_missing}.",
         result=count,
