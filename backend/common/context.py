@@ -18,8 +18,7 @@ class AppContext:
         self.engine = get_async_engine(settings.sqlalchemy)
         self.openai_client = OpenAIClient(settings.openai)
         self.session_factory = get_session_factory(self.engine)
-
-        setup_logging()
+        setup_logging(environment=settings.app.ENVIRONMENT)
         
     async def __aenter__(self) -> "AppContext":
         return self

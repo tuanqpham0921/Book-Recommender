@@ -3,63 +3,29 @@ import logging
 import os
 from typing import Optional
 
-LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+LOG_FILE = "logs/dev_log.log"
 
-class JSONFormatter(logging.Formatter):
-    """Formatter that outputs logs as structured JSON."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        log_entry = {
-            "timestamp": self.formatTime(record, self.datefmt),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-        }
-        if hasattr(record, "extra"):
-            log_entry.update(record.extra)
-        return json.dumps(log_entry)
-
-
-def setup_logging(
-    env: Optional[str] = None,
-    level: Optional[str] = None,
-    json_output: Optional[bool] = None,
-) -> logging.Logger:
-    """
-    Configure and return a root logger for the app.
-    """
-    try:
-        from ..settings import settings
-
-        environment = env or settings.app.ENVIRONMENT
-    except Exception:
-        environment = env or os.getenv("APP_ENVIRONMENT", "development")
-
-    log_level = level or os.getenv("LOG_LEVEL", "INFO").upper()
-    json_output = (
-        json_output if json_output is not None else environment == "production"
-    )
-
+def setup_logging(environment: str):
+    
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    
+    handlers = [logging.StreamHandler()]
+    if environment == "development":
+        handlers.append(logging.FileHandler(LOG_FILE))
+    
     logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
+        level=log_level,
         format=LOG_FORMAT,
         datefmt=DATE_FORMAT,
-        handlers=[logging.StreamHandler()],
+        handlers=handlers,
         force=True,
     )
 
-    root_logger = logging.getLogger("app")
-
-    if json_output:
-        formatter = JSONFormatter()
-        for handler in root_logger.handlers:
-            handler.setFormatter(formatter)
-        root_logger.info("🧾 Structured JSON logging enabled")
-
-    root_logger.info(f"📋 Logging initialized ({environment}) — level: {log_level}")
-    return root_logger
+    logger = logging.getLogger(__name__)
+    logger.info(f"Logging setup for environment: {environment}")
+    logger.info(f"Log file: {LOG_FILE}")
+    logger.info(f"Log level: {log_level}")
+    logger.info(f"Handlers: {handlers}")

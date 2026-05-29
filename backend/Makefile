@@ -16,11 +16,11 @@ install:
 
 # Local development (native FastAPI)
 dev:
-	poetry run fastapi dev app/main.py
+	LOG_LEVEL=INFO poetry run fastapi dev app/main.py
 
 # run the ingestion script
 ingestion:
-	poetry run python ingestion/main.py
+	LOG_LEVEL=INFO poetry run python ingestion/main.py
 
 # clear the pycache
 clean:

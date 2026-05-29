@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.lifecycle import start_all, shutdown_all
 from config import setup_logging, settings
 
-logger = setup_logging()
-
+import logging
+setup_logging(environment=settings.app.ENVIRONMENT)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -9,7 +9,7 @@ from .constants import (
 )
 
 # from .logging_config import setup_logging
-from .logging_dev import setup_logging
+from .logging_config import setup_logging
 
 
 __all__ = [
