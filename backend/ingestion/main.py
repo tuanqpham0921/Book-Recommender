@@ -45,9 +45,21 @@ async def load_books(ctx: AppContext) -> OperationResult:
     checks.append(await embed_missing_books(
         ctx.session_factory, ctx.openai_client))
     
+    if not readiness.ok:
+        retry_readiness = await is_ready(
+            ctx.session_factory, 
+            schema=schema, 
+            table=table, 
+            min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT
+        )
+        retry_readiness.name += "---retry"
+        retry_readiness.details = {"retry_reason": "Readiness check failed first time."}
+        checks.append(retry_readiness)
+    
+    ok = all(check.ok for check in checks) or retry_readiness.ok
     return OperationResult(
-        ok=all(check.ok for check in checks), 
-        message="Books loaded successfully.", 
+        ok=ok, 
+        message="Books loaded successfully." if ok else "Books loading failed.", 
         steps=checks
     )
 

@@ -13,7 +13,7 @@ def count_csv_data_rows(csv_path: Path) -> int:
 
 
 def iter_books_from_csv(
-    csv_path: Path, *, chunksize: int = 10, limit: int | None = None
+    csv_path: Path, *, chunksize: int = 1000, limit: int | None = None
 ):
     """Yield prepared book dict batches from a CSV file."""
     rows_seen = 0
