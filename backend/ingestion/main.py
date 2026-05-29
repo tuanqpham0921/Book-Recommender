@@ -1,22 +1,14 @@
 """CLI entrypoint: load books from CSV and backfill embeddings."""
 import asyncio
-import time
 from pathlib import Path
 
-from clients.openai_client import OpenAIClient
 from config import (
     DatabaseConstants,
     FilesLocationConstants,
     IngestionConstants,
-    settings,
 )
-from db import (
-    bootstrap_schema,
-    close_async_engine,
-    get_async_engine,
-    get_session_factory,
-    is_ready,
-)
+from db import bootstrap_schema, is_ready
+
 from db.schema import BookModel
 from ingestion.embeddings import embed_missing_books
 from ingestion.store import store_books
@@ -32,7 +24,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
     schema = DatabaseConstants.SCHEMA
     table = BookModel.__tablename__
     csv_path = Path(FilesLocationConstants.DATA_DIR) / FilesLocationConstants.CSV_FILE
-    print(f"Running ingestion for schema: {schema} and table: {table}")
+    ctx.logger.info(f"Running ingestion for schema: {schema} and table: {table}")
     
     checks = []
     readiness = await is_ready(
@@ -50,9 +42,9 @@ async def load_books(ctx: AppContext) -> OperationResult:
         ctx.session_factory, ctx.openai_client, logger=ctx.logger))
     
     return OperationResult(
-        name="load_books", 
         ok=all(check.ok for check in checks), 
-        message="Books loaded successfully.", steps=checks
+        message="Books loaded successfully.", 
+        steps=checks
     )
 
 async def main() -> None:
@@ -69,8 +61,7 @@ async def main() -> None:
         else:
             ctx.logger.error("❌ Books loading failed.")
 
-        save_file(result, file_name="operation_result")
-        ctx.logger.info(f"📋 Operation result saved to {FilesLocationConstants.EXPORT_DIR}/operation_result.json")
+        save_file(result, file_name="operation_result", logger=ctx.logger)
 
 if __name__ == "__main__":
     asyncio.run(main())

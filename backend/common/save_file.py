@@ -12,6 +12,7 @@ def save_file(
     data,
     file_name: str = "log",
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
+    logger: logging.Logger | None = None,
 ):
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
@@ -23,4 +24,8 @@ def save_file(
     filepath = path / f"{file_name}.json"
     with open(filepath, "w") as f:
         f.write(json_str)
-    print(f"📋 log written to {filepath}")
+    
+    if logger:
+        logger.info(f"📋 log written to {filepath}")
+    else:
+        print(f"📋 log written to {filepath}")
