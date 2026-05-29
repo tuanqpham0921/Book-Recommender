@@ -54,7 +54,10 @@ async def load_books(ctx: AppContext) -> OperationResult:
 async def main() -> None:
     """Entry point for the ingestion pipeline."""
     settings = Settings()
-    setup_logging(environment=settings.app.ENVIRONMENT)
+    setup_logging(
+        environment=settings.app.ENVIRONMENT, 
+        log_file=FilesLocationConstants.EXPORT_DIR / "ingestion_log.log"
+    )
     async with AppContext(settings) as ctx:
         result = await load_books(ctx)
         

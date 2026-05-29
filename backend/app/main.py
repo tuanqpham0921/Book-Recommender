@@ -6,9 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.lifecycle import start_all, shutdown_all
 from config import settings
 from common.utils import setup_logging
+from config import FilesLocationConstants
 
 import logging
-setup_logging(environment=settings.app.ENVIRONMENT)
+setup_logging(
+    environment=settings.app.ENVIRONMENT, 
+    log_file=FilesLocationConstants.LOG_DIR / "dev_log.log"
+)
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager

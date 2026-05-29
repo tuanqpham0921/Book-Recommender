@@ -35,6 +35,8 @@ class FilesLocationConstants:
     SCHEMA_EXTENSIONS_FILE = SCHEMA_DIR / "00_extensions.sql"
     SCHEMA_TABLES_FILE = SCHEMA_DIR / "01_tables.sql"
     SCHEMA_INDEXES_FILE = SCHEMA_DIR / "02_indexes.sql"
+    
+    LOG_DIR = PROJECT_ROOT / "logs"
 
 class BookGuides:
     """Book guides constants."""
