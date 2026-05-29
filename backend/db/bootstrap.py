@@ -97,10 +97,10 @@ async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], re
 # poetry run python db/bootstrap.py
 # -----------------------------------------------------------------------------
 async def main() -> None:
-    from config.bootstrap import setup_logging
     from db.async_engine import close_async_engine, get_async_engine, get_session_factory
     from config import settings
-    setup_logging()
+    from config.logging_config import setup_logging
+    setup_logging(environment=settings.app.ENVIRONMENT)
     engine = get_async_engine(settings.sqlalchemy)
     try:
         session_factory = get_session_factory(engine)

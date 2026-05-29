@@ -8,7 +8,6 @@ from .constants import (
     IngestionConstants,
 )
 
-# from .logging_config import setup_logging
 from .logging_config import setup_logging
 
 

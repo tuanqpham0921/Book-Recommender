@@ -1,11 +1,14 @@
 """CLI entrypoint: load books from CSV and backfill embeddings."""
 import asyncio
+import logging
 from pathlib import Path
 
 from config import (
     DatabaseConstants,
     FilesLocationConstants,
     IngestionConstants,
+    Settings,
+    setup_logging,
 )
 from db import bootstrap_schema, is_ready
 
@@ -17,7 +20,6 @@ from common.context import AppContext
 from common.operation import OperationResult, task
 from common.save_file import save_file
 
-import logging
 logger = logging.getLogger(__name__)
 
 @task
@@ -52,8 +54,9 @@ async def load_books(ctx: AppContext) -> OperationResult:
 
 async def main() -> None:
     """Entry point for the ingestion pipeline."""
-    from config import Settings
-    async with AppContext(Settings()) as ctx:
+    settings = Settings()
+    setup_logging(environment=settings.app.ENVIRONMENT)
+    async with AppContext(settings) as ctx:
         result = await load_books(ctx)
         
         # print("-----------FINAL RESULT-----------------")
