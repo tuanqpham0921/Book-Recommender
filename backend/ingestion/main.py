@@ -49,7 +49,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
     if not readiness.result.enough_rows:
         checks.append(await store_books(ctx.session_factory, csv_path))
         
-    # checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
+    checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
     
     return OperationResult(
         name="load_books", 

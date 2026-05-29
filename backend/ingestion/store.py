@@ -72,7 +72,6 @@ async def store_books(
         "csv_row_count": csv_row_count,
     }
     return OperationResult(
-        name="store_books", 
         ok= total_books_stored == total_books, 
         message=f"Stored {total_books_stored} books out of {total_books}.", 
         result=result,
