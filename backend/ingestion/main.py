@@ -56,7 +56,7 @@ async def main() -> None:
     settings = Settings()
     setup_logging(
         environment=settings.app.ENVIRONMENT, 
-        log_file=FilesLocationConstants.EXPORT_DIR / "ingestion_log.log"
+        log_file=FilesLocationConstants.LOG_DIR / "ingestion_log.log"
     )
     async with AppContext(settings) as ctx:
         result = await load_books(ctx)

@@ -9,7 +9,7 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 LOG_FILE = "logs/dev_log.log"
 
-def setup_logging(environment: str, log_file: Path | str = LOG_FILE) -> None:
+def setup_logging(environment: str, log_file: Path | str = LOG_FILE, overwrite: bool = True) -> None:
     """Setup logging for the application."""
     
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -18,7 +18,8 @@ def setup_logging(environment: str, log_file: Path | str = LOG_FILE) -> None:
     if environment.lower() == "development":
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+        file_mode = "w" if overwrite else "a"
+        handlers.append(logging.FileHandler(log_path, mode=file_mode, encoding="utf-8"))
     
     logging.basicConfig(
         level=getattr(logging, log_level, logging.INFO),
