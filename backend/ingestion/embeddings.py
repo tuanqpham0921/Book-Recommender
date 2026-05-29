@@ -6,8 +6,8 @@ from clients.openai_client import OpenAIClient
 from db.stores.book_store import BookStore
 from db.schema import BookModel
 from common.operation import OperationResult, task
-
-import logging
+from typing import Any, AsyncIterator
+import logging, asyncio
 logger = logging.getLogger(__name__)
 
 def embedding_text(book: dict) -> str:
@@ -33,7 +33,6 @@ async def update_book_embedding(
         result=isbn13
     )
 
-from typing import AsyncIterator, Any
 from sqlalchemy import select
 async def _iter_missing_embeddings(
         session_factory: async_sessionmaker[AsyncSession],
@@ -59,21 +58,89 @@ async def _iter_missing_embeddings(
     
 @task(log_info=False)
 async def _embed_batch(
-    batch_isbn13: list[str],
+    batch_isbn13s: list[str],
     embeddings: list[list[float]],
     session_factory: async_sessionmaker[AsyncSession],
 ) -> OperationResult:
+    if len(batch_isbn13s) != len(embeddings):
+        raise ValueError(
+            "ISBN13 and embedding batches have different lengths: "
+            f"{len(batch_isbn13s)} != {len(embeddings)}"
+        )
+
     async with session_factory() as session:
-        for i, embedding in enumerate(embeddings):
-            await update_book_embedding(batch_isbn13[i], embedding, session)
-                
+        update_results = []
+        for isbn13, embedding in zip(batch_isbn13s, embeddings, strict=True):
+            update_result = await update_book_embedding(isbn13, embedding, session)
+            update_results.append(update_result)
+            if not update_result.ok:
+                await session.rollback()
+                return OperationResult(
+                    ok=False,
+                    message=f"Failed to update embedding for book {isbn13}.",
+                    result=0,
+                    steps=update_results,
+                )
+
         await session.commit()
         
     return OperationResult(
         ok=True,
-        message=f"Embedded {len(batch_isbn13)} books.",
-        result=len(batch_isbn13)
+        message=f"Embedded {len(batch_isbn13s)} books.",
+        result=len(batch_isbn13s)
     )
+    
+async def get_bucketed_embeddings(
+    session_factory: async_sessionmaker[AsyncSession],
+    openai_client: OpenAIClient,
+) -> dict[int, dict[str, list[str]]]:
+    
+    text_bucket: list[str] = []
+    isbn13_bucket: list[str] = []
+    total_bucket = {}
+    running_token_count: int = 0
+    batch_count: int = 0
+    
+    async for book in _iter_missing_embeddings(session_factory):
+        text = embedding_text(book)
+        text_tokens = openai_client.token_count(text)
+        if text_bucket and running_token_count + text_tokens > openai_client.max_tokens:
+            if len(text_bucket) != len(isbn13_bucket):
+                raise ValueError(f"Text bucket and ISBN13 bucket have different lengths: {len(text_bucket)} != {len(isbn13_bucket)}")
+                
+            total_bucket[batch_count] = {"text_bucket": text_bucket, "isbn13_bucket": isbn13_bucket}
+            
+            batch_count += 1
+            text_bucket = []
+            isbn13_bucket = []
+            running_token_count = 0
+       
+        text_bucket.append(text)
+        isbn13_bucket.append(book["isbn13"])
+        running_token_count += text_tokens
+        
+    if len(text_bucket):
+        if len(text_bucket) != len(isbn13_bucket):
+            raise ValueError(f"Text bucket and ISBN13 bucket have different lengths: {len(text_bucket)} != {len(isbn13_bucket)}")
+        total_bucket[batch_count] = {"text_bucket": text_bucket, "isbn13_bucket": isbn13_bucket}
+    
+    for batch_id, bucket in total_bucket.items():
+        logger.debug(
+            "Prepared embedding bucket %s with %d texts and %d ISBN13s",
+            batch_id,
+            len(bucket["text_bucket"]),
+            len(bucket["isbn13_bucket"]),
+        )
+    
+    return total_bucket
+
+async def get_batch_embeddings(
+    batch_id: int,
+    text_bucket: list[str],
+    openai_client: OpenAIClient,
+) -> dict[str, Any]:
+    embeddings = await openai_client.get_embeddings_batch(text_bucket)
+    return {"batch_id": batch_id, "embeddings": embeddings}
     
 @task
 async def embed_missing_books(
@@ -90,43 +157,39 @@ async def embed_missing_books(
                                ok=True, 
                                message="No books missing embeddings.")
     
-    batch_isbn13 = []
-    batch_text = []
-    
-    
     logger.info(f"📋 Found {num_missing} books with missing embeddings...")
+    
+    total_bucket = await get_bucketed_embeddings(session_factory, openai_client)
+    coroutines = []
+    for batch_id, bucket in total_bucket.items():
+        coroutines.append(get_batch_embeddings(batch_id, bucket["text_bucket"], openai_client))
+    batch_embedding_results = await asyncio.gather(*coroutines)
+    logger.info("📋 Fetched embeddings for %d batches.", len(batch_embedding_results))
+    
+    coroutines = []
+    for batch_embedding_result in batch_embedding_results:
+        batch_id = batch_embedding_result["batch_id"]
+        embeddings = batch_embedding_result["embeddings"]
+        isbn13_bucket = total_bucket[batch_id]["isbn13_bucket"]
+        
+        logger.debug(
+            "Prepared update bucket %s with %d ISBN13s and %d embeddings",
+            batch_id,
+            len(isbn13_bucket),
+            len(embeddings),
+        )
+        
+        coroutines.append(_embed_batch(isbn13_bucket, embeddings, session_factory))
+    batch_results = await asyncio.gather(*coroutines)
+    
+    logger.info("📋 Updated embeddings for %d batches.", len(batch_results))
+    
     count = 0
-    token_count = 0
     steps = []
-    batch_count = 0
-    async for book in _iter_missing_embeddings(session_factory):
-        text = embedding_text(book)
-        
-        if openai_client.over_max_tokens(token_count + openai_client.token_count(text)):
-            embeddings = await openai_client.get_embeddings_batch(batch_text)
-            
-            batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)            
-            batch_result.name = f"embed_batch_{count}"
-            steps.append(batch_result)
-            
-            count += len(batch_isbn13)
-            batch_isbn13 = []
-            batch_text = []
-            token_count = 0
-            batch_count += 1
-            
-        batch_isbn13.append(book["isbn13"])
-        batch_text.append(text)
-        token_count += openai_client.token_count(text)
-        
-    if len(batch_isbn13) > 0:
-        embeddings = await openai_client.get_embeddings_batch(batch_text)
-        batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)
-        
-        batch_result.name = f"embed_batch_{batch_count}"
+    for batch_result in batch_results:
+        batch_result.name = f"embed_batch_{count}"
         steps.append(batch_result)
-        batch_count += 1
-        count += len(batch_isbn13)
+        count += batch_result.result or 0
         
     return OperationResult(
         ok=count == num_missing,
