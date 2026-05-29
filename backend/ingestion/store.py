@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@task
+@task(log_info=False)
 async def insert_batch(
     batch: list[dict],
     session_factory: async_sessionmaker[AsyncSession],
@@ -69,9 +69,7 @@ async def store_books(
     steps = []
     i = 0
     for batch in iter_books_from_csv(csv_path):
-        total_books += len(batch)
-        logger.info(f"📋 Inserting batch {i} of {total_books} books...")
-        
+        total_books += len(batch)        
         batch_result = await insert_batch(batch, session_factory)
         total_books_stored += batch_result.result
         batch_result.name += f"--batch-{i}"
@@ -88,5 +86,5 @@ async def store_books(
         ok= total_books_stored == total_books, 
         message=f"Stored {total_books_stored} books out of {total_books}.", 
         result=result,
-        # steps=steps
+        steps=steps
     )

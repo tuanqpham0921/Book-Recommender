@@ -15,7 +15,7 @@ def embedding_text(book: dict) -> str:
     # TODO: might be blocking
     return f"{book['title']}\n\n{book['description']}"
 
-@task
+@task(log_info=False)
 async def update_book_embedding(
     isbn13: str,
     embedding: list[float],
@@ -57,7 +57,7 @@ async def _iter_missing_embeddings(
             async for row in result.mappings():
                 yield dict(row)
     
-@task
+@task(log_info=False)
 async def _embed_batch(
     batch_isbn13: list[str],
     embeddings: list[list[float]],
@@ -94,7 +94,7 @@ async def embed_missing_books(
     batch_text = []
     
     
-    logger.info(f"📋 Embedding {num_missing} books missing embeddings...")
+    logger.info(f"📋 Found {num_missing} books with missing embeddings...")
     count = 0
     token_count = 0
     steps = []
@@ -105,9 +105,7 @@ async def embed_missing_books(
         if openai_client.over_max_tokens(token_count + openai_client.token_count(text)):
             embeddings = await openai_client.get_embeddings_batch(batch_text)
             
-            batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)
-            logger.info(f"📋 Embedded {len(batch_isbn13)} books...")
-            
+            batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)            
             batch_result.name = f"embed_batch_{count}"
             steps.append(batch_result)
             
@@ -124,7 +122,6 @@ async def embed_missing_books(
     if len(batch_isbn13) > 0:
         embeddings = await openai_client.get_embeddings_batch(batch_text)
         batch_result = await _embed_batch(batch_isbn13, embeddings, session_factory)
-        logger.info(f"📋 Embedded {len(batch_isbn13)} books...")
         
         batch_result.name = f"embed_batch_{batch_count}"
         steps.append(batch_result)
