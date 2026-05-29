@@ -10,6 +10,8 @@ from common.operation import OperationResult, task
 from db.readiness import ReadinessResult
 import logging
 
+logger = logging.getLogger(__name__)
+
 @task
 async def insert_batch(
     batch: list[dict],
@@ -49,7 +51,6 @@ async def store_books(
     session_factory: async_sessionmaker[AsyncSession],
     csv_path: Path,
     readiness: ReadinessResult | None = None,
-    logger: logging.Logger | None = None,
 ) -> OperationResult:
     """Load books from CSV into the database."""
     if readiness and readiness.enough_rows:

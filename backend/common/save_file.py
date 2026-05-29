@@ -8,11 +8,12 @@ from dataclasses import is_dataclass
 from typing import Any
 from dataclasses import asdict
 
+logger = logging.getLogger(__name__)
+
 def save_file(
     data,
     file_name: str = "log",
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
-    logger: logging.Logger | None = None,
 ):
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)

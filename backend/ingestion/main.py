@@ -17,6 +17,9 @@ from common.context import AppContext
 from common.operation import OperationResult, task
 from common.save_file import save_file
 
+import logging
+logger = logging.getLogger(__name__)
+
 @task
 async def load_books(ctx: AppContext) -> OperationResult:
     """Load books from CSV into PostgreSQL and embed any missing vectors."""
@@ -24,7 +27,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
     schema = DatabaseConstants.SCHEMA
     table = BookModel.__tablename__
     csv_path = Path(FilesLocationConstants.DATA_DIR) / FilesLocationConstants.CSV_FILE
-    ctx.logger.info(f"Running ingestion for schema: {schema} and table: {table}")
+    logger.info(f"Running ingestion for schema: {schema} and table: {table}")
     
     checks = []
     readiness = await is_ready(
@@ -37,9 +40,9 @@ async def load_books(ctx: AppContext) -> OperationResult:
     
     checks.append(await bootstrap_schema(ctx.session_factory, readiness.result))
     checks.append(await store_books(
-        ctx.session_factory, csv_path, readiness.result, logger=ctx.logger))
+        ctx.session_factory, csv_path, readiness.result))
     checks.append(await embed_missing_books(
-        ctx.session_factory, ctx.openai_client, logger=ctx.logger))
+        ctx.session_factory, ctx.openai_client))
     
     return OperationResult(
         ok=all(check.ok for check in checks), 
@@ -57,11 +60,11 @@ async def main() -> None:
         # result.print()
         # print("--------------------------------")
         if result.ok:
-            ctx.logger.info("✅ Books loaded successfully.")
+            logger.info("✅ Books loaded successfully.")
         else:
-            ctx.logger.error("❌ Books loading failed.")
+            logger.error("❌ Books loading failed.")
 
-        save_file(result, file_name="operation_result", logger=ctx.logger)
+        save_file(result, file_name="operation_result")
 
 if __name__ == "__main__":
     asyncio.run(main())

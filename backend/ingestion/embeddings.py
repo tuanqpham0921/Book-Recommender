@@ -6,7 +6,9 @@ from clients.openai_client import OpenAIClient
 from db.stores.book_store import BookStore
 from db.schema import BookModel
 from common.operation import OperationResult, task
+
 import logging
+logger = logging.getLogger(__name__)
 
 def embedding_text(book: dict) -> str:
     """Canonical text used for book description embeddings."""
@@ -77,10 +79,9 @@ async def _embed_batch(
 async def embed_missing_books(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
-    logger: logging.Logger | None = None,
 ) -> OperationResult:
     """Backfill embeddings for rows where embedding IS NULL."""
-    
+
     async with session_factory() as session:
         book_store = BookStore(session)
         num_missing = await book_store.get_num_book_missing_embeddings()
