@@ -67,7 +67,7 @@ async def _embed_batch(
             "ISBN13 and embedding batches have different lengths: "
             f"{len(batch_isbn13s)} != {len(embeddings)}"
         )
-
+    
     async with session_factory() as session:
         update_results = []
         for isbn13, embedding in zip(batch_isbn13s, embeddings, strict=True):
@@ -90,16 +90,17 @@ async def _embed_batch(
         result=len(batch_isbn13s)
     )
     
-async def get_bucketed_embeddings(
+async def _get_bucketed_embeddings(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
 ) -> dict[int, dict[str, list[str]]]:
+    # TODO: blocking operation might be a long operation (not IO bound)
     
     text_bucket: list[str] = []
     isbn13_bucket: list[str] = []
     total_bucket = {}
     running_token_count: int = 0
-    batch_count: int = 0
+    batch_id: int = 0
     
     async for book in _iter_missing_embeddings(session_factory):
         text = embedding_text(book)
@@ -108,9 +109,9 @@ async def get_bucketed_embeddings(
             if len(text_bucket) != len(isbn13_bucket):
                 raise ValueError(f"Text bucket and ISBN13 bucket have different lengths: {len(text_bucket)} != {len(isbn13_bucket)}")
                 
-            total_bucket[batch_count] = {"text_bucket": text_bucket, "isbn13_bucket": isbn13_bucket}
+            total_bucket[batch_id] = {"text_bucket": text_bucket, "isbn13_bucket": isbn13_bucket}
             
-            batch_count += 1
+            batch_id += 1
             text_bucket = []
             isbn13_bucket = []
             running_token_count = 0
@@ -122,7 +123,7 @@ async def get_bucketed_embeddings(
     if len(text_bucket):
         if len(text_bucket) != len(isbn13_bucket):
             raise ValueError(f"Text bucket and ISBN13 bucket have different lengths: {len(text_bucket)} != {len(isbn13_bucket)}")
-        total_bucket[batch_count] = {"text_bucket": text_bucket, "isbn13_bucket": isbn13_bucket}
+        total_bucket[batch_id] = {"text_bucket": text_bucket, "isbn13_bucket": isbn13_bucket}
     
     for batch_id, bucket in total_bucket.items():
         logger.debug(
@@ -134,7 +135,7 @@ async def get_bucketed_embeddings(
     
     return total_bucket
 
-async def get_batch_embeddings(
+async def _get_batch_embeddings(
     batch_id: int,
     text_bucket: list[str],
     openai_client: OpenAIClient,
@@ -148,7 +149,8 @@ async def embed_missing_books(
     openai_client: OpenAIClient,
 ) -> OperationResult:
     """Backfill embeddings for rows where embedding IS NULL."""
-
+    
+    # check if there are any books missing embeddings
     async with session_factory() as session:
         book_store = BookStore(session)
         num_missing = await book_store.get_num_book_missing_embeddings()
@@ -159,13 +161,17 @@ async def embed_missing_books(
     
     logger.info(f"📋 Found {num_missing} books with missing embeddings...")
     
-    total_bucket = await get_bucketed_embeddings(session_factory, openai_client)
+    # get the bucketed embeddings
+    total_bucket = await _get_bucketed_embeddings(session_factory, openai_client)
+    
+    # get the batch embeddings concurrently
     coroutines = []
     for batch_id, bucket in total_bucket.items():
-        coroutines.append(get_batch_embeddings(batch_id, bucket["text_bucket"], openai_client))
+        coroutines.append(_get_batch_embeddings(batch_id, bucket["text_bucket"], openai_client))
     batch_embedding_results = await asyncio.gather(*coroutines)
     logger.info("📋 Fetched embeddings for %d batches.", len(batch_embedding_results))
     
+    # update the book embeddings concurrently
     coroutines = []
     for batch_embedding_result in batch_embedding_results:
         batch_id = batch_embedding_result["batch_id"]
@@ -181,9 +187,9 @@ async def embed_missing_books(
         
         coroutines.append(_embed_batch(isbn13_bucket, embeddings, session_factory))
     batch_results = await asyncio.gather(*coroutines)
-    
     logger.info("📋 Updated embeddings for %d batches.", len(batch_results))
     
+    # collect the results
     count = 0
     steps = []
     for batch_result in batch_results:
