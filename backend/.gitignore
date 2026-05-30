@@ -12,3 +12,7 @@ data/backup.sql
 
 # Data & Exports
 *.csv
+
+# Logs
+logs/
+*.log
