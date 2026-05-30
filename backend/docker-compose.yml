@@ -1,0 +1,45 @@
+services:
+  app:
+    build: .
+    container_name: book-rec-app
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    env_file:
+      - config/.env
+    environment:
+      # Reach the postgres service from the app container
+      POSTGRES_HOST: postgres
+    ports:
+      - "8000:8000"
+    networks:
+      - book-rec-network
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: book-rec-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/schema/00_extensions.sql:/docker-entrypoint-initdb.d/00_extensions.sql:ro
+      - ./db/schema/01_tables.sql:/docker-entrypoint-initdb.d/01_tables.sql:ro
+      - ./db/schema/02_indexes.sql:/docker-entrypoint-initdb.d/02_indexes.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - book-rec-network
+
+networks:
+  book-rec-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

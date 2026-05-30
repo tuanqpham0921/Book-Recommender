@@ -4,21 +4,15 @@ venv/
 .venv/
 
 # Environment & Config
-config/.env
-config/.env.*
+config/.env*
 !config/.env.example
-!config/.env.production
-config/*.yaml
-!config/env-vars.yaml.example
 
-infra/scripts/
+# Data
+data/backup.sql
 
 # Data & Exports
 *.csv
-examples/
 
-# Docker volumes
-caddy_data/
-caddy_config/
-postgres_data/
-redis_data/
+# Logs
+logs/
+*.log

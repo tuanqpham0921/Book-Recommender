@@ -3,12 +3,17 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config.settings import settings
 from app.lifecycle import start_all, shutdown_all
-from app.config.logging_config import setup_logging
+from config import settings
+from common.utils import setup_logging
+from config import FilesLocationConstants
 
-logger = setup_logging()
-
+import logging
+setup_logging(
+    environment=settings.app.ENVIRONMENT, 
+    log_file=FilesLocationConstants.LOG_DIR / "dev_log.log"
+)
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
