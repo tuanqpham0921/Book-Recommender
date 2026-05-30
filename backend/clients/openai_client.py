@@ -10,7 +10,7 @@ from .base import BaseLLMClient
 from config.settings import OpenAISettings
 from app.common.messages import AssistantMessage
 from app.common.sse_stream import SSEStream
-
+import asyncio
 logger = logging.getLogger(__name__)
 
 class OpenAIClient(BaseLLMClient):
@@ -23,15 +23,18 @@ class OpenAIClient(BaseLLMClient):
         self.embedding_model      = openai_settings.EMBEDDING_MODEL
         self.embedding_dimensions = openai_settings.EMBEDDING_DIMENSIONS
         
+        self.semaphore = asyncio.Semaphore(openai_settings.MAX_CONCURRENCY)
+        
     async def get_embedding(self, input: str) -> List[float]:
         """Get the embedding for the input text."""
         try:
-            response = await self.client.embeddings.create(
-                                input=input, 
-                                model=self.embedding_model, 
-                                dimensions=self.embedding_dimensions
-                            )
-            return response.data[0].embedding
+            async with self.semaphore:
+                response = await self.client.embeddings.create(
+                                    input=input, 
+                                    model=self.embedding_model, 
+                                    dimensions=self.embedding_dimensions
+                                )
+                return response.data[0].embedding
         
         except Exception as e:
             logger.error(f"❌❌❌ OpenAI embedding API call failed: {e}")
@@ -40,11 +43,13 @@ class OpenAIClient(BaseLLMClient):
     async def get_embeddings_batch(self, input: List[str]) -> List[float]:
         """Get the embeddings for the input texts."""
         try:
-            response = await self.client.embeddings.create(
-                                input=input, 
-                                model=self.embedding_model, 
-                                dimensions=self.embedding_dimensions
-                            )
+            async with self.semaphore:
+                response = await self.client.embeddings.create(
+                                    input=input, 
+                                    model=self.embedding_model, 
+                                    dimensions=self.embedding_dimensions
+                                )
+                
             response_data = sorted(response.data, key=lambda x: x.index)
             return [data.embedding for data in response_data]
         except Exception as e:
@@ -53,6 +58,7 @@ class OpenAIClient(BaseLLMClient):
 
     async def execute(self, req: OpenAIRequest) -> AssistantMessage:
         """Execute the chat completion."""
+        #TODO: add semaphore to the execute method
         try:
             payload = req.to_payload()
 
