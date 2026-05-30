@@ -3,12 +3,14 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import select
+from sqlalchemy import update
 from db.schema import BookModel
-from ingestion.csv_source import count_csv_data_rows, iter_books_from_csv
+from ingestion.utils import count_csv_data_rows, iter_books_from_csv
 from common.operation import OperationResult, task
 from db.readiness import ReadinessResult
 import logging
+from typing import Any, AsyncIterator
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +46,8 @@ async def insert_batch(
         details={"batch_length": len(batch)}
     )
 
-
-
 @task
-async def store_books(
+async def store_books_from_csv(
     session_factory: async_sessionmaker[AsyncSession],
     csv_path: Path,
     readiness: ReadinessResult | None = None,
@@ -65,6 +65,7 @@ async def store_books(
     total_books_stored = 0
     total_books = 0
     csv_row_count = count_csv_data_rows(csv_path)
+    logger.info(f"📋 Found {csv_row_count} rows in CSV.")
     
     steps = []
     i = 0
@@ -88,3 +89,47 @@ async def store_books(
         result=result,
         steps=steps
     )
+    
+# ------------------------------------------------------------
+# ---------------- EMBEDDINGS WRITE --------------------------
+# ------------------------------------------------------------
+
+@task(log_info=False)
+async def store_book_embedding(
+    isbn13: str,
+    embedding: list[float],
+    session: AsyncSession,
+) -> OperationResult:
+    stmt = (
+        update(BookModel)
+        .where(BookModel.isbn13 == isbn13)
+        .values(embedding=embedding)
+    )
+    await session.execute(stmt)
+    return OperationResult(
+        ok=True,
+        message=f"Updated embedding for book {isbn13}.",
+        result=isbn13
+    )
+    
+async def iter_missing_embeddings(
+        session_factory: async_sessionmaker[AsyncSession],
+        *,
+        batch_size: int = 500,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream books missing embeddings."""
+        stmt = (
+            select(
+                BookModel.isbn13,
+                BookModel.title,
+                BookModel.description,
+            )
+            .where(BookModel.embedding.is_(None))
+            .where(BookModel.description.is_not(None))
+            .execution_options(yield_per=batch_size)
+            # .limit(1000)
+        )
+        async with session_factory() as session:
+            result = await session.stream(stmt)
+            async for row in result.mappings():
+                yield dict(row)

@@ -14,7 +14,7 @@ from db import bootstrap_schema, is_ready
 
 from db.schema import BookModel
 from ingestion.embeddings import embed_missing_books
-from ingestion.store import store_books
+from ingestion.write_store import store_books_from_csv
 
 from common.context import AppContext
 from common.operation import OperationResult, task
@@ -40,10 +40,8 @@ async def load_books(ctx: AppContext) -> OperationResult:
     checks.append(readiness)
     
     checks.append(await bootstrap_schema(ctx.session_factory, readiness.result))
-    checks.append(await store_books(
-        ctx.session_factory, csv_path, readiness.result))
-    checks.append(await embed_missing_books(
-        ctx.session_factory, ctx.openai_client))
+    checks.append(await store_books_from_csv(ctx.session_factory, csv_path, readiness.result))
+    checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
     
     if not readiness.ok:
         logger.info(f"Readiness check failed first time, retrying after ingestion...")
