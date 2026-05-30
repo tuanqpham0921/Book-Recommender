@@ -14,7 +14,7 @@ from db import bootstrap_schema, is_ready
 
 from db.schema import BookModel
 from ingestion.embeddings import embed_missing_books
-from ingestion.write_store import store_books_from_csv
+from ingestion.store import store_books_from_csv
 
 from common.context import AppContext
 from common.operation import OperationResult, task
