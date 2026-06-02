@@ -10,6 +10,7 @@ from config import (
     Settings,
 )
 from common.utils import save_file, setup_logging
+from ingestion.utils import count_csv_data_rows
 from db import bootstrap_schema, is_ready
 
 from db.schema import BookModel
@@ -30,12 +31,15 @@ async def load_books(ctx: AppContext) -> OperationResult:
     csv_path = Path(FilesLocationConstants.DATA_DIR) / FilesLocationConstants.CSV_FILE
     logger.info(f"Running ingestion for schema: {schema} and table: {table}")
     # TODO: add a connection check to the database (because it will continue even if the database is not on)
+    
+    csv_rows = count_csv_data_rows(csv_path)
+    
     checks = []
     readiness = await is_ready(
         ctx.session_factory, 
         schema=schema, 
         table=table, 
-        min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT
+        min_rows=csv_rows
     )
     checks.append(readiness)
     
@@ -49,7 +53,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
             ctx.session_factory, 
             schema=schema, 
             table=table, 
-            min_rows=IngestionConstants.APPROXIMATE_LOAD_LIMIT
+            min_rows=csv_rows
         )
         readiness.name += "---retry"
         readiness.details = {"retry_reason": "Readiness check failed first time."}
