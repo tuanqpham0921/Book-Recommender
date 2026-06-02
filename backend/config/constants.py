@@ -23,8 +23,8 @@ class FilesLocationConstants:
 
     PROJECT_ROOT = PROJECT_ROOT
     DATA_DIR = PROJECT_ROOT / "data"
-    CSV_FILE = "books.csv"
-    # CSV_FILE = "test_books.csv"
+    # CSV_FILE = "books.csv"
+    CSV_FILE = "test_books.csv"
     
     ENV_FILE = PROJECT_ROOT / "config" / ".env"
     
