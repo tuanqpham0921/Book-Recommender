@@ -97,3 +97,9 @@ class OpenAIClient(BaseLLMClient):
     async def close(self):
         """Close the OpenAIClient."""
         await self.client._client.aclose()
+
+    def token_count(self, text: str) -> int:
+        """Count the number of tokens in the text."""
+        import tiktoken
+        encoding = tiktoken.encoding_for_model(self.embedding_model)
+        return len(encoding.encode(text))

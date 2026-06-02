@@ -11,7 +11,7 @@ class BaseLLMRequest(BaseModel, ABC):
     model: str
     temperature: float = 0.3
     top_p: float = 0.8
-    sse_stream: Optional[Any] = None
+    sse_stream: Optional[Any] = None # TODO: Optional[SSEStream]
 
     # Trimming + runtime
     max_prompt_tokens: int = 120_000
@@ -41,11 +41,10 @@ class BaseLLMClient(ABC):
         """Close any resources used by the client."""
         ...
         
+    @abstractmethod
     def token_count(self, text: str) -> int:
         """Count the number of tokens in the text."""
-        import tiktoken
-        encoding = tiktoken.encoding_for_model(self.embedding_model)
-        return len(encoding.encode(text))
+        ...
     
     def over_max_tokens(self, token_count: int) -> bool:
         return token_count > self.max_tokens
