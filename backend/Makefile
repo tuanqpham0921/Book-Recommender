@@ -79,4 +79,12 @@ docker-clean-all:
 	@echo "Docker containers and volumes cleaned"
 
 # -------------------
-.PHONY: dev ingestion postgres-start postgres-stop postgres-cli postgres-restore postgres-dump postgres-restore-data docker-clean-all clean
+# Testing commands
+# -------------------
+
+# run the tests
+tests:
+	poetry run pytest tests
+
+# -------------------
+.PHONY: dev ingestion postgres-start postgres-stop postgres-cli postgres-restore postgres-dump postgres-restore-data docker-clean-all clean tests
