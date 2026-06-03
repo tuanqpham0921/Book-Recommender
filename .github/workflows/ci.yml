@@ -32,13 +32,13 @@ jobs:
         working-directory: backend
 
     steps:
-      - name: Set up environment variables
-        run: |
-          echo {{ vars.APP_ENVIRONMENT }}
-          echo {{ vars.APP_ALLOW_ORIGINS }}
-
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up environment variables
+        run: |
+          echo "${{ vars.APP_ENVIRONMENT }}"
+          echo "${{ vars.APP_ALLOW_ORIGINS }}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
