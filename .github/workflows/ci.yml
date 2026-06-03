@@ -11,16 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     env:
       APP_NAME: book-recommender-backend
-      APP_ENVIRONMENT: test
-      APP_ALLOW_ORIGINS: http://localhost:3000
+      APP_ENVIRONMENT: ${{ vars.APP_ENVIRONMENT }}
+      APP_ALLOW_ORIGINS: ${{ vars.APP_ALLOW_ORIGINS }}
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
       POSTGRES_DB: book_recommender_test
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       POSTGRES_MIN_CONNECTIONS: "1"
       POSTGRES_MAX_CONNECTIONS: "5"
-      OPENAI_API_KEY: test-api-key
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_BASE_MODEL: gpt-4.1-mini
       OPENAI_TOKENIZER_ENCODING: o200k_base
       OPENAI_EMBEDDING_MODEL: text-embedding-3-large
@@ -32,6 +32,11 @@ jobs:
         working-directory: backend
 
     steps:
+      - name: Set up environment variables
+        run: |
+          echo {{ vars.APP_ENVIRONMENT }}
+          echo {{ vars.APP_ALLOW_ORIGINS }}
+
       - name: Check out repository
         uses: actions/checkout@v4
 
