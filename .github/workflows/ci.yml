@@ -27,10 +27,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install Poetry
-        run: python -m pip install --upgrade pip poetry
+        run: python -m pip install --upgrade --quiet pip poetry
 
       - name: Install dependencies
-        run: poetry install --no-interaction --no-ansi
+        run: poetry install --no-interaction --no-ansi --quiet
 
       - name: Run backend tests
         run: poetry run pytest tests
