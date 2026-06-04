@@ -12,6 +12,8 @@ from db.readiness import ReadinessResult
 
 from common.operation import OperationResult, task
 
+logger = logging.getLogger(__name__)
+
 def _sql_statements(sql: str) -> list[str]:
     """Split the SQL file into individual statements."""
     # TODO: this might be blocking
@@ -78,7 +80,7 @@ async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], re
             message="No actions required.", 
             steps=[]
         )
-        
+    
     checks: list[OperationResult] = []
     
     checks.append(await enable_extensions(session_factory))
@@ -99,8 +101,7 @@ async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], re
 async def main() -> None:
     from db.async_engine import close_async_engine, get_async_engine, get_session_factory
     from config import settings
-    from config.logging_config import setup_logging
-    setup_logging(environment=settings.app.ENVIRONMENT)
+
     engine = get_async_engine(settings.sqlalchemy)
     try:
         session_factory = get_session_factory(engine)
