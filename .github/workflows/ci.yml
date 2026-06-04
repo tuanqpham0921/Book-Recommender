@@ -10,15 +10,15 @@ jobs:
     name: Backend pytest
     runs-on: ubuntu-latest
     env:
-      APP_NAME: book-recommender-backend
+      APP_NAME: ${{ vars.APP_NAME }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
 
       APP_ENVIRONMENT: ${{ vars.APP_ENVIRONMENT }}
       APP_ALLOW_ORIGINS: ${{ vars.APP_ALLOW_ORIGINS }}
 
-      POSTGRES_HOST: localhost
-      POSTGRES_PORT: "5432"
+      POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+      POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
       POSTGRES_DB: book_recommender_test
       POSTGRES_USER: postgres
       POSTGRES_MIN_CONNECTIONS: "1"

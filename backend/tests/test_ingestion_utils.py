@@ -21,6 +21,4 @@ def test_row_to_book(sample_books: pd.DataFrame):
     assert book.published_year == 1995
     assert book.average_rating == 4.43
     assert book.num_pages == 128
-    assert book.ratings_count == 3860
-    print("Test passed")
-    
+    assert book.ratings_count == 3860    
