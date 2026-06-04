@@ -84,10 +84,10 @@ docker-clean-all:
 
 # run the tests
 tests:
-	LOG_LEVEL=INFO poetry run pytest -s tests/unit && \
-	LOG_LEVEL=INFO poetry run pytest -s tests/integration
+	LOG_LEVEL=INFO poetry run pytest -s tests/unit
 	
-
+local-end-to-end-test:
+	./tests/scripts/local_end_to_end_test.sh
 
 # -------------------
-.PHONY: dev ingestion postgres-start postgres-stop postgres-cli postgres-restore postgres-dump postgres-restore-data docker-clean-all clean tests
+.PHONY: dev ingestion postgres-start postgres-stop postgres-cli postgres-restore postgres-dump postgres-restore-data docker-clean-all clean tests local-end-to-end-test
