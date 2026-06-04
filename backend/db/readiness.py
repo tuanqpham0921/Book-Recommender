@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 from common.operation import OperationResult, task
 from dataclasses import dataclass
 from dataclasses import field
+from db.stores.book_store import BookStore
 
 @task
 async def _check_table(
@@ -112,6 +113,7 @@ class ReadinessResult:
     need_db_bootstrap: bool = False
     enough_rows: bool = False
     need_extensions: bool = False
+    num_missing_embeddings: int = 0
     
     missing_extensions: list[str] = field(default_factory=list)
     
@@ -166,10 +168,24 @@ async def is_ready(
         result.need_extensions = not extensions.ok
         result.missing_extensions = extensions.result["missing"]
         
+    
+    async with session_factory() as session:
+        # check if embeddings are present
+        book_store = BookStore(session)
+        # TODO: we can change this when book store implement @task decorator
+        num_missing = await book_store.get_num_book_missing_embeddings()
+        checks.append(OperationResult(
+            name="num_missing_embeddings",
+            ok=num_missing == 0,
+            message="No books missing embeddings." if num_missing == 0 else f"Found {num_missing} books missing embeddings.",
+            result=num_missing,
+        ))
+        result.num_missing_embeddings = num_missing
+        
+    ok = all(check.ok for check in checks)
     return OperationResult(
-        name="is_ready", 
-        ok=all(check.ok for check in checks), 
-        message="Database is ready.", 
+        ok=ok, 
+        message="Database is ready." if ok else "Database is not ready.", 
         steps=checks,
         result=result,
     )
