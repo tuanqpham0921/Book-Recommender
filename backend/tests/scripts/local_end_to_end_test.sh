@@ -23,6 +23,8 @@ LOG_LEVEL=INFO poetry run pytest -s tests/unit
 
 make docker-clean-all
 make postgres-start
+sleep 10
+
 LOG_LEVEL=INFO poetry run python -m ingestion.main
 
 LOG_LEVEL=INFO poetry run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
