@@ -3,7 +3,11 @@ name: Backend CI
 on:
   push:
     branches:
-      - add_github_action_tests
+      - "**"
+  pull_request:
+    branches:
+      - main
+      - dev
 
 env:
   APP_NAME: book-recommender-backend
