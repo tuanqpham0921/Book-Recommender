@@ -84,8 +84,9 @@ docker-clean-all:
 
 # run the tests
 tests:
+	LOG_LEVEL=INFO poetry run pytest -s tests/unit && \
 	LOG_LEVEL=INFO poetry run pytest -s tests/integration
-	LOG_LEVEL=INFO poetry run pytest -s tests/unit
+	
 
 
 # -------------------
