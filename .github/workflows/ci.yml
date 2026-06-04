@@ -47,11 +47,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Poetry
-        run: python -m pip install --upgrade pip poetry
-
-      - name: Install dependencies
-        run: poetry install --no-interaction --no-ansi
+      - name: Set up backend
+        uses: ./.github/actions/setup/action.yml
 
       - name: Check Python syntax
         run: poetry run python -m compileall .
