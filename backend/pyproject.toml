@@ -13,6 +13,8 @@ packages = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+log_cli_level = "INFO"
+log_cli = true
 
 [tool.poetry.dependencies]
 python = "^3.11"
