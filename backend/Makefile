@@ -85,6 +85,7 @@ docker-clean-all:
 # run the tests
 tests:
 	LOG_LEVEL=INFO poetry run pytest -s tests/unit
+	LOG_LEVEL=INFO poetry run pytest -s tests/integration
 	
 local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh

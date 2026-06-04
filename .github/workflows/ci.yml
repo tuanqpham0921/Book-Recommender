@@ -53,5 +53,8 @@ jobs:
       - name: Check Python syntax
         run: poetry run python -m compileall .
 
-      - name: Run backend tests
+      - name: Run backend unit tests
         run: poetry run pytest tests/unit
+
+      - name: Run backend integration tests
+        run: poetry run pytest tests/integration
