@@ -53,9 +53,9 @@ jobs:
         run: poetry run python -m compileall .
 
       - name: Run backend tests
-        run: poetry run pytest tests
+        run: poetry run pytest tests/unit
 
-  backend-ingestion-smoke-tests:
+  backend-integration-tests:
     name: Backend ingestion smoke test
     runs-on: ubuntu-latest
 
@@ -90,11 +90,5 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction --no-ansi
 
-      # - name: Use smoke-test dataset
-      #   run: cp data/test_books.csv data/books.csv
-
-      - name: Initialize database schema
-        run: poetry run python -m db.bootstrap
-
-      - name: Run backend ingestion script
-        run: LOG_LEVEL=INFO poetry run python -m ingestion.main
+      - name: Run backend integration tests
+        run: poetry run pytest tests/integration
