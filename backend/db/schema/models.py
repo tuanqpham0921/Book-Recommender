@@ -1,5 +1,5 @@
 # SQLAlchemy models (shared by stores / DB layers)
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy import Column, Integer, String, Float, Text, Boolean
 from pgvector.sqlalchemy import Vector
 

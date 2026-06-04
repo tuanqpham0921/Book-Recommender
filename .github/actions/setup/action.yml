@@ -1,0 +1,19 @@
+name: Setup backend
+description: Set up Python, Poetry, and backend dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Poetry
+      shell: bash
+      run: python -m pip install --upgrade pip poetry
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: backend
+      run: poetry install --no-interaction --no-ansi

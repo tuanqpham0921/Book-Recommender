@@ -84,7 +84,12 @@ async def main() -> None:
         else:
             logger.error("❌ Books loading failed.")
 
-        save_file(result, file_name="operation_result")
+        # TODO: add a config option for this
+        # no need to save the file in test environment
+        if ctx.app_env != "test": 
+            save_file(result, file_name="operation_result")
+        
+    return result
 
 if __name__ == "__main__":
     asyncio.run(main())
