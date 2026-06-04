@@ -49,6 +49,9 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction --no-ansi
 
+      - name: Check Python syntax
+        run: poetry run python -m compileall .
+
       - name: Run backend tests
         run: poetry run pytest tests
 
@@ -63,6 +66,7 @@ jobs:
           POSTGRES_DB: book_recommender_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
+        
         ports:
           - 5432:5432
         options: >-
@@ -86,8 +90,11 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction --no-ansi
 
-      - name: Use smoke-test dataset
-        run: cp data/test_books.csv data/books.csv
+      # - name: Use smoke-test dataset
+      #   run: cp data/test_books.csv data/books.csv
+
+      - name: Initialize database schema
+        run: poetry run python -m db.bootstrap
 
       - name: Run backend ingestion script
         run: LOG_LEVEL=INFO poetry run python -m ingestion.main
