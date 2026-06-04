@@ -20,7 +20,7 @@ dev:
 
 # run the ingestion script
 ingestion:
-	LOG_LEVEL=INFO poetry run python ingestion/main.py
+	LOG_LEVEL=INFO poetry run python -m ingestion.main
 
 # clear the pycache
 clean:

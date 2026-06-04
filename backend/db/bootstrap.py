@@ -81,9 +81,9 @@ async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], re
         
     checks: list[OperationResult] = []
     
+    checks.append(await enable_extensions(session_factory))
     checks.append(await init_tables(session_factory))
     checks.append(await create_indexes(session_factory))
-    checks.append(await enable_extensions(session_factory))
     
     return OperationResult(
         name="bootstrap_schema", 

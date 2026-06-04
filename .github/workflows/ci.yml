@@ -5,33 +5,34 @@ on:
     branches:
       - add_github_action_tests
 
+env:
+  APP_NAME: book-recommender-backend
+  APP_ENVIRONMENT: test
+  APP_ALLOW_ORIGINS: http://localhost:3000
+
+  POSTGRES_HOST: localhost
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: book_recommender_test
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_MIN_CONNECTIONS: "1"
+  POSTGRES_MAX_CONNECTIONS: "5"
+  
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  OPENAI_BASE_MODEL: gpt-4.1-mini
+  OPENAI_TOKENIZER_ENCODING: o200k_base
+  OPENAI_EMBEDDING_MODEL: text-embedding-3-large
+  OPENAI_EMBEDDING_DIMENSIONS: "1024"
+  OPENAI_MAX_CONCURRENCY: "1"
+
+defaults:
+  run:
+    working-directory: backend
+
 jobs:
-  backend-tests:
-    name: Backend pytest
+  backend-unit-tests:
+    name: Backend unit tests
     runs-on: ubuntu-latest
-    env:
-      APP_NAME: ${{ vars.APP_NAME }}
-      APP_ENVIRONMENT: ${{ vars.APP_ENVIRONMENT }}
-      APP_ALLOW_ORIGINS: ${{ vars.APP_ALLOW_ORIGINS }}
-
-      POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
-      POSTGRES_PORT: ${{ vars.POSTGRES_PORT }}
-      POSTGRES_DB: ${{ vars.POSTGRES_DB }}
-      POSTGRES_USER: ${{ vars.POSTGRES_USER }}
-      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-      POSTGRES_MIN_CONNECTIONS: ${{ vars.POSTGRES_MIN_CONNECTIONS }}
-      POSTGRES_MAX_CONNECTIONS: ${{ vars.POSTGRES_MAX_CONNECTIONS }}
-      
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_BASE_MODEL: ${{ vars.OPENAI_BASE_MODEL }}
-      OPENAI_TOKENIZER_ENCODING: ${{ vars.OPENAI_TOKENIZER_ENCODING }}
-      OPENAI_EMBEDDING_MODEL: ${{ vars.OPENAI_EMBEDDING_MODEL }}
-      OPENAI_EMBEDDING_DIMENSIONS: ${{ vars.OPENAI_EMBEDDING_DIMENSIONS }}
-      OPENAI_MAX_CONCURRENCY: ${{ vars.OPENAI_MAX_CONCURRENCY }}
-
-    defaults:
-      run:
-        working-directory: backend
 
     steps:
       - name: Check out repository
@@ -50,3 +51,43 @@ jobs:
 
       - name: Run backend tests
         run: poetry run pytest tests
+
+  backend-ingestion-smoke-tests:
+    name: Backend ingestion smoke test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: book_recommender_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d book_recommender_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: python -m pip install --upgrade pip poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Use smoke-test dataset
+        run: cp data/test_books.csv data/books.csv
+
+      - name: Run backend ingestion script
+        run: LOG_LEVEL=INFO poetry run python -m ingestion.main
