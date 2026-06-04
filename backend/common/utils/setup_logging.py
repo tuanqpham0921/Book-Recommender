@@ -2,12 +2,14 @@
 
 import logging
 import os
+import sys
 from pathlib import Path
 from rich.logging import RichHandler
 
 """
 DEBUG, INFO, WARNING, ERROR, CRITICAL
 """
+PLAIN_LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s:%(funcName)s:%(lineno)d - %(message)s"
 
 FILE_LOG_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
 RICH_LOG_FORMAT = "| %(name)s | %(funcName)s:%(lineno)d | %(message)s"
@@ -21,14 +23,18 @@ def setup_logging(environment: str, log_file: Path | str = LOG_FILE, overwrite: 
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
     handlers: list[logging.Handler] = []
-    
-    console_handler = RichHandler(
-        rich_tracebacks=True,
-        show_time=True,
-        show_level=True,
-        show_path=False,
-    )
-    console_handler.setFormatter(logging.Formatter(RICH_LOG_FORMAT, datefmt=DATE_FORMAT))
+    use_plain_logs = os.getenv("CI") or os.getenv("PYTEST_CURRENT_TEST")
+    if use_plain_logs:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(logging.Formatter(PLAIN_LOG_FORMAT, datefmt=DATE_FORMAT))
+    else:
+        console_handler = RichHandler(
+            rich_tracebacks=True,
+            show_time=True,
+            show_level=True,
+            show_path=False,
+        )
+        console_handler.setFormatter(logging.Formatter(RICH_LOG_FORMAT, datefmt=DATE_FORMAT))
     handlers.append(console_handler)
     
     if environment.lower() == "development":
