@@ -2,6 +2,8 @@
 __pycache__/
 venv/
 .venv/
+.pytest_cache/
+.ruff_cache/
 
 # Environment & Config
 config/.env*
