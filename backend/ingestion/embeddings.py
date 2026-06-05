@@ -90,7 +90,7 @@ async def _get_batch_embeddings(
     text_bucket: list[str],
     openai_client: OpenAIClient,
 ) -> dict[str, Any]:
-    embeddings = await openai_client.get_embeddings_batch(text_bucket)
+    embeddings = await openai_client.get_embeddings(text_bucket)
     return {"batch_id": batch_id, "embeddings": embeddings}
     
 @task

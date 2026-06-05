@@ -25,23 +25,11 @@ class OpenAIClient(BaseLLMClient):
         
         self.semaphore = asyncio.Semaphore(openai_settings.MAX_CONCURRENCY)
         
-    async def get_embedding(self, input: str) -> List[float]:
-        """Get the embedding for the input text."""
-        try:
-            async with self.semaphore:
-                response = await self.client.embeddings.create(
-                                    input=input, 
-                                    model=self.embedding_model, 
-                                    dimensions=self.embedding_dimensions
-                                )
-                return response.data[0].embedding
-        
-        except Exception as e:
-            logger.error(f"❌❌❌ OpenAI embedding API call failed: {e}")
-            raise e
-        
-    async def get_embeddings_batch(self, input: List[str]) -> List[float]:
+    async def get_embeddings(self, input: list[str]) -> list[list[float]]:
         """Get the embeddings for the input texts."""
+        if self.token_count(input) > self.max_tokens:
+            raise ValueError(f"Input is too long. Max tokens: {self.max_tokens}")
+        
         try:
             async with self.semaphore:
                 response = await self.client.embeddings.create(
@@ -50,8 +38,7 @@ class OpenAIClient(BaseLLMClient):
                                     dimensions=self.embedding_dimensions
                                 )
                 
-            response_data = sorted(response.data, key=lambda x: x.index)
-            return [data.embedding for data in response_data]
+            return [data.embedding for data in response.data]
         except Exception as e:
             logger.error(f"❌❌❌ OpenAI embedding API call failed: {e}")
             raise e
@@ -98,8 +85,15 @@ class OpenAIClient(BaseLLMClient):
         """Close the OpenAIClient."""
         await self.client._client.aclose()
 
-    def token_count(self, text: str) -> int:
-        """Count the number of tokens in the text."""
+
+    def token_count(self, text: str | list[str]) -> int:
         import tiktoken
+        
         encoding = tiktoken.encoding_for_model(self.embedding_model)
-        return len(encoding.encode(text))
+        
+        # single string
+        if isinstance(text, str):
+            return len(encoding.encode(text))
+        
+        # list of strings
+        return sum(len(encoding.encode(item)) for item in text)

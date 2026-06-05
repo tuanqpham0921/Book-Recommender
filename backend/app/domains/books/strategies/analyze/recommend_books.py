@@ -135,7 +135,7 @@ class RecommendBooks(StrategyBase):
         llm = request_context.llm_client
         book_store = request_context.book_store
 
-        query_embedding = await llm.get_embedding(query_text)
+        query_embedding = await llm.get_embeddings([query_text])[0]
 
         logger.debug("Generated embedding with %d dimensions", len(query_embedding))
 
