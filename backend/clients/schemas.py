@@ -7,17 +7,25 @@ from .base import BaseLLMRequest
 from config import settings
 from app.common.utils import save_file
 from app.common.messages import APIMessage, SystemMessage
+from app.common.sse_stream import SSEStream
+from pydantic import ConfigDict
 
 logger = logging.getLogger(__name__)
 
 
+
 class OpenAIRequest(BaseLLMRequest):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     model: str = settings.openai.BASE_MODEL
+    temperature: float = 0.3
+    top_p: float = 0.8
+    seed: int = 42
+    
     system: SystemMessage
-    messages: List[APIMessage]
+    messages: list[APIMessage]
     tools: list[dict] | None = None
-    tool_choice: dict | str = None
-    max_output_tokens: Optional[int] = None
+    tool_choice: dict | str | None = None
+    sse_stream: SSEStream | None = None
 
     def to_payload(self) -> dict[str, Any]:
         messages = []
@@ -30,10 +38,10 @@ class OpenAIRequest(BaseLLMRequest):
             "messages": messages,
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "seed": 42, 
+            "seed": self.seed, 
         }
-        if self.max_output_tokens:
-            payload["max_output_tokens"] = self.max_output_tokens
+        # if self.max_output_tokens:
+        #     payload["max_output_tokens"] = self.max_output_tokens
         if self.tools:
             payload["tools"] = self.tools
             payload["tool_choice"] = self.tool_choice if self.tool_choice else "auto"

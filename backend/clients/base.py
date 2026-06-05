@@ -9,17 +9,7 @@ class BaseLLMRequest(BaseModel, ABC):
     """Base schema for any LLM request (OpenAI, Anthropic, etc.)."""
 
     model: str
-    temperature: float = 0.3
-    top_p: float = 0.8
-    sse_stream: Optional[Any] = None # TODO: Optional[SSEStream]
 
-    # Trimming + runtime
-    max_prompt_tokens: int = 120_000
-    reserved_output_tokens: int = 4_000
-    # trim_strategy: Literal["recency", "summary", "domain"] = "recency"
-
-    # Internal metadata
-    # request_id: Optional[str] = None
 
     @abstractmethod
     def to_payload(self) -> dict[str, Any]:
