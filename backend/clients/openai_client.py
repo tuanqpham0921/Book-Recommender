@@ -10,6 +10,7 @@ from .base import BaseLLMClient
 from config.settings import OpenAISettings
 from app.common.messages import AssistantMessage
 from app.common.sse_stream import SSEStream
+from config.constants import OpenAIConstants
 import asyncio
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ class OpenAIClient(BaseLLMClient):
         self.client               = AsyncOpenAI(api_key=openai_settings.API_KEY)
         self.embedding_model      = openai_settings.EMBEDDING_MODEL
         self.embedding_dimensions = openai_settings.EMBEDDING_DIMENSIONS
+        self.max_tokens = OpenAIConstants.MAX_TOKENS
         
         self.semaphore = asyncio.Semaphore(openai_settings.MAX_CONCURRENCY)
     

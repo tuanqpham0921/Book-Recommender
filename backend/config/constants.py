@@ -13,6 +13,8 @@ class AppConfig:
     DEFAULT_TIMEOUT  = 10.0
 
 
+class OpenAIConstants:
+    MAX_TOKENS = 100_000
 
 class DatabaseConstants:
     """Database constants."""

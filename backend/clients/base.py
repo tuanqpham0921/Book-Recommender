@@ -18,8 +18,7 @@ class BaseLLMRequest(BaseModel, ABC):
 
 class BaseLLMClient(ABC):
     """Abstract base interface for all LLM providers."""
-
-    max_tokens: int = 100_000
+    max_tokens: int
 
     @abstractmethod
     async def execute(self, req: BaseLLMRequest):
