@@ -24,7 +24,9 @@ class OpenAIClient(BaseLLMClient):
         self.embedding_dimensions = openai_settings.EMBEDDING_DIMENSIONS
         
         self.semaphore = asyncio.Semaphore(openai_settings.MAX_CONCURRENCY)
-        
+    
+    # these functions are like session commit()
+    # use them similarly to ensure proper error handling and logging
     async def get_embeddings(self, input: list[str]) -> list[list[float]]:
         """Get the embeddings for the input texts."""
         if self.token_count(input) > self.max_tokens:

@@ -113,6 +113,7 @@ async def embed_missing_books(
     
     # get the bucketed embeddings
     # get the batch embeddings concurrently
+    # TODO: move this to a separate function (for logging)
     coroutines = []
     isbn13_batch = {}
     async for bucket in _get_bucketed_embeddings(session_factory, openai_client):
