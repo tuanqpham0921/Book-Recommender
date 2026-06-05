@@ -40,8 +40,8 @@ class OpenAIClient(BaseLLMClient):
                 
             return [data.embedding for data in response.data]
         except Exception as e:
-            logger.error(f"❌❌❌ OpenAI embedding API call failed: {e}")
-            raise e
+            logger.exception(f"❌❌❌ OpenAI embedding API call failed: {e}")
+            raise
 
     async def execute(self, req: OpenAIRequest) -> AssistantMessage:
         """Execute the chat completion."""
@@ -65,8 +65,8 @@ class OpenAIClient(BaseLLMClient):
             # --- Execute ---
             return assistant_msg
         except Exception as e:
-            logger.error(f"❌❌❌ OpenAI API call failed: {e}")
-            raise e
+            logger.exception(f"❌❌❌ OpenAI API call failed: {e}")
+            raise
 
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
         """Stream the chat completion."""
