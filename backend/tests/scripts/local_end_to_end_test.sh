@@ -23,7 +23,7 @@ LOG_LEVEL=INFO poetry run pytest -s tests/unit
 
 make docker-clean-all
 make postgres-start
-sleep 10
+sleep 5
 
 LOG_LEVEL=INFO poetry run python -m ingestion.main
 
