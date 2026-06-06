@@ -46,7 +46,6 @@ pytest-cov = "^7.0.0"
 jupyter = "^1.1.1"
 notebook = "^7.4.7"
 ruff = "^0.15.16"
-pyright = "^1.1.410"
 
 [build-system]
 requires = ["poetry-core"]
