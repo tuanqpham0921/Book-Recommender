@@ -31,7 +31,7 @@ class FilesLocationConstants:
     ENV_FILE = PROJECT_ROOT / "config" / ".env"
     
     EXAMPLE_PROMPT_DIR = DATA_DIR / "prompt_example"
-    PROMPTS_DIR = PROJECT_ROOT / "app" / "prompts"
+    PROMPTS_DIR = PROJECT_ROOT / "app" / "domains"
     EXPORT_DIR = PROJECT_ROOT / "logs"
     BACKUP_DIR = DATA_DIR / "backup"
     SCHEMA_DIR = PROJECT_ROOT / "db" / "schema"

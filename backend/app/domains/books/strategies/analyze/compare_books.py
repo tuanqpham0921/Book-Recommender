@@ -38,7 +38,7 @@ class CompareBooks(StrategyBase):
         # Load and format prompt from external file
         comparison_fields = comparison_criteria or "general characteristics"
         prompt = format_prompt(
-            "books/compare_books_response.txt",
+            "books/prompts/compare_books_response.txt",
             books_data=books_data,
             comparison_fields=comparison_fields,
             similarity_basis_section=similarity_basis_section,

@@ -99,7 +99,7 @@ class RecommendBooks(StrategyBase):
 
                 # Build the recommendation prompt
                 prompt = format_prompt(
-                    "books/generate_search_query.txt",
+                    "books/prompts/generate_search_query.txt",
                     semantic_input=semantic_input,
                     reference_books=book_data,
                 )
@@ -181,7 +181,7 @@ class RecommendBooks(StrategyBase):
 
         # Build the recommendation prompt
         prompt = format_prompt(
-            "books/semantic_recommendation.txt",
+            "books/prompts/semantic_recommendation.txt",
             semantic_input=semantic_input,
             reference_books=book_data,
             candidate_books=candidates_text,
