@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
+import asyncio
 from pydantic import BaseModel
 
 
@@ -18,7 +19,9 @@ class BaseLLMRequest(BaseModel, ABC):
 class BaseLLMClient(ABC):
     """Abstract base interface for all LLM providers."""
 
+    client: Any
     max_tokens: int
+    semaphore: asyncio.Semaphore
 
     @abstractmethod
     async def execute(self, req: BaseLLMRequest):

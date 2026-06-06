@@ -17,12 +17,17 @@ from db.schema import BookModel
 from ingestion.embeddings import embed_missing_books
 from ingestion.store import store_books_from_csv
 from ingestion.utils import count_csv_data_rows
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from clients.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
 
 
 @task
-async def load_books(ctx: AppContext) -> OperationResult:
+async def load_books(
+    session_factory: async_sessionmaker[AsyncSession],
+    openai_client: OpenAIClient,
+) -> OperationResult:
     """Load books from CSV into PostgreSQL and embed any missing vectors."""
 
     schema = DatabaseConstants.SCHEMA
@@ -35,22 +40,24 @@ async def load_books(ctx: AppContext) -> OperationResult:
 
     checks = []
     readiness = await is_ready(
-        ctx.session_factory, schema=schema, table=table, min_rows=csv_rows
+        session_factory, schema=schema, table=table, min_rows=csv_rows
     )
     checks.append(readiness)
 
-    checks.append(await bootstrap_schema(ctx.session_factory, readiness.result))
+    checks.append(await bootstrap_schema(session_factory, readiness.result))
 
     checks.append(
-        await store_books_from_csv(ctx.session_factory, csv_path, readiness.result)
+        await store_books_from_csv(session_factory, csv_path, readiness.result)
     )
 
-    checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
+    checks.append(
+        await embed_missing_books(session_factory, openai_client)
+    )
 
     if not readiness.ok:
         logger.info("Readiness check failed first time, retrying after ingestion...")
         readiness = await is_ready(
-            ctx.session_factory, schema=schema, table=table, min_rows=csv_rows
+            session_factory, schema=schema, table=table, min_rows=csv_rows
         )
         readiness.name += "---retry"
         readiness.details = {"retry_reason": "Readiness check failed first time."}
@@ -72,7 +79,10 @@ async def main() -> None:
         log_file=FilesLocationConstants.LOG_DIR / "ingestion_log.log",
     )
     async with AppContext(settings) as ctx:
-        result = await load_books(ctx)
+        result = await load_books(
+            session_factory=ctx.session_factory,
+            openai_client=OpenAIClient(settings.openai)
+        )
 
         # print("-----------FINAL RESULT-----------------")
         # result.print()
