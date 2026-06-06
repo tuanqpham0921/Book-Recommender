@@ -44,6 +44,5 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-load = "app.utils.loader:main"
-get-loader-stats = "app.utils.get_loader_stats:main"
-export = "app.utils.export:main"
+ingestion = "ingestion.main:main"
+app = "app.main:main"

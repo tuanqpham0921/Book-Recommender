@@ -192,9 +192,10 @@ class Orchestrator:
             await sse_stream.send("complete", {"status": "completed"})
             logger.info("✅ Orchestration completed successfully")
 
+        #TODO: add Dev vs Prod handling
         except asyncio.TimeoutError:
             msg = "Uhh... request timed out (5 mins) while processing your query."
-            logger.warning(msg)
+            logger.info(msg)
             await sse_stream.send_error(msg)
 
         except asyncio.CancelledError:

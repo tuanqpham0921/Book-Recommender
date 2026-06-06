@@ -7,6 +7,6 @@ __all__ = [
     "InitialParseNode",
     "InitialParseResult",
     "TaskGenerationNode",
-    "BookClassificationNode"
+    "BookClassificationNode",
     "BookClassificationResult",
 ]

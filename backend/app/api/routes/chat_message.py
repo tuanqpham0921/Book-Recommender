@@ -28,43 +28,30 @@ async def generate_chat_response(
 ) -> AsyncGenerator[Any, None]:
     
     # make sure to register the stream with the registry
-    orchestrator_task = asyncio.create_task(
-        orchestrator.run(request_context=request_context)
-    )
-    
-    # register the stream with the registry
-    await registry.register(
-        request_context.session_id,
-        request_context.sse_stream,
-        orchestrator_task,
-    )
+    try:
+        orchestrator_task = asyncio.create_task(
+            orchestrator.run(request_context=request_context)
+        )
+        
+        # register the stream with the registry
+        # TODO: make sure this works with the new registry
+        await registry.register(
+            request_context.session_id,
+            request_context.sse_stream,
+            orchestrator_task,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Unable to register stream") from e
 
     try:
         async for event in request_context.sse_stream:
             yield event
-
-        try:
-            await orchestrator_task
-        except asyncio.CancelledError:
-            pass
-
+        await orchestrator_task
+        
     except Exception as e:
-        logger.exception(f"❌ Orchestration error at endpoint: {e}")
-        
-        if request_context.app_env == "PRODUCTION":
-            await request_context.sse_stream.send_error(
-                "Something went wrong while processing your request."
-            )
-        
-        else:
-            await request_context.sse_stream.send_error(
-                f"❌ Endpoint orchestration error: {str(e)}"
-            )
-            raise HTTPException(status_code=500, detail="Internal server error")
-
+        raise HTTPException(status_code=500, detail="Orchestration error") from e
     finally:
         registry.unregister(request_context.session_id, orchestrator_task)
-        await request_context.sse_stream.close()
 
 
 @router.post("/session/{session_id}/message")
