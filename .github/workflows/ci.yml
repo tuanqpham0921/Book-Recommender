@@ -34,10 +34,9 @@ defaults:
     working-directory: backend
 
 jobs:
-  backend-unit-tests:
-    name: Backend unit tests
+  backend-quality:
+    name: Backend quality
     runs-on: ubuntu-latest
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -47,6 +46,19 @@ jobs:
 
       - name: Check Python syntax
         run: poetry run python -m compileall .
+
+      - name: Check Code Quality
+        run: make quality-check
+
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up backend
+        uses: ./.github/actions/setup
 
       - name: Run backend unit tests
         run: poetry run pytest tests/unit
