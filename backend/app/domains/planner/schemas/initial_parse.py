@@ -3,9 +3,6 @@ import logging
 from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 
-from app.common.utils import _examples
-
-
 logger = logging.getLogger(__name__)
 
 

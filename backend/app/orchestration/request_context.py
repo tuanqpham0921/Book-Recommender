@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 from app.common.enums import Role
-from app.common.utils import now_iso, save_file
+from common.utils import now_iso, save_file
 from app.common.messages import APIMessage, UserMessage, AssistantMessage, ToolMessage
 from db.stores.book_store import BookStore
 from app.common.sse_stream import SSEStream

@@ -2,9 +2,10 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
-from config import FilesLocationConstants
 
+from config import FilesLocationConstants
 logger = logging.getLogger(__name__)
+
 
 class PromptLoader:
     """Utility for loading and formatting prompt templates from files."""

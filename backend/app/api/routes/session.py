@@ -1,10 +1,10 @@
 import logging
 
 from uuid import uuid4
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException
 
 from app.api.schemas import SessionOut
-from app.common.utils import now_iso
+from common.utils import now_iso
 
 logger = logging.getLogger(__name__)
 # Store assistant instances to access book results

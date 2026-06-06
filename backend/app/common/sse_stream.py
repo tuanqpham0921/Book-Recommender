@@ -81,6 +81,9 @@ class SSEStream:
     
     async def close(self):
         """Close the stream."""
+        if self._finished:
+            return
+        
         self._finished = True
         await self._queue.put(self._stream_end)
         logger.info("🔚 Endpoint cleanup: closing SSE stream")
