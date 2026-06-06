@@ -18,6 +18,7 @@ def get_session_factory(engine: AsyncEngine):
         expire_on_commit=False,  # Keep objects usable after commit
     )
     
+    logger.info("Session factory created")
     return session_factory
 
 def get_async_engine(sqlalchemy_settings: SQLAlchemySettings) -> AsyncEngine:
@@ -33,15 +34,15 @@ def get_async_engine(sqlalchemy_settings: SQLAlchemySettings) -> AsyncEngine:
         pool_timeout=60,     # Wait up to 60 seconds for a connection
         # echo=settings.debug, # Log SQL queries in debug mode
     )
+    
+    logger.info("Async engine created")
     return engine
 
     
 async def close_async_engine(_async_engine: AsyncEngine):
-    """Close global async engine."""
-
-    if _async_engine:
-        await _async_engine.dispose()
-        logger.info("🛑 SQLAlchemy engine disposed")
+    """Close the async engine."""
+    await _async_engine.dispose()
+    logger.info("SQLAlchemy engine disposed")
         
 async def check_connection(session: AsyncSession) -> bool:
     """Check if the database connection is established.

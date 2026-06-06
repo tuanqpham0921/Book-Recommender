@@ -88,7 +88,7 @@ class OpenAIClient(BaseLLMClient):
     async def close(self):
         """Close the OpenAIClient."""
         await self.client._client.aclose()
-
+        logger.info("OpenAI client closed")
 
     def token_count(self, text: str | list[str]) -> int:
         import tiktoken
