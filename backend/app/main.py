@@ -3,7 +3,6 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.lifecycle import start_all, shutdown_all
 from config import settings
 from common.utils import setup_logging
 from config import FilesLocationConstants
@@ -16,27 +15,28 @@ setup_logging(
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup phase - Critical for Cloud Run
-    logger.info("🚀 Application starting...")
-    logger.info("🔧 Initializing services for Cloud Run...")
+async def lifespan(app: FastAPI): 
+    from common.context import AppContext
+    from app.orchestration.orchestrator import Orchestrator
     
-    try:
-        await start_all(app)
-        logger.info("✅ All services initialized successfully")
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-        raise  # This will prevent Cloud Run from routing traffic
+    logger.info("Starting App lifespan")
+    async with AppContext(settings) as ctx:
+        
+        app.state.openai_client = ctx.openai_client
+        logger.info("OpenAI client set")
+        
+        app.state.sqlalchemy_engine = ctx.engine
+        logger.info("SQLAlchemy engine set")
+        
+        app.state.sqlalchemy_session_factory = ctx.session_factory
+        logger.info("SQLAlchemy session factory set")
+        
+        app.state.orchestrator = Orchestrator()
+        logger.info("Orchestrator set")
+        
+        yield
     
-    yield  # App runs here
-    
-    # Shutdown phase - Graceful cleanup when scaling to zero
-    logger.info("🔻 Application shutting down...")
-    try:
-        await shutdown_all(app)
-        logger.info("✅ Graceful shutdown completed")
-    except Exception as e:
-        logger.error(f"❌ Shutdown error: {e}")
+    logger.info("Ending App lifespan")
 
 
 app = FastAPI(
