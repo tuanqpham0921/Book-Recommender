@@ -4,7 +4,7 @@ from config.constants import FilesLocationConstants
 
 
 class SQLAlchemySettings(BaseSettings):
-    """Connection and pool settings for the async SQLAlchemy engine (PostgreSQL + asyncpg)."""
+    """Connection and pool settings for the async SQLAlchemy engine."""
 
     HOST: str
     PORT: int

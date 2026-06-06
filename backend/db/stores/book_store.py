@@ -24,96 +24,97 @@ class BookStore(BaseStore[BookModel]):
 
     async def get_by_isbn(self, isbn: str) -> list[dict[str, Any]]:
         """Get a single book by ISBN-13"""
-        
+
         stmt = build_isbn_search(self.model, isbn)
         result = await self._execute_statement(stmt)
         row = result.scalars().first()
         return [self.row_to_dict(row)] if row else None
 
     async def search_by_title(
-        self, title: str, authors: list[str], limit: int = 10, similarity_threshold: float = 0.7
+        self,
+        title: str,
+        authors: list[str],
+        limit: int = 10,
+        similarity_threshold: float = 0.7,
     ) -> list[dict[str, Any]]:
         """Search books by title with fuzzy matching."""
-        
-        stmt = build_title_search(self.model, title, authors, limit, similarity_threshold)
+
+        stmt = build_title_search(
+            self.model, title, authors, limit, similarity_threshold
+        )
+
         result = await self._execute_statement(stmt)
         rows = result.scalars().all()
         return [self.row_to_dict(row) for row in rows]
-    
+
     async def search_by_filters(
-        self, 
+        self,
         filters: BooksFilter,
     ) -> list[dict[str, Any]]:
         """Search books using structured filters."""
-        
+
         stmt = build_filtered_search(self.model, filters)
         result = await self._execute_statement(stmt)
         rows = result.scalars().all()
         return [self.row_to_dict(row) for row in rows]
 
     async def search_by_book_filter(
-        self, 
+        self,
         filters: BooksFilter,
     ) -> list[dict[str, Any]]:
         """Search books separately per author, then combine results."""
-        
+
         if not filters.authors:
             # No authors specified, use regular search
             return await self.search_by_filters(filters)
-        
+
         all_results = []
-        
+
         # to ensure we have each authors in the results
         for author_name in filters.authors:
             # Create a filter for just this author
             author_filter = filters.model_copy(
-                update={"authors": [author_name]},
-                deep=True
+                update={"authors": [author_name]}, deep=True
             )
-            
+
             results = await self.search_by_filters(author_filter)
             all_results.extend(results)
-        
+
         # Remove duplicates (in case a book appears for multiple authors)
         seen_isbns = set()
         unique_results = []
         for book in all_results:
-            if book.get('isbn13') not in seen_isbns:
+            if book.get("isbn13") not in seen_isbns:
                 unique_results.append(book)
-                seen_isbns.add(book.get('isbn13'))
-        
+                seen_isbns.add(book.get("isbn13"))
+
         return unique_results
-    
+
     async def search_by_embedding(
         self,
         query_embedding: list[float],
         filters: BooksFilter | None = None,
         similarity_threshold: float = 0.7,
-        limit: int = 50
+        limit: int = 50,
     ) -> list[dict[str, Any]]:
         """Search books using embedding similarity."""
-        
+
         stmt = build_embedding_search(
-            self.model,
-            query_embedding,
-            filters,
-            similarity_threshold,
-            limit
+            self.model, query_embedding, filters, similarity_threshold, limit
         )
-        
+
         result = await self._execute_statement(stmt)
         rows = result.all()
-        
+
         # Convert to dicts and include similarity scores
         books_with_scores = []
         for row in rows:
             book_dict = self.row_to_dict(row[0])  # The book object
-            book_dict['similarity_score'] = float(row[1])  # The similarity score
+            book_dict["similarity_score"] = float(row[1])  # The similarity score
             books_with_scores.append(book_dict)
-        
+
         return books_with_scores
-    
-    
+
     async def iter_missing_embeddings(
         self,
         *,
@@ -133,10 +134,14 @@ class BookStore(BaseStore[BookModel]):
         result = await self.session.stream(stmt)
         async for row in result.mappings():
             yield dict(row)
-    
+
     async def get_num_book_missing_embeddings(self) -> int:
         """Get the number of books that are missing embeddings."""
-        stmt = select(func.count()).select_from(BookModel).where(BookModel.embedding.is_(None))
+        stmt = (
+            select(func.count())
+            .select_from(BookModel)
+            .where(BookModel.embedding.is_(None))
+        )
         result = await self.session.execute(stmt)
         return result.scalar()
 
@@ -162,5 +167,5 @@ class BookStore(BaseStore[BookModel]):
             ),
             "ratings_count": row.ratings_count,
             "genre": row.genre,
-            "is_children": row.is_children
+            "is_children": row.is_children,
         }

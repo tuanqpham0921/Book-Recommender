@@ -12,11 +12,11 @@ class Settings(BaseModel):
     """Unified application settings (aggregates all sub-configs)."""
 
     model_config = SettingsConfigDict(
-        env_file=FilesLocationConstants.ENV_FILE, 
+        env_file=FilesLocationConstants.ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
-    
+
     sqlalchemy: SQLAlchemySettings = SQLAlchemySettings()
     openai: OpenAISettings = OpenAISettings()
     app: AppSettings = AppSettings()

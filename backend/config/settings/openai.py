@@ -11,7 +11,7 @@ class OpenAISettings(BaseSettings):
     EMBEDDING_MODEL: str
     EMBEDDING_DIMENSIONS: int
     MAX_CONCURRENCY: int
-    
+
     model_config = SettingsConfigDict(
         env_file=FilesLocationConstants.ENV_FILE,
         env_prefix="OPENAI_",

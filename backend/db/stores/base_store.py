@@ -6,15 +6,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.utils import compile_sql
 
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class BaseStore(Generic[T], ABC):
     """Base store with common database operations."""
-    
+
     def __init__(self, session: AsyncSession, model_class: type[T]):
         self.session = session
         self.model = model_class
-        
+
     async def _execute_statement(self, stmt):
         try:
             print("------ STMT ------")
@@ -24,20 +25,23 @@ class BaseStore(Generic[T], ABC):
             return result
         except Exception as e:
             raise e
-    
+
     async def get_by_id(self, id: Any) -> T | None:
         """Get entity by primary key."""
-        return await self._execute_statement(select(self.model).where(self.model.id == id))
-    
+        return await self._execute_statement(
+            select(self.model).where(self.model.id == id)
+        )
+
     async def get_all(self, limit: int = 100) -> list[T]:
         """Get all entities with limit."""
         stmt = select(self.model).limit(limit)
         result = await self._execute_statement(stmt)
         return result.scalars().all()
-    
+
     async def count(self) -> int:
         """Count total entities."""
         from sqlalchemy import func
+
         stmt = select(func.count(self.model.id))
         result = await self._execute_statement(stmt)
         return result.scalar()

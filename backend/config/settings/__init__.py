@@ -8,5 +8,5 @@ __all__ = [
     "AppSettings",
     "OpenAISettings",
     "SQLAlchemySettings",
-    "settings"
+    "settings",
 ]

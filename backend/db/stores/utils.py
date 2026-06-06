@@ -1,6 +1,5 @@
 """Query builder for book-related database operations."""
 
-
 from app.domains.books.schemas.request_schemas import BooksFilter
 from sqlalchemy import and_, func, or_, select, text
 
@@ -224,7 +223,7 @@ def build_embedding_search(
     #     # Similarity threshold
     #     # embed_col.cosine_distance(query_embedding) < (1 - similarity_threshold)
     # )
-    
+
     # Apply additional filters if provided
     if filters:
         # Temporarily remove limit from filters to apply it after sorting by similarity

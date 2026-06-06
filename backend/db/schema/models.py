@@ -7,6 +7,7 @@ from config import settings
 
 Base = declarative_base()
 
+
 # TODO: this is an ORM file, we should avoid confusion with dataclasses
 class BookModel(Base):
     """SQLAlchemy model for books table."""

@@ -13,17 +13,17 @@ class AppContext:
     engine: AsyncEngine
     openai_client: OpenAIClient
     session_factory: async_sessionmaker[AsyncSession]
-    
+
     def __init__(self, settings: Settings) -> None:
         self.engine = get_async_engine(settings.sqlalchemy)
         self.openai_client = OpenAIClient(settings.openai)
         self.session_factory = get_session_factory(self.engine)
-        
+
         self.app_env = os.getenv("APP_ENVIRONMENT")
-        
+
     async def __aenter__(self) -> "AppContext":
         return self
-    
+
     async def __aexit__(
         self,
         exc_type: type[BaseException] | None,
@@ -32,4 +32,3 @@ class AppContext:
     ) -> None:
         await close_async_engine(self.engine)
         await self.openai_client.close()
-        

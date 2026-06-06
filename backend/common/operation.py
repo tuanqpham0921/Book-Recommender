@@ -9,6 +9,7 @@ from typing import Any
 @dataclass(slots=True)
 class OperationResult:
     """Outcome of a single named check or step."""
+
     name: str | None = None
     ok: bool = True
     message: str | None = None
@@ -17,7 +18,7 @@ class OperationResult:
     duration: float | None = None
     run_time_error: Exception | None = None
     result: Any | None = None
-    
+
     def print(self, indent: int = 0) -> None:
         prefix = "    " * indent
         print(f"{prefix}{'✅' if self.ok else '❌'} {self.name}: {self.message}")
@@ -30,7 +31,8 @@ class OperationResult:
             print(f"{prefix}Result: {self.result}")
         if self.duration:
             print(f"{prefix}Duration: {self.duration} seconds")
-            
+
+
 def task(
     func: Callable[..., Any] | None = None,
     *,
@@ -43,25 +45,25 @@ def task(
             func_ref = f"{func.__module__}.{func.__qualname__}"
             try:
                 time_start = time.perf_counter()
-                
+
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
-                
+
                 result = await func(*args, **kwargs)
                 time_end = time.perf_counter()
                 result.duration = time_end - time_start
                 result.name = func_ref
-                
+
                 if not result.ok:
                     # runtime failure, app still runs
                     logger.warning(f"Task {func_ref} failed: {result.message}")
                 elif log_info:
                     logger.info(f"Task {func_ref} : {result.message}")
-                
+
                 return result
             except Exception as e:
                 logger.exception(f"Task {func_ref} failed: {e}")
-                
+
                 result = OperationResult(
                     name=func_ref,
                     ok=False,

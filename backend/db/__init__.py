@@ -16,5 +16,5 @@ __all__ = [
     "enable_extensions",
     "init_tables",
     "create_indexes",
-    "is_ready"
+    "is_ready",
 ]

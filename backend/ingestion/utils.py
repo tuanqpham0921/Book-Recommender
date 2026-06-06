@@ -1,4 +1,5 @@
 """Utils for ingestion."""
+
 from pathlib import Path
 
 import pandas as pd
@@ -82,7 +83,9 @@ def prepare_chunk(chunk: pd.DataFrame) -> list[dict]:
     cleaned_chunk: list[dict] = []
 
     for _, row in chunk.iterrows():
-        if not pd.notna(row.get("title")) or not pd.notna(row.get("tagged_description")):
+        if not pd.notna(row.get("title")) or not pd.notna(
+            row.get("tagged_description")
+        ):
             continue
         try:
             book = row_to_book(row)
