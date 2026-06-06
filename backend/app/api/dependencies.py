@@ -1,11 +1,12 @@
 import logging
-from typing import Any, AsyncGenerator
+from typing import AsyncGenerator
 
 from fastapi import Request, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.book_store import BookStore
 from clients import OpenAIClient
+from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
@@ -57,19 +58,35 @@ async def get_book_store(
     """Get BookStore instance with injected session."""
     return BookStore(session)
 
+def get_app_env(request: Request) -> str:
+    """Get the app environment"""
+    app_env = getattr(request.app.state, "app_env", None)
+    if app_env is None:
+        raise HTTPException(status_code=503, detail="App environment not available")
+    return app_env
+
+def get_sse_stream() -> SSEStream:
+    """Get the SSE stream"""
+    try:
+        return SSEStream()
+    except Exception as e:
+        logger.exception(f"❌ Failed to create SSE stream: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create SSE stream: {e}")
 
 async def get_request_context_factory(
-    # state_manager: StateManager = Depends(get_state_manager),
     llm_client=Depends(get_openai_client),
-    session=Depends(get_sqlalchemy_session),
     book_store=Depends(get_book_store),
+    sse_stream=Depends(get_sse_stream),
+    app_env: str = Depends(get_app_env),
 ):
     """Factory to create request contexts with runtime arguments."""
-
-    def create_context(session_id: str, user_message, sse_stream=None):
-        from app.orchestration.request_context import RequestContext
+    from app.common.messages import UserMessage
+    from app.orchestration.request_context import RequestContext
+    
+    def create_context(session_id: str, user_message: UserMessage):
 
         return RequestContext(
+            app_env=app_env,
             session_id=session_id,
             user_message=user_message,
             llm_client=llm_client,

@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RequestContext:
     """Enhanced request context with separated conversation streams."""
-
+    app_env: str
+    
     # Core identifiers
     session_id: str
     user_message: UserMessage

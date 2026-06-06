@@ -31,6 +31,9 @@ async def lifespan(app: FastAPI):
         app.state.sqlalchemy_session_factory = ctx.session_factory
         logger.info("SQLAlchemy session factory set")
         
+        app.state.app_env = ctx.app_env
+        logger.info(f"App environment set to: {app.state.app_env.upper()}")
+        
         app.state.orchestrator = Orchestrator()
         logger.info("Orchestrator set")
         
