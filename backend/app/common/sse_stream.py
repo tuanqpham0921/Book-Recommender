@@ -28,7 +28,7 @@ class SSEStream:
                 raise StopAsyncIteration
             return ServerSentEvent(data=data)
         except asyncio.TimeoutError:
-            logger.warning("⏰ SSE stream timeout")
+            logger.error("⏰ SSE stream timeout")
             # Don't call send_error here to avoid recursion
             raise StopAsyncIteration
         except Exception as e:
@@ -37,39 +37,39 @@ class SSEStream:
             )  # Use exception() for full traceback
             raise StopAsyncIteration
 
-    async def send_json(self, data):
-        """Send raw JSON data."""
-        try:
-            if not self._finished:
-                await self._queue.put(json.dumps(data))
-        except Exception as e:
-            logger.exception(f"❌ Error sending JSON data: {e}")
-
     async def send(self, type: str = "content.delta", data: str = ""):
         """Send a typed message."""
+        if self._finished:
+            logger.warning("🔚 SSE stream already finished")
+            return
+        
         try:
-            if not self._finished:
-                await self._queue.put(json.dumps({"type": type, "data": data}))
-                logger.debug(f"📡 SSE sent: {type}")
+            await self._queue.put(json.dumps({"type": type, "data": data}))
         except Exception as e:
-            logger.exception(f"❌ Error sending SSE message: {e}")
-
+            logger.exception(f"❌ Error sending SSE type: {type} with data: {data}")
+            
     async def send_event(self, event_type: str, data: Dict[str, Any]):
         """Send an SSE event with structured data."""
+        
+        try:
+            event_data = {"event": event_type, "data": json.dumps(data)}
+            await self._queue.put(json.dumps(event_data))
+            logger.debug(f"📡 SSE Event sent: {event_type}")
+        except Exception as e:
+            logger.exception(f"❌ Error sending SSE event: {event_type} with data: {data}")
+            
+    async def send_book_card(self, position: int, data: dict):
+        """Send raw JSON data."""
+        if self._finished:
+            logger.warning("🔚 SSE stream already finished")
+            return
+        
         try:
             if not self._finished:
-                event_data = {"event": event_type, "data": json.dumps(data)}
-                await self._queue.put(json.dumps(event_data))
-                logger.debug(f"📡 SSE Event sent: {event_type}")
+                await self._queue.put(json.dumps({"type": "book_card", "position": position, "data": data}))
+                await asyncio.sleep(0.2)  # Smooth streaming
         except Exception as e:
-            logger.exception(f"❌ Error sending SSE event: {e}")
-
-    async def close(self):
-        """Close the stream."""
-        if not self._finished:
-            self._finished = True
-            await self._queue.put(self._stream_end)
-            logger.debug("🏁 SSE stream closed")
+            logger.exception(f"❌ Error sending book card: {position} with data: {data}")
 
     async def send_chars(self, data: str, delay: float = 0.01):
         """Stream text character by character for smoother effect."""
@@ -80,20 +80,11 @@ class SSEStream:
 
     async def send_ui_loading(self, text: str):
         """Send loading message to UI."""
-        try:
-            logger.debug(f"Sending ui.loading: {text}")
-            await self.send(type="ui.loading", data=text)
-        except Exception as e:
-            logger.exception(f"❌ Error in send_ui_loading: {e}")
-
+        await self.send(type="ui.loading", data=text)
 
     async def send_error(self, text: str):
         """Send error message."""
-        try:
-            logger.debug(f"Sending error: {text}")
-            await self.send(type="error", data=text)
-        except Exception as e:
-            logger.exception(f"❌ Error in send_error: {e}")
+        await self.send(type="error", data=text)
 
     async def send_step_complete(self, step: str, result: Optional[Dict] = None):
         """Send step completion notification."""
@@ -109,7 +100,10 @@ class SSEStream:
     async def send_mermaid(self, data: str):
         """Send mermaid diagram."""
         await self.send(type="mermaid.diagram", data=data)
-
-    def is_finished(self) -> bool:
-        """Check if stream is finished."""
-        return self._finished
+    
+    async def close(self):
+        """Close the stream."""
+        if not self._finished:
+            self._finished = True
+            await self._queue.put(self._stream_end)
+            logger.info("🔚 Endpoint cleanup: closing SSE stream")

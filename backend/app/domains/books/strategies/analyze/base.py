@@ -38,10 +38,8 @@ class StrategyBase:
                 if book_dict["isbn13"] in sent_isbn:
                     continue
 
-                await sse_stream.send_json(
-                    {"type": "book_card", "position": i, "data": book_dict}
-                )
-                await asyncio.sleep(0.2)  # Smooth streaming
+                await sse_stream.send_book_card(position=i, data=book_dict)
+                
                 sent_isbn.add(book_dict["isbn13"])
 
     def _format_books_for_llm(self, results):
