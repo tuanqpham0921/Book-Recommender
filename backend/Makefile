@@ -104,3 +104,27 @@ tests:
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
+
+# -------------------
+# Quality commands
+# -------------------
+
+# run the quality checks
+.PHONY: quality-check
+quality-check: lint format-check
+
+# run the lint checks
+.PHONY: lint
+lint:
+	poetry run ruff check .
+
+# run the format checks
+.PHONY: format-check
+format-check:
+	poetry run ruff format --check .
+
+# fix the quality issues
+.PHONY: quality-fix
+quality-fix:
+	poetry run ruff check . --fix
+	poetry run ruff format .
