@@ -1,16 +1,17 @@
 """Persist normalized book rows to PostgreSQL."""
+import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import update
-from db.schema import BookModel
-from ingestion.utils import count_csv_data_rows, iter_books_from_csv
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
 from common.operation import OperationResult, task
 from db.readiness import ReadinessResult
-import logging
-from typing import Any, AsyncIterator
-from sqlalchemy import select
+from db.schema import BookModel
+from ingestion.utils import count_csv_data_rows, iter_books_from_csv
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from config.constants import FilesLocationConstants
+
 
 class SQLAlchemySettings(BaseSettings):
     """Connection and pool settings for the async SQLAlchemy engine (PostgreSQL + asyncpg)."""

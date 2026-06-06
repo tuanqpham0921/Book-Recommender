@@ -5,12 +5,9 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from db.schema.extensions import REQUIRED_EXTENSIONS
-
+from common.operation import OperationResult, task
 from config.constants import FilesLocationConstants
 from db.readiness import ReadinessResult
-
-from common.operation import OperationResult, task
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +96,12 @@ async def bootstrap_schema(session_factory: async_sessionmaker[AsyncSession], re
 # poetry run python db/bootstrap.py
 # -----------------------------------------------------------------------------
 async def main() -> None:
-    from db.async_engine import close_async_engine, get_async_engine, get_session_factory
     from config import settings
+    from db.async_engine import (
+        close_async_engine,
+        get_async_engine,
+        get_session_factory,
+    )
 
     engine = get_async_engine(settings.sqlalchemy)
     try:

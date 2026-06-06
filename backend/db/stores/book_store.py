@@ -1,18 +1,20 @@
-from typing import List, Optional, Any, Dict
-from sqlalchemy.ext.asyncio import AsyncSession
+from collections.abc import AsyncIterator
+from typing import Any
+
 from app.domains.books.schemas.request_schemas import BooksFilter
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.schema import BookModel
+
 from .base_store import BaseStore
 from .utils import (
-    build_title_search,
-    build_isbn_search,
+    build_embedding_search,
     build_filtered_search,
-    build_embedding_search
+    build_isbn_search,
+    build_title_search,
 )
 
-from sqlalchemy import select, func
-from typing import AsyncIterator
 
 class BookStore(BaseStore[BookModel]):
     """SQLAlchemy-based book data access layer."""
@@ -20,7 +22,7 @@ class BookStore(BaseStore[BookModel]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, BookModel)
 
-    async def get_by_isbn(self, isbn: str) -> List[Dict[str, Any]]:
+    async def get_by_isbn(self, isbn: str) -> list[dict[str, Any]]:
         """Get a single book by ISBN-13"""
         
         stmt = build_isbn_search(self.model, isbn)
@@ -30,7 +32,7 @@ class BookStore(BaseStore[BookModel]):
 
     async def search_by_title(
         self, title: str, authors: list[str], limit: int = 10, similarity_threshold: float = 0.7
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search books by title with fuzzy matching."""
         
         stmt = build_title_search(self.model, title, authors, limit, similarity_threshold)
@@ -41,7 +43,7 @@ class BookStore(BaseStore[BookModel]):
     async def search_by_filters(
         self, 
         filters: BooksFilter,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search books using structured filters."""
         
         stmt = build_filtered_search(self.model, filters)
@@ -52,7 +54,7 @@ class BookStore(BaseStore[BookModel]):
     async def search_by_book_filter(
         self, 
         filters: BooksFilter,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search books separately per author, then combine results."""
         
         if not filters.authors:
@@ -84,11 +86,11 @@ class BookStore(BaseStore[BookModel]):
     
     async def search_by_embedding(
         self,
-        query_embedding: List[float],
-        filters: Optional[BooksFilter] = None,
+        query_embedding: list[float],
+        filters: BooksFilter | None = None,
         similarity_threshold: float = 0.7,
         limit: int = 50
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search books using embedding similarity."""
         
         stmt = build_embedding_search(
@@ -138,7 +140,7 @@ class BookStore(BaseStore[BookModel]):
         result = await self.session.execute(stmt)
         return result.scalar()
 
-    def row_to_dict(self, row: BookModel) -> Dict[str, Any]:
+    def row_to_dict(self, row: BookModel) -> dict[str, Any]:
         """Convert BookModel to standardized dictionary."""
         if not row:
             return None

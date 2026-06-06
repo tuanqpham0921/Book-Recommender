@@ -1,7 +1,10 @@
 """Utils for ingestion."""
 from pathlib import Path
+
 import pandas as pd
+
 from db.schema import BookModel
+
 
 def count_csv_data_rows(csv_path: Path) -> int:
     """Count data rows in a CSV (excludes header)"""

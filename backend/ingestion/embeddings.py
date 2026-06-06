@@ -1,16 +1,18 @@
 """Backfill description embeddings for books missing vectors."""
-from sqlalchemy import update
+import asyncio
+import logging
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from clients.openai_client import OpenAIClient
-from db.stores.book_store import BookStore
-from db.schema import BookModel
 from common.operation import OperationResult, task
-from typing import Any, AsyncIterator
-import logging, asyncio
+from db.stores.book_store import BookStore
+
 logger = logging.getLogger(__name__)
 
-from ingestion.store import store_book_embedding, iter_missing_embeddings
+from ingestion.store import iter_missing_embeddings, store_book_embedding
+
 
 def _get_embedding_text(book: dict) -> str:
     """Canonical text used for book description embeddings."""

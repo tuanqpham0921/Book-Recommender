@@ -8,10 +8,11 @@ from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
+from dataclasses import dataclass, field
+
 from common.operation import OperationResult, task
-from dataclasses import dataclass
-from dataclasses import field
 from db.stores.book_store import BookStore
+
 
 @task
 async def _check_table(
@@ -196,14 +197,13 @@ async def is_ready(
 # poetry run python db/readiness.py
 # -----------------------------------------------------------------------------
 async def main() -> None:
-    from config import DatabaseConstants, IngestionConstants
+    from config import DatabaseConstants, IngestionConstants, settings
     from db.async_engine import (
         close_async_engine,
         get_async_engine,
         get_session_factory,
     )
     from db.schema import BookModel
-    from config import settings
 
     engine = None
     try:

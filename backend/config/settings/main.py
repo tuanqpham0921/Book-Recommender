@@ -1,11 +1,12 @@
 from pydantic import BaseModel
 from pydantic_settings import SettingsConfigDict
 
+from config.constants import FilesLocationConstants
+
 from .app import AppSettings
 from .openai import OpenAISettings
 from .sqlalchemy import SQLAlchemySettings
 
-from config.constants import FilesLocationConstants
 
 class Settings(BaseModel):
     """Unified application settings (aggregates all sub-configs)."""

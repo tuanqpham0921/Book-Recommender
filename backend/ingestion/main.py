@@ -3,22 +3,19 @@ import asyncio
 import logging
 from pathlib import Path
 
+from common.context import AppContext
+from common.operation import OperationResult, task
+from common.utils import save_file, setup_logging
 from config import (
     DatabaseConstants,
     FilesLocationConstants,
-    IngestionConstants,
     Settings,
 )
-from common.utils import save_file, setup_logging
-from ingestion.utils import count_csv_data_rows
 from db import bootstrap_schema, is_ready
-
 from db.schema import BookModel
 from ingestion.embeddings import embed_missing_books
 from ingestion.store import store_books_from_csv
-
-from common.context import AppContext
-from common.operation import OperationResult, task
+from ingestion.utils import count_csv_data_rows
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +45,7 @@ async def load_books(ctx: AppContext) -> OperationResult:
     checks.append(await embed_missing_books(ctx.session_factory, ctx.openai_client))
     
     if not readiness.ok:
-        logger.info(f"Readiness check failed first time, retrying after ingestion...")
+        logger.info("Readiness check failed first time, retrying after ingestion...")
         readiness = await is_ready(
             ctx.session_factory, 
             schema=schema, 

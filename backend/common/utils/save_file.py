@@ -1,12 +1,9 @@
 import json
 import logging
+from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 from config import FilesLocationConstants
-
-from dataclasses import is_dataclass
-from typing import Any
-from dataclasses import asdict
 
 logger = logging.getLogger(__name__)
 

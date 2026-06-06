@@ -1,8 +1,7 @@
-from typing import Optional
-from pydantic import BaseModel
 from abc import ABC, abstractmethod
+from typing import Any
+
 from pydantic import BaseModel
-from typing import Optional, Any
 
 
 class BaseLLMRequest(BaseModel, ABC):

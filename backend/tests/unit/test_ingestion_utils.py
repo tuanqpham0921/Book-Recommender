@@ -1,8 +1,8 @@
-from ingestion.utils import normalize_field, row_to_book
-from conftest import sample_books
-from db.schema.models import BookModel
-import pytest
 import pandas as pd
+
+from db.schema.models import BookModel
+from ingestion.utils import row_to_book
+
 
 def test_row_to_book(sample_books: pd.DataFrame):
     one_row = sample_books.iloc[0]

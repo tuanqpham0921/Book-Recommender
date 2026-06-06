@@ -1,17 +1,17 @@
-import time
+import asyncio
 import logging
+import time
 
-from openai import AsyncOpenAI
-from typing import List, Optional
-
-from .schemas import OpenAIRequest
-from .base import BaseLLMClient
-
-from config.settings import OpenAISettings
 from app.common.messages import AssistantMessage
 from app.common.sse_stream import SSEStream
+from openai import AsyncOpenAI
+
 from config.constants import OpenAIConstants
-import asyncio
+from config.settings import OpenAISettings
+
+from .base import BaseLLMClient
+from .schemas import OpenAIRequest
+
 logger = logging.getLogger(__name__)
 
 class OpenAIClient(BaseLLMClient):
@@ -72,7 +72,7 @@ class OpenAIClient(BaseLLMClient):
             logger.exception(f"❌❌❌ OpenAI API call failed: {e}")
             raise
 
-    async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
+    async def _chat_stream(self, payload: dict, sse_stream: SSEStream | None):
         """Stream the chat completion."""
         async with self.client.beta.chat.completions.stream(**payload) as stream:
             async for event in stream:

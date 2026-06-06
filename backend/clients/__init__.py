@@ -1,7 +1,6 @@
 from .base import BaseLLMClient
-from .schemas import BaseLLMRequest
 from .openai_client import OpenAIClient
-from .schemas import OpenAIRequest
+from .schemas import BaseLLMRequest, OpenAIRequest
 
 __all__ = [
     "BaseLLMClient",

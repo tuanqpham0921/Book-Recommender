@@ -1,12 +1,12 @@
 import os
 from types import TracebackType
 
-from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from clients import OpenAIClient
 from config import Settings
 from db.async_engine import close_async_engine, get_async_engine, get_session_factory
+
 
 class AppContext:
     app_env: str

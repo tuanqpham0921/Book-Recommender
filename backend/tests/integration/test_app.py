@@ -1,6 +1,7 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_app_smoke():
     from app.main import app

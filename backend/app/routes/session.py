@@ -1,10 +1,10 @@
 import logging
-
 from uuid import uuid4
-from fastapi import APIRouter, Request, HTTPException
+
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 
 from common.utils import now_iso
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

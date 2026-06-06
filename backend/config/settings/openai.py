@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from config.constants import FilesLocationConstants
+
 
 class OpenAISettings(BaseSettings):
     API_KEY: str

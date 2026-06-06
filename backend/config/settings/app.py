@@ -1,7 +1,8 @@
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
-import os
+
 from config.constants import FilesLocationConstants
+
 
 class AppSettings(BaseSettings):
     NAME: str

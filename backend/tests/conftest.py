@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 
+
 @pytest.fixture
 def sample_books() -> pd.DataFrame:
     from config import FilesLocationConstants

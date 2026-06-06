@@ -1,4 +1,3 @@
-from .settings import settings, Settings
 from .constants import (
     AppConfig,
     BookConstraints,
@@ -7,6 +6,7 @@ from .constants import (
     FilesLocationConstants,
     IngestionConstants,
 )
+from .settings import Settings, settings
 
 __all__ = [
     "settings",

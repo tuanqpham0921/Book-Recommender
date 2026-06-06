@@ -1,8 +1,8 @@
 """Query builder for book-related database operations."""
 
-from sqlalchemy import select, func, or_, and_, text
+
 from app.domains.books.schemas.request_schemas import BooksFilter
-from typing import Optional, List
+from sqlalchemy import and_, func, or_, select, text
 
 
 def compile_sql(stmt):
@@ -16,7 +16,7 @@ def compile_sql(stmt):
             }
         )
         return str(compiled)
-    except Exception as e:
+    except Exception:
         # Fallback without literal binds if that fails
         return str(stmt.compile())
 
@@ -200,8 +200,8 @@ def build_filtered_search(
 
 def build_embedding_search(
     model,
-    query_embedding: List[float],
-    filters: Optional[BooksFilter] = None,
+    query_embedding: list[float],
+    filters: BooksFilter | None = None,
     similarity_threshold: float = 0.7,
     limit: int = 50,
     embedding_column: str = "embedding",

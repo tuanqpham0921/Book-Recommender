@@ -1,4 +1,5 @@
 from pathlib import Path
+
 """ Centralized constants for the application.
 Makefile and docker compose will need to update (manually) if these are changed.
 """

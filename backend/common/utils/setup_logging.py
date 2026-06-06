@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+
 from rich.logging import RichHandler
 
 """
