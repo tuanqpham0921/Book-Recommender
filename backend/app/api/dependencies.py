@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.book_store import BookStore
 from clients import OpenAIClient
+from app.active_streams import ActiveStreamRegistry
 from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
 
@@ -26,6 +27,16 @@ def get_orchestrator(request: Request) -> Orchestrator:
     if orchestrator is None:
         raise HTTPException(status_code=503, detail="Orchestrator not available")
     return orchestrator
+
+
+def get_active_stream_registry(request: Request) -> ActiveStreamRegistry:
+    """Get the in-memory registry of active chat SSE streams."""
+    registry = getattr(request.app.state, "active_stream_registry", None)
+    if registry is None:
+        raise HTTPException(
+            status_code=503, detail="Active stream registry not available"
+        )
+    return registry
 
 
 def get_sqlalchemy_session_factory(request: Request):

@@ -50,6 +50,14 @@ async function fetch_api(url, options = {}, timeoutMs = 120000) {
   }
 }
 
+// TODO: implement this
+async function stopChatStream(sessionId) {
+  const res = await fetch_api(BASE_URL + `/session/${sessionId}/stop`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  return await res.json();
+}
 
 async function backEndHealthReady() {
   try {

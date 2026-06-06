@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 # Store assistant instances to access book results
 router = APIRouter(tags=["Session"])
 
-
+# NOTE: or user
 @router.post("/session/new", response_model=SessionOut)
 async def create_new_session(request: Request):
     """Create a new session, initialize metadata."""
