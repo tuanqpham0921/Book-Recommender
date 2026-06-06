@@ -24,9 +24,10 @@ app = FastAPI(
     title="Book Recommender API",
     description="AI-powered book recommendation system",
     version="0.1.0",
-    lifespan=lifespan
+    # lifespan=lifespan
 )
 
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.app.ALLOW_ORIGINS,
@@ -35,6 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+from app.routes.session import router as session_router
+
+app.include_router(session_router)
 
 # Cloud Run entry point
 if __name__ == "__main__":
