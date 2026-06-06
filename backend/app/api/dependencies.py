@@ -27,14 +27,6 @@ def get_orchestrator(request: Request) -> Orchestrator:
     return orchestrator
 
 
-def get_sqlalchemy_engine(request: Request):
-    """Get SQLAlchemy engine from app state"""
-    engine = getattr(request.app.state, "sqlalchemy_engine", None)
-    if engine is None:
-        raise HTTPException(status_code=503, detail="SQLAlchemy engine not available")
-    return engine
-
-
 def get_sqlalchemy_session_factory(request: Request):
     """Get SQLAlchemy session maker"""
     session_factory = getattr(request.app.state, "sqlalchemy_session_factory", None)
@@ -86,11 +78,3 @@ async def get_request_context_factory(
         )
 
     return create_context
-
-
-def get_core_services(request: Request) -> tuple[Any, Any, OpenAIClient, Orchestrator]:
-    """Get all core services at once"""
-    return (
-        get_openai_client(request),
-        get_orchestrator(request),
-    )

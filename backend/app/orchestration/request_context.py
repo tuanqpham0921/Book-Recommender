@@ -18,13 +18,13 @@ class RequestContext:
     """Enhanced request context with separated conversation streams."""
 
     # Core identifiers
-    session_id: str = None
-    user_message: UserMessage = None
+    session_id: str
+    user_message: UserMessage
 
     # Services
-    llm_client: OpenAIClient = None
-    book_store: BookStore = None
-    sse_stream: SSEStream = None
+    llm_client: OpenAIClient
+    book_store: BookStore
+    sse_stream: SSEStream
 
     # Internal LLM calls
     pipeline_conversation: List[APIMessage] = field(default_factory=list)
