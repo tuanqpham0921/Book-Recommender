@@ -200,7 +200,7 @@ async def is_ready(
 # poetry run python db/readiness.py
 # -----------------------------------------------------------------------------
 async def main() -> None:
-    from config import DatabaseConstants, IngestionConstants, settings
+    from config import DatabaseConstants, settings
     from db.async_engine import (
         close_async_engine,
         get_async_engine,
@@ -213,11 +213,10 @@ async def main() -> None:
         engine = get_async_engine(settings.sqlalchemy)
         schema = DatabaseConstants.SCHEMA
         table = BookModel.__tablename__
-        min_rows = IngestionConstants.APPROXIMATE_LOAD_LIMIT
 
         session_factory = get_session_factory(engine)
         report = await is_ready(
-            session_factory, schema=schema, table=table, min_rows=min_rows
+            session_factory, schema=schema, table=table, min_rows=5000
         )
         report.log()
     finally:

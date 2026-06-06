@@ -4,7 +4,6 @@ from .constants import (
     BookGuides,
     DatabaseConstants,
     FilesLocationConstants,
-    IngestionConstants,
 )
 from .settings import Settings, settings
 
@@ -14,7 +13,6 @@ __all__ = [
     "AppConfig",
     "BookConstraints",
     "BookGuides",
-    "IngestionConstants",
     "DatabaseConstants",
     "FilesLocationConstants",
 ]
