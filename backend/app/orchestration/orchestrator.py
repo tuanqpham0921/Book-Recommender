@@ -32,6 +32,12 @@ class Orchestrator:
 
     def __init__(self):
         """Initialize the orchestrator."""
+        # Here you can initialize any resources that are needed for the orchestrator
+        # like saving logs to a file or a database
+        # update user info after each request
+        # this is one App level resource that can be used by all requests
+        # so it will hold references that are needed for the resources managed by the orchestrator
+        # self.log_session_factory = None
         pass
 
     async def _handle_tool_call(
@@ -406,3 +412,4 @@ class Orchestrator:
         finally:
             # Important: close here to unblock endpoint's `async for`
             await sse_stream.close()
+
