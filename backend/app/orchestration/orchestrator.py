@@ -387,7 +387,7 @@ class Orchestrator:
             )
 
             # Normal completion
-            await sse_stream.send_event("complete", {"status": "completed"})
+            await sse_stream.send("complete", {"status": "completed"})
             logger.info("✅ Orchestration completed successfully")
 
         except asyncio.TimeoutError:

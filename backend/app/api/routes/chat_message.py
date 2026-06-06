@@ -50,18 +50,17 @@ async def generate_chat_response(
 
     except Exception as e:
         logger.exception(f"❌ Orchestration error at endpoint: {e}")
-        if request_context.app_env == "DEVELOPMENT":
-            await request_context.sse_stream.send_error(
-                f"❌ Endpoint orchestration error: {str(e)}"
-            )
-            raise HTTPException(
-                status_code=500, detail=f"Internal server error: {str(e)}"
-            )
-
-        elif request_context.app_env == "PRODUCTION":
+        
+        if request_context.app_env == "PRODUCTION":
             await request_context.sse_stream.send_error(
                 "Something went wrong while processing your request."
             )
+        
+        else:
+            await request_context.sse_stream.send_error(
+                f"❌ Endpoint orchestration error: {str(e)}"
+            )
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     finally:
         registry.unregister(request_context.session_id, orchestrator_task)
