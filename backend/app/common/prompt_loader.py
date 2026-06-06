@@ -88,6 +88,8 @@ class PromptLoader:
         return list(self.prompts_dir.rglob(pattern))
 
 
+# TODO: this can be in app context global
+# or in orchestrator global
 # Global prompt loader instance
 prompt_loader = PromptLoader()
 
