@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from common.utils import setup_logging
+from common import setup_logging
 from config import FilesLocationConstants
 
 import logging
