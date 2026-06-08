@@ -40,3 +40,8 @@ class BaseLLMClient(ABC):
 
     def over_max_tokens(self, token_count: int) -> bool:
         return token_count > self.max_tokens
+
+    @abstractmethod
+    async def ping(self) -> bool:
+        """Ping the API."""
+        ...

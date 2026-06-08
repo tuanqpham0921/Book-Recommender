@@ -101,3 +101,14 @@ class OpenAIClient(BaseLLMClient):
         
         # list of strings
         return sum(len(encoding.encode(item)) for item in text)
+    
+    async def ping(self):
+        """Ping the OpenAI API."""
+        try:
+            response = await self.client.responses.create(
+                model="gpt-5-nano",
+                input="ping"
+            )
+        except Exception as e:
+            logger.exception(f"❌❌❌ OpenAI API ping failed: {e}")
+            raise
