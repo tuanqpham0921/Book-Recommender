@@ -28,49 +28,6 @@ class Orchestrator:
         # self.log_session_factory = None
         pass
 
-    async def handle_tool_call(
-        self, tool_calls, max_calls: int = 10, **extra_kwargs
-    ) -> list[ToolMessage]:
-        """Execute tool calls and return the results."""
-        results = []
-        for tool_call in tool_calls[:max_calls]:
-            try:
-
-                tool_name = tool_call.function.name
-                tool_id = tool_call.id
-                logger.info(f"🔧 Starting tool call: {tool_name} (id: {tool_id})")
-
-                raw_args = json.loads(tool_call.function.arguments)
-                tool_instance = tool_call.function.parsed_arguments
-
-                start = time.monotonic()
-                # logger.info(f"⚡ Executing {tool_name} with args: {raw_args}")
-                logger.info(f"⚡ Executing {tool_name}")
-
-                result = await tool_instance(**extra_kwargs)
-                elapsed = round(time.monotonic() - start, 2)
-
-                logger.info(f"✅ Tool {tool_name} completed successfully in {elapsed}s")
-
-                results.append(
-                    ToolMessage(
-                        name=tool_call.function.name,
-                        tool_call_id=tool_call.id,
-                        content=result,
-                        elapsed=elapsed,
-                    )
-                )
-            except json.JSONDecodeError as e:
-                logger.error(f"🛑 JSON parsing failed for tool {tool_name}: {e}")
-                continue
-            except Exception as e:
-                logger.error(
-                    f"🛑 Tool execution failed for {tool_name}: {e}", exc_info=True
-                )
-                continue
-
-        return results
-
     async def run_tasks(
         self, node_ids, task_planner_: TaskPlan, sse_stream: SSEStream, request_context
     ):

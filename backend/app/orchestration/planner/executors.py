@@ -5,13 +5,58 @@ from app.common.prompt_loader import load_prompt, format_prompt
 from openai import pydantic_function_tool
 from app.orchestration.request_context import RequestContext
 from .schemas import InitialParseNode, InitialParseResult, BookClassificationNode, BookClassificationResult, TaskGenerationNode, TaskPlan
+from app.common.messages import ToolMessage
+import logging
+import time
+
+logger = logging.getLogger(__name__)
+
+async def handle_tool_call(
+       tool_calls, max_calls: int = 10, **extra_kwargs
+) -> list[ToolMessage]:
+    """Execute tool calls and return the results."""
+    results = []
+    for tool_call in tool_calls[:max_calls]:
+        try:
+
+            tool_name = tool_call.function.name
+            tool_id = tool_call.id
+            logger.info(f"🔧 Starting tool call: {tool_name} (id: {tool_id})")
+
+            raw_args = json.loads(tool_call.function.arguments)
+            tool_instance = tool_call.function.parsed_arguments
+
+            start = time.monotonic()
+            # logger.info(f"⚡ Executing {tool_name} with args: {raw_args}")
+            logger.info(f"⚡ Executing {tool_name}")
+
+            result = await tool_instance(**extra_kwargs)
+            elapsed = round(time.monotonic() - start, 2)
+
+            logger.info(f"✅ Tool {tool_name} completed successfully in {elapsed}s")
+
+            results.append(
+                ToolMessage(
+                    name=tool_call.function.name,
+                    tool_call_id=tool_call.id,
+                    content=result,
+                    elapsed=elapsed,
+                )
+            )
+        except json.JSONDecodeError as e:
+            logger.error(f"🛑 JSON parsing failed for tool {tool_name}: {e}")
+            continue
+        except Exception as e:
+            logger.error(
+                f"🛑 Tool execution failed for {tool_name}: {e}", exc_info=True
+            )
+            continue
+
+    return results
 
 async def run_initial_step(request_context, sse_stream) -> str | None:
     """Run the initial parsing step to determine if the query is in-scope."""
     
-    from app.orchestration.orchestrator import Orchestrator
-    orchestrator = Orchestrator()
-
     await sse_stream.send_ui_loading("Thinking...")
 
     tool_name = InitialParseNode.__name__
@@ -45,7 +90,7 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
 
     # Add to pipeline conversation (internal)
     request_context.add_message(assistant_msg)
-    tool_message = await orchestrator.handle_tool_call(
+    tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1
     )
 
@@ -86,9 +131,7 @@ async def run_analyze_classification(
 ) -> BookClassificationResult:
     """Classify the user query into book-related strategies."""
     
-    from app.orchestration.orchestrator import Orchestrator
-    orchestrator = Orchestrator()
-    
+
     tool_name = BookClassificationNode.__name__
     tool = pydantic_function_tool(
         BookClassificationNode,
@@ -127,7 +170,7 @@ async def run_analyze_classification(
         )
 
     request_context.add_message(assistant_msg)
-    tool_message = await orchestrator.handle_tool_call(
+    tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1
     )
     if not tool_message:
@@ -144,9 +187,6 @@ async def run_create_task_plan(
     node_ids,
 ) -> TaskPlan:
     """Create a task execution plan with dependency resolution."""
-
-    from app.orchestration.orchestrator import Orchestrator
-    orchestrator = Orchestrator()
     
     tool_name = TaskGenerationNode.__name__
     tool_choice = {"type": "function", "function": {"name": tool_name}}
@@ -190,12 +230,11 @@ async def run_create_task_plan(
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
 
     request_context.add_message(assistant_msg)
-    tool_message = await orchestrator.handle_tool_call(
+    tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1, node_ids=node_ids
     )
     if not tool_message:
         raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
 
     request_context.add_message(tool_message[0])
-
     return tool_message[0].content
