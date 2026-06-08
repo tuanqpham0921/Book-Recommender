@@ -32,10 +32,6 @@ class RequestContext:
 
     # Pipeline state
     pipeline_context: Dict[str, Any] = field(default_factory=dict)
-    current_step: Optional[str] = None
-
-    # Results from each step
-    step_results: Dict[str, Any] = field(default_factory=dict)
 
     # TODO: we might need this instead of just querying
     context_size: int = 0
@@ -68,28 +64,6 @@ class RequestContext:
             return self.pipeline_conversation.copy()
         return self.chat_messages.copy()
 
-    def set_step_result(self, step_name: str, result: Any):
-        """Store result from a pipeline step."""
-        self.step_results[step_name] = result
-        logger.debug(f"Stored result for step '{step_name}': {type(result).__name__}")
-
-    def get_step_result(self, step_name: str) -> Any:
-        """Get result from a previous pipeline step."""
-        return self.step_results.get(step_name)
-
-    def set_current_step(self, step_name: str):
-        """Set the current pipeline step."""
-        self.current_step = step_name
-        logger.debug(f"Current step: {step_name}")
-
-    def get_pipeline_summary(self) -> Dict[str, Any]:
-        """Get summary of pipeline execution."""
-        return {
-            "current_step": self.current_step,
-            "completed_steps": list(self.step_results.keys()),
-            "pipeline_messages_count": len(self.pipeline_conversation),
-            "chat_messages_count": len(self.chat_messages),
-        }
 
     def add_message(self, message: APIMessage, background: bool = True):
         """Add a message to the in-memory context and optionally persist it asynchronously."""

@@ -8,8 +8,10 @@ from .schemas import InitialParseNode, InitialParseResult, BookClassificationNod
 from app.common.messages import ToolMessage
 import logging
 import time
+from app.common.sse_stream import SSEStream
 
 from common.operation import task, OperationResult
+from app.operation import ChatResult
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +59,11 @@ async def handle_tool_call(
     return results
 
 @task
-async def run_initial_step(request_context, sse_stream) -> str | None:
+async def run_initial_step(request_context: RequestContext, sse_stream: SSEStream) -> ChatResult:
     """Run the initial parsing step to determine if the query is in-scope."""
+    conversation = [request_context.user_message]
     
-    await sse_stream.send_ui_loading("Thinking...")
+    await sse_stream.send_ui_loading("Thinking...")    
 
     tool_name = InitialParseNode.__name__
     tool = pydantic_function_tool(
@@ -69,18 +72,13 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         description=f"Fill the schema for {tool_name}",
     )
     tool_choice = {"type": "function", "function": {"name": tool_name}}
-    # Set current step for tracking
-    request_context.set_current_step("initial_parse")
 
     # Use pipeline conversation for internal LLM calls
-    pipeline_messages = request_context.get_conversation_for_llm(
-        include_pipeline=True
-    )
 
     prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_system.txt")
     req = OpenAIRequest(
         system=SystemMessage(content=prompt),
-        messages=pipeline_messages,
+        messages=[request_context.user_message],
         tools=[tool],
         tool_choice=tool_choice,
         temperature=0.3,
@@ -92,7 +90,7 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
 
     # Add to pipeline conversation (internal)
-    request_context.add_message(assistant_msg)
+    conversation.append(assistant_msg)
     tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1
     )
@@ -101,11 +99,10 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
 
     # Add tool response to pipeline conversation
-    request_context.add_message(tool_message[0])
+    conversation.append(tool_message[0])
 
     # Store the result for later use
     parse_result = tool_message[0].content
-    request_context.set_step_result("initial_parse", parse_result)
 
     no_in_domain_msg = tool_message[0].content.model_dump_json(
         include={"small_talk", "out_of_scope", "continue_pipeline"}
@@ -125,13 +122,14 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
 
     await sse_stream.send_divider()
 
-    request_context.add_message(response)
+    conversation.append(response)
     
     ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
     message = "Initial parse completed successfully" if ok else "Initial parse failed"
 
-    return OperationResult(
-        name="initial_parse",
+    return ChatResult(
+        session_id=request_context.session_id,
+        conversation=conversation,
         ok=ok,
         message=message,
         result=parse_result,

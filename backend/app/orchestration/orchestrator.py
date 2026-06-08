@@ -164,6 +164,7 @@ class Orchestrator:
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
         sse_stream = request_context.sse_stream
+        result = None
         try:
             await sse_stream.send_ui_loading("Starting conversation...")
 
@@ -195,5 +196,7 @@ class Orchestrator:
             )
 
         finally:
-            save_file(result, file_name=f"orchestration_result-dev")
+            if result is not None:
+                save_file(result, file_name=f"orchestration_result-dev")
             await sse_stream.close()
+            request_context.export_pipeline_context(file_name=f"request_context_dev")
