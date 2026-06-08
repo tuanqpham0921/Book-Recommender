@@ -145,7 +145,7 @@ async def run_analyze_classification(
     initial_parse: InitialParseResult,
 ) -> OperationResult:
     """Classify the user query into book-related strategies."""
-    
+    steps = []
     tool_name = BookClassificationNode.__name__
     tool = pydantic_function_tool(
         BookClassificationNode,
@@ -174,9 +174,13 @@ async def run_analyze_classification(
         top_p=0.5,
     )
 
-    # req.export(file_name="analyze_classification")
+    result = await request_context.llm_client.execute(req)
+    steps.append(result)
+    if not result.ok:
+        raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
+        ...
 
-    assistant_msg = await request_context.llm_client.execute(req)
+    assistant_msg = result.result
 
     if not assistant_msg or not assistant_msg.tool_calls:
         raise RuntimeError(
@@ -195,6 +199,7 @@ async def run_analyze_classification(
     # we know for a fact it must have the fragments here
     return OperationResult(
         name="analyze_classification",
+        steps=steps,
         ok=True,
         message="Analysis completed successfully",
         result=tool_message[0].content,
