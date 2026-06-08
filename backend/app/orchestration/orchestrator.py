@@ -27,9 +27,14 @@ class Orchestrator:
         # so it will hold references that are needed for the resources managed by the orchestrator
         # self.log_session_factory = None
         pass
+    
+    
 
     async def run_tasks(
-        self, node_ids, task_planner_: TaskPlan, sse_stream: SSEStream, request_context
+        self, 
+        node_ids, 
+        task_planner_: TaskPlan, 
+        request_context: RequestContext
     ):
         """Execute tasks in the planned order with dependency resolution."""
 
@@ -54,6 +59,7 @@ class Orchestrator:
             results[tid] = result
 
         return results
+    
 
     async def _run_conversation_step(
         self,
@@ -62,20 +68,17 @@ class Orchestrator:
     ):
         """Execute the complete conversation pipeline from parsing to task execution."""
         try:
-            initial_parse_result = await run_initial_step(
-                request_context, sse_stream
-            )
+            initial_parse = await run_initial_step(request_context, sse_stream)
             if (
-                not initial_parse_result.continue_pipeline
-                or not initial_parse_result.user_query_domain
+                not initial_parse.ok
             ):
                 logger.info(
                     "User query classified as out-of-scope or no domain identified. Ending pipeline."
                 )
                 return
-
+            
             request_context.pipeline_context["in_domain_message"] = (
-                initial_parse_result.model_dump_json(
+                initial_parse.result.model_dump_json(
                     include={"user_query_domain", "continue_pipeline", "reasoning"}
                 )
             )
@@ -84,7 +87,7 @@ class Orchestrator:
 
             classified_strategy_ = await run_analyze_classification(
                 request_context=request_context,
-                initial_parse_result=initial_parse_result,
+                initial_parse=initial_parse.result,
             )
 
             node_ids = classified_strategy_.get_accepted_node_ids()
@@ -93,7 +96,7 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Planning The Tasks...")
             task_planner_ = await run_create_task_plan(
                 request_context=request_context,
-                initial_parse_result=initial_parse_result,
+                initial_parse=initial_parse.result,
                 node_ids=node_ids,
             )
 
@@ -118,7 +121,6 @@ class Orchestrator:
             result = await self.run_tasks(
                 node_ids,
                 task_planner_,
-                sse_stream=sse_stream,
                 request_context=request_context,
             )
 

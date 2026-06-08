@@ -9,6 +9,8 @@ from app.common.messages import ToolMessage
 import logging
 import time
 
+from common.operation import task, OperationResult
+
 logger = logging.getLogger(__name__)
 
 async def handle_tool_call(
@@ -54,6 +56,7 @@ async def handle_tool_call(
 
     return results
 
+@task
 async def run_initial_step(request_context, sse_stream) -> str | None:
     """Run the initial parsing step to determine if the query is in-scope."""
     
@@ -108,6 +111,7 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         include={"small_talk", "out_of_scope", "continue_pipeline"}
     )
 
+    # user facing response
     prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_parse_response.txt")
     req = OpenAIRequest(
         system=SystemMessage(content=prompt),
@@ -122,16 +126,23 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
     await sse_stream.send_divider()
 
     request_context.add_message(response)
+    
+    ok = (parse_result.continue_pipeline and parse_result.user_query_domain)
+    message = "Initial parse completed successfully" if ok else "Initial parse failed"
 
-    return tool_message[0].content
+    return OperationResult(
+        name="initial_parse",
+        ok=ok,
+        message=message,
+        result=parse_result,
+    )
 
 async def run_analyze_classification(
     request_context: RequestContext,
-    initial_parse_result: InitialParseResult,
+    initial_parse: InitialParseResult,
 ) -> BookClassificationResult:
     """Classify the user query into book-related strategies."""
     
-
     tool_name = BookClassificationNode.__name__
     tool = pydantic_function_tool(
         BookClassificationNode,
@@ -140,7 +151,7 @@ async def run_analyze_classification(
     )
     tool_choice = {"type": "function", "function": {"name": tool_name}}
 
-    in_domain_msg = initial_parse_result.model_dump_json(
+    in_domain_msg = initial_parse.model_dump_json(
         include={"user_query_domain", "continue_pipeline", "reasoning"}
     )
 
@@ -183,7 +194,7 @@ async def run_analyze_classification(
 
 async def run_create_task_plan(
     request_context: RequestContext,
-    initial_parse_result: InitialParseResult,
+    initial_parse: InitialParseResult,
     node_ids,
 ) -> TaskPlan:
     """Create a task execution plan with dependency resolution."""
@@ -197,7 +208,7 @@ async def run_create_task_plan(
     )
     TaskGenerationNode.modify_schema(tool=tool, valid_ids=list(node_ids.keys()))
 
-    in_domain_msg = initial_parse_result.model_dump_json(
+    in_domain_msg = initial_parse.model_dump_json(
         include={"user_query_domain", "reasoning"}
     )
 
