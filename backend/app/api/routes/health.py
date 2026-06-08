@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["System"])
 
 
+@router.get("/health", include_in_schema=False)
 @router.get("/ping", include_in_schema=False)
 async def ping():
     """Ping the backend - always returns ok if app is running."""

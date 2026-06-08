@@ -33,15 +33,23 @@ class AppContext:
         await asyncio.wait_for(
             asyncio.gather(
                 self.openai_client.ping(),
-                check_connection(self.session_factory()),
+                check_connection(self.session_factory),
             ), 
             timeout=10.0
         )
         logger.info("Pinging services Completed")
         
     async def __aenter__(self) -> "AppContext":
-        await self.ping_services()
+        try:
+            await self.ping_services()
+        except Exception:
+            await self.close()
+            raise
         return self
+
+    async def close(self) -> None:
+        await close_async_engine(self.engine)
+        await self.openai_client.close()
     
     async def __aexit__(
         self,
@@ -49,6 +57,4 @@ class AppContext:
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        
-        await close_async_engine(self.engine)
-        await self.openai_client.close()
+        await self.close()
