@@ -46,7 +46,8 @@ async def generate_chat_response(
     try:
         async for event in request_context.sse_stream:
             yield event
-        await orchestrator_task
+        
+        await asyncio.wait_for(orchestrator_task, timeout=300.0)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail="Orchestration error") from e

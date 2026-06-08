@@ -50,7 +50,7 @@ def task(
                 
                 result = await func(*args, **kwargs)
                 time_end = time.perf_counter()
-                result.duration = time_end - time_start
+                result.duration = round(time_end - time_start, 2)
                 result.name = func_ref
                 
                 if not result.ok:
@@ -62,15 +62,16 @@ def task(
                 return result
             except Exception as e:
                 logger.exception(f"Task {func_ref} failed: {e}")
+                time_end = time.perf_counter()
+                duration = round(time_end - time_start, 2)
                 
-                result = OperationResult(
+                return OperationResult(
                     name=func_ref,
                     ok=False,
                     message=f"Task {func_ref} failed: {e}",
-                    duration=0,
+                    duration=duration,
                     run_time_error=e,
                 )
-                return result
 
         return wrapper
 

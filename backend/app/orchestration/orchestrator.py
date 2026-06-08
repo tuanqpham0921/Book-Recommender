@@ -144,10 +144,7 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            result = await asyncio.wait_for(
-                self._run_conversation_step(request_context, sse_stream),
-                timeout=300.0,
-            )
+            result = await self._run_conversation_step(request_context, sse_stream)
 
             # Normal completion
             await sse_stream.send("complete", {"status": "completed"})
@@ -175,3 +172,4 @@ class Orchestrator:
 
         finally:
             save_file(result, file_name=f"orchestration_result-dev")
+            sse_stream.close()
