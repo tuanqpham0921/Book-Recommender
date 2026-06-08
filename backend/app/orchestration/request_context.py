@@ -26,80 +26,8 @@ class RequestContext:
     llm_client: OpenAIClient
     book_store: BookStore
     sse_stream: SSEStream
-
-    # Internal LLM calls
-    pipeline_conversation: List[APIMessage] = field(default_factory=list)
-
-    # Pipeline state
-    pipeline_context: Dict[str, Any] = field(default_factory=dict)
-
-    # TODO: we might need this instead of just querying
-    context_size: int = 0
-    # context_messages: List[APIMessage] = field(default_factory=list)
-
-    # user facing messages
-    chat_messages: List[APIMessage] = field(default_factory=list)
-    timestamp: str = field(default_factory=now_iso)
-
-    def __post_init__(self):
-        if self.user_message:
-            self.chat_messages.append(self.user_message)
-            self.pipeline_conversation.append(self.user_message)
-
-    def add_chat_message(self, message: APIMessage):
-        """Add message to user-facing conversation."""
-        self.chat_messages.append(message)
-        logger.debug(f"Added user message: {type(message).__name__}")
-
-    def add_pipeline_message(self, message: APIMessage):
-        """Add message to internal pipeline conversation."""
-        self.pipeline_conversation.append(message)
-        logger.debug(f"Added pipeline message: {type(message).__name__}")
-
-    def get_conversation_for_llm(
-        self, include_pipeline: bool = True
-    ) -> List[APIMessage]:
-        """Get conversation for LLM calls."""
-        if include_pipeline:
-            return self.pipeline_conversation.copy()
-        return self.chat_messages.copy()
-
-
-    def add_message(self, message: APIMessage, background: bool = True):
-        """Add a message to the in-memory context and optionally persist it asynchronously."""
-        if (hasattr(message, "tool_calls") and message.tool_calls) or (
-            message.role == Role.TOOL
-        ):
-            self.add_pipeline_message(message)
-        else:
-            self.add_chat_message(message)
-
-    # -----------------------------------------------------------------------------------
-    def export_user_context(self, file_name: str = "dev"):
-        user_message = self.user_message.model_dump()
-        chat_messages = [m.model_dump() for m in self.chat_messages]
-
-        context = {
-            "session_id": self.session_id,
-            "timestamp": self.timestamp,
-            "user_message": user_message,
-            "chat_messages": chat_messages,
-        }
-        save_file(context, file_name=f"{file_name}_request_context_reponse")
-
-    def export_pipeline_context(self, file_name: str = "dev"):
-        user_message = self.user_message.model_dump() if self.user_message else None
-        pipeline_conversation = [m.model_dump() for m in self.pipeline_conversation]
-
-        context = {
-            "session_id": self.session_id,
-            "timestamp": self.timestamp,
-            "user_message": user_message,
-            "pipeline_conversation": pipeline_conversation,
-            "pipeline_context": self.pipeline_context,
-        }
-        save_file(context, file_name=f"{file_name}_request_context_pipeline")
-
-    def export(self, file_name: str = "dev"):
-        self.export_user_context(file_name)
-        self.export_pipeline_context(file_name)
+    
+    # in-domain message
+    # TODO: move this elsewhere
+    # need it for legacy reasons for now
+    in_domain_message: str | None = None

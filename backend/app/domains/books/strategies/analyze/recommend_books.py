@@ -114,7 +114,7 @@ class RecommendBooks(StrategyBase):
 
                 # Get LLM response
                 rag_response = await llm.execute(req)
-                request_context.add_message(rag_response)
+                # request_context.add_message(rag_response) #TODO: add to conversation
 
                 query_text = (
                     rag_response.content if rag_response.content else semantic_input
@@ -202,7 +202,7 @@ class RecommendBooks(StrategyBase):
 
         # Get LLM response
         rag_response = await llm_client.execute(req)
-        request_context.add_message(rag_response)
+        # request_context.add_message(rag_response) #TODO: add to conversation
 
         # Parse LLM response to extract recommended book ISBNs/titles
         recommended_books = self._parse_llm_recommendations(

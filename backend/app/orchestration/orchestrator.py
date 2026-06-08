@@ -199,4 +199,3 @@ class Orchestrator:
             if result is not None:
                 save_file(result, file_name=f"orchestration_result-dev")
             await sse_stream.close()
-            request_context.export_pipeline_context(file_name=f"request_context_dev")

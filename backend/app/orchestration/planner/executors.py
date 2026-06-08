@@ -179,14 +179,14 @@ async def run_analyze_classification(
             f"Failed to execute {tool_name} - no tool calls received"
         )
 
-    request_context.add_message(assistant_msg)
+    # request_context.add_message(assistant_msg) #TODO: add to conversation
     tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1
     )
     if not tool_message:
         raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
 
-    request_context.add_message(tool_message[0])
+    # request_context.add_message(tool_message[0]) #TODO: add to conversation
 
     # we know for a fact it must have the fragments here
     return OperationResult(
@@ -255,14 +255,14 @@ async def run_create_task_plan(
     if not assistant_msg or not assistant_msg.tool_calls:
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
 
-    request_context.add_message(assistant_msg)
+    # request_context.add_message(assistant_msg) #TODO: add to conversation
     tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1, node_ids=node_ids
     )
     if not tool_message:
         raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
 
-    request_context.add_message(tool_message[0])
+    # request_context.add_message(tool_message[0]) #TODO: add to conversation
     
     return OperationResult(
         name="create_task_plan",

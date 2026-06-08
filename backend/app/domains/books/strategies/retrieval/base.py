@@ -131,7 +131,7 @@ class RetrievalBase:
             raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
 
         # Add to pipeline conversation (internal)
-        request_context.add_message(assistant_msg)
+        # request_context.add_message(assistant_msg) #TODO: add to conversation
         tool_message = await self._handle_tool_call(
             assistant_msg.tool_calls, max_calls=1
         )

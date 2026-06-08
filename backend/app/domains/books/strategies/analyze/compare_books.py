@@ -56,7 +56,7 @@ class CompareBooks(StrategyBase):
         )
 
         rag_response = await llm_client.execute(req)
-        request_context.add_message(rag_response)
+        # request_context.add_message(rag_response) #TODO: add to conversation
 
         # stream books
         await self._stream_books(dependent_books, sse_stream)
