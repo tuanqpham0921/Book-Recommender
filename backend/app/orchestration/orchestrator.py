@@ -79,33 +79,43 @@ class Orchestrator:
                 message="User query classified as out-of-scope or no domain identified. Ending pipeline.",
                 details={"initial_parse": initial_parse}
             )
-        
+        # ----------------------------------------------------------
+
         request_context.pipeline_context["in_domain_message"] = (
             initial_parse.result.model_dump_json(
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
         )
-
+    
+        # ----------------------------------------------------------
         await sse_stream.send_ui_loading("Classifying User Request...")
 
-        classified_strategy_ = await run_analyze_classification(
+        classified_strategy = await run_analyze_classification(
             request_context=request_context,
             initial_parse=initial_parse.result,
         )
-
-        node_ids = classified_strategy_.get_accepted_node_ids()
+        steps.append(classified_strategy)
+        if not classified_strategy.ok:
+            return OperationResult(
+                name="analyze_classification",
+                ok=False,
+                message="Unable to classify the user request",
+                details={"classified_strategy": classified_strategy}
+            )
+        node_ids = classified_strategy.result.get_accepted_node_ids()
 
         # ----------------------------------------------------------
         await sse_stream.send_ui_loading("Planning The Tasks...")
-        task_planner_ = await run_create_task_plan(
+    
+        task_planner = await run_create_task_plan(
             request_context=request_context,
             initial_parse=initial_parse.result,
-            node_ids=node_ids,
+            classified_strategy=classified_strategy.result,
         )
 
-        if task_planner_:
+        if task_planner:
             # task_planner_.export()
-            mermaid_diagram = task_planner_.get_accepted_diagram(node_ids)
+            mermaid_diagram = task_planner.get_accepted_diagram(node_ids)
             await sse_stream.send_chars("__My Plan for Your Request__")
             await sse_stream.send_mermaid(mermaid_diagram)
             await sse_stream.send_chars(
@@ -121,7 +131,7 @@ class Orchestrator:
                 name="run_tasks",
                 ok=False,
                 message="Unable to generate a Task Planner",
-                details={"task_planner": task_planner_}
+                details={"task_planner": task_planner}
             )
 
         # ----------------------------------------------------------
@@ -129,7 +139,7 @@ class Orchestrator:
 
         result = await self.run_tasks(
             node_ids,
-            task_planner_,
+            task_planner,
             request_context=request_context,
         )
         
@@ -178,4 +188,4 @@ class Orchestrator:
 
         finally:
             save_file(result, file_name=f"orchestration_result-dev")
-            sse_stream.close()
+            await sse_stream.close()

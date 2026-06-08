@@ -137,10 +137,11 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         result=parse_result,
     )
 
+@task
 async def run_analyze_classification(
     request_context: RequestContext,
     initial_parse: InitialParseResult,
-) -> BookClassificationResult:
+) -> OperationResult:
     """Classify the user query into book-related strategies."""
     
     tool_name = BookClassificationNode.__name__
@@ -190,12 +191,17 @@ async def run_analyze_classification(
     request_context.add_message(tool_message[0])
 
     # we know for a fact it must have the fragments here
-    return tool_message[0].content
+    return OperationResult(
+        name="analyze_classification",
+        ok=True,
+        message="Analysis completed successfully",
+        result=tool_message[0].content,
+    )
 
 async def run_create_task_plan(
     request_context: RequestContext,
     initial_parse: InitialParseResult,
-    node_ids,
+    classified_strategy: BookClassificationResult,
 ) -> TaskPlan:
     """Create a task execution plan with dependency resolution."""
     
@@ -206,6 +212,11 @@ async def run_create_task_plan(
         name=tool_name,
         description=f"Fill the schema for {tool_name}",
     )
+    
+    node_ids = classified_strategy.get_accepted_node_ids()
+    if not node_ids:
+        return None
+    
     TaskGenerationNode.modify_schema(tool=tool, valid_ids=list(node_ids.keys()))
 
     in_domain_msg = initial_parse.model_dump_json(
