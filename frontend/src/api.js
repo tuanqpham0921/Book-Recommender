@@ -59,9 +59,9 @@ async function stopChatStream(sessionId) {
   return await res.json();
 }
 
-async function backEndHealthReady() {
+async function backEndPing() {
   try {
-    const res = await fetch_api(BASE_URL + '/health', { method: 'GET' });
+    const res = await fetch_api(BASE_URL + '/ping', { method: 'GET' });
     const data = await res.json();
     return data.status === 'ok';
   } catch (e) {
@@ -110,5 +110,5 @@ async function getTaskPlanDiagram(sessionId) {
 }
 
 export default {
-  createSession, sendChatMessage, getRecommendedBooks, backEndHealthReady
+  createSession, sendChatMessage, getRecommendedBooks, backEndPing
 };

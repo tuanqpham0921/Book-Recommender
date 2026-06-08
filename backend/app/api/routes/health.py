@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["System"])
 
 
-@router.get("/health", include_in_schema=False)
-def health_check():
-    """Basic health check - always returns ok if app is running."""
+@router.get("/ping", include_in_schema=False)
+async def ping():
+    """Ping the backend - always returns ok if app is running."""
     return {"status": "ok", "timestamp": time.time()}
 
 
 # TODO: use the depend on get core services
-@router.get("/ready", include_in_schema=False, response_model=HealthStatus)
+@router.get("/ready", response_model=HealthStatus)
 async def detailed_health_check(request: Request):
     """Detailed health check with service status."""
     ...
