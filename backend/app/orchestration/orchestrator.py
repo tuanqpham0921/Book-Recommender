@@ -81,82 +81,82 @@ class Orchestrator:
             )
         # ----------------------------------------------------------
 
-        request_context.in_domain_message = (
-            initial_parse.result.model_dump_json(
-                include={"user_query_domain", "continue_pipeline", "reasoning"}
-            )
-        )
+        # request_context.in_domain_message = (
+        #     initial_parse.result.model_dump_json(
+        #         include={"user_query_domain", "continue_pipeline", "reasoning"}
+        #     )
+        # )
     
-        # ----------------------------------------------------------
-        await sse_stream.send_ui_loading("Classifying User Request...")
+        # # ----------------------------------------------------------
+        # await sse_stream.send_ui_loading("Classifying User Request...")
 
-        classified_strategy = await run_analyze_classification(
-            request_context=request_context,
-            initial_parse=initial_parse.result,
-        )
-        steps.append(classified_strategy)
-        if not classified_strategy.ok:
-            return OperationResult(
-                name="analyze_classification",
-                ok=False,
-                message="Unable to classify the user request",
-                details={"classified_strategy": classified_strategy}
-            )
-        node_ids = classified_strategy.result.get_accepted_node_ids()
+        # classified_strategy = await run_analyze_classification(
+        #     request_context=request_context,
+        #     initial_parse=initial_parse.result,
+        # )
+        # steps.append(classified_strategy)
+        # if not classified_strategy.ok:
+        #     return OperationResult(
+        #         name="analyze_classification",
+        #         ok=False,
+        #         message="Unable to classify the user request",
+        #         details={"classified_strategy": classified_strategy}
+        #     )
+        # node_ids = classified_strategy.result.get_accepted_node_ids()
 
-        # ----------------------------------------------------------
-        await sse_stream.send_ui_loading("Planning The Tasks...")
+        # # ----------------------------------------------------------
+        # await sse_stream.send_ui_loading("Planning The Tasks...")
     
-        task_planner = await run_create_task_plan(
-            request_context=request_context,
-            initial_parse=initial_parse.result,
-            classified_strategy=classified_strategy.result,
-        )
-        steps.append(task_planner)
-        if not task_planner.ok:
-            return OperationResult(
-                name="run_tasks",
-                ok=False,
-                message="Unable to generate a Task Planner",
-                details={"task_planner": task_planner}
-            )
+        # task_planner = await run_create_task_plan(
+        #     request_context=request_context,
+        #     initial_parse=initial_parse.result,
+        #     classified_strategy=classified_strategy.result,
+        # )
+        # steps.append(task_planner)
+        # if not task_planner.ok:
+        #     return OperationResult(
+        #         name="run_tasks",
+        #         ok=False,
+        #         message="Unable to generate a Task Planner",
+        #         details={"task_planner": task_planner}
+        #     )
         
-        if task_planner.ok:
-            # task_planner_.export()
-            mermaid_diagram = task_planner.result.get_accepted_diagram(node_ids)
-            await sse_stream.send_chars("__My Plan for Your Request__")
-            await sse_stream.send_mermaid(mermaid_diagram)
-            await sse_stream.send_chars(
-                "_Note:_ This flow shows how your query will run.\n"
-            )
-            await sse_stream.send_chars(
-                "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
-            )
-            await sse_stream.send_divider()
-        else:
-            await sse_stream.send_error("Unable to generate a Task Planner")
-            return OperationResult(
-                name="run_tasks",
-                ok=False,
-                message="Unable to generate a Task Planner",
-                details={"task_planner": task_planner}
-            )
+        # if task_planner.ok:
+        #     # task_planner_.export()
+        #     mermaid_diagram = task_planner.result.get_accepted_diagram(node_ids)
+        #     await sse_stream.send_chars("__My Plan for Your Request__")
+        #     await sse_stream.send_mermaid(mermaid_diagram)
+        #     await sse_stream.send_chars(
+        #         "_Note:_ This flow shows how your query will run.\n"
+        #     )
+        #     await sse_stream.send_chars(
+        #         "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
+        #     )
+        #     await sse_stream.send_divider()
+        # else:
+        #     await sse_stream.send_error("Unable to generate a Task Planner")
+        #     return OperationResult(
+        #         name="run_tasks",
+        #         ok=False,
+        #         message="Unable to generate a Task Planner",
+        #         details={"task_planner": task_planner}
+        #     )
 
-        # ----------------------------------------------------------
-        await sse_stream.send_ui_loading("Executing the tasks...")
+        # # ----------------------------------------------------------
+        # await sse_stream.send_ui_loading("Executing the tasks...")
 
-        result = await self.run_tasks(
-            node_ids,
-            task_planner.result,
-            request_context=request_context,
-        )
+        # result = await self.run_tasks(
+        #     node_ids,
+        #     task_planner.result,
+        #     request_context=request_context,
+        # )
         
         return OperationResult(
             name="run_tasks",
             ok=True,
             steps=steps,
             message="Tasks executed successfully.",
-            details={"tasks": result}
+            details={"user_input": request_context.user_message}
         )
 
         

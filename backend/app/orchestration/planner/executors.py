@@ -11,7 +11,7 @@ import time
 from app.common.sse_stream import SSEStream
 
 from common.operation import task, OperationResult
-from app.operation import ChatResult
+# from app.operation import ChatResult
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +59,10 @@ async def handle_tool_call(
     return results
 
 @task
-async def run_initial_step(request_context: RequestContext, sse_stream: SSEStream) -> ChatResult:
+async def run_initial_step(request_context: RequestContext, sse_stream: SSEStream) -> OperationResult:
     """Run the initial parsing step to determine if the query is in-scope."""
-    conversation = [request_context.user_message]
-    
+    # conversation = [request_context.user_message]
+    steps = []
     await sse_stream.send_ui_loading("Thinking...")    
 
     tool_name = InitialParseNode.__name__
@@ -84,13 +84,14 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
         temperature=0.3,
         top_p=0.8,
     )
-    assistant_msg = await request_context.llm_client.execute(req)
-    # this shouldn't happen at all but raise to be safe
-    if not assistant_msg or not assistant_msg.tool_calls:
+    result = await request_context.llm_client.execute(req)
+    steps.append(result)
+    
+    if not result.ok:
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
-
-    # Add to pipeline conversation (internal)
-    conversation.append(assistant_msg)
+        ...
+        
+    assistant_msg = result.result
     tool_message = await handle_tool_call(
         assistant_msg.tool_calls, max_calls=1
     )
@@ -99,7 +100,8 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
         raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
 
     # Add tool response to pipeline conversation
-    conversation.append(tool_message[0])
+    #TODO: add to conversation
+    # conversation.append(tool_message[0])
 
     # Store the result for later use
     parse_result = tool_message[0].content
@@ -118,18 +120,20 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
         top_p=1.0,
     )
 
-    response = await request_context.llm_client.execute(req)
+    result = await request_context.llm_client.execute(req)
+    steps.append(result)
+    if not result.ok:
+        raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
+        ...
 
     await sse_stream.send_divider()
-
-    conversation.append(response)
-    
+        
     ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
     message = "Initial parse completed successfully" if ok else "Initial parse failed"
 
-    return ChatResult(
-        session_id=request_context.session_id,
-        conversation=conversation,
+    return OperationResult(
+        name="initial_parse",
+        steps=steps,
         ok=ok,
         message=message,
         result=parse_result,
