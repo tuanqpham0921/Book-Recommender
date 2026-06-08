@@ -4,7 +4,7 @@ from app.common.messages import SystemMessage, AssistantMessage
 from app.common.prompt_loader import load_prompt, format_prompt
 from openai import pydantic_function_tool
 from app.orchestration.request_context import RequestContext
-from app.domains.planner.schemas import InitialParseNode, InitialParseResult, BookClassificationNode, BookClassificationResult, TaskGenerationNode, TaskPlan
+from .schemas import InitialParseNode, InitialParseResult, BookClassificationNode, BookClassificationResult, TaskGenerationNode, TaskPlan
 
 async def run_initial_step(request_context, sse_stream) -> str | None:
     """Run the initial parsing step to determine if the query is in-scope."""
