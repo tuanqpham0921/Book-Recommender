@@ -12,7 +12,7 @@ class ActiveChat:
     sse_stream: SSEStream
     task: asyncio.Task
 
-
+# TODO: move this to Redis or shared memory for instance-level state
 class ActiveStreamRegistry:
     """Tracks in-flight chat SSE streams so /stop can cancel the right one."""
 
