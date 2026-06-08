@@ -7,8 +7,8 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 from app.common.messages import ToolMessage
 
-from app.domains.planner.schemas import TaskPlan
-from app.domains.planner.executors import run_initial_step, run_analyze_classification, run_create_task_plan
+from planner.schemas import TaskPlan
+from planner.executors import run_initial_step, run_analyze_classification, run_create_task_plan
 from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
 
