@@ -6,12 +6,12 @@ import time
 from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 from app.common.messages import ToolMessage
-
 from .planner.schemas import TaskPlan
 from .planner.executors import run_initial_step, run_analyze_classification, run_create_task_plan
 from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
-
+from common.operation import OperationResult, task
+from common.utils import save_file
 logger = logging.getLogger(__name__)
 
 
@@ -60,80 +60,82 @@ class Orchestrator:
 
         return results
     
-
+    @task
     async def _run_conversation_step(
         self,
         request_context: RequestContext,
         sse_stream: SSEStream,
-    ):
+    ) -> OperationResult:
         """Execute the complete conversation pipeline from parsing to task execution."""
-        try:
-            initial_parse = await run_initial_step(request_context, sse_stream)
-            if (
-                not initial_parse.ok
-            ):
-                logger.info(
-                    "User query classified as out-of-scope or no domain identified. Ending pipeline."
-                )
-                return
-            
-            request_context.pipeline_context["in_domain_message"] = (
-                initial_parse.result.model_dump_json(
-                    include={"user_query_domain", "continue_pipeline", "reasoning"}
-                )
+        steps = []
+        
+        initial_parse = await run_initial_step(request_context, sse_stream)
+        steps.append(initial_parse)
+        if not initial_parse.ok:
+            # should just be out of scope or no domain identified
+            return OperationResult(
+                name="initial_parse",
+                ok=True,
+                message="User query classified as out-of-scope or no domain identified. Ending pipeline.",
+                details={"initial_parse": initial_parse}
             )
-
-            await sse_stream.send_ui_loading("Classifying User Request...")
-
-            classified_strategy_ = await run_analyze_classification(
-                request_context=request_context,
-                initial_parse=initial_parse.result,
+        
+        request_context.pipeline_context["in_domain_message"] = (
+            initial_parse.result.model_dump_json(
+                include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
+        )
 
-            node_ids = classified_strategy_.get_accepted_node_ids()
+        await sse_stream.send_ui_loading("Classifying User Request...")
 
-            # ----------------------------------------------------------
-            await sse_stream.send_ui_loading("Planning The Tasks...")
-            task_planner_ = await run_create_task_plan(
-                request_context=request_context,
-                initial_parse=initial_parse.result,
-                node_ids=node_ids,
+        classified_strategy_ = await run_analyze_classification(
+            request_context=request_context,
+            initial_parse=initial_parse.result,
+        )
+
+        node_ids = classified_strategy_.get_accepted_node_ids()
+
+        # ----------------------------------------------------------
+        await sse_stream.send_ui_loading("Planning The Tasks...")
+        task_planner_ = await run_create_task_plan(
+            request_context=request_context,
+            initial_parse=initial_parse.result,
+            node_ids=node_ids,
+        )
+
+        if task_planner_:
+            # task_planner_.export()
+            mermaid_diagram = task_planner_.get_accepted_diagram(node_ids)
+            await sse_stream.send_chars("__My Plan for Your Request__")
+            await sse_stream.send_mermaid(mermaid_diagram)
+            await sse_stream.send_chars(
+                "_Note:_ This flow shows how your query will run.\n"
             )
-
-            if task_planner_:
-                # task_planner_.export()
-                mermaid_diagram = task_planner_.get_accepted_diagram(node_ids)
-                await sse_stream.send_chars("__My Plan for Your Request__")
-                await sse_stream.send_mermaid(mermaid_diagram)
-                await sse_stream.send_chars(
-                    "_Note:_ This flow shows how your query will run.\n"
-                )
-                await sse_stream.send_chars(
-                    "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
-                )
-                await sse_stream.send_divider()
-            else:
-                await sse_stream.send_error("Unable to generate a Task Planner")
-
-            # ----------------------------------------------------------
-            await sse_stream.send_ui_loading("Executing the tasks...")
-
-            result = await self.run_tasks(
-                node_ids,
-                task_planner_,
-                request_context=request_context,
+            await sse_stream.send_chars(
+                "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
             )
+            await sse_stream.send_divider()
+        else:
+            await sse_stream.send_error("Unable to generate a Task Planner")
 
-        except Exception as e:
-            logger.error(f"Error in conversation step: {str(e)}")
-            raise
-        finally:
-            ...
-            # request_context.export()
-            # await request_context.persist_chat_messages()
-            # await request_context.state_manager.export_snapshot(
-            #     request_context.session_id
-            # )
+        # ----------------------------------------------------------
+        await sse_stream.send_ui_loading("Executing the tasks...")
+
+        result = await self.run_tasks(
+            node_ids,
+            task_planner_,
+            request_context=request_context,
+        )
+        
+        return OperationResult(
+            name="run_tasks",
+            ok=True,
+            steps=steps,
+            message="Tasks executed successfully.",
+            details={"tasks": result}
+        )
+
+        
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
@@ -142,7 +144,7 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 self._run_conversation_step(request_context, sse_stream),
                 timeout=300.0,
             )
@@ -172,6 +174,4 @@ class Orchestrator:
             )
 
         finally:
-            # Important: close here to unblock endpoint's `async for`
-            await sse_stream.close()
-
+            save_file(result, file_name=f"orchestration_result-dev")

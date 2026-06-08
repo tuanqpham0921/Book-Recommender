@@ -127,7 +127,7 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
 
     request_context.add_message(response)
     
-    ok = (parse_result.continue_pipeline and parse_result.user_query_domain)
+    ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
     message = "Initial parse completed successfully" if ok else "Initial parse failed"
 
     return OperationResult(
