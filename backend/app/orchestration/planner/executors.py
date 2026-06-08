@@ -198,11 +198,12 @@ async def run_analyze_classification(
         result=tool_message[0].content,
     )
 
+@task
 async def run_create_task_plan(
     request_context: RequestContext,
     initial_parse: InitialParseResult,
     classified_strategy: BookClassificationResult,
-) -> TaskPlan:
+) -> OperationResult:
     """Create a task execution plan with dependency resolution."""
     
     tool_name = TaskGenerationNode.__name__
@@ -215,7 +216,12 @@ async def run_create_task_plan(
     
     node_ids = classified_strategy.get_accepted_node_ids()
     if not node_ids:
-        return None
+        return OperationResult(
+            name="create_task_plan",
+            ok=False,
+            message="No accepted node ids",
+            details={"classified_strategy": classified_strategy}
+        )
     
     TaskGenerationNode.modify_schema(tool=tool, valid_ids=list(node_ids.keys()))
 
@@ -259,4 +265,10 @@ async def run_create_task_plan(
         raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
 
     request_context.add_message(tool_message[0])
-    return tool_message[0].content
+    
+    return OperationResult(
+        name="create_task_plan",
+        ok=True,
+        message="Task plan created successfully",
+        result=tool_message[0].content,
+    )

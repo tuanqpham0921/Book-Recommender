@@ -33,15 +33,15 @@ class Orchestrator:
     async def run_tasks(
         self, 
         node_ids, 
-        task_planner_: TaskPlan, 
+        task_planner: TaskPlan, 
         request_context: RequestContext
     ):
         """Execute tasks in the planned order with dependency resolution."""
 
-        depends_map = {cur.id: cur.depends_on for cur in task_planner_.accepted}
+        depends_map = {cur.id: cur.depends_on for cur in task_planner.accepted}
         results = {}
 
-        for tid in task_planner_.execution_order:
+        for tid in task_planner.execution_order:
             task = node_ids[tid]
             deps = {d: results[d] for d in depends_map[tid]}
 
@@ -112,10 +112,18 @@ class Orchestrator:
             initial_parse=initial_parse.result,
             classified_strategy=classified_strategy.result,
         )
-
-        if task_planner:
+        steps.append(task_planner)
+        if not task_planner.ok:
+            return OperationResult(
+                name="run_tasks",
+                ok=False,
+                message="Unable to generate a Task Planner",
+                details={"task_planner": task_planner}
+            )
+        
+        if task_planner.ok:
             # task_planner_.export()
-            mermaid_diagram = task_planner.get_accepted_diagram(node_ids)
+            mermaid_diagram = task_planner.result.get_accepted_diagram(node_ids)
             await sse_stream.send_chars("__My Plan for Your Request__")
             await sse_stream.send_mermaid(mermaid_diagram)
             await sse_stream.send_chars(
@@ -139,7 +147,7 @@ class Orchestrator:
 
         result = await self.run_tasks(
             node_ids,
-            task_planner,
+            task_planner.result,
             request_context=request_context,
         )
         
