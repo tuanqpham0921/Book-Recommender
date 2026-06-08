@@ -13,6 +13,7 @@ from app.common.sse_stream import SSEStream
 from config.constants import OpenAIConstants
 import asyncio
 logger = logging.getLogger(__name__)
+from common.operation import task, OperationResult
 
 class OpenAIClient(BaseLLMClient):
     def __init__(self, openai_settings: OpenAISettings):
@@ -46,31 +47,34 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             logger.exception(f"❌❌❌ OpenAI embedding API call failed: {e}")
             raise
-
-    async def execute(self, req: OpenAIRequest) -> AssistantMessage:
+    
+    @task
+    async def execute(self, req: OpenAIRequest) -> OperationResult:
         """Execute the chat completion."""
         #TODO: add semaphore to the execute method
-        try:
-            payload = req.to_payload()
+        
+        payload = req.to_payload()
 
-            start = time.monotonic()
-            final_completion = await self._chat_stream(payload, req.sse_stream)
-            elapsed = round(time.monotonic() - start, 2)
+        final_completion = await self._chat_stream(payload, req.sse_stream)
 
-            response_message = final_completion.choices[0].message
-            assistant_msg = AssistantMessage(
-                id=final_completion.id,
-                content=response_message.content,
-                tool_calls=response_message.tool_calls,
-                refusal=response_message.refusal,
-                elapsed=elapsed,
-            )
+        response_message = final_completion.choices[0].message
+        assistant_msg = AssistantMessage(
+            id=final_completion.id,
+            content=response_message.content,
+            tool_calls=response_message.tool_calls,
+            refusal=response_message.refusal,
+            elapsed=0.0,
+        )
 
-            # --- Execute ---
-            return assistant_msg
-        except Exception as e:
-            logger.exception(f"❌❌❌ OpenAI API call failed: {e}")
-            raise
+        # --- Execute ---
+        return OperationResult(
+            name="execute",
+            ok=True,
+            message="OpenAI API call completed successfully",
+            result=assistant_msg,
+            # details={"payload": payload}
+        )
+
 
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
         """Stream the chat completion."""
