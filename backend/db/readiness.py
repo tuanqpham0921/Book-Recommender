@@ -136,12 +136,9 @@ async def is_ready(
     checks: list[OperationResult] = []
     result = ReadinessResult()
     
-    async with session_factory() as session:
-        # simple test connection (must be first and pass)
-        if not await check_connection(session):
-            raise ValueError("Database connection failed")
-        
-        result.database_connected = True
+    if not await check_connection(session_factory):
+        raise ValueError("Database connection failed")
+    result.database_connected = True
 
     async with session_factory() as session:
         # check if table exists and schema is correct

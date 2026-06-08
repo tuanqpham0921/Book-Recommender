@@ -44,14 +44,14 @@ async def close_async_engine(_async_engine: AsyncEngine):
     await _async_engine.dispose()
     logger.info("SQLAlchemy engine disposed")
         
-async def check_connection(factory: async_sessionmaker[AsyncSession]) -> bool:
+async def check_connection(session_factory: async_sessionmaker[AsyncSession]) -> bool:
     """Check if the database connection is established.
     
     Args:
         session: An async session.
     """
     from sqlalchemy import text
-    async with factory() as session:
+    async with session_factory() as session:
         result = await session.execute(text("SELECT 1"))
     return result.scalar() == 1
     
