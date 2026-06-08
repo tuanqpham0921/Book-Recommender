@@ -8,7 +8,8 @@ from clients import OpenAIClient
 from config import Settings
 from db.async_engine import close_async_engine, get_async_engine, get_session_factory
 import logging
-
+from db.async_engine import check_connection
+import asyncio
 logger = logging.getLogger(__name__)
 
 class AppContext:
@@ -27,7 +28,19 @@ class AppContext:
         self.app_env = settings.app.ENVIRONMENT
         logger.info(f"App environment set to: {self.app_env.upper()}")
         
+    async def ping_services(self) -> None:
+        """Ping the services to make sure they are running."""
+        await asyncio.wait_for(
+            asyncio.gather(
+                self.openai_client.ping(),
+                check_connection(self.session_factory()),
+            ), 
+            timeout=10.0
+        )
+        logger.info("Pinging services Completed")
+        
     async def __aenter__(self) -> "AppContext":
+        await self.ping_services()
         return self
     
     async def __aexit__(
