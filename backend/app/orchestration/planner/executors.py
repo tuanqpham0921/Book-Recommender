@@ -212,7 +212,7 @@ async def run_create_task_plan(
     classified_strategy: BookClassificationResult,
 ) -> OperationResult:
     """Create a task execution plan with dependency resolution."""
-    
+    steps = []
     tool_name = TaskGenerationNode.__name__
     tool_choice = {"type": "function", "function": {"name": tool_name}}
     tool = pydantic_function_tool(
@@ -258,7 +258,13 @@ async def run_create_task_plan(
     # req.export(file_name="task_planner")
 
     # initial parsing, with no streaming or content (forcing tool)
-    assistant_msg = await request_context.llm_client.execute(req)
+    result = await request_context.llm_client.execute(req)
+    steps.append(result)
+    if not result.ok:
+        raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
+        ...
+
+    assistant_msg = result.result
 
     # this shouldn't happen at all but raise to be safe
     if not assistant_msg or not assistant_msg.tool_calls:
@@ -275,7 +281,9 @@ async def run_create_task_plan(
     
     return OperationResult(
         name="create_task_plan",
+        steps=steps,
         ok=True,
         message="Task plan created successfully",
         result=tool_message[0].content,
+        details={"node_ids": node_ids}
     )
