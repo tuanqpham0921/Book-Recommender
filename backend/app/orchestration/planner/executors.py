@@ -29,7 +29,7 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         include_pipeline=True
     )
 
-    prompt = load_prompt(prompt_path="planner/prompts/initial_system.txt")
+    prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_system.txt")
     req = OpenAIRequest(
         system=SystemMessage(content=prompt),
         messages=pipeline_messages,
@@ -63,7 +63,7 @@ async def run_initial_step(request_context, sse_stream) -> str | None:
         include={"small_talk", "out_of_scope", "continue_pipeline"}
     )
 
-    prompt = load_prompt(prompt_path="planner/prompts/initial_parse_response.txt")
+    prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_parse_response.txt")
     req = OpenAIRequest(
         system=SystemMessage(content=prompt),
         messages=[AssistantMessage(content=no_in_domain_msg)],
@@ -104,7 +104,7 @@ async def run_analyze_classification(
     from config import BookConstraints, BookGuides
 
     prompt = format_prompt(
-        prompt_path="books/prompts/strategy_classification.txt",
+        prompt_path="domains/books/prompts/strategy_classification.txt",
         book_constraints=str(BookConstraints()),
         book_guides=str(BookGuides()),
     )
@@ -165,7 +165,7 @@ async def run_create_task_plan(
     for id in node_ids:
         formatted_node_ids[id] = node_ids[id].model_dump()
 
-    prompt = load_prompt(prompt_path="planner/prompts/dependency_resolution.txt")
+    prompt = load_prompt(prompt_path="orchestration/planner/prompts/dependency_resolution.txt")
     req = OpenAIRequest(
         system=SystemMessage(content=prompt),
         messages=[

@@ -12,9 +12,7 @@ class PromptLoader:
 
     def __init__(self, prompts_dir: Optional[Path] = None):
         """Initialize with prompts directory."""
-        self.prompts_dir = Path(
-            prompts_dir or FilesLocationConstants.PROMPTS_DIR
-        )
+        self.prompts_dir = Path(prompts_dir or FilesLocationConstants.PROMPTS_DIR)
         self._cache: Dict[str, str] = {}
 
     def load_prompt(self, prompt_path: str, use_cache: bool = True) -> str:
@@ -34,8 +32,7 @@ class PromptLoader:
         if use_cache and prompt_path in self._cache:
             return self._cache[prompt_path]
 
-        full_path = self.prompts_dir / prompt_path
-
+        full_path = self.prompts_dir / Path(prompt_path)
         if not full_path.exists():
             raise FileNotFoundError(f"Prompt file not found: {full_path}")
 
