@@ -117,6 +117,12 @@ class Orchestrator:
             await sse_stream.send_divider()
         else:
             await sse_stream.send_error("Unable to generate a Task Planner")
+            return OperationResult(
+                name="run_tasks",
+                ok=False,
+                message="Unable to generate a Task Planner",
+                details={"task_planner": task_planner_}
+            )
 
         # ----------------------------------------------------------
         await sse_stream.send_ui_loading("Executing the tasks...")
