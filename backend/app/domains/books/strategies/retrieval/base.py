@@ -108,7 +108,7 @@ class RetrievalBase:
 
         prompt = format_prompt(
             prompt_path="domains/books/prompts/retrieval_post_processing.txt",
-            in_domain_msg=str(request_context.pipeline_context["in_domain_message"]),
+            in_domain_msg=str(request_context.in_domain_message),
             filter_criteria=str(format_task),
             book_results=str(format_books),
             book_constraints=str(BookConstraints()),

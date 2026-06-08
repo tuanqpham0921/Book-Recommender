@@ -81,7 +81,7 @@ class Orchestrator:
             )
         # ----------------------------------------------------------
 
-        request_context.pipeline_context["in_domain_message"] = (
+        request_context.in_domain_message = (
             initial_parse.result.model_dump_json(
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
