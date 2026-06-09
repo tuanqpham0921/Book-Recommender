@@ -3,9 +3,37 @@ from dataclasses import dataclass, field
 from typing import Any
 import time
 from typing import Callable
-from pathlib import Path
-import json
+import traceback
 from functools import wraps
+
+
+def format_exception(error: BaseException) -> dict[str, Any]:
+    """Return a JSON-friendly traceback payload for operation logs."""
+    frames = traceback.extract_tb(error.__traceback__)
+    formatted_frames = [
+        {
+            "file": frame.filename,
+            "line": frame.lineno,
+            "function": frame.name,
+            "code": frame.line,
+        }
+        for frame in frames
+    ]
+
+    origin = formatted_frames[-1] if formatted_frames else None
+
+    return {
+        "type": type(error).__name__,
+        "message": str(error),
+        "origin": origin,
+        "frames": formatted_frames,
+        "traceback": traceback.format_exception(
+            type(error),
+            error,
+            error.__traceback__,
+        ),
+    }
+
 
 @dataclass(slots=True)
 class OperationResult:
@@ -13,11 +41,13 @@ class OperationResult:
     name: str | None = None
     ok: bool = True
     message: str | None = None
-    steps: list["OperationResult"] | None = None
+    steps: list["OperationResult"] = field(default_factory=list)
     details: dict[str, Any] | None = None
     duration: float | None = None
-    run_time_error: Exception | None = None
+    run_time_error: dict[str, Any] | Exception | None = None
     result: Any | None = None
+    
+    
     
     def print(self, indent: int = 0) -> None:
         prefix = "    " * indent
@@ -42,16 +72,27 @@ def task(
         async def wrapper(*args: Any, **kwargs: Any) -> OperationResult:
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
+            time_start = time.perf_counter()
+            result = None
             try:
-                time_start = time.perf_counter()
-                
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
                 
                 result = await func(*args, **kwargs)
-                time_end = time.perf_counter()
-                result.duration = round(time_end - time_start, 2)
+                return result
+            except Exception as e:
+                logger.exception(f"Task {func_ref} failed: {e}")
+                # in case the task is not returning a result, create a default one
+                if result is None:
+                    result = OperationResult(name=func_ref)
+                    
+                result.ok = False
+                result.message = f"Task {func_ref} failed: {e}"
+                result.run_time_error = format_exception(e)
+            finally:
+                # final formatting of the result
                 result.name = func_ref
+                result.duration = round(time.perf_counter() - time_start, 2)
                 
                 if not result.ok:
                     # runtime failure, app still runs
@@ -60,18 +101,6 @@ def task(
                     logger.info(f"Task {func_ref} : {result.message}")
                 
                 return result
-            except Exception as e:
-                logger.exception(f"Task {func_ref} failed: {e}")
-                time_end = time.perf_counter()
-                duration = round(time_end - time_start, 2)
-                
-                return OperationResult(
-                    name=func_ref,
-                    ok=False,
-                    message=f"Task {func_ref} failed: {e}",
-                    duration=duration,
-                    run_time_error=e,
-                )
 
         return wrapper
 
