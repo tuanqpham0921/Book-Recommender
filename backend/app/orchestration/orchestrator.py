@@ -26,17 +26,22 @@ class ConversationOrchestrator(Workflow):
         self.user_message = user_message
         self.llm_client = llm_client
         
-    async def run(self, request_context: RequestContext) -> OperationResult:
+    async def run(self, request_context: RequestContext) -> None:
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
         initial_parse_result = await initial_parse()
         self.add_step(initial_parse_result)
+        if not initial_parse_result.ok or initial_parse_result.result is None:
+            self.result.ok = False
+            self.result.message = "Initial parse failed"
+            return
         
         request_context.in_domain_message = (
             initial_parse_result.result.model_dump_json(
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
         )
-        return self.result
+        self.result.ok = True
+        self.result.message = "Conversation orchestration completed successfully"
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""

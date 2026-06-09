@@ -154,7 +154,7 @@ class InitialParseWorkflow(Workflow):
         self.llm_client = llm_client
         
         
-    async def run(self) -> OperationResult:
+    async def run(self) -> None:
         await self.sse_stream.send_ui_loading("Thinking...")    
 
         tool_name = InitialParseNode.__name__
@@ -196,9 +196,9 @@ class InitialParseWorkflow(Workflow):
         # conversation.append(tool_message[0])
 
         # Store the result for later use
-        parse_result = tool_message.content
+        parse_result = tool_message
 
-        no_in_domain_msg = tool_message.content.model_dump_json(
+        no_in_domain_msg = tool_message.model_dump_json(
             include={"small_talk", "out_of_scope", "continue_pipeline"}
         )
 
@@ -223,7 +223,6 @@ class InitialParseWorkflow(Workflow):
         self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         self.result.result = parse_result
-        return self.result
         # ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         # message = "Initial parse completed successfully" if ok else "Initial parse failed"
 

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from common.operation import OperationResult
 import logging
 import time
@@ -16,7 +15,7 @@ class Workflow(ABC):
         logger = logging.getLogger(self.workflow_ref)
         time_start = time.perf_counter()
         try:
-            self.result = await self.run(*args, **kwargs)
+            await self.run(*args, **kwargs)
             
             # runtime failure, app still runs
             if not self.result.ok:
@@ -35,7 +34,7 @@ class Workflow(ABC):
             return self.result
     
     @abstractmethod
-    async def run(self, *args: Any, **kwargs: Any) -> OperationResult:
+    async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
     
     def add_step(self, step: OperationResult) -> None:
