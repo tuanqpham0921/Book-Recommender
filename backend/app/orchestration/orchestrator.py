@@ -14,7 +14,7 @@ from common.utils import save_file
 from app.orchestration.planner.executors import InitialParseWorkflow
 logger = logging.getLogger(__name__)
 
-from app.workflow import Workflow
+from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 

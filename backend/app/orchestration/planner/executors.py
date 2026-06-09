@@ -9,7 +9,7 @@ from app.common.sse_stream import SSEStream
 from clients.schemas import OpenAIParserRequest, OpenAIChatRequest
 logger = logging.getLogger(__name__)
 
-from app.workflow import Workflow
+from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 from common.operation import task, OperationResult
