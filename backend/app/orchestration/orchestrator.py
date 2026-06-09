@@ -49,44 +49,8 @@ class Orchestrator:
 
     def __init__(self):
         """Initialize the orchestrator."""
-        # Here you can initialize any resources that are needed for the orchestrator
-        # like saving logs to a file or a database
-        # update user info after each request
-        # this is one App level resource that can be used by all requests
-        # so it will hold references that are needed for the resources managed by the orchestrator
-        # self.log_session_factory = None
         pass
     
-    # @task
-    # async def _run_conversation_step(
-    #     self,
-    #     request_context: RequestContext,
-    #     sse_stream: SSEStream,
-    # ) -> OperationResult:
-    #     """Execute the complete conversation pipeline from parsing to task execution."""
-    #     steps = []
-        
-    #     initial_parse = await run_initial_step(request_context, sse_stream)
-    #     steps.append(initial_parse)
-    #     if initial_parse.run_time_error:
-    #         #TODO: handle out of scope or no domain identified
-    #         ... 
-    #     # ----------------------------------------------------------
-
-    #     request_context.in_domain_message = (
-    #         initial_parse.result.model_dump_json(
-    #             include={"user_query_domain", "continue_pipeline", "reasoning"}
-    #         )
-    #     )
-        
-    #     return OperationResult(
-    #         name="run_tasks",
-    #         ok=True,
-    #         steps=steps,
-    #         message="Tasks executed successfully.",
-    #         details={"user_input": request_context.user_message}
-    #     )
-
     async def _run_conversation_step(self, request_context: RequestContext, sse_stream: SSEStream):
         conversation_orchestrator = ConversationOrchestrator(sse_stream, request_context.user_message, request_context.llm_client)
         await conversation_orchestrator(request_context=request_context)
