@@ -1,7 +1,7 @@
 import logging
 
 from typing import Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -36,16 +36,10 @@ class InitialParseNode(InitialParseBase):
     # model_config = ConfigDict(json_schema_extra=_examples)
 
     async def __call__(self, confident_tuning: float = 0.5) -> InitialParseResult:
-        """Convert request into a result, applying confidence threshold."""
         return InitialParseResult(
-            user_query=self.user_query,
-            small_talk=self.small_talk,
-            out_of_scope=self.out_of_scope,
-            user_query_domain=self.user_query_domain,
-            reasoning=self.reasoning,
+            **self.model_dump(),
             continue_pipeline=(
-                True
-                if self.domain_confidence >= confident_tuning and self.user_query_domain
-                else False
+                self.domain_confidence >= confident_tuning
+                and bool(self.user_query_domain)
             ),
         )
