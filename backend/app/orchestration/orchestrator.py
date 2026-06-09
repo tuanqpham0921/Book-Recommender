@@ -74,19 +74,6 @@ class Orchestrator:
             await sse_stream.send("complete", {"status": "completed"})
             logger.info("✅ Orchestration completed successfully")
 
-        #TODO: add Dev vs Prod handling
-        except asyncio.TimeoutError:
-            msg = "Uhh... request timed out (5 mins) while processing your query."
-            logger.info(msg)
-            await sse_stream.send_error(msg)
-
-        except asyncio.CancelledError:
-            # Raised if server reloads or client disconnects mid-stream
-            logger.info("🛑 Orchestration cancelled before shutdown or client abort.")
-            await sse_stream.send_error(
-                f"Oh no... orchestration server while processing your query."
-            )
-
         except Exception as e:
             logger.exception(f"❌ Unhandled orchestrator error: {e}")
             # await sse_stream.send_error(f"Internal error: {str(e)}")
