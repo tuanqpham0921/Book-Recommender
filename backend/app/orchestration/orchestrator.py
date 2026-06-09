@@ -34,6 +34,8 @@ class ConversationOrchestrator(Workflow[None]):
             self.result.message = "Initial parse failed"
             return
         
+        await self.sse_stream.send_divider()
+        
         request_context.in_domain_message = (
             initial_parse_result.result.model_dump_json(
                 include={"user_query_domain", "continue_pipeline", "reasoning"}

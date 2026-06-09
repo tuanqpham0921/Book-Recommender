@@ -88,12 +88,6 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
             raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
             ...
 
-        await self.sse_stream.send_divider()
-        
         self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         self.result.result = parse_result
-        # ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
-        # message = "Initial parse completed successfully" if ok else "Initial parse failed"
-
-        # return self.result
