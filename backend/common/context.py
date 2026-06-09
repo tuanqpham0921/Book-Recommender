@@ -40,11 +40,11 @@ class AppContext:
         logger.info("Pinging services Completed")
         
     async def __aenter__(self) -> "AppContext":
-        try:
-            await self.ping_services()
-        except Exception:
-            await self.close()
-            raise
+        # try:
+        #     await self.ping_services()
+        # except Exception:
+        #     await self.close()
+        #     raise
         return self
 
     async def close(self) -> None:

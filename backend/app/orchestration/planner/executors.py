@@ -137,3 +137,94 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
         message=message,
         result=parse_result,
     )
+    
+
+from app.workflow import Workflow
+from app.common.messages import UserMessage
+from clients.openai_client import OpenAIClient
+class InitialParseWorkflow(Workflow):
+    success_message = "Initial parse completed successfully"
+    failure_message = "Initial parse failed"
+    
+    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+        super().__init__(name="initial_parse")
+        
+        self.sse_stream = sse_stream
+        self.user_message = user_message
+        self.llm_client = llm_client
+        
+        
+    async def run(self) -> OperationResult:
+        await self.sse_stream.send_ui_loading("Thinking...")    
+
+        tool_name = InitialParseNode.__name__
+        tool = pydantic_function_tool(
+            InitialParseNode,
+            name=tool_name,
+            description=f"Fill the schema for {tool_name}",
+        )
+        tool_choice = {"type": "function", "function": {"name": tool_name}}
+
+        # Use pipeline conversation for internal LLM calls
+
+        prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_system.txt")
+        req = OpenAIRequest(
+            system=SystemMessage(content=prompt),
+            messages=[self.user_message],
+            tools=[tool],
+            tool_choice=tool_choice,
+            temperature=0.3,
+            top_p=0.8,
+        )
+        result = await self.llm_client.execute_new(req)
+        self.add_step(result)
+        
+        if not result.ok:
+            raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
+            ...
+            
+        assistant_msg = result.result
+        
+        tool_instance = assistant_msg.tool_calls[0].function.parsed_arguments
+        tool_message = await tool_instance()
+
+        if not tool_message:
+            raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
+
+        # Add tool response to pipeline conversation
+        #TODO: add to conversation
+        # conversation.append(tool_message[0])
+
+        # Store the result for later use
+        parse_result = tool_message.content
+
+        no_in_domain_msg = tool_message.content.model_dump_json(
+            include={"small_talk", "out_of_scope", "continue_pipeline"}
+        )
+
+        # user facing response
+        prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_parse_response.txt")
+        req = OpenAIRequest(
+            system=SystemMessage(content=prompt),
+            messages=[AssistantMessage(content=no_in_domain_msg)],
+            sse_stream=self.sse_stream,
+            temperature=0.7,
+            top_p=1.0,
+        )
+
+        result = await self.llm_client.execute_new(req)
+        self.add_step(result)
+        if not result.ok:
+            raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
+            ...
+
+        await self.sse_stream.send_divider()
+        
+        self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
+        self.result.message = self.success_message if self.result.ok else self.failure_message
+        self.result.result = parse_result
+        return self.result
+        # ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
+        # message = "Initial parse completed successfully" if ok else "Initial parse failed"
+
+        # return self.result

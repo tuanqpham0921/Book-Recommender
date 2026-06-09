@@ -12,8 +12,31 @@ from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
 from common.operation import OperationResult, task
 from common.utils import save_file
+from app.orchestration.planner.executors import InitialParseWorkflow
 logger = logging.getLogger(__name__)
 
+from app.workflow import Workflow
+from app.common.messages import UserMessage
+from clients.openai_client import OpenAIClient
+
+class ConversationOrchestrator(Workflow):
+    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+        super().__init__(name="initial_parse")
+        self.sse_stream = sse_stream
+        self.user_message = user_message
+        self.llm_client = llm_client
+        
+    async def run(self, request_context: RequestContext) -> OperationResult:
+        initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        await initial_parse()
+        self.add_step(initial_parse)
+        
+        request_context.in_domain_message = (
+            initial_parse.result.model_dump_json(
+                include={"user_query_domain", "continue_pipeline", "reasoning"}
+            )
+        )
+        return self.result
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
@@ -28,37 +51,40 @@ class Orchestrator:
         # self.log_session_factory = None
         pass
     
-    @task
-    async def _run_conversation_step(
-        self,
-        request_context: RequestContext,
-        sse_stream: SSEStream,
-    ) -> OperationResult:
-        """Execute the complete conversation pipeline from parsing to task execution."""
-        steps = []
+    # @task
+    # async def _run_conversation_step(
+    #     self,
+    #     request_context: RequestContext,
+    #     sse_stream: SSEStream,
+    # ) -> OperationResult:
+    #     """Execute the complete conversation pipeline from parsing to task execution."""
+    #     steps = []
         
-        initial_parse = await run_initial_step(request_context, sse_stream)
-        steps.append(initial_parse)
-        if initial_parse.run_time_error:
-            #TODO: handle out of scope or no domain identified
-            ... 
-        # ----------------------------------------------------------
+    #     initial_parse = await run_initial_step(request_context, sse_stream)
+    #     steps.append(initial_parse)
+    #     if initial_parse.run_time_error:
+    #         #TODO: handle out of scope or no domain identified
+    #         ... 
+    #     # ----------------------------------------------------------
 
-        request_context.in_domain_message = (
-            initial_parse.result.model_dump_json(
-                include={"user_query_domain", "continue_pipeline", "reasoning"}
-            )
-        )
+    #     request_context.in_domain_message = (
+    #         initial_parse.result.model_dump_json(
+    #             include={"user_query_domain", "continue_pipeline", "reasoning"}
+    #         )
+    #     )
         
-        return OperationResult(
-            name="run_tasks",
-            ok=True,
-            steps=steps,
-            message="Tasks executed successfully.",
-            details={"user_input": request_context.user_message}
-        )
+    #     return OperationResult(
+    #         name="run_tasks",
+    #         ok=True,
+    #         steps=steps,
+    #         message="Tasks executed successfully.",
+    #         details={"user_input": request_context.user_message}
+    #     )
 
-        
+    async def _run_conversation_step(self, request_context: RequestContext, sse_stream: SSEStream):
+        conversation_orchestrator = ConversationOrchestrator(sse_stream, request_context.user_message, request_context.llm_client)
+        await conversation_orchestrator(request_context=request_context)
+        return conversation_orchestrator.result
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
