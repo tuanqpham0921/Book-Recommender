@@ -7,7 +7,7 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 from app.common.messages import ToolMessage
 from .planner.schemas import TaskPlan
-from .planner.executors import run_initial_step, run_analyze_classification, run_create_task_plan
+from .planner.executors import run_initial_step
 from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
 from common.operation import OperationResult, task
@@ -28,38 +28,6 @@ class Orchestrator:
         # self.log_session_factory = None
         pass
     
-    
-
-    async def run_tasks(
-        self, 
-        node_ids, 
-        task_planner: TaskPlan, 
-        request_context: RequestContext
-    ):
-        """Execute tasks in the planned order with dependency resolution."""
-
-        depends_map = {cur.id: cur.depends_on for cur in task_planner.accepted}
-        results = {}
-
-        for tid in task_planner.execution_order:
-            task = node_ids[tid]
-            deps = {d: results[d] for d in depends_map[tid]}
-
-            node_type = task.node_type
-
-            # Create strategy instance and call it with proper arguments
-            strategy_class = BOOK_STRAT_REGISTRY[node_type]
-            strategy_instance = strategy_class()
-
-            # Pass the task data and context to the strategy
-            result = await strategy_instance(
-                task=task, dependent_results=deps, request_context=request_context
-            )
-
-            results[tid] = result
-
-        return results
-    
     @task
     async def _run_conversation_step(
         self,
@@ -71,14 +39,9 @@ class Orchestrator:
         
         initial_parse = await run_initial_step(request_context, sse_stream)
         steps.append(initial_parse)
-        if not initial_parse.ok:
-            # should just be out of scope or no domain identified
-            return OperationResult(
-                name="initial_parse",
-                ok=True,
-                message="User query classified as out-of-scope or no domain identified. Ending pipeline.",
-                details={"initial_parse": initial_parse}
-            )
+        if initial_parse.run_time_error:
+            #TODO: handle out of scope or no domain identified
+            ... 
         # ----------------------------------------------------------
 
         request_context.in_domain_message = (
@@ -86,77 +49,12 @@ class Orchestrator:
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
         )
-    
-        # # ----------------------------------------------------------
-        await sse_stream.send_ui_loading("Classifying User Request...")
-
-        classified_strategy = await run_analyze_classification(
-            request_context=request_context,
-            initial_parse=initial_parse.result,
-        )
-        steps.append(classified_strategy)
-        if not classified_strategy.ok:
-            return OperationResult(
-                name="analyze_classification",
-                ok=False,
-                message="Unable to classify the user request",
-                details={"classified_strategy": classified_strategy}
-            )
-        node_ids = classified_strategy.result.get_accepted_node_ids()
-
-        # # ----------------------------------------------------------
-        await sse_stream.send_ui_loading("Planning The Tasks...")
-    
-        task_planner = await run_create_task_plan(
-            request_context=request_context,
-            initial_parse=initial_parse.result,
-            classified_strategy=classified_strategy.result,
-        )
-        steps.append(task_planner)
-        if not task_planner.ok:
-            return OperationResult(
-                name="run_tasks",
-                ok=False,
-                message="Unable to generate a Task Planner",
-                details={"task_planner": task_planner}
-            )
-        
-        if task_planner.ok:
-            # task_planner_.export()
-            mermaid_diagram = task_planner.result.get_accepted_diagram(node_ids)
-            await sse_stream.send_chars("__My Plan for Your Request__")
-            await sse_stream.send_mermaid(mermaid_diagram)
-            await sse_stream.send_chars(
-                "_Note:_ This flow shows how your query will run.\n"
-            )
-            await sse_stream.send_chars(
-                "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
-            )
-            await sse_stream.send_divider()
-        else:
-            await sse_stream.send_error("Unable to generate a Task Planner")
-            return OperationResult(
-                name="run_tasks",
-                ok=False,
-                message="Unable to generate a Task Planner",
-                details={"task_planner": task_planner}
-            )
-
-        # # ----------------------------------------------------------
-        await sse_stream.send_ui_loading("Executing the tasks...")
-
-        result = await self.run_tasks(
-            node_ids,
-            task_planner.result,
-            request_context=request_context,
-        )
         
         return OperationResult(
             name="run_tasks",
             ok=True,
             steps=steps,
             message="Tasks executed successfully.",
-            result=result,
             details={"user_input": request_context.user_message}
         )
 
