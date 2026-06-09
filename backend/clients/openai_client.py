@@ -4,7 +4,7 @@ import logging
 from openai import AsyncOpenAI
 from typing import List, Optional
 
-from .schemas import OpenAIRequest
+from .schemas import OpenAIRequest, OpenAIBaseRequest
 from .base import BaseLLMClient
 
 from config.settings import OpenAISettings
@@ -51,10 +51,11 @@ class OpenAIClient(BaseLLMClient):
     async def execute(self, req: OpenAIRequest) -> AssistantMessage:
         # --- Preflight ---
         try:
+            sse_stream = req.sse_stream
             payload = req.to_payload()
-
+            
             start = time.monotonic()
-            final_completion = await self._chat_stream(payload, req.sse_stream)
+            final_completion = await self._chat_stream(payload, sse_stream)
             elapsed = round(time.monotonic() - start, 2)
 
             response_message = final_completion.choices[0].message
@@ -73,7 +74,7 @@ class OpenAIClient(BaseLLMClient):
             raise e
     
     @task
-    async def execute_new(self, req: OpenAIRequest) -> OperationResult:
+    async def execute_new(self, req: OpenAIRequest | OpenAIBaseRequest) -> OperationResult:
         """Execute the chat completion."""
         #TODO: add semaphore to the execute method
         

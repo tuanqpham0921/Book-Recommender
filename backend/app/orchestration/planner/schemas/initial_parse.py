@@ -37,7 +37,7 @@ class InitialParseNode(InitialParseBase):
 
     async def __call__(self, confident_tuning: float = 0.5) -> InitialParseResult:
         return InitialParseResult(
-            **self.model_dump(),
+            **self.model_dump(exclude={"domain_confidence"}),
             continue_pipeline=(
                 self.domain_confidence >= confident_tuning
                 and bool(self.user_query_domain)

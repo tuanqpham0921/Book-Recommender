@@ -2,18 +2,24 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import asyncio
-from pydantic import BaseModel
+from dataclasses import dataclass
+from app.common.messages import APIMessage, SystemMessage
+from app.common.sse_stream import SSEStream
+from config import settings
 
-
-class BaseLLMRequest(BaseModel, ABC):
+@dataclass
+class BaseLLMRequest(ABC):
     """Base schema for any LLM request (OpenAI, Anthropic, etc.)."""
-
     model: str
+    prompt: str
+    messages: list[APIMessage]
+    tool_models: list[type]
 
     @abstractmethod
     def to_payload(self) -> dict[str, Any]:
         """Convert this request to provider-specific API payload."""
         ...
+        
 
 
 class BaseLLMClient(ABC):
