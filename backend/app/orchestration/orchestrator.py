@@ -21,18 +21,18 @@ from clients.openai_client import OpenAIClient
 
 class ConversationOrchestrator(Workflow):
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__(name="initial_parse")
+        super().__init__()
         self.sse_stream = sse_stream
         self.user_message = user_message
         self.llm_client = llm_client
         
     async def run(self, request_context: RequestContext) -> OperationResult:
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
-        await initial_parse()
-        self.add_step(initial_parse)
+        initial_parse_result = await initial_parse()
+        self.add_step(initial_parse_result)
         
         request_context.in_domain_message = (
-            initial_parse.result.model_dump_json(
+            initial_parse_result.result.model_dump_json(
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
         )

@@ -147,7 +147,7 @@ class InitialParseWorkflow(Workflow):
     failure_message = "Initial parse failed"
     
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__(name="initial_parse")
+        super().__init__()
         
         self.sse_stream = sse_stream
         self.user_message = user_message
