@@ -12,6 +12,24 @@ logger = logging.getLogger(__name__)
 from app.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
+from common.operation import task, OperationResult
+from typing import Any
+
+@task
+async def run_tool_call(tool_call, **kwargs) -> OperationResult[Any]:
+    tool_name = tool_call.function.name
+    
+    tool_instance = tool_call.function.parsed_arguments
+    output = await tool_instance(**kwargs)
+    return OperationResult(
+        name=tool_name,
+        ok=True,
+        message=f"{tool_name} completed successfully",
+        result=output,
+        output_type=type(output),
+    )
+
+
 class InitialParseWorkflow(Workflow[InitialParseResult]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
@@ -40,15 +58,12 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         self.add_step(llm_result)
         assistant_msg = llm_result.result
         
-        tool_instance = assistant_msg.tool_calls[0].function.parsed_arguments
-        tool_message = await tool_instance()
-
-        if not tool_message:
-            raise RuntimeError(f"🛑 {InitialParseNode.__name__} call {tool_message} FAILED")
+        tool_message = await run_tool_call(assistant_msg.tool_calls[0])
+        self.add_step(tool_message)
 
         # Store the result for later use
-        parse_result = tool_message
-        no_in_domain_msg = tool_message.model_dump_json(
+        parse_result = tool_message.result
+        no_in_domain_msg = tool_message.result.model_dump_json(
             include={"small_talk", "out_of_scope", "continue_pipeline"}
         )
 
