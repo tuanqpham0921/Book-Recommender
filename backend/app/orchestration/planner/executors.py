@@ -12,23 +12,7 @@ logger = logging.getLogger(__name__)
 from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
-from common.operation import task, OperationResult
-from typing import Any
-
-@task
-async def run_tool_call(tool_call, **kwargs) -> OperationResult[Any]:
-    tool_name = tool_call.function.name
-    
-    tool_instance = tool_call.function.parsed_arguments
-    output = await tool_instance(**kwargs)
-    return OperationResult(
-        name=tool_name,
-        ok=True,
-        message=f"{tool_name} completed successfully",
-        result=output,
-        output_type=type(output),
-    )
-
+from common.operation import run_tool_call
 
 class InitialParseWorkflow(Workflow[InitialParseResult]):
     success_message = "Initial parse completed successfully"
