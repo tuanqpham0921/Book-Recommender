@@ -84,7 +84,7 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
         temperature=0.3,
         top_p=0.8,
     )
-    result = await request_context.llm_client.execute(req)
+    result = await request_context.llm_client.execute_new(req)
     steps.append(result)
     
     if not result.ok:
@@ -120,7 +120,7 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
         top_p=1.0,
     )
 
-    result = await request_context.llm_client.execute(req)
+    result = await request_context.llm_client.execute_new(req)
     steps.append(result)
     if not result.ok:
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
@@ -174,7 +174,7 @@ async def run_analyze_classification(
         top_p=0.5,
     )
 
-    result = await request_context.llm_client.execute(req)
+    result = await request_context.llm_client.execute_new(req)
     steps.append(result)
     if not result.ok:
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
@@ -258,7 +258,7 @@ async def run_create_task_plan(
     # req.export(file_name="task_planner")
 
     # initial parsing, with no streaming or content (forcing tool)
-    result = await request_context.llm_client.execute(req)
+    result = await request_context.llm_client.execute_new(req)
     steps.append(result)
     if not result.ok:
         raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
