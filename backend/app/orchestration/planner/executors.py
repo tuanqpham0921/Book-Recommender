@@ -60,25 +60,16 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         
         tool_message = await run_tool_call(assistant_msg.tool_calls[0])
         self.add_step(tool_message)
-
-        # Store the result for later use
-        parse_result = tool_message.result
-        no_in_domain_msg = tool_message.result.model_dump_json(
-            include={"small_talk", "out_of_scope", "continue_pipeline"}
-        )
-
-        # user facing response
-        prompt = self.user_prompt
-        req = OpenAIChatRequest(
-            prompt=prompt,
-            messages=[AssistantMessage(content=no_in_domain_msg)],
-            sse_stream=self.sse_stream,
-            temperature=0.7,
-            top_p=1.0,
-        )
-        result = await self.llm_client.execute_new(req)
-        self.add_step(result)
         
+        parse_result = tool_message.result
+
+        self.result.result = parse_result
         self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         self.result.message = self.success_message if self.result.ok else self.failure_message
-        self.result.result = parse_result
+        
+        await self.generate_user_response(
+            parse_result.to_llm_messages(), 
+            prompt=self.user_prompt, 
+            sse_stream=self.sse_stream
+        )
+        

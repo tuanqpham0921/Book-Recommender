@@ -2,6 +2,7 @@ import logging
 
 from typing import Optional
 from pydantic import BaseModel, Field
+from app.common.messages import AssistantMessage, BaseMessage
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,11 @@ class InitialParseResult(InitialParseBase):
     continue_pipeline: bool = Field(
         default=False, description="Should the pipeline continue?"
     )
+    
+    def to_llm_messages(self) -> list[BaseMessage]:
+        return [AssistantMessage(content=self.model_dump_json(
+            include={"small_talk", "out_of_scope", "continue_pipeline"}
+        ))]
 
 
 class InitialParseNode(InitialParseBase):

@@ -4,6 +4,9 @@ import logging
 import time
 from typing import Any, Generic, TypeVar
 from common.operation import format_exception
+from clients.schemas import OpenAIChatRequest
+from app.common.messages import BaseMessage
+from app.common.sse_stream import SSEStream
 OutputT = TypeVar("OutputT")
 
 
@@ -72,3 +75,17 @@ class Workflow(ABC, Generic[OutputT]):
     
     def check_output_type(self) -> None:
         self.result.check_output_type()
+        
+    async def generate_user_response(self,
+                                     messages: list[BaseMessage],
+                                     prompt: str,
+                                     sse_stream: SSEStream) -> OperationResult[Any]:
+        req = OpenAIChatRequest(
+            prompt=prompt,
+            messages=messages,
+            sse_stream=sse_stream,
+            temperature=0.7,
+            top_p=1.0,
+        )
+        result = await self.llm_client.execute_new(req)
+        return self.add_step(result)
