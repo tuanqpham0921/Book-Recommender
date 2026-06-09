@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Any, Generic, TypeVar
 from common.operation import format_exception
-
 OutputT = TypeVar("OutputT")
 
 
@@ -15,6 +14,7 @@ class Workflow(ABC, Generic[OutputT]):
             name=self.workflow_ref,
             output_type=output_type,
         )
+        self.stop_on_failure = True
     
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         time_start = time.perf_counter()
@@ -43,9 +43,21 @@ class Workflow(ABC, Generic[OutputT]):
     async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
     
-    def add_step(self, step: OperationResult[Any]) -> None:
+    def add_step(self, step: OperationResult[Any]) -> OperationResult[Any]:
         self.result.steps.append(step)
         
+        if step.ok:
+            return step
+        
+        self.result.ok = False
+        self.result.message = f"Step failed: {step.name}"
+        self.logger.warning(f"🛑 {step.name} FAILED: {step.message}")
+        
+        if self.stop_on_failure:
+            raise RuntimeError(f"🛑 {step.name} FAILED: {step.message}")
+        
+        return step
+                
     def format_result(self):
         self.result.message = self.success_message if self.result.ok else self.failure_message
         self.result.details = self.result.details
@@ -60,6 +72,3 @@ class Workflow(ABC, Generic[OutputT]):
     
     def check_output_type(self) -> None:
         self.result.check_output_type()
-        
-        # TODO: handle if needed
-        # might cast to output type or try to convert to output type

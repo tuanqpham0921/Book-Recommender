@@ -6,7 +6,7 @@ from openai import pydantic_function_tool
 from .schemas import InitialParseNode, InitialParseResult
 import logging
 from app.common.sse_stream import SSEStream
-from clients.schemas import OpenAIParserRequest
+from clients.schemas import OpenAIParserRequest, OpenAIChatRequest
 logger = logging.getLogger(__name__)
 
 from app.workflow import Workflow
@@ -38,11 +38,6 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         )
         llm_result = await self.llm_client.execute_new(req)
         self.add_step(llm_result)
-        
-        # if not result.ok:
-        #     raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
-        #     ...
-            
         assistant_msg = llm_result.result
         
         tool_instance = assistant_msg.tool_calls[0].function.parsed_arguments
@@ -51,33 +46,24 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         if not tool_message:
             raise RuntimeError(f"🛑 {InitialParseNode.__name__} call {tool_message} FAILED")
 
-        # Add tool response to pipeline conversation
-        #TODO: add to conversation
-        # conversation.append(tool_message[0])
-
         # Store the result for later use
         parse_result = tool_message
-
         no_in_domain_msg = tool_message.model_dump_json(
             include={"small_talk", "out_of_scope", "continue_pipeline"}
         )
 
         # user facing response
         prompt = self.user_prompt
-        req = OpenAIRequest(
-            system=SystemMessage(content=prompt),
+        req = OpenAIChatRequest(
+            prompt=prompt,
             messages=[AssistantMessage(content=no_in_domain_msg)],
             sse_stream=self.sse_stream,
             temperature=0.7,
             top_p=1.0,
         )
-
         result = await self.llm_client.execute_new(req)
         self.add_step(result)
-        if not result.ok:
-            raise RuntimeError(f"🛑 {InitialParseNode.__name__} parse {InitialParseNode.__name__} FAILED")
-            ...
-
+        
         self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         self.result.result = parse_result
