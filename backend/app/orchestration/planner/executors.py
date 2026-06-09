@@ -142,12 +142,12 @@ async def run_initial_step(request_context: RequestContext, sse_stream: SSEStrea
 from app.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
-class InitialParseWorkflow(Workflow):
+class InitialParseWorkflow(Workflow[InitialParseResult]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
     
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__()
+        super().__init__(output_type=InitialParseResult)
         
         self.sse_stream = sse_stream
         self.user_message = user_message

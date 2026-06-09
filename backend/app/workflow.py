@@ -2,28 +2,33 @@ from abc import ABC, abstractmethod
 from common.operation import OperationResult
 import logging
 import time
-from typing import Any
+from typing import Any, Generic, TypeVar
 from common.operation import format_exception
 
+OutputT = TypeVar("OutputT")
 
-class Workflow(ABC):
-    def __init__(self):
+
+class Workflow(ABC, Generic[OutputT]):
+    def __init__(self, output_type: type[OutputT] | None = None):
         self.name = self.workflow_ref
-        self.result = OperationResult(name=self.workflow_ref)
+        self.result: OperationResult[OutputT] = OperationResult(
+            name=self.workflow_ref,
+            output_type=output_type,
+        )
     
-    async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult:
-        logger = logging.getLogger(self.workflow_ref)
+    async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         time_start = time.perf_counter()
         try:
             await self.run(*args, **kwargs)
+            self.check_output_type()
             
             # runtime failure, app still runs
             if not self.result.ok:
-                logger.warning(f"Workflow failed: {self.result.message}")
+                self.logger.warning(f"Workflow failed: {self.result.message}")
                 
         except Exception as e:
             # run-time failure, TODO: handle if needed
-            logger.exception(f"Workflow failed: {e}")
+            self.logger.exception(f"Workflow failed: {e}")
             self.result.ok = False
             self.result.message = f"Workflow failed: {e}"
             self.result.run_time_error = format_exception(e)
@@ -31,13 +36,14 @@ class Workflow(ABC):
             # final formatting of the result
             self.result.name = self.workflow_ref
             self.result.duration = round(time.perf_counter() - time_start, 2)
+            
             return self.result
     
     @abstractmethod
     async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
     
-    def add_step(self, step: OperationResult) -> None:
+    def add_step(self, step: OperationResult[Any]) -> None:
         self.result.steps.append(step)
         
     def format_result(self):
@@ -47,3 +53,13 @@ class Workflow(ABC):
     @property
     def workflow_ref(self) -> str:
         return f"{type(self).__module__}.{type(self).__qualname__}"
+    
+    @property
+    def logger(self) -> logging.Logger:
+        return logging.getLogger(self.workflow_ref)
+    
+    def check_output_type(self) -> None:
+        self.result.check_output_type()
+        
+        # TODO: handle if needed
+        # might cast to output type or try to convert to output type

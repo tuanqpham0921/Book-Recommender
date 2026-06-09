@@ -7,7 +7,6 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 from app.common.messages import ToolMessage
 from .planner.schemas import TaskPlan
-from .planner.executors import run_initial_step
 from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
 from common.operation import OperationResult, task
@@ -19,9 +18,9 @@ from app.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 
-class ConversationOrchestrator(Workflow):
+class ConversationOrchestrator(Workflow[None]):
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__()
+        super().__init__(output_type=None)
         self.sse_stream = sse_stream
         self.user_message = user_message
         self.llm_client = llm_client

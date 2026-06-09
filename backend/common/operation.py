@@ -1,10 +1,12 @@
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Generic, TypeVar
 import time
 from typing import Callable
 import traceback
 from functools import wraps
+
+OutputT = TypeVar("OutputT")
 
 
 def format_exception(error: BaseException) -> dict[str, Any]:
@@ -36,31 +38,25 @@ def format_exception(error: BaseException) -> dict[str, Any]:
 
 
 @dataclass(slots=True)
-class OperationResult:
+class OperationResult(Generic[OutputT]):
     """Outcome of a single named check or step."""
     name: str | None = None
     ok: bool = True
     message: str | None = None
-    steps: list["OperationResult"] = field(default_factory=list)
+    steps: list["OperationResult[Any]"] = field(default_factory=list)
     details: dict[str, Any] | None = None
     duration: float | None = None
     run_time_error: dict[str, Any] | Exception | None = None
-    result: Any | None = None
     
+    result: OutputT | None = None
+    output_type: type[OutputT] | None = None
     
-    
-    def print(self, indent: int = 0) -> None:
-        prefix = "    " * indent
-        print(f"{prefix}{'✅' if self.ok else '❌'} {self.name}: {self.message}")
-        if self.steps:
-            for step in self.steps:
-                step.print(indent + 1)
-        if self.details:
-            print(f"{prefix}Details: {self.details}")
-        if self.result:
-            print(f"{prefix}Result: {self.result}")
-        if self.duration:
-            print(f"{prefix}Duration: {self.duration} seconds")
+    def check_output_type(self) -> None:
+        if self.result is None or self.output_type is None:
+            return
+        
+        if self.output_type and not isinstance(self.result, self.output_type):
+            raise TypeError(f"Result {self.result} is of type {type(self.result)} not of type {self.output_type}")
             
 def task(
     func: Callable[..., Any] | None = None,
@@ -69,7 +65,7 @@ def task(
 ) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> OperationResult:
+        async def wrapper(*args: Any, **kwargs: Any) -> OperationResult[Any]:
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
             time_start = time.perf_counter()
