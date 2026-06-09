@@ -11,7 +11,6 @@ import time
 from app.common.sse_stream import SSEStream
 
 from common.operation import task, OperationResult
-# from app.operation import ChatResult
 
 logger = logging.getLogger(__name__)
 
