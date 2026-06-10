@@ -1,18 +1,17 @@
-import json
-from clients import OpenAIRequest
-from app.common.messages import SystemMessage, AssistantMessage
-from app.common.prompt_loader import load_prompt
-from openai import pydantic_function_tool
-from .schemas import InitialParseNode, InitialParseResult
 import logging
+
+from app.common.prompt_loader import load_prompt
+from .schemas import InitialParseNode, InitialParseResult
+
 from app.common.sse_stream import SSEStream
-from clients.schemas import OpenAIParserRequest, OpenAIChatRequest
-logger = logging.getLogger(__name__)
+from clients.schemas import OpenAIParserRequest
 
 from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 from common.operation import run_tool_call
+
+logger = logging.getLogger(__name__)
 
 class InitialParseWorkflow(Workflow[InitialParseResult]):
     success_message = "Initial parse completed successfully"
