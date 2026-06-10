@@ -67,17 +67,14 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
         self.user_message = user_message
         self.llm_client = llm_client
         
-    async def run(self, initial_parse: InitialParseResult) -> StrategyClassificationResult:    
+    async def run(self, in_domain_message: str) -> StrategyClassificationResult:    
         """Classify the user query into book-related strategies."""        
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
         
-        in_domain_msg = initial_parse.model_dump_json(
-            include={"user_query_domain", "continue_pipeline", "reasoning"}
-        )
         
         req = OpenAIParserRequest(
             prompt=self.system_prompt,
-            messages=[AssistantMessage(content=in_domain_msg)],
+            messages=[AssistantMessage(content=in_domain_message)],
             tool_models=self.tool_models,
         )
         llm_result = await self.run_async_step(self.llm_client.execute_new(req))

@@ -30,20 +30,23 @@ class ConversationOrchestrator(Workflow[None]):
         initial_parse_result = await self.run_async_step(initial_parse())
         await self.sse_stream.send_divider()
         
-        request_context.in_domain_message = (
-            initial_parse_result.output.model_dump_json(
-                include={"user_query_domain", "continue_pipeline", "reasoning"}
-            )
+        in_domain_message = initial_parse_result.output.model_dump_json(
+            include={"user_query_domain", "continue_pipeline", "reasoning"}
         )
+        request_context.in_domain_message = in_domain_message
         
         strategy_classification = StrategyClassificationWorkflow(self.sse_stream, self.user_message, self.llm_client)
         strategy_classification_result = await self.run_async_step(
-            strategy_classification(initial_parse_result.output)
+            strategy_classification(in_domain_message)
         )
+        
+        node_ids = strategy_classification_result.output.get_accepted_node_ids()
+        if not node_ids:
+            raise RuntimeError("No accepted node ids")
         
         task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
         task_planner_result = await self.run_async_step(
-            task_planner(initial_parse_result.output, strategy_classification_result.output)
+            task_planner(in_domain_message, node_ids)
         )
     
         

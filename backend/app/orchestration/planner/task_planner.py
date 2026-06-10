@@ -256,26 +256,22 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         self.user_message = user_message
         self.llm_client = llm_client
         
-    async def run(self, initial_parse: InitialParseResult, classified_strategy: StrategyClassificationResult) -> TaskPlan:
+    async def run(self, in_domain_message: str, node_ids: dict[str, BaseNode]) -> TaskPlan:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
         
-        node_ids = classified_strategy.get_accepted_node_ids()
         if not node_ids:
             raise RuntimeError("No accepted node ids")
         
         tool_override = self.modify_schema(tool_model=self.tool_models[0], valid_ids=list(node_ids.keys()))
 
-        in_domain_msg = initial_parse.model_dump_json(
-            include={"user_query_domain", "reasoning"}
-        )
         
         formatted_node_ids = {}
         for id in node_ids:
             formatted_node_ids[id] = node_ids[id].model_dump()
             
         messages = [
-            AssistantMessage(content=in_domain_msg),
+            AssistantMessage(content=in_domain_message),
             AssistantMessage(
                 content=json.dumps(formatted_node_ids, separators=(",", ":"))
             ),
