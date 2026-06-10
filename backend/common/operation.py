@@ -3,38 +3,11 @@ from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 import time
 from typing import Callable
-import traceback
 from functools import wraps
 
+from common.utils import format_exception
+
 OutputT = TypeVar("OutputT")
-
-
-def format_exception(error: BaseException) -> dict[str, Any]:
-    """Return a JSON-friendly traceback payload for operation logs."""
-    frames = traceback.extract_tb(error.__traceback__)
-    formatted_frames = [
-        {
-            "file": frame.filename,
-            "line": frame.lineno,
-            "function": frame.name,
-            "code": frame.line,
-        }
-        for frame in frames
-    ]
-
-    origin = formatted_frames[-1] if formatted_frames else None
-
-    return {
-        "type": type(error).__name__,
-        "message": str(error),
-        "origin": origin,
-        "frames": formatted_frames,
-        "traceback": traceback.format_exception(
-            type(error),
-            error,
-            error.__traceback__,
-        ),
-    }
 
 
 @dataclass(slots=True)
@@ -63,6 +36,7 @@ def task(
     *,
     log_info: bool = True,
 ) -> Callable[..., Any]:
+    """ for single step operations (for multiple steps, use Workflow)"""
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> OperationResult[Any]:
@@ -75,9 +49,10 @@ def task(
                     logger.info(f"Running task: {func_ref}")
                 
                 result = await func(*args, **kwargs)
+                result.name = func_ref
+                result.duration = round(time.perf_counter() - time_start, 2)
                 return result
             except Exception as e:
-                logger.exception(f"Task {func_ref} failed: {e}")
                 # in case the task is not returning a result, create a default one
                 if result is None:
                     result = OperationResult(name=func_ref)
@@ -85,19 +60,11 @@ def task(
                 result.ok = False
                 result.message = f"Task {func_ref} failed: {e}"
                 result.run_time_error = format_exception(e)
-            finally:
-                # final formatting of the result
-                result.name = func_ref
                 result.duration = round(time.perf_counter() - time_start, 2)
-                
-                if not result.ok:
-                    # runtime failure, app still runs
-                    logger.warning(f"Task {func_ref} failed: {result.message}")
-                elif log_info:
-                    logger.info(f"Task {func_ref} : {result.message}")
-                
+                logger.exception(f"Task {func_ref} failed: {e}")
+                # or raise the exception
                 return result
-
+                
         return wrapper
 
     if func is None:

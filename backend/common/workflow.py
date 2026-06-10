@@ -3,12 +3,12 @@ from common.operation import OperationResult
 import logging
 import time
 from typing import Any, Generic, TypeVar
-from common.operation import format_exception
+from common.utils import format_exception
 from clients.schemas import OpenAIChatRequest
 from app.common.messages import BaseMessage
 from app.common.sse_stream import SSEStream
-OutputT = TypeVar("OutputT")
 
+OutputT = TypeVar("OutputT")
 
 class Workflow(ABC, Generic[OutputT]):
     def __init__(self, output_type: type[OutputT] | None = None):
