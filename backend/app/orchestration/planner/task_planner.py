@@ -11,8 +11,11 @@ from app.domains.books.types import (
 )
 
 from app.common.base_node import BaseNode
-
 logger = logging.getLogger(__name__)
+
+def clean_string_mermaid(text):
+    # Remove parentheses, quotes, and Mermaid-reserved symbols
+    return re.sub(r'[()"\'<>{}\[\]|`#%@:;\\/]', "", text)
 
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
@@ -189,7 +192,7 @@ class TaskPlan(BaseModel):
     
     def export(self, file_name: str = "dev"):
         """Export the full request payload for logging/debugging."""
-        from app.common.utils import save_file
+        from common.utils import save_file
         
         payload = self.to_payload()
         save_file(payload, file_name=f"{file_name}_task_plan")
@@ -268,6 +271,4 @@ class TaskGenerationNode(BaseModel):
         return tool
 
 
-def clean_string_mermaid(text):
-    # Remove parentheses, quotes, and Mermaid-reserved symbols
-    return re.sub(r'[()"\'<>{}\[\]|`#%@:;\\/]', "", text)
+

@@ -6,7 +6,6 @@ import time
 from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 from app.common.messages import ToolMessage
-from .planner.schemas import TaskPlan
 from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
 from common.operation import OperationResult, task
