@@ -11,7 +11,7 @@ from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
 from common.operation import OperationResult, task
 from common.utils import save_file
-from app.orchestration.planner.executors import InitialParseWorkflow
+from app.orchestration.planner import InitialParseWorkflow
 logger = logging.getLogger(__name__)
 
 from common.workflow import Workflow
