@@ -119,27 +119,7 @@ class TaskPlan(BaseModel):
 
         self.execution_order = order
 
-    # Here we should know that the ids are valid nodes
-    def validate_accepted(self, node_ids: dict[str, BaseNode]) -> None:
-        """Enforce the rules for accepted strategies. Add to refuse if fails"""
-        cleaned_accepted = []
-        for task in self.accepted:
-            node = node_ids[task.id]
-            type = node.get_type()
-
-            if type in SINGLE_BOOK_RETRIEVAL and len(task.depends_on) != 0:
-                logger.warning(f"⚠️ Single Book Retrieval ID {task.id} has dependencies")
-                task.depends_on = []
-            elif type == NodeType.COMPARE and len(task.depends_on) < 2:
-                logger.warning(
-                    f"⚠️ Compare Book Strategy ID {task.id} doesn't have enough dependencies"
-                )
-                self.refused.append(task)
-                continue
-
-            cleaned_accepted.append(task)
-
-        self.accepted = cleaned_accepted
+    
 
     def get_accepted_diagram(self, node_ids):
         accepted_ids = self.get_accepted_ids()
@@ -248,9 +228,82 @@ class TaskGenerationNode(BaseModel):
 
         return result
 
-    @classmethod
-    def modify_schema(cls, tool, valid_ids):
-        """Quick fix for your notebook."""
+    
+
+from common.workflow import Workflow
+from app.common.messages import UserMessage
+from clients.openai_client import OpenAIClient
+from app.orchestration.planner import InitialParseResult
+from app.common.sse_stream import SSEStream
+from app.common.prompt_loader import load_prompt
+from app.common.messages import AssistantMessage
+from clients.schemas import OpenAIParserRequest
+import json
+from common.operation import run_tool_call
+class TaskPlanWorkflow(Workflow[TaskPlan]):
+    success_message = "Task plan created successfully"
+    failure_message = "Task plan creation failed"
+    
+    prompt = load_prompt(
+        prompt_path="orchestration/planner/prompts/dependency_resolution.txt",
+    )
+    tool_models = [TaskGenerationNode]
+    
+    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+        super().__init__(output_type=TaskPlan)
+        self.sse_stream = sse_stream
+        self.user_message = user_message
+        self.llm_client = llm_client
+        
+    async def run(self, initial_parse: InitialParseResult, classified_strategy: StrategyClassificationResult) -> TaskPlan:
+        """Create a task execution plan with dependency resolution."""
+        
+        node_ids = classified_strategy.get_accepted_node_ids()
+        if not node_ids:
+            raise RuntimeError("No accepted node ids")
+        
+        self.modify_schema(tool=self.tool_models[0], valid_ids=list(node_ids.keys()))
+
+        in_domain_msg = initial_parse.model_dump_json(
+            include={"user_query_domain", "reasoning"}
+        )
+
+        formatted_node_ids = {}
+        for id in node_ids:
+            formatted_node_ids[id] = node_ids[id].model_dump()
+            
+        messages = [
+            AssistantMessage(content=in_domain_msg),
+            AssistantMessage(
+                content=json.dumps(formatted_node_ids, separators=(",", ":"))
+            ),
+        ]
+
+        req = OpenAIParserRequest(
+            prompt=self.prompt,
+            messages=messages,
+            tool_models=self.tool_models,
+            temperature=0.4,
+            top_p=0.5,
+        )
+
+        # req.export(file_name="task_planner")
+
+        # initial parsing, with no streaming or content (forcing tool)
+        result = await self.llm_client.execute_new(req)
+        self.result.steps.append(result)
+        
+        assistant_msg = result.result
+        tool_message = await run_tool_call(assistant_msg.tool_calls[0])
+        self.add_step(tool_message)
+        
+        self.result.ok = True
+        self.result.message = self.success_message if result.ok else self.failure_message
+        self.result.result = tool_message.result
+        
+        
+        
+    def modify_schema(self, tool, valid_ids):
         # Modify the schema
         schema = tool["function"]["parameters"]["$defs"]["Task"]
 
@@ -269,6 +322,25 @@ class TaskGenerationNode(BaseModel):
         }
 
         return tool
+    
+    # Here we should know that the ids are valid nodes
+    def validate_accepted(self, node_ids: dict[str, BaseNode]) -> None:
+        """Enforce the rules for accepted strategies. Add to refuse if fails"""
+        cleaned_accepted = []
+        for task in self.accepted:
+            node = node_ids[task.id]
+            type = node.get_type()
 
+            if type in SINGLE_BOOK_RETRIEVAL and len(task.depends_on) != 0:
+                logger.warning(f"⚠️ Single Book Retrieval ID {task.id} has dependencies")
+                task.depends_on = []
+            elif type == NodeType.COMPARE and len(task.depends_on) < 2:
+                logger.warning(
+                    f"⚠️ Compare Book Strategy ID {task.id} doesn't have enough dependencies"
+                )
+                self.refused.append(task)
+                continue
 
+            cleaned_accepted.append(task)
 
+        self.accepted = cleaned_accepted
