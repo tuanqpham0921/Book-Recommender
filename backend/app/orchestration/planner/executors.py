@@ -30,8 +30,6 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         self.user_message = user_message
         self.llm_client = llm_client
         
-        
-        
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading("Thinking...")    
 

@@ -22,6 +22,7 @@ class Workflow(ABC, Generic[OutputT]):
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         time_start = time.perf_counter()
         try:
+            self.logger.info(f"Running workflow: {self.workflow_name}")
             await self.run(*args, **kwargs)
             self.check_output_type()
             
@@ -68,6 +69,10 @@ class Workflow(ABC, Generic[OutputT]):
     @property
     def workflow_ref(self) -> str:
         return f"{type(self).__module__}.{type(self).__qualname__}"
+    
+    @property
+    def workflow_name(self) -> str:
+        return f"{type(self).__name__}:{self.result.id}"
     
     @property
     def logger(self) -> logging.Logger:
