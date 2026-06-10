@@ -292,14 +292,14 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         # initial parsing, with no streaming or content (forcing tool)
         result = await self.run_async_step(self.llm_client.execute_new(req))
         
-        assistant_msg = result.result
+        assistant_msg = result.output
         tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids))
         
         self.result.ok = True
         self.result.message = self.success_message if result.ok else self.failure_message
-        self.result.result = tool_message.result
+        self.result.output = tool_message.output
         
-        await self.send_mermaid(tool_message.result, node_ids)
+        await self.send_mermaid(tool_message.output, node_ids)
         
         
     def modify_schema(self, tool_model: type, valid_ids: list[str]):

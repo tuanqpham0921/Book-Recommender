@@ -87,13 +87,13 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
             tool_models=self.tool_models,
         )
         llm_result = await self.run_async_step(self.llm_client.execute_new(req))
-        assistant_msg = llm_result.result
+        assistant_msg = llm_result.output
         
         tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0]))
         
-        parse_result = tool_message.result
+        parse_result = tool_message.output
 
-        self.result.result = parse_result
+        self.result.output = parse_result
         self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         

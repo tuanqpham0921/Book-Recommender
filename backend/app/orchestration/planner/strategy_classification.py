@@ -82,12 +82,12 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
         )
         llm_result = await self.run_async_step(self.llm_client.execute_new(req))
         
-        assistant_msg = llm_result.result
+        assistant_msg = llm_result.output
         
         tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0]))
         
-        classification_result = tool_message.result
-        self.result.result = classification_result
+        classification_result = tool_message.output
+        self.result.output = classification_result
         self.result.ok = bool(classification_result.continue_pipeline)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         

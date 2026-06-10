@@ -96,7 +96,7 @@ class OpenAIClient(BaseLLMClient):
             name="execute",
             ok=True,
             message="OpenAI API call completed successfully",
-            result=assistant_msg,
+            output=assistant_msg,
             # details={"payload": payload}
         )
 

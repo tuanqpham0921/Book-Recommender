@@ -25,15 +25,15 @@ class OperationResult(Generic[OutputT]):
     duration: float | None = None
     run_time_error: dict[str, Any] | Exception | None = None
     
-    result: OutputT | None = None
+    output: OutputT | None = None
     output_type: type[OutputT] | None = None
     
     def check_output_type(self) -> None:
-        if self.result is None or self.output_type is None:
+        if self.output is None or self.output_type is None:
             return
         
-        if self.output_type and not isinstance(self.result, self.output_type):
-            raise TypeError(f"Result {self.result} is of type {type(self.result)} not of type {self.output_type}")
+        if self.output_type and not isinstance(self.output, self.output_type):
+            raise TypeError(f"Output {self.output} is of type {type(self.output)} not of type {self.output_type}")
             
 def task(
     func: Callable[..., Any] | None = None,
@@ -86,6 +86,6 @@ async def run_tool_call(tool_call, **kwargs) -> OperationResult[Any]:
         name=tool_name,
         ok=True,
         message=f"{tool_name} completed successfully",
-        result=output,
+        output=output,
         output_type=type(output),
     )

@@ -31,19 +31,19 @@ class ConversationOrchestrator(Workflow[None]):
         await self.sse_stream.send_divider()
         
         request_context.in_domain_message = (
-            initial_parse_result.result.model_dump_json(
+            initial_parse_result.output.model_dump_json(
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
         )
         
         strategy_classification = StrategyClassificationWorkflow(self.sse_stream, self.user_message, self.llm_client)
         strategy_classification_result = await self.run_async_step(
-            strategy_classification(initial_parse_result.result)
+            strategy_classification(initial_parse_result.output)
         )
         
         task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
         task_planner_result = await self.run_async_step(
-            task_planner(initial_parse_result.result, strategy_classification_result.result)
+            task_planner(initial_parse_result.output, strategy_classification_result.output)
         )
     
         

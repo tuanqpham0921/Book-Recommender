@@ -42,7 +42,7 @@ async def insert_batch(
     return OperationResult(
         ok=rowcount, 
         message=f"Stored {rowcount} books out.", 
-        result=rowcount,
+        output=rowcount,
         details={"batch_length": len(batch)}
     )
 
@@ -72,7 +72,7 @@ async def store_books_from_csv(
     for batch in iter_books_from_csv(csv_path):
         total_books += len(batch)        
         batch_result = await insert_batch(batch, session_factory)
-        total_books_stored += batch_result.result
+        total_books_stored += batch_result.output
         batch_result.name += f"--batch-{i}"
         
         steps.append(batch_result)
@@ -86,7 +86,7 @@ async def store_books_from_csv(
     return OperationResult(
         ok= total_books_stored == total_books, 
         message=f"Stored {total_books_stored} books out of {total_books}.", 
-        result=result,
+        output=result,
         steps=steps
     )
     
@@ -109,7 +109,7 @@ async def store_book_embedding(
     return OperationResult(
         ok=True,
         message=f"Updated embedding for book {isbn13}.",
-        result=isbn13
+        output=isbn13
     )
     
 async def iter_missing_embeddings(

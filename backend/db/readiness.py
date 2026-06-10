@@ -68,7 +68,7 @@ async def _check_table_rows(
         ok=ok,
         message=(f"Table {fqtn} has {row_count} rows (need at least {min_rows})."),
         details={"row_count": row_count, "min_rows": min_rows},
-        result=row_count,
+        output=row_count,
     )
     
 
@@ -102,7 +102,7 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
             if ok
             else f"Missing PostgreSQL extensions: {', '.join(missing)}."
         ),
-        result=result,
+        output=result,
     )
     
 
@@ -163,7 +163,7 @@ async def is_ready(
         extensions = await _check_table_extensions(session)
         checks.append(extensions)
         result.need_extensions = not extensions.ok
-        result.missing_extensions = extensions.result["missing"]
+        result.missing_extensions = extensions.output["missing"]
         
     
     async with session_factory() as session:
@@ -175,7 +175,7 @@ async def is_ready(
             name="num_missing_embeddings",
             ok=num_missing == 0,
             message="No books missing embeddings." if num_missing == 0 else f"Found {num_missing} books missing embeddings.",
-            result=num_missing,
+            output=num_missing,
         ))
         result.num_missing_embeddings = num_missing
         
@@ -184,7 +184,7 @@ async def is_ready(
         ok=ok, 
         message="Database is ready." if ok else "Database is not ready.", 
         steps=checks,
-        result=result,
+        output=result,
     )
 
 
