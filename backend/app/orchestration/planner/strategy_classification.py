@@ -3,7 +3,7 @@ from typing import List
 from app.domains.books.schemas import ClassificationStrategy
 
 
-class BookClassificationResult(BaseModel):
+class StrategyClassificationResult(BaseModel):
     """Generic classification result for any node type."""
     accepted: List[ClassificationStrategy] = []
     refused: List[ClassificationStrategy] = []
@@ -14,7 +14,7 @@ class BookClassificationResult(BaseModel):
         return {node.id: node for node in self.accepted}
 
 
-class BookClassificationNode(BaseModel):
+class StrategyClassificationNode(BaseModel):
     """Classification node specifically for book domain strategies."""
     strategies: List[ClassificationStrategy] = Field(
         ...,
@@ -23,7 +23,7 @@ class BookClassificationNode(BaseModel):
 
     async def __call__(self, accepted_tuning: float = 0.7):
         """Convert to ClassificationResult format"""        
-        result = BookClassificationResult()
+        result = StrategyClassificationResult()
         
         for strategy in self.strategies:
             if strategy.refusal or strategy.confidence < accepted_tuning:
@@ -115,7 +115,7 @@ from app.orchestration.planner import InitialParseResult
 from clients.schemas import OpenAIParserRequest
 from common.operation import run_tool_call
 
-class StrategyClassificationWorkflow(Workflow[BookClassificationResult]):
+class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
     
@@ -125,15 +125,15 @@ class StrategyClassificationWorkflow(Workflow[BookClassificationResult]):
         book_guides=str(BookGuides()),
     )
     
-    tool_models = [BookClassificationNode]
+    tool_models = [StrategyClassificationNode]
     
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__(output_type=BookClassificationResult)
+        super().__init__(output_type=StrategyClassificationResult)
         self.sse_stream = sse_stream
         self.user_message = user_message
         self.llm_client = llm_client
         
-    async def run(self, initial_parse: InitialParseResult) -> BookClassificationResult:    
+    async def run(self, initial_parse: InitialParseResult) -> StrategyClassificationResult:    
         """Classify the user query into book-related strategies."""        
 
         in_domain_msg = initial_parse.model_dump_json(
@@ -157,3 +157,8 @@ class StrategyClassificationWorkflow(Workflow[BookClassificationResult]):
         self.result.result = classification_result
         self.result.ok = bool(classification_result.continue_pipeline)
         self.result.message = self.success_message if self.result.ok else self.failure_message
+        
+        if classification_result.refused:
+            # TODO: handle refused strategies (UI message or re-classification)
+            ...
+            

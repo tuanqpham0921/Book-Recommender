@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
+from app.orchestration.planner import StrategyClassificationWorkflow
 
 class ConversationOrchestrator(Workflow[None]):
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
@@ -26,14 +27,7 @@ class ConversationOrchestrator(Workflow[None]):
         self.llm_client = llm_client
         
     async def run(self, request_context: RequestContext) -> None:
-        initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
-        initial_parse_result = await initial_parse()
-        self.add_step(initial_parse_result)
-        if not initial_parse_result.ok or initial_parse_result.result is None:
-            self.result.ok = False
-            self.result.message = "Initial parse failed"
-            return
-        
+        initial_parse_result = await self._run_initial_parse()
         await self.sse_stream.send_divider()
         
         request_context.in_domain_message = (
@@ -41,9 +35,29 @@ class ConversationOrchestrator(Workflow[None]):
                 include={"user_query_domain", "continue_pipeline", "reasoning"}
             )
         )
+        
+        strategy_classification_result = await self._run_strategy_classification(initial_parse_result)
+        
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
-
+        
+    async def _run_initial_parse(self):
+        initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        initial_parse_result = await initial_parse()
+        self.add_step(initial_parse_result)
+        if not initial_parse_result.ok or initial_parse_result.result is None:
+            raise RuntimeError("Initial parse failed")
+        return initial_parse_result
+    
+    async def _run_strategy_classification(self, initial_parse_result: InitialParseWorkflow):
+        strategy_classification = StrategyClassificationWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        strategy_classification_result = await strategy_classification(initial_parse_result.result)
+        
+        self.add_step(strategy_classification_result)
+        if strategy_classification_result.result is None or not strategy_classification_result.result.continue_pipeline:
+            raise RuntimeError("Strategy classification failed")
+        return strategy_classification_result
+    
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
 
