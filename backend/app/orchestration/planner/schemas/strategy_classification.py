@@ -99,3 +99,61 @@ class BookClassificationNode(BaseModel):
 #         message="Analysis completed successfully",
 #         result=tool_message[0].content,
 #     )
+    
+from common.workflow import Workflow
+from app.common.messages import UserMessage
+from clients.openai_client import OpenAIClient
+from app.common.sse_stream import SSEStream
+from app.orchestration.request_context import RequestContext
+from app.common.messages import AssistantMessage, BaseMessage
+from clients.openai_client import OpenAIClient
+from common.operation import OperationResult, task
+from app.common.prompt_loader import format_prompt
+from clients.schemas import OpenAIRequest
+from config import BookConstraints, BookGuides
+from app.orchestration.planner import InitialParseResult
+from clients.schemas import OpenAIParserRequest
+from common.operation import run_tool_call
+
+class StrategyClassificationWorkflow(Workflow[BookClassificationResult]):
+    success_message = "Strategy classification completed successfully"
+    failure_message = "Strategy classification failed"
+    
+    system_prompt = format_prompt(
+        prompt_path="domains/books/prompts/strategy_classification.txt",
+        book_constraints=str(BookConstraints()),
+        book_guides=str(BookGuides()),
+    )
+    
+    tool_models = [BookClassificationNode]
+    
+    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+        super().__init__(output_type=BookClassificationResult)
+        self.sse_stream = sse_stream
+        self.user_message = user_message
+        self.llm_client = llm_client
+        
+    async def run(self, initial_parse: InitialParseResult) -> BookClassificationResult:    
+        """Classify the user query into book-related strategies."""        
+
+        in_domain_msg = initial_parse.model_dump_json(
+            include={"user_query_domain", "continue_pipeline", "reasoning"}
+        )
+        
+        req = OpenAIParserRequest(
+            prompt=self.system_prompt,
+            messages=[AssistantMessage(content=in_domain_msg)],
+            tool_models=self.tool_models,
+        )
+        llm_result = await self.llm_client.execute_new(req)
+        self.result.steps.append(llm_result)
+        
+        assistant_msg = llm_result.result
+        
+        tool_message = await run_tool_call(assistant_msg.tool_calls[0])
+        self.result.steps.append(tool_message)
+        
+        classification_result = tool_message.result
+        self.result.result = classification_result
+        self.result.ok = bool(classification_result.continue_pipeline)
+        self.result.message = self.success_message if self.result.ok else self.failure_message
