@@ -18,7 +18,7 @@ install:
 # Local development (native FastAPI)
 .PHONY: dev
 dev:
-	LOG_LEVEL=INFO poetry run fastapi dev app/main.py
+	LOG_LEVEL=INFO poetry run uvicorn app.main:app --reload --reload-include "*.py" --reload-include "*.env"
 
 # run the ingestion script
 .PHONY: ingestion

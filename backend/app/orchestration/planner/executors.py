@@ -20,12 +20,16 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
     system_prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_system.txt")
     user_prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_parse_response.txt")
     
+    output_schema = InitialParseResult
+    tool_models = [InitialParseNode]
+    
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__(output_type=InitialParseResult)
+        super().__init__(output_type=self.output_schema)
         
         self.sse_stream = sse_stream
         self.user_message = user_message
         self.llm_client = llm_client
+        
         
         
     async def run(self) -> None:
@@ -35,7 +39,7 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         req = OpenAIParserRequest(
             prompt=self.system_prompt,
             messages=[self.user_message],
-            tool_models=[InitialParseNode],
+            tool_models=self.tool_models,
         )
         llm_result = await self.llm_client.execute_new(req)
         self.add_step(llm_result)
