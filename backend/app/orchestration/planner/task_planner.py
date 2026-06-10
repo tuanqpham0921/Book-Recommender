@@ -290,12 +290,10 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
             top_p=0.5,
         )
         # initial parsing, with no streaming or content (forcing tool)
-        result = await self.llm_client.execute_new(req)
-        self.add_step(result)
+        result = await self.run_async_step(self.llm_client.execute_new(req))
         
         assistant_msg = result.result
-        tool_message = await run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids)
-        self.add_step(tool_message)
+        tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids))
         
         self.result.ok = True
         self.result.message = self.success_message if result.ok else self.failure_message

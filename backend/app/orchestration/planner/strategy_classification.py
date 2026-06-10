@@ -80,13 +80,11 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
             messages=[AssistantMessage(content=in_domain_msg)],
             tool_models=self.tool_models,
         )
-        llm_result = await self.llm_client.execute_new(req)
-        self.result.steps.append(llm_result)
+        llm_result = await self.run_async_step(self.llm_client.execute_new(req))
         
         assistant_msg = llm_result.result
         
-        tool_message = await run_tool_call(assistant_msg.tool_calls[0])
-        self.result.steps.append(tool_message)
+        tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0]))
         
         classification_result = tool_message.result
         self.result.result = classification_result

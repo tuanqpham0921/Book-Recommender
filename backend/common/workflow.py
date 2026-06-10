@@ -7,7 +7,7 @@ from common.utils import format_exception
 from clients.schemas import OpenAIChatRequest
 from app.common.messages import BaseMessage
 from app.common.sse_stream import SSEStream
-
+from typing import Coroutine
 OutputT = TypeVar("OutputT")
 
 class Workflow(ABC, Generic[OutputT]):
@@ -46,6 +46,10 @@ class Workflow(ABC, Generic[OutputT]):
     @abstractmethod
     async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
+    
+    async def run_async_step(self, function: Coroutine[Any, Any, OperationResult[Any]]) -> OperationResult[Any]:
+        result = await function
+        return self.add_step(result)
     
     def add_step(self, step: OperationResult[Any]) -> OperationResult[Any]:
         self.result.steps.append(step)
@@ -92,5 +96,5 @@ class Workflow(ABC, Generic[OutputT]):
             temperature=0.7,
             top_p=1.0,
         )
-        result = await self.llm_client.execute_new(req)
-        return self.add_step(result)
+        result = await self.run_async_step(self.llm_client.execute_new(req))
+        return result

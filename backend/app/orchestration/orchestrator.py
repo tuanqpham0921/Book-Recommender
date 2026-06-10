@@ -26,7 +26,8 @@ class ConversationOrchestrator(Workflow[None]):
         self.llm_client = llm_client
         
     async def run(self, request_context: RequestContext) -> None:
-        initial_parse_result = await self._run_initial_parse()
+        initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        initial_parse_result = await self.run_async_step(initial_parse())
         await self.sse_stream.send_divider()
         
         request_context.in_domain_message = (
@@ -35,9 +36,15 @@ class ConversationOrchestrator(Workflow[None]):
             )
         )
         
-        strategy_classification_result = await self._run_strategy_classification(initial_parse_result)
+        strategy_classification = StrategyClassificationWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        strategy_classification_result = await self.run_async_step(
+            strategy_classification(initial_parse_result.result)
+        )
         
-        task_planner_result = await self._run_task_planner(initial_parse_result, strategy_classification_result)
+        task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        task_planner_result = await self.run_async_step(
+            task_planner(initial_parse_result.result, strategy_classification_result.result)
+        )
     
         
         await self.sse_stream.send_divider()
@@ -45,32 +52,6 @@ class ConversationOrchestrator(Workflow[None]):
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
         
-    async def _run_initial_parse(self):
-        initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
-        initial_parse_result = await initial_parse()
-        self.add_step(initial_parse_result)
-        if not initial_parse_result.ok or initial_parse_result.result is None:
-            raise RuntimeError("Initial parse failed")
-        return initial_parse_result
-    
-    async def _run_strategy_classification(self, initial_parse_result: InitialParseWorkflow):
-        strategy_classification = StrategyClassificationWorkflow(self.sse_stream, self.user_message, self.llm_client)
-        strategy_classification_result = await strategy_classification(initial_parse_result.result)
-        
-        self.add_step(strategy_classification_result)
-        if strategy_classification_result.result is None or not strategy_classification_result.result.continue_pipeline:
-            raise RuntimeError("Strategy classification failed")
-        return strategy_classification_result
-    
-    async def _run_task_planner(self, initial_parse_result: InitialParseWorkflow, strategy_classification_result: StrategyClassificationWorkflow):
-        task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
-        task_planner_result = await task_planner(initial_parse_result.result, strategy_classification_result.result)
-        
-        if task_planner_result.result is None or not task_planner_result.ok:
-            raise RuntimeError("Task planner failed")
-        
-        self.add_step(task_planner_result)
-        return task_planner_result
     
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
