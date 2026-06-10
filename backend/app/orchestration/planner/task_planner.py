@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import logging
 import re
 
@@ -11,6 +12,17 @@ from app.domains.books.types import (
 )
 
 from app.common.base_node import BaseNode
+from common.workflow import Workflow
+from app.common.messages import UserMessage
+from clients.openai_client import OpenAIClient
+from app.orchestration.planner import InitialParseResult
+from app.common.sse_stream import SSEStream
+from app.common.prompt_loader import load_prompt
+from app.common.messages import AssistantMessage
+from clients.schemas import OpenAIParserRequest
+
+from common.operation import run_tool_call
+from app.orchestration.planner import StrategyClassificationResult
 logger = logging.getLogger(__name__)
 
 def clean_string_mermaid(text):
@@ -228,21 +240,10 @@ class TaskGenerationNode(BaseModel):
 
         return result
 
-    
-
-from common.workflow import Workflow
-from app.common.messages import UserMessage
-from clients.openai_client import OpenAIClient
-from app.orchestration.planner import InitialParseResult
-from app.common.sse_stream import SSEStream
-from app.common.prompt_loader import load_prompt
-from app.common.messages import AssistantMessage
-from clients.schemas import OpenAIParserRequest
-import json
-from common.operation import run_tool_call
 class TaskPlanWorkflow(Workflow[TaskPlan]):
     success_message = "Task plan created successfully"
     failure_message = "Task plan creation failed"
+    ui_loading_message = "Creating task plan..."
     
     prompt = load_prompt(
         prompt_path="orchestration/planner/prompts/dependency_resolution.txt",
@@ -257,17 +258,18 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         
     async def run(self, initial_parse: InitialParseResult, classified_strategy: StrategyClassificationResult) -> TaskPlan:
         """Create a task execution plan with dependency resolution."""
+        await self.sse_stream.send_ui_loading(self.ui_loading_message)
         
         node_ids = classified_strategy.get_accepted_node_ids()
         if not node_ids:
             raise RuntimeError("No accepted node ids")
         
-        self.modify_schema(tool=self.tool_models[0], valid_ids=list(node_ids.keys()))
+        tool_override = self.modify_schema(tool_model=self.tool_models[0], valid_ids=list(node_ids.keys()))
 
         in_domain_msg = initial_parse.model_dump_json(
             include={"user_query_domain", "reasoning"}
         )
-
+        
         formatted_node_ids = {}
         for id in node_ids:
             formatted_node_ids[id] = node_ids[id].model_dump()
@@ -283,27 +285,33 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
             prompt=self.prompt,
             messages=messages,
             tool_models=self.tool_models,
+            tool_override=tool_override,
             temperature=0.4,
             top_p=0.5,
         )
-
-        # req.export(file_name="task_planner")
-
         # initial parsing, with no streaming or content (forcing tool)
         result = await self.llm_client.execute_new(req)
-        self.result.steps.append(result)
+        self.add_step(result)
         
         assistant_msg = result.result
-        tool_message = await run_tool_call(assistant_msg.tool_calls[0])
+        tool_message = await run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids)
         self.add_step(tool_message)
         
         self.result.ok = True
         self.result.message = self.success_message if result.ok else self.failure_message
         self.result.result = tool_message.result
         
+        await self.send_mermaid(tool_message.result, node_ids)
         
         
-    def modify_schema(self, tool, valid_ids):
+    def modify_schema(self, tool_model: type, valid_ids: list[str]):
+        from openai import pydantic_function_tool
+        tool = pydantic_function_tool(
+            tool_model,
+            name=tool_model.__name__,
+            description=f"Fill the schema for {tool_model.__name__}",
+        )
+        
         # Modify the schema
         schema = tool["function"]["parameters"]["$defs"]["Task"]
 
@@ -344,3 +352,13 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
             cleaned_accepted.append(task)
 
         self.accepted = cleaned_accepted
+        
+    async def send_mermaid(self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]) -> None:
+        await self.sse_stream.send_chars("__My Plan for Your Request__")
+        await self.sse_stream.send_mermaid(task_plan.get_accepted_diagram(node_ids))
+        await self.sse_stream.send_chars(
+            "_Note:_ This flow shows how your query will run.\n"
+        )
+        await self.sse_stream.send_chars(
+            "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
+        )

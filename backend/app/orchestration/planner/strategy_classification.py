@@ -51,6 +51,7 @@ class StrategyClassificationNode(BaseModel):
 class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
+    ui_loading_message = "Classifying user query..."
     
     system_prompt = format_prompt(
         prompt_path="domains/books/prompts/strategy_classification.txt",
@@ -68,7 +69,8 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
         
     async def run(self, initial_parse: InitialParseResult) -> StrategyClassificationResult:    
         """Classify the user query into book-related strategies."""        
-
+        await self.sse_stream.send_ui_loading(self.ui_loading_message)
+        
         in_domain_msg = initial_parse.model_dump_json(
             include={"user_query_domain", "continue_pipeline", "reasoning"}
         )

@@ -17,7 +17,7 @@ from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 from app.orchestration.planner import StrategyClassificationWorkflow
-
+from app.orchestration.planner import TaskPlanWorkflow
 class ConversationOrchestrator(Workflow[None]):
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
         super().__init__(output_type=None)
@@ -36,6 +36,11 @@ class ConversationOrchestrator(Workflow[None]):
         )
         
         strategy_classification_result = await self._run_strategy_classification(initial_parse_result)
+        
+        task_planner_result = await self._run_task_planner(initial_parse_result, strategy_classification_result)
+    
+        
+        await self.sse_stream.send_divider()
         
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
@@ -56,6 +61,16 @@ class ConversationOrchestrator(Workflow[None]):
         if strategy_classification_result.result is None or not strategy_classification_result.result.continue_pipeline:
             raise RuntimeError("Strategy classification failed")
         return strategy_classification_result
+    
+    async def _run_task_planner(self, initial_parse_result: InitialParseWorkflow, strategy_classification_result: StrategyClassificationWorkflow):
+        task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        task_planner_result = await task_planner(initial_parse_result.result, strategy_classification_result.result)
+        
+        if task_planner_result.result is None or not task_planner_result.ok:
+            raise RuntimeError("Task planner failed")
+        
+        self.add_step(task_planner_result)
+        return task_planner_result
     
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""

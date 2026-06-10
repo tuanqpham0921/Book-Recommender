@@ -81,6 +81,7 @@ class OpenAIBaseRequest(ABC):
 class OpenAIParserRequest(OpenAIBaseRequest):
     """ Support only one tool model for parsing 1 request"""
     tool_models: list[type] = field(default_factory=list)
+    tool_override: dict | None = None
     
     def __post_init__(self):
         if not self.tool_models or len(self.tool_models) != 1:
@@ -89,7 +90,7 @@ class OpenAIParserRequest(OpenAIBaseRequest):
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
 
-        payload["tools"] = [self.to_function_tools()]
+        payload["tools"] = [self.to_function_tools()] if not self.tool_override else [self.tool_override]
         payload["tool_choice"] = {
             "type": "function",
             "function": {"name": self.tool_models[0].__name__},
