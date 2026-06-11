@@ -19,6 +19,10 @@ from clients.openai_client import OpenAIClient
 from app.orchestration.planner import StrategyClassificationWorkflow
 from app.orchestration.planner import TaskPlanWorkflow
 class ConversationOrchestrator(Workflow[None]):
+    initial_parse_failure_message = "I couldn't understand your request. Please try again."
+    strategy_classification_failure_message = "I can't find any relevant strategies for your request."
+    task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
+    
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
         super().__init__(output_type=None)
         self.sse_stream = sse_stream
@@ -28,6 +32,9 @@ class ConversationOrchestrator(Workflow[None]):
     async def run(self, request_context: RequestContext) -> None:
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
         initial_parse_result = await self.run_async_step(initial_parse())
+        if not initial_parse_result.ok:
+            await self.sse_stream.send_error(self.initial_parse_failure_message)
+            return
         await self.sse_stream.send_divider()
         
         in_domain_message = initial_parse_result.output.model_dump_json(
@@ -39,11 +46,11 @@ class ConversationOrchestrator(Workflow[None]):
         strategy_classification_result = await self.run_async_step(
             strategy_classification(in_domain_message)
         )
-        
         node_ids = strategy_classification_result.output.get_accepted_node_ids()
-        if not node_ids:
-            raise RuntimeError("No accepted node ids")
-        
+        if not strategy_classification_result.ok or not node_ids:
+            await self.sse_stream.send_error(self.strategy_classification_failure_message)
+            return
+
         task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
         task_planner_result = await self.run_async_step(
             task_planner(in_domain_message, node_ids)
@@ -51,7 +58,7 @@ class ConversationOrchestrator(Workflow[None]):
         if not task_planner_result.ok:
             # TODO: test and get an openai error message for this
             # need to pass in details and context to the error message
-            await self.sse_stream.send_error(task_planner_result.message)
+            await self.sse_stream.send_error(self.task_planner_failure_message)
             return
         
         await self.sse_stream.send_divider()

@@ -210,7 +210,7 @@ class TaskGenerationNode(BaseModel):
 
 class TaskPlanWorkflow(Workflow[TaskPlan]):
     success_message = "Task plan created successfully"
-    failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
+    failure_message = "Task plan creation failed"
     ui_loading_message = "Creating task plan..."
     
     prompt = load_prompt(
@@ -262,10 +262,13 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
             raise_on_failure=False
         )
         
+        if not tool_message.ok or tool_message.output is None:
+            self.result.ok = False
+            self.result.message = self.failure_message
+            return
+        
         plan_result = tool_message.output
-        self.result.ok = (tool_message.ok and 
-                          plan_result.execution_order is not None 
-                          and 1 <= len(plan_result.execution_order) <= MAX_TASKS)
+        self.result.ok = (1 <= len(plan_result.execution_order) <= MAX_TASKS)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         self.result.output = plan_result
         
