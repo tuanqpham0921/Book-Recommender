@@ -50,6 +50,10 @@ class Task(BaseModel):
 
     def validate_dependencies(self, valid_ids: set[str]) -> Task:
         """Validate and clean dependencies against valid node IDs."""
+        if self.id not in valid_ids:
+            logger.warning(f"⚠️ Task {self.id} not in valid id")
+            return self.model_copy(update={"refusal": True, "reasoning": f"Task {self.id} not in valid id"})
+        
         if not self.depends_on:
             return self
 
