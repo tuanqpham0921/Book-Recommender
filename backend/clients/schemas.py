@@ -12,18 +12,18 @@ from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
-class OpenAIRequest(BaseLLMRequest):
-    """ Legacy request class for backward compatibility """
-    model: str = settings.openai.BASE_MODEL
-    temperature: float = 0.3
-    top_p: float = 0.8
-    seed: int = 42
-    
+@dataclass
+class OpenAIRequest:
+    """Legacy request class for backward compatibility."""
     system: SystemMessage
     messages: list[APIMessage]
     tools: list[dict] | None = None
     tool_choice: dict | str | None = None
     sse_stream: SSEStream | None = None
+    model: str = settings.openai.BASE_MODEL
+    temperature: float = 0.3
+    top_p: float = 0.8
+    seed: int = 42
 
     def to_payload(self) -> dict[str, Any]:
         messages = []

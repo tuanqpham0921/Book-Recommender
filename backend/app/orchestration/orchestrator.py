@@ -18,6 +18,8 @@ from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 from app.orchestration.planner import StrategyClassificationWorkflow
 from app.orchestration.planner import TaskPlanWorkflow
+from app.orchestration.planner import TaskPlan
+
 class ConversationOrchestrator(Workflow[None]):
     initial_parse_failure_message = "I couldn't understand your request. Please try again."
     strategy_classification_failure_message = "I can't find any relevant strategies for your request."
@@ -63,8 +65,43 @@ class ConversationOrchestrator(Workflow[None]):
         
         await self.sse_stream.send_divider()
         
+        results = await self.run_async_step(
+            self.run_tasks(node_ids, task_planner_result.output, request_context),
+            raise_on_failure=False
+        )
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
+        # self.result.output = results
+    
+    async def run_tasks(
+        self, 
+        node_ids, 
+        task_planner: TaskPlan, 
+        request_context: RequestContext
+    ):
+        """Execute tasks in the planned order with dependency resolution."""
+
+        depends_map = {cur.id: cur.depends_on for cur in task_planner.accepted}
+        results = {}
+
+        for tid in task_planner.execution_order:
+            task = node_ids[tid]
+            deps = {d: results[d] for d in depends_map[tid]}
+
+            node_type = task.node_type
+
+            # Create strategy instance and call it with proper arguments
+            strategy_class = BOOK_STRAT_REGISTRY[node_type]
+            strategy_instance = strategy_class()
+
+            # Pass the task data and context to the strategy
+            result = await strategy_instance(
+                task=task, dependent_results=deps, request_context=request_context
+            )
+
+            results[tid] = result
+
+        return results
         
     
 class Orchestrator:
