@@ -67,8 +67,9 @@ class TaskPlan(BaseModel):
     execution_order: List[str] = Field(default_factory=list)
     
     def validate(self, node_ids: dict[str, BaseNode]) -> None:
-        self.execution_order = self._create_execution_order()
         self._validate_dependency_rules(node_ids)
+        self._validate_dependency_in_accepted(node_ids)
+        self.execution_order = self._create_execution_order()
         self._validate_execution_order()
         
     def _validate_execution_order(self) -> None:
@@ -80,6 +81,15 @@ class TaskPlan(BaseModel):
             raise ValueError(
                 f"Execution order mismatch. Missing={missing_ids}, extra={extra_ids}"
             )
+            
+    def _validate_dependency_in_accepted(self, node_ids: dict[str, BaseNode]) -> None:
+        accepted_ids = set(task.id for task in self.accepted)
+        for task in self.accepted:
+            for dep in task.depends_on:
+                if dep not in accepted_ids:
+                    raise ValueError(
+                        f"Dependency {dep} in task {task.id} is not in accepted. Accepted ids: {sorted(accepted_ids)}"
+                    )
         
     # Here we should know that the ids are valid nodes
     def _validate_dependency_rules(self, node_ids: dict[str, BaseNode]) -> None:
