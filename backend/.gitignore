@@ -10,7 +10,7 @@ config/.env*
 !config/.env.example
 
 # Data
-data/backup.sql
+data/*backup.sql
 
 # Data & Exports
 *.csv
