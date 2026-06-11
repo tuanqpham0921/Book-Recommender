@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
+MAX_COMPLETION_TOKENS = 50
+
 @dataclass
 class OpenAIRequest:
     """Legacy request class for backward compatibility."""
@@ -36,13 +38,17 @@ class OpenAIRequest:
             "messages": messages,
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "seed": self.seed, 
+            "seed": self.seed,
         }
-        # if self.max_output_tokens:
-        #     payload["max_output_tokens"] = self.max_output_tokens
+
         if self.tools:
             payload["tools"] = self.tools
             payload["tool_choice"] = self.tool_choice if self.tool_choice else "auto"
+
+        # TODO: Remove for production
+        # using for testing and debugging
+        if self.sse_stream:
+            payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
 
         return payload
 # ------------------------------------------------------------------------------------------------
@@ -110,7 +116,10 @@ class OpenAIParserRequest(OpenAIBaseRequest):
 class OpenAIChatRequest(OpenAIBaseRequest):
     
     def to_payload(self) -> dict[str, Any]:
-        return self.base_payload()
+        payload = self.base_payload()
+        if self.sse_stream:
+            payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
+        return payload
     
 @dataclass
 class OpenAIToolRequest(OpenAIBaseRequest):
