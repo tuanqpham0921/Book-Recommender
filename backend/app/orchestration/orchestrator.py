@@ -48,7 +48,11 @@ class ConversationOrchestrator(Workflow[None]):
         task_planner_result = await self.run_async_step(
             task_planner(in_domain_message, node_ids)
         )
-    
+        if not task_planner_result.ok:
+            # TODO: test and get an openai error message for this
+            # need to pass in details and context to the error message
+            await self.sse_stream.send_error(task_planner_result.message)
+            return
         
         await self.sse_stream.send_divider()
         

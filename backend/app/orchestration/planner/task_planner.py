@@ -25,6 +25,8 @@ from common.operation import run_tool_call
 
 logger = logging.getLogger(__name__)
 
+MAX_TASKS = 10
+
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
     id: str
@@ -159,8 +161,12 @@ class TaskGenerationNode(BaseModel):
     model_config = {"extra": "forbid"}
 
     tasks: List[Task] = Field(
-        ..., description="create a list of tasks with dependency resolve"
+        ..., 
+        description=f"Create at most {MAX_TASKS} tasks with resolved dependencies",
+        max_length=MAX_TASKS,
     )
+    # TODO: add buffer for overflowing the list of tasks
+    
     missing_strategies: List[str] = Field(
         ..., description="part of the query that we don't support yet"
     )
@@ -204,7 +210,7 @@ class TaskGenerationNode(BaseModel):
 
 class TaskPlanWorkflow(Workflow[TaskPlan]):
     success_message = "Task plan created successfully"
-    failure_message = "Task plan creation failed"
+    failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
     ui_loading_message = "Creating task plan..."
     
     prompt = load_prompt(
@@ -251,14 +257,20 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         result = await self.run_async_step(self.llm_client.execute_new(req))
         
         assistant_msg = result.output
-        tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids))
+        tool_message = await self.run_async_step(
+            run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids), 
+            raise_on_failure=False
+        )
         
         plan_result = tool_message.output
-        self.result.ok = tool_message.ok and plan_result.execution_order is not None
+        self.result.ok = (tool_message.ok and 
+                          plan_result.execution_order is not None 
+                          and 1 <= len(plan_result.execution_order) <= MAX_TASKS)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         self.result.output = plan_result
         
-        await self.send_mermaid(plan_result, node_ids)
+        if self.result.ok:
+            await self.send_mermaid(plan_result, node_ids)
         
         
     def modify_schema(self, tool_model: type, valid_ids: list[str]):

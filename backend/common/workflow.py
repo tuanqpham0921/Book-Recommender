@@ -47,11 +47,17 @@ class Workflow(ABC, Generic[OutputT]):
     async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
     
-    async def run_async_step(self, function: Coroutine[Any, Any, OperationResult[Any]]) -> OperationResult[Any]:
+    async def run_async_step(self, 
+                             function: Coroutine[Any, Any, OperationResult[Any]], 
+                             *,
+                             raise_on_failure: bool = True) -> OperationResult[Any]:
         result = await function
-        return self.add_step(result)
+        return self.add_step(result, raise_on_failure=raise_on_failure)
     
-    def add_step(self, step: OperationResult[Any]) -> OperationResult[Any]:
+    def add_step(self, 
+                step: OperationResult[Any], 
+                *, 
+                raise_on_failure: bool = True) -> OperationResult[Any]:
         self.result.steps.append(step)
         
         if step.ok:
@@ -61,7 +67,7 @@ class Workflow(ABC, Generic[OutputT]):
         self.result.message = f"Step failed: {step.name}"
         self.logger.warning(f"🛑 {step.name} FAILED: {step.message}")
         
-        if self.stop_on_failure:
+        if raise_on_failure:
             raise RuntimeError(f"🛑 {step.name} FAILED: {step.message}")
         
         return step
