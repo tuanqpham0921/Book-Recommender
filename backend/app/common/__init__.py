@@ -4,5 +4,5 @@ from .classification import ClassificationNode, ClassificationResult
 __all__ = [
     "BaseNode",
     "ClassificationNode",
-    "ClassificationResult"
+    "ClassificationResult",
 ]

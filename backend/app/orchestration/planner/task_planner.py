@@ -22,12 +22,8 @@ from app.common.messages import AssistantMessage
 from clients.schemas import OpenAIParserRequest
 
 from common.operation import run_tool_call
-from app.orchestration.planner import StrategyClassificationResult
-logger = logging.getLogger(__name__)
 
-def clean_string_mermaid(text):
-    # Remove parentheses, quotes, and Mermaid-reserved symbols
-    return re.sub(r'[()"\'<>{}\[\]|`#%@:;\\/]', "", text)
+logger = logging.getLogger(__name__)
 
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
@@ -130,66 +126,6 @@ class TaskPlan(BaseModel):
         )
 
         self.execution_order = order
-
-    
-
-    def get_accepted_diagram(self, node_ids):
-        accepted_ids = self.get_accepted_ids()
-        
-        def is_retrieval_node(node_id: str) -> bool:
-            return node_id.endswith(("_tit", "_isbn", "_traits"))
-        
-        def is_analyze_node(node_id: str) -> bool:
-            return node_id.endswith(("_cmp", "_rec"))
-
-        result = "flowchart LR\n"
-
-        # Retrieval subgraph
-        
-        retrieval_nodes, analyze_nodes = [], []
-        for id in node_ids:
-            if id not in accepted_ids:
-                continue
-            
-            description = clean_string_mermaid(node_ids[id].description)
-            if is_retrieval_node(id) and id:
-                retrieval_nodes.append(f"\t\t{id}[{description}]")
-            elif is_analyze_node(id):
-                analyze_nodes.append(f"\t\t{id}[{description}]")
-            
-        result += "\n\tsubgraph Retrieval\n\t\tdirection LR\n"
-        result += "\n".join(retrieval_nodes) + "\n\t\tend\n"
-        # Analyze subgraph  
-        result += "\n\tsubgraph Analyze\n\t\tdirection LR\n"
-        result += "\n".join(analyze_nodes) + "\n\t\tend\n"
-
-        # Dependencies
-        result += "\n\tRetrieval ~~~ Analyze\n"
-        for task in self.accepted:
-            for depends_on in task.depends_on:
-                result += f"\t{depends_on} ---> {task.id}\n"
-
-        return result
-    
-    def to_payload(self) -> dict:
-        """Convert to simple dictionary format."""
-        return {
-            "accepted": [task.model_dump() for task in self.accepted],
-            "refused": [task.model_dump() for task in self.refused],
-            "missing_ids": self.missing_ids,
-            "missing_strategies": self.missing_strategies,
-            "execution_order": self.execution_order,
-            "summary": f"{len(self.accepted)} accepted, {len(self.refused)} refused"
-        }
-    
-    def export(self, file_name: str = "dev"):
-        """Export the full request payload for logging/debugging."""
-        from common.utils import save_file
-        
-        payload = self.to_payload()
-        save_file(payload, file_name=f"{file_name}_task_plan")
-        logger.debug(f"📋 Exported OpenAI request payload: {payload}")
-
 
 class TaskGenerationNode(BaseModel):
     model_config = {"extra": "forbid"}
@@ -348,8 +284,16 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         self.accepted = cleaned_accepted
         
     async def send_mermaid(self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]) -> None:
+        from app.common.mermaid import get_mermaid_diagram
+        
+        try:
+            diagram = get_mermaid_diagram(task_plan, node_ids)
+        except Exception as e:
+            logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
+            return
+        
         await self.sse_stream.send_chars("__My Plan for Your Request__")
-        await self.sse_stream.send_mermaid(task_plan.get_accepted_diagram(node_ids))
+        await self.sse_stream.send_mermaid(diagram)
         await self.sse_stream.send_chars(
             "_Note:_ This flow shows how your query will run.\n"
         )
