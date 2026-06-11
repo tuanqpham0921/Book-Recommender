@@ -27,50 +27,33 @@ logger = logging.getLogger(__name__)
 
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
-
     id: str
-    depends_on: Optional[List[str]] = Field(
-        default_factory=list, description="Task dependencies"
-    )
-    refusal: bool = Field(default=False, description="Whether this task was refused")
-    reasoning: str = Field(default="", description="Reasoning for task state")
-
-    def model_post_init(self, __context) -> None:
-        """Basic cleanup - remove self-dependencies and duplicates."""
-        if not self.depends_on:
-            return
-
-        # Remove duplicates and self-references
-        cleaned_depends_on = set(self.depends_on)
-        if self.id in cleaned_depends_on:
-            logger.warning(f"⚠️ Task {self.id} had dependency on itself - removing")
-            cleaned_depends_on.remove(self.id)
-
-        self.depends_on = list(cleaned_depends_on)
-
-    def validate_dependencies(self, valid_ids: set[str]) -> Task:
-        """Validate and clean dependencies against valid node IDs."""
+    depends_on: list[str] = Field(default_factory=list)
+    refusal: bool = False
+    reasoning: str = ""
+    
+    def model_post_init(self, __context: object) -> None:
+        """Validate the dependencies of the task and return a new task with the valid dependencies"""        
+        if self.id in self.depends_on:
+            logger.warning(f"Task {self.id} depended on itself; removing dependency")
+            self.depends_on.remove(self.id)
+            
+    def with_valid_dependencies(self, valid_ids: set[str]) -> "Task":
+        """Validate the dependencies of the task and return a new task with the valid dependencies"""
         if self.id not in valid_ids:
-            logger.warning(f"⚠️ Task {self.id} not in valid id")
-            return self.model_copy(update={"refusal": True, "reasoning": f"Task {self.id} not in valid id"})
+            return self.model_copy(
+                update={
+                    "refusal": True,
+                    "reasoning": f"Task id {self.id} is not a valid node id",
+                }
+            )
+            
+        valid_deps = [dep for dep in self.depends_on if dep in valid_ids]
+        invalid_deps = (set(self.depends_on) - valid_ids)
         
-        if not self.depends_on:
-            return self
-
-        # Remove invalid dependencies
-        valid_deps = []
-        invalid_deps = []
-
-        for dep in self.depends_on:
-            if dep in valid_ids:
-                valid_deps.append(dep)
-            else:
-                invalid_deps.append(dep)
-
         if invalid_deps:
-            logger.warning(f"⚠️ Task {self.id} had invalid dependencies: {invalid_deps}")
-
-        # Create new task with cleaned dependencies
+            logger.warning(f"Task {self.id} had invalid dependencies: {invalid_deps}")
+            
         return self.model_copy(update={"depends_on": valid_deps})
 
 
@@ -82,8 +65,46 @@ class TaskPlan(BaseModel):
     missing_ids: List[str] = Field(default_factory=list)
     missing_strategies: List[str] = Field(default_factory=list)
     execution_order: List[str] = Field(default_factory=list)
+    
+    def validate(self, node_ids: dict[str, BaseNode]) -> None:
+        self.execution_order = self._create_execution_order()
+        self._validate_dependency_rules(node_ids)
+        self._validate_execution_order()
+        
+    def _validate_execution_order(self) -> None:
+        accepted_ids = set(task.id for task in self.accepted)
+        order_ids = set(self.execution_order)
+        if order_ids != accepted_ids:
+            missing_ids = accepted_ids - order_ids
+            extra_ids = order_ids - accepted_ids
+            raise ValueError(
+                f"Execution order mismatch. Missing={missing_ids}, extra={extra_ids}"
+            )
+        
+    # Here we should know that the ids are valid nodes
+    def _validate_dependency_rules(self, node_ids: dict[str, BaseNode]) -> None:
+        """Enforce the rules for accepted strategies. Add to refuse if fails"""
+        valid_accepted = []
+        for task in self.accepted:
+            node = node_ids[task.id]
+            type = node.get_type()
 
-    def order_task_plan(self):
+            # check the dependencie rules for Retrieval and Analyze nodes
+            if type in SINGLE_BOOK_RETRIEVAL and len(task.depends_on) != 0:
+                logger.warning(f"⚠️ Single Book Retrieval ID {task.id} has dependencies")
+                task.depends_on = []
+            elif type == NodeType.COMPARE and len(task.depends_on) < 2:
+                logger.warning(
+                    f"⚠️ Compare Book Strategy ID {task.id} doesn't have enough dependencies"
+                )
+                self.refused.append(task)
+                continue
+
+            valid_accepted.append(task)
+
+        self.accepted = valid_accepted
+
+    def _create_execution_order(self):
         # Build adjacency list and indegree map
         from collections import defaultdict, deque
 
@@ -114,18 +135,15 @@ class TaskPlan(BaseModel):
         # Check for cycles in the dependency graph
         if len(order) != len(indegree):
             remaining_nodes = [node for node, degree in indegree.items() if degree > 0]
-            logger.error(
-                f"❌ Cycle detected in dependency graph! Remaining nodes: {remaining_nodes}"
+            raise ValueError(
+                f"Cycle detected in dependency graph! Nodes involved: {remaining_nodes}"
             )
-            # raise ValueError(
-            #     f"Cycle detected in dependency graph! Nodes involved: {remaining_nodes}"
-            # )
 
         logger.info(
             f"📋 Task execution order: {' -> '.join(order) if order else 'No tasks'}"
         )
-
-        self.execution_order = order
+        
+        return order
 
 class TaskGenerationNode(BaseModel):
     model_config = {"extra": "forbid"}
@@ -141,33 +159,37 @@ class TaskGenerationNode(BaseModel):
         logger.debug("🔍 Processing TaskGenerationNode")
 
         valid_ids = set(node_ids.keys())
-        accepted, refused, requested_ids = set(), set(), set()
+        missing_ids = valid_ids.copy()
+        accepted, refused, seen_ids = [], [], set()
 
         for task in self.tasks:
             if task.id not in valid_ids:
                 logger.warning(f"⚠️ TaskGeneration hallucinated ID: {task.id}")
                 continue
 
-            if task.id in requested_ids:
+            if task.id in seen_ids:
                 logger.warning(f"⚠️ TaskGeneration classified duplicates ID: {task.id}")
                 continue
 
-            validated_task = task.validate_dependencies(valid_ids)
+            validated_task = task.with_valid_dependencies(valid_ids=valid_ids)
 
             if not validated_task.refusal:
-                accepted.add(validated_task)
+                accepted.append(validated_task)
             else:
-                refused.add(validated_task)
+                refused.append(validated_task)
 
-            requested_ids.add(task.id)
-
+            seen_ids.add(task.id)
+            if task.id in missing_ids:
+                missing_ids.remove(task.id)
+        
         plan_result = TaskPlan(
             accepted=accepted,
             refused=refused,
-            missing_ids=list(requested_ids - (accepted | refused)),
+            missing_ids=missing_ids,
             missing_strategies=self.missing_strategies,
         )
-
+        
+        plan_result.validate(node_ids=node_ids)
         return plan_result
 
 class TaskPlanWorkflow(Workflow[TaskPlan]):
@@ -222,14 +244,11 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids))
         
         plan_result = tool_message.output
-        plan_result.order_task_plan()
-        plan_result.validate_accepted(node_ids)
+        self.result.ok = tool_message.ok and plan_result.execution_order is not None
+        self.result.message = self.success_message if self.result.ok else self.failure_message
+        self.result.output = plan_result
         
-        self.result.ok = True
-        self.result.message = self.success_message if result.ok else self.failure_message
-        self.result.output = tool_message.output
-        
-        await self.send_mermaid(tool_message.output, node_ids)
+        await self.send_mermaid(plan_result, node_ids)
         
         
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
@@ -259,27 +278,7 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
 
         return tool
     
-    # Here we should know that the ids are valid nodes
-    def validate_accepted(self, node_ids: dict[str, BaseNode]) -> None:
-        """Enforce the rules for accepted strategies. Add to refuse if fails"""
-        cleaned_accepted = []
-        for task in self.accepted:
-            node = node_ids[task.id]
-            type = node.get_type()
-
-            if type in SINGLE_BOOK_RETRIEVAL and len(task.depends_on) != 0:
-                logger.warning(f"⚠️ Single Book Retrieval ID {task.id} has dependencies")
-                task.depends_on = []
-            elif type == NodeType.COMPARE and len(task.depends_on) < 2:
-                logger.warning(
-                    f"⚠️ Compare Book Strategy ID {task.id} doesn't have enough dependencies"
-                )
-                self.refused.append(task)
-                continue
-
-            cleaned_accepted.append(task)
-
-        self.accepted = cleaned_accepted
+    
         
     async def send_mermaid(self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]) -> None:
         from app.common.mermaid import get_mermaid_diagram

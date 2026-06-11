@@ -11,7 +11,7 @@ def clean_string_mermaid(text):
     return re.sub(r'[()"\'<>{}\[\]|`#%@:;\\/]', "", text)
 
 def get_mermaid_diagram(task_plan: "TaskPlan", node_ids: dict[str, BaseNode]) -> str:
-    accepted_ids = set(task_plan.accepted)
+    accepted_ids = set(task.id for task in task_plan.accepted)
     
     def is_retrieval_node(node_id: str) -> bool:
         return node_id.endswith(("_tit", "_isbn", "_traits"))
