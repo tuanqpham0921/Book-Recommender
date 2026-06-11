@@ -38,7 +38,6 @@ class Task(BaseModel):
     def model_post_init(self, __context) -> None:
         """Basic cleanup - remove self-dependencies and duplicates."""
         if not self.depends_on:
-            self.depends_on = []
             return
 
         # Remove duplicates and self-references
@@ -79,9 +78,6 @@ class TaskPlan(BaseModel):
     missing_ids: List[str] = Field(default_factory=list)
     missing_strategies: List[str] = Field(default_factory=list)
     execution_order: List[str] = Field(default_factory=list)
-
-    def get_accepted_ids(self) -> set[str]:
-        return {task.id for task in self.accepted}
 
     def order_task_plan(self):
         # Build adjacency list and indegree map
@@ -141,7 +137,7 @@ class TaskGenerationNode(BaseModel):
         logger.debug("🔍 Processing TaskGenerationNode")
 
         valid_ids = set(node_ids.keys())
-        accepted, refused, requested_ids = [], [], set()
+        accepted, refused, requested_ids = set(), set(), set()
 
         for task in self.tasks:
             if task.id not in valid_ids:
@@ -152,29 +148,23 @@ class TaskGenerationNode(BaseModel):
                 logger.warning(f"⚠️ TaskGeneration classified duplicates ID: {task.id}")
                 continue
 
-            cleaned_task = task.validate_dependencies(valid_ids)
+            validated_task = task.validate_dependencies(valid_ids)
 
-            if not cleaned_task.refusal:
-                accepted.append(cleaned_task)
+            if not validated_task.refusal:
+                accepted.add(validated_task)
             else:
-                refused.append(cleaned_task)
+                refused.add(validated_task)
 
             requested_ids.add(task.id)
 
-        processed_ids = set(task.id for task in accepted + refused)
-        missing_ids = list(requested_ids - processed_ids)
-
-        result = TaskPlan(
+        plan_result = TaskPlan(
             accepted=accepted,
             refused=refused,
-            missing_ids=missing_ids,
+            missing_ids=list(requested_ids - (accepted | refused)),
             missing_strategies=self.missing_strategies,
         )
 
-        # result.validate_accepted(node_ids)
-        result.order_task_plan()
-
-        return result
+        return plan_result
 
 class TaskPlanWorkflow(Workflow[TaskPlan]):
     success_message = "Task plan created successfully"
@@ -226,6 +216,10 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         
         assistant_msg = result.output
         tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids))
+        
+        plan_result = tool_message.output
+        plan_result.order_task_plan()
+        plan_result.validate_accepted(node_ids)
         
         self.result.ok = True
         self.result.message = self.success_message if result.ok else self.failure_message
