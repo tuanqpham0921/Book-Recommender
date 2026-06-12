@@ -1,7 +1,6 @@
 from .base import BaseLLMClient
-from .schemas import BaseLLMRequest
 from .openai_client import OpenAIClient
-from .schemas import OpenAIRequest, OpenAIParserRequest, OpenAIChatRequest, OpenAIBaseRequest, OpenAIToolRequest
+from .openai_requests import OpenAIParserRequest, OpenAIBaseRequest
 
 __all__ = [
     "BaseLLMClient",
@@ -9,5 +8,5 @@ __all__ = [
     "OpenAIClient",
     "OpenAIRequest",
     "OpenAIParserRequest",
-    "OpenAIChatRequest"
+    "OpenAIBaseRequest"
 ]

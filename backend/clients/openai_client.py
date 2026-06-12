@@ -4,7 +4,7 @@ import logging
 from openai import AsyncOpenAI
 from typing import List, Optional
 
-from .schemas import OpenAIRequest, OpenAIBaseRequest
+from .openai_requests import OpenAIBaseRequest
 from .base import BaseLLMClient
 
 from config.settings import OpenAISettings
@@ -47,34 +47,9 @@ class OpenAIClient(BaseLLMClient):
         except Exception as e:
             logger.exception(f"❌❌❌ OpenAI embedding API call failed: {e}")
             raise
-        
-    async def execute(self, req: OpenAIRequest) -> AssistantMessage:
-        # --- Preflight ---
-        try:
-            sse_stream = req.sse_stream
-            payload = req.to_payload()
-            
-            start = time.monotonic()
-            final_completion = await self._chat_stream(payload, sse_stream)
-            elapsed = round(time.monotonic() - start, 2)
-
-            response_message = final_completion.choices[0].message
-            assistant_msg = AssistantMessage(
-                id=final_completion.id,
-                content=response_message.content,
-                tool_calls=response_message.tool_calls,
-                refusal=response_message.refusal,
-                elapsed=elapsed,
-            )
-
-            # --- Execute ---
-            return assistant_msg
-        except Exception as e:
-            logger.error(f"❌❌❌ OpenAI API call failed: {e}")
-            raise e
     
     @task
-    async def execute_new(self, req: OpenAIRequest | OpenAIBaseRequest) -> OperationResult:
+    async def execute(self, req: OpenAIBaseRequest) -> OperationResult:
         """Execute the chat completion."""
         #TODO: add semaphore to the execute method
         

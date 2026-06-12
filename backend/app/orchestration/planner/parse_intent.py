@@ -3,7 +3,7 @@ import logging
 from app.common.prompt_loader import load_prompt
 
 from app.common.sse_stream import SSEStream
-from clients.schemas import OpenAIParserRequest
+from clients import OpenAIParserRequest
 
 from common.workflow import Workflow
 from app.common.messages import UserMessage
@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.common.messages import AssistantMessage, BaseMessage
 
 logger = logging.getLogger(__name__)
+
 
 class InitialParseBase(BaseModel):
     user_query: str = Field(
@@ -33,11 +34,15 @@ class InitialParseResult(InitialParseBase):
     continue_pipeline: bool = Field(
         default=False, description="Should the pipeline continue?"
     )
-    
+
     def to_llm_messages(self) -> list[BaseMessage]:
-        return [AssistantMessage(content=self.model_dump_json(
-            include={"small_talk", "out_of_scope", "continue_pipeline"}
-        ))]
+        return [
+            AssistantMessage(
+                content=self.model_dump_json(
+                    include={"small_talk", "out_of_scope", "continue_pipeline"}
+                )
+            )
+        ]
 
 
 class InitialParseNode(InitialParseBase):
@@ -63,22 +68,28 @@ class InitialParseNode(InitialParseBase):
 class InitialParseWorkflow(Workflow[InitialParseResult]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
-    
-    system_prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_system.txt")
-    user_prompt = load_prompt(prompt_path="orchestration/planner/prompts/initial_parse_response.txt")
-    
+
+    system_prompt = load_prompt(
+        prompt_path="orchestration/planner/prompts/initial_system.txt"
+    )
+    user_prompt = load_prompt(
+        prompt_path="orchestration/planner/prompts/initial_parse_response.txt"
+    )
+
     output_schema = InitialParseResult
     tool_models = [InitialParseNode]
-    
-    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+
+    def __init__(
+        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
+    ):
         super().__init__(output_type=self.output_schema)
-        
+
         self.sse_stream = sse_stream
         self.user_message = user_message
         self.llm_client = llm_client
-        
+
     async def run(self) -> None:
-        await self.sse_stream.send_ui_loading("Thinking...")    
+        await self.sse_stream.send_ui_loading("Thinking...")
 
         # Use pipeline conversation for internal LLM calls
         req = OpenAIParserRequest(
@@ -86,20 +97,25 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
             messages=[self.user_message],
             tool_models=self.tool_models,
         )
-        llm_result = await self.run_async_step(self.llm_client.execute_new(req))
+        llm_result = await self.run_async_step(self.llm_client.execute(req))
         assistant_msg = llm_result.output
-        
-        tool_message = await self.run_async_step(run_tool_call(assistant_msg.tool_calls[0]))
-        
+
+        tool_message = await self.run_async_step(
+            run_tool_call(assistant_msg.tool_calls[0])
+        )
+
         parse_result = tool_message.output
 
         self.result.output = parse_result
-        self.result.ok = bool(parse_result.continue_pipeline and parse_result.user_query_domain)
-        self.result.message = self.success_message if self.result.ok else self.failure_message
-        
-        await self.generate_user_response(
-            parse_result.to_llm_messages(), 
-            prompt=self.user_prompt, 
-            sse_stream=self.sse_stream
+        self.result.ok = bool(
+            parse_result.continue_pipeline and parse_result.user_query_domain
+        )
+        self.result.message = (
+            self.success_message if self.result.ok else self.failure_message
         )
 
+        await self.generate_user_response(
+            parse_result.to_llm_messages(),
+            prompt=self.user_prompt,
+            sse_stream=self.sse_stream,
+        )

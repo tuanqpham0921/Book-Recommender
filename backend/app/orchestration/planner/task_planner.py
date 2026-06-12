@@ -18,7 +18,7 @@ from clients.openai_client import OpenAIClient
 from app.common.sse_stream import SSEStream
 from app.common.prompt_loader import load_prompt
 from app.common.messages import AssistantMessage
-from clients.schemas import OpenAIParserRequest
+from clients import OpenAIParserRequest
 
 from common.operation import run_tool_call
 
@@ -26,19 +26,20 @@ logger = logging.getLogger(__name__)
 
 MAX_TASKS = 10
 
+
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
     id: str
     depends_on: list[str] = Field(default_factory=list)
     refusal: bool = False
     reasoning: str = ""
-    
+
     def model_post_init(self, __context: object) -> None:
-        """Validate the dependencies of the task and return a new task with the valid dependencies"""        
+        """Validate the dependencies of the task and return a new task with the valid dependencies"""
         if self.id in self.depends_on:
             logger.warning(f"Task {self.id} depended on itself; removing dependency")
             self.depends_on.remove(self.id)
-            
+
     def with_valid_dependencies(self, valid_ids: set[str]) -> "Task":
         """Validate the dependencies of the task and return a new task with the valid dependencies"""
         if self.id not in valid_ids:
@@ -48,13 +49,13 @@ class Task(BaseModel):
                     "reasoning": f"Task id {self.id} is not a valid node id",
                 }
             )
-            
+
         valid_deps = [dep for dep in self.depends_on if dep in valid_ids]
-        invalid_deps = (set(self.depends_on) - valid_ids)
-        
+        invalid_deps = set(self.depends_on) - valid_ids
+
         if invalid_deps:
             logger.warning(f"Task {self.id} had invalid dependencies: {invalid_deps}")
-            
+
         return self.model_copy(update={"depends_on": valid_deps})
 
 
@@ -66,13 +67,13 @@ class TaskPlan(BaseModel):
     missing_ids: List[str] = Field(default_factory=list)
     missing_strategies: List[str] = Field(default_factory=list)
     execution_order: List[str] = Field(default_factory=list)
-    
+
     def validate(self, node_ids: dict[str, BaseNode]) -> None:
         self._validate_dependency_rules(node_ids)
         self._validate_dependency_in_accepted(node_ids)
         self.execution_order = self._create_execution_order()
         self._validate_execution_order()
-        
+
     def _validate_execution_order(self) -> None:
         accepted_ids = set(task.id for task in self.accepted)
         order_ids = set(self.execution_order)
@@ -82,7 +83,7 @@ class TaskPlan(BaseModel):
             raise ValueError(
                 f"Execution order mismatch. Missing={missing_ids}, extra={extra_ids}"
             )
-            
+
     def _validate_dependency_in_accepted(self, node_ids: dict[str, BaseNode]) -> None:
         accepted_ids = set(task.id for task in self.accepted)
         for task in self.accepted:
@@ -91,7 +92,7 @@ class TaskPlan(BaseModel):
                     raise ValueError(
                         f"Dependency {dep} in task {task.id} is not in accepted. Accepted ids: {sorted(accepted_ids)}"
                     )
-        
+
     # Here we should know that the ids are valid nodes
     def _validate_dependency_rules(self, node_ids: dict[str, BaseNode]) -> None:
         """Enforce the rules for accepted strategies. Add to refuse if fails"""
@@ -153,19 +154,20 @@ class TaskPlan(BaseModel):
         logger.info(
             f"📋 Task execution order: {' -> '.join(order) if order else 'No tasks'}"
         )
-        
+
         return order
+
 
 class TaskGenerationNode(BaseModel):
     model_config = {"extra": "forbid"}
 
     tasks: List[Task] = Field(
-        ..., 
+        ...,
         description=f"Create at most {MAX_TASKS} tasks with resolved dependencies",
         max_length=MAX_TASKS,
     )
     # TODO: add buffer for overflowing the list of tasks
-    
+
     missing_strategies: List[str] = Field(
         ..., description="part of the query that we don't support yet"
     )
@@ -196,47 +198,53 @@ class TaskGenerationNode(BaseModel):
             seen_ids.add(task.id)
             if task.id in missing_ids:
                 missing_ids.remove(task.id)
-        
+
         plan_result = TaskPlan(
             accepted=accepted,
             refused=refused,
             missing_ids=missing_ids,
             missing_strategies=self.missing_strategies,
         )
-        
+
         plan_result.validate(node_ids=node_ids)
         return plan_result
+
 
 class TaskPlanWorkflow(Workflow[TaskPlan]):
     success_message = "Task plan created successfully"
     failure_message = "Task plan creation failed"
     ui_loading_message = "Creating task plan..."
-    
+
     prompt = load_prompt(
         prompt_path="orchestration/planner/prompts/dependency_resolution.txt",
     )
     tool_models = [TaskGenerationNode]
-    
-    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+
+    def __init__(
+        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
+    ):
         super().__init__(output_type=TaskPlan)
         self.sse_stream = sse_stream
         self.user_message = user_message
         self.llm_client = llm_client
-        
-    async def run(self, in_domain_message: str, node_ids: dict[str, BaseNode]) -> TaskPlan:
+
+    async def run(
+        self, in_domain_message: str, node_ids: dict[str, BaseNode]
+    ) -> TaskPlan:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-        
+
         if not node_ids:
             raise RuntimeError("No accepted node ids")
-        
-        tool_override = self.modify_schema(tool_model=self.tool_models[0], valid_ids=list(node_ids.keys()))
 
-        
+        tool_override = self.modify_schema(
+            tool_model=self.tool_models[0], valid_ids=list(node_ids.keys())
+        )
+
         formatted_node_ids = {}
         for id in node_ids:
             formatted_node_ids[id] = node_ids[id].model_dump()
-            
+
         messages = [
             AssistantMessage(content=in_domain_message),
             AssistantMessage(
@@ -253,36 +261,38 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
             top_p=0.5,
         )
         # initial parsing, with no streaming or content (forcing tool)
-        result = await self.run_async_step(self.llm_client.execute_new(req))
-        
+        result = await self.run_async_step(self.llm_client.execute(req))
+
         assistant_msg = result.output
         tool_message = await self.run_async_step(
-            run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids), 
-            raise_on_failure=False
+            run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids),
+            raise_on_failure=False,
         )
-        
+
         if not tool_message.ok or tool_message.output is None:
             self.result.ok = False
             self.result.message = self.failure_message
             return
-        
+
         plan_result = tool_message.output
-        self.result.ok = (1 <= len(plan_result.execution_order) <= MAX_TASKS)
-        self.result.message = self.success_message if self.result.ok else self.failure_message
+        self.result.ok = 1 <= len(plan_result.execution_order) <= MAX_TASKS
+        self.result.message = (
+            self.success_message if self.result.ok else self.failure_message
+        )
         self.result.output = plan_result
-        
+
         if self.result.ok:
             await self.send_mermaid(plan_result, node_ids)
-        
-        
+
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
         from openai import pydantic_function_tool
+
         tool = pydantic_function_tool(
             tool_model,
             name=tool_model.__name__,
             description=f"Fill the schema for {tool_model.__name__}",
         )
-        
+
         # Modify the schema
         schema = tool["function"]["parameters"]["$defs"]["Task"]
 
@@ -301,18 +311,18 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
         }
 
         return tool
-    
-    
-        
-    async def send_mermaid(self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]) -> None:
+
+    async def send_mermaid(
+        self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]
+    ) -> None:
         from app.common.mermaid import get_mermaid_diagram
-        
+
         try:
             diagram = get_mermaid_diagram(task_plan, node_ids)
         except Exception as e:
             logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
             return
-        
+
         await self.sse_stream.send_chars("__My Plan for Your Request__")
         await self.sse_stream.send_mermaid(diagram)
         await self.sse_stream.send_chars(

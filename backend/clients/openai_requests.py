@@ -1,67 +1,27 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from .base import BaseLLMRequest
 
 from config import settings
-from app.common.messages import APIMessage, SystemMessage
-from app.common.sse_stream import SSEStream
+from app.common.messages import SystemMessage
 from openai import pydantic_function_tool
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
 MAX_COMPLETION_TOKENS = 50
+TEMPERATURE = 0.3
+TOP_P = 0.8
+SEED = 42
 
-@dataclass
-class OpenAIRequest:
-    """Legacy request class for backward compatibility."""
-    system: SystemMessage
-    messages: list[APIMessage]
-    tools: list[dict] | None = None
-    tool_choice: dict | str | None = None
-    sse_stream: SSEStream | None = None
+@dataclass(kw_only=True)
+class OpenAIBaseRequest(BaseLLMRequest):
     model: str = settings.openai.BASE_MODEL
-    temperature: float = 0.3
-    top_p: float = 0.8
-    seed: int = 42
-
-    def to_payload(self) -> dict[str, Any]:
-        messages = []
-        if self.system:
-            messages.append(self.system.model_dump())
-        messages.extend([m.to_openai_dict() for m in self.messages])
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "seed": self.seed,
-        }
-
-        if self.tools:
-            payload["tools"] = self.tools
-            payload["tool_choice"] = self.tool_choice if self.tool_choice else "auto"
-
-        # TODO: Remove for production
-        # using for testing and debugging
-        if self.sse_stream:
-            payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
-
-        return payload
-# ------------------------------------------------------------------------------------------------
-# New request classes
-@dataclass
-class OpenAIBaseRequest(ABC):
-    prompt: str
-    messages: list[APIMessage]
-    model: str = settings.openai.BASE_MODEL
-    temperature: float = 0.3
-    top_p: float = 0.8
-    seed: int = 42
-    sse_stream: SSEStream | None = None
+    temperature: float = TEMPERATURE
+    top_p: float = TOP_P
+    seed: int = SEED
 
     def to_messages_payload(self) -> list[dict[str, Any]]:
         messages = []
@@ -79,18 +39,17 @@ class OpenAIBaseRequest(ABC):
             "seed": self.seed,
         }
     
-    @abstractmethod
     def to_payload(self) -> dict[str, Any]:
-        ...
+        return self.base_payload()
 
-@dataclass
+@dataclass(kw_only=True)
 class OpenAIParserRequest(OpenAIBaseRequest):
     """ Support only one tool model for parsing 1 request"""
-    tool_models: list[type] = field(default_factory=list)
+    tool_models: list[type]
     tool_override: dict | None = None
     
     def __post_init__(self):
-        if not self.tool_models or len(self.tool_models) != 1:
+        if len(self.tool_models) != 1:
             raise ValueError("tool_models must be a list of exactly one tool model")
 
     def to_payload(self) -> dict[str, Any]:
@@ -112,19 +71,23 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         )
         return tool
 
-@dataclass
+@dataclass(kw_only=True)
 class OpenAIChatRequest(OpenAIBaseRequest):
-    
+    """ Support only sse stream """
+    def __post_init__(self):
+        if not self.sse_stream:
+            raise ValueError("Usage error: sse_stream must be provided")
+        
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
         if self.sse_stream:
             payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
         return payload
     
-@dataclass
+@dataclass(kw_only=True)
 class OpenAIToolRequest(OpenAIBaseRequest):
     """ Support both sse stream and tool choice """
-    tool_models: list[type] = field(default_factory=list)
+    tool_models: list[type]
     def __post_init__(self):
         if not self.tool_models:
             raise ValueError("Usage error: tool_models must be a list of tool models")

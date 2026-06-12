@@ -7,20 +7,19 @@ from app.common.messages import APIMessage, SystemMessage
 from app.common.sse_stream import SSEStream
 from config import settings
 
-@dataclass
+import logging
+logger = logging.getLogger(__name__)
+
+@dataclass(kw_only=True)
 class BaseLLMRequest(ABC):
-    """Base schema for any LLM request (OpenAI, Anthropic, etc.)."""
-    model: str
     prompt: str
     messages: list[APIMessage]
-    tool_models: list[type]
-
+    model: str
+    sse_stream: SSEStream | None = None
+    
     @abstractmethod
     def to_payload(self) -> dict[str, Any]:
-        """Convert this request to provider-specific API payload."""
         ...
-        
-
 
 class BaseLLMClient(ABC):
     """Abstract base interface for all LLM providers."""
