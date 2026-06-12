@@ -6,9 +6,7 @@ import time
 from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 from app.common.messages import ToolMessage
-from app.domains.books.strategies import BOOK_STRAT_REGISTRY
 
-from common.operation import OperationResult, task
 from common.utils import save_file
 from app.orchestration.planner import InitialParseWorkflow
 logger = logging.getLogger(__name__)
@@ -74,40 +72,9 @@ class ConversationOrchestrator(Workflow[None]):
         
         await self.sse_stream.send_divider()
         
-        results = await self.run_tasks(node_ids, task_planner_result.output, request_context)
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
         # self.result.output = results
-    
-    async def run_tasks(
-        self, 
-        node_ids, 
-        task_planner: TaskPlan, 
-        request_context: RequestContext
-    ):
-        """Execute tasks in the planned order with dependency resolution."""
-
-        depends_map = {cur.id: cur.depends_on for cur in task_planner.accepted}
-        results = {}
-
-        for tid in task_planner.execution_order:
-            task = node_ids[tid]
-            deps = {d: results[d] for d in depends_map[tid]}
-
-            node_type = task.node_type
-
-            # Create strategy instance and call it with proper arguments
-            strategy_class = BOOK_STRAT_REGISTRY[node_type]
-            strategy_instance = strategy_class()
-
-            # Pass the task data and context to the strategy
-            result = await strategy_instance(
-                task=task, dependent_results=deps, request_context=request_context
-            )
-
-            results[tid] = result
-
-        return results
         
     
 class Orchestrator:

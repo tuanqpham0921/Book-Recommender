@@ -54,7 +54,7 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
     ui_loading_message = "Classifying user query..."
     
     system_prompt = format_prompt(
-        prompt_path="domains/books/prompts/strategy_classification.txt",
+        prompt_path="orchestration/planner/prompts/strategy_classification.txt",
         book_constraints=str(BookConstraints()),
         book_guides=str(BookGuides()),
     )
@@ -85,10 +85,8 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
         
         classification_result = tool_message.output
         self.result.output = classification_result
-        self.result.ok = bool(classification_result.continue_pipeline)
+        self.result.ok = bool(
+            classification_result.continue_pipeline 
+            and not classification_result.refused)
         self.result.message = self.success_message if self.result.ok else self.failure_message
         
-        if classification_result.refused:
-            # TODO: handle refused strategies (UI message or re-classification)
-            ...
-            
