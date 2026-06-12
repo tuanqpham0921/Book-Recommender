@@ -94,7 +94,7 @@ class ToolMessage(BaseMessage):
     def to_openai_dict(self) -> Dict:
         # TODO: unit test this for other types of content
         # OpenAI tool messages require string content and no extra fields like name/elapsed
-        content = self.output
+        content = self.content
         if isinstance(content, (dict, list)):
             content = json.dumps(content)
         else:
