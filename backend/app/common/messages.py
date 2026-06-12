@@ -10,16 +10,16 @@ from typing import Union, Dict, Optional, List, Literal, Any
 from app.common.enums import Role
 
 from abc import ABC, abstractmethod
+import logging
+from common.operation import OperationResult, task
+
+logger = logging.getLogger(__name__)
 
 class BaseMessage(BaseModel, ABC):
-
     @abstractmethod
     def to_openai_dict(self) -> Dict:
         ...
     
-
-
-# --- Role-specific Messages ---
 class SystemMessage(BaseMessage):
     role: Literal[Role.SYSTEM] = Role.SYSTEM
     content: str
@@ -69,14 +69,32 @@ class ToolMessage(BaseMessage):
     name: str
     tool_call_id: str
     content: Any  # tool results only (raw output)
-    elapsed: Optional[float] = None
     created: Optional[str] = Field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
+    
+    @classmethod
+    @task
+    async def execute(cls, tool_call: ParsedFunctionToolCall, **kwargs) -> "ToolMessage":
+        tool_name = tool_call.function.name
+        tool_instance = tool_call.function.parsed_arguments
+        output = await tool_instance(**kwargs)
+        
+        # TODO: handle this when you have a tool that returns an operation result
+        # should keep it in the output field, but not in the content field
+        if isinstance(output, OperationResult):
+            logger.warning(f"Tool {tool_name} returned an operation result, not a raw output")
+        
+        return cls(
+            name=tool_name,
+            tool_call_id=tool_call.id,
+            content=output,
+        )
 
     def to_openai_dict(self) -> Dict:
+        # TODO: unit test this for other types of content
         # OpenAI tool messages require string content and no extra fields like name/elapsed
-        content = self.content
+        content = self.output
         if isinstance(content, (dict, list)):
             content = json.dumps(content)
         else:

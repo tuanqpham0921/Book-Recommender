@@ -1,4 +1,4 @@
-from .operation import OperationResult, task, run_tool_call
+from .operation import OperationResult, task
 from .context import AppContext
 from .setup_logging import setup_logging
 from .workflow import Workflow
@@ -9,5 +9,4 @@ __all__ = [
     "AppContext",
     "setup_logging",
     "Workflow",
-    "run_tool_call"
 ]

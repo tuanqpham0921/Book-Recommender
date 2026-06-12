@@ -13,14 +13,13 @@ from app.domains.books.types import (
 
 from app.common.base_node import BaseNode
 from common.workflow import Workflow
-from app.common.messages import UserMessage
+from app.common.messages import UserMessage, ToolMessage
 from clients.openai_client import OpenAIClient
 from app.common.sse_stream import SSEStream
 from app.common.prompt_loader import load_prompt
 from app.common.messages import AssistantMessage
 from clients import OpenAIParserRequest
 
-from common.operation import run_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +264,7 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
 
         assistant_msg = result.output
         tool_message = await self.run_async_step(
-            run_tool_call(assistant_msg.tool_calls[0], node_ids=node_ids),
+            ToolMessage.execute(assistant_msg.tool_calls[0], node_ids=node_ids),
             raise_on_failure=False,
         )
 
@@ -274,7 +273,7 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
             self.result.message = self.failure_message
             return
 
-        plan_result = tool_message.output
+        plan_result = TaskPlan.model_validate(tool_message.output.content)
         self.result.ok = 1 <= len(plan_result.execution_order) <= MAX_TASKS
         self.result.message = (
             self.success_message if self.result.ok else self.failure_message

@@ -8,11 +8,10 @@ from clients import OpenAIParserRequest
 from common.workflow import Workflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
-from common.operation import run_tool_call
 
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.common.messages import AssistantMessage, BaseMessage
+from app.common.messages import AssistantMessage, BaseMessage, ToolMessage
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +100,10 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         assistant_msg = llm_result.output
 
         tool_message = await self.run_async_step(
-            run_tool_call(assistant_msg.tool_calls[0])
+            ToolMessage.execute(assistant_msg.tool_calls[0])
         )
 
-        parse_result = tool_message.output
+        parse_result = InitialParseResult.model_validate(tool_message.output.content)
 
         self.result.output = parse_result
         self.result.ok = bool(

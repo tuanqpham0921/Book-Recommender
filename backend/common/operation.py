@@ -83,17 +83,3 @@ def task(
         return decorator
 
     return decorator(func)
-
-@task
-async def run_tool_call(tool_call, **kwargs) -> OperationResult[Any]:
-    tool_name = tool_call.function.name
-    
-    tool_instance = tool_call.function.parsed_arguments
-    output = await tool_instance(**kwargs)
-    return OperationResult(
-        name=tool_name,
-        ok=True,
-        message=f"{tool_name} completed successfully",
-        output=output,
-        output_type=type(output),
-    )

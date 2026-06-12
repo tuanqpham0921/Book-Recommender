@@ -2,7 +2,7 @@ from typing import List
 
 from pydantic import BaseModel, Field
 
-from app.common.messages import AssistantMessage, UserMessage
+from app.common.messages import AssistantMessage, UserMessage, ToolMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.domains.books.schemas import ClassificationStrategy
@@ -10,7 +10,6 @@ from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
 from common.workflow import Workflow
 from config import BookConstraints, BookGuides
-from common.operation import run_tool_call
 
 
 class StrategyClassificationResult(BaseModel):
@@ -81,10 +80,10 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
         assistant_msg = llm_result.output
 
         tool_message = await self.run_async_step(
-            run_tool_call(assistant_msg.tool_calls[0])
+            ToolMessage.execute(assistant_msg.tool_calls[0])
         )
 
-        classification_result = tool_message.output
+        classification_result = StrategyClassificationResult.model_validate(tool_message.output.content)
         self.result.output = classification_result
         self.result.ok = bool(
             classification_result.continue_pipeline
