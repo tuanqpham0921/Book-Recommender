@@ -47,26 +47,34 @@ def task(
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
             time_start = time.perf_counter()
-            result = None
             try:
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
                 
-                result = await func(*args, **kwargs)
-                result.name = func_ref
+                output = await func(*args, **kwargs)
+                
+                # custom operation result retuned from the task
+                # the task must validate ok and message
+                if isinstance(output, OperationResult):
+                    output.name = func_ref
+                    output.duration = round(time.perf_counter() - time_start, 2)
+                    return output
+                
+                # task is not returning an operation result, create a default one
+                # no run time error is recorded, so the task is considered successful
+                result = OperationResult(name=func_ref, output=output, output_type=type(output))
                 result.duration = round(time.perf_counter() - time_start, 2)
+                result.ok = True
+                result.message = f"Task {func_ref} completed successfully"
+                result.details = {"output_note": "output is not an operation result, creating a default one"}
                 return result
             except Exception as e:
-                # in case the task is not returning a result, create a default one
-                if result is None:
-                    result = OperationResult(name=func_ref)
-                    
+                # run time error is recorded, so the task is considered failed
+                result = OperationResult(name=func_ref)
                 result.ok = False
                 result.message = f"Task {func_ref} failed: {e}"
                 result.run_time_error = format_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
-                logger.exception(f"Task {func_ref} failed: {e}")
-                # or raise the exception
                 return result
                 
         return wrapper
