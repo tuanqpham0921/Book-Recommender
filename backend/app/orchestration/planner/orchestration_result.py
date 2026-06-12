@@ -46,6 +46,17 @@ class OrchestrationResult(BaseModel):
     task_plan: TaskPlan | None = None
     total_tokens: int = 0
 
+    def to_save_dict(self) -> dict[str, Any]:
+        from common.utils.save_file import _to_jsonable
+
+        return _to_jsonable(self.model_dump())
+
+    def save(self, file_name: str = "orchestration_outcome-dev") -> Path:
+        save_file(self.to_save_dict(), file_name=file_name)
+        from config import FilesLocationConstants
+
+        return FilesLocationConstants.EXPORT_DIR / f"{file_name}.json"
+
 
 def build_orchestration_result(
     workflow_result: OperationResult[Any],
