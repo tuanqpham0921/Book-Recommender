@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 def _to_jsonable(value: Any) -> Any:
     """Convert app/Pydantic objects into readable JSON-compatible values."""
     if isinstance(value, BaseModel):
+        print(f"!!!!!!!!Value: {value.model_dump(mode="json")}")
         return value.model_dump(mode="json")
 
     if is_dataclass(value):
