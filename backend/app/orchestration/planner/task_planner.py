@@ -12,7 +12,7 @@ from app.domains.books.types import (
 )
 
 from app.common.base_node import BaseNode
-from common.workflow import Workflow
+from app.common.workflow import UserFacingBaseWorkflow
 from app.common.messages import UserMessage, ToolMessage
 from clients.openai_client import OpenAIClient
 from app.common.sse_stream import SSEStream
@@ -209,7 +209,7 @@ class TaskGenerationNode(BaseModel):
         return plan_result
 
 
-class TaskPlanWorkflow(Workflow[TaskPlan]):
+class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
     success_message = "Task plan created successfully"
     failure_message = "Task plan creation failed"
     ui_loading_message = "Creating task plan..."
@@ -222,10 +222,12 @@ class TaskPlanWorkflow(Workflow[TaskPlan]):
     def __init__(
         self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
     ):
-        super().__init__(output_type=TaskPlan)
-        self.sse_stream = sse_stream
+        super().__init__(
+            llm_client=llm_client,
+            sse_stream=sse_stream,
+            output_type=TaskPlan,
+        )
         self.user_message = user_message
-        self.llm_client = llm_client
 
     async def run(
         self, in_domain_message: str, node_ids: dict[str, BaseNode]

@@ -5,7 +5,7 @@ from app.common.prompt_loader import load_prompt
 from app.common.sse_stream import SSEStream
 from clients import OpenAIParserRequest
 
-from common.workflow import Workflow
+from app.common.workflow import UserFacingBaseWorkflow
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 
@@ -64,7 +64,7 @@ class InitialParseNode(InitialParseBase):
         )
 
 
-class InitialParseWorkflow(Workflow[InitialParseResult]):
+class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
 
@@ -81,11 +81,12 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
     def __init__(
         self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
     ):
-        super().__init__(output_type=self.output_schema)
-
-        self.sse_stream = sse_stream
+        super().__init__(
+            llm_client=llm_client,
+            sse_stream=sse_stream,
+            output_type=self.output_schema,
+        )
         self.user_message = user_message
-        self.llm_client = llm_client
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading("Thinking...")
@@ -116,5 +117,4 @@ class InitialParseWorkflow(Workflow[InitialParseResult]):
         await self.generate_user_response(
             parse_result.to_llm_messages(),
             prompt=self.user_prompt,
-            sse_stream=self.sse_stream,
         )

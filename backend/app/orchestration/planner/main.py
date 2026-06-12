@@ -5,18 +5,20 @@ from app.orchestration.request_context import RequestContext
 from app.orchestration.planner.parse_intent import InitialParseWorkflow
 from app.orchestration.planner.strategy_classification import StrategyClassificationWorkflow
 from app.orchestration.planner.task_planner import TaskPlanWorkflow
-from common.workflow import Workflow
+from app.common.workflow import UserFacingBaseWorkflow
 
-class ConversationOrchestrator(Workflow[None]):
+class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
     initial_parse_failure_message = "I couldn't understand your request. Please try again."
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
     
     def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
-        super().__init__(output_type=None)
-        self.sse_stream = sse_stream
+        super().__init__(
+            llm_client=llm_client,
+            sse_stream=sse_stream,
+            output_type=None,
+        )
         self.user_message = user_message
-        self.llm_client = llm_client
         
     async def run(self, request_context: RequestContext) -> None:
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)

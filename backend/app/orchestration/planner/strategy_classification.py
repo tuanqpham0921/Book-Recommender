@@ -8,7 +8,7 @@ from app.common.sse_stream import SSEStream
 from app.domains.books.schemas import ClassificationStrategy
 from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
-from common.workflow import Workflow
+from app.common.workflow import UserFacingBaseWorkflow
 from config import BookConstraints, BookGuides
 
 
@@ -45,7 +45,7 @@ class StrategyClassificationNode(BaseModel):
         return result
 
 
-class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
+class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificationResult]):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
     ui_loading_message = "Classifying user query..."
@@ -61,10 +61,12 @@ class StrategyClassificationWorkflow(Workflow[StrategyClassificationResult]):
     def __init__(
         self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
     ):
-        super().__init__(output_type=StrategyClassificationResult)
-        self.sse_stream = sse_stream
+        super().__init__(
+            llm_client=llm_client,
+            sse_stream=sse_stream,
+            output_type=StrategyClassificationResult,
+        )
         self.user_message = user_message
-        self.llm_client = llm_client
 
     async def run(self, in_domain_message: str) -> StrategyClassificationResult:
         """Classify the user query into book-related strategies."""
