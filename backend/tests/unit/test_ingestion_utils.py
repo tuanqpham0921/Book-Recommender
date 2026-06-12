@@ -1,4 +1,4 @@
-from ingestion.utils import normalize_field, row_to_book
+from db.ingestion.utils import normalize_field, row_to_book
 from conftest import sample_books
 from db.schema.models import BookModel
 import pytest

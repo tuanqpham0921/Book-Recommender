@@ -14,9 +14,9 @@ from config import (
 )
 from db import bootstrap_schema, is_ready
 from db.schema import BookModel
-from ingestion.embeddings import embed_missing_books
-from ingestion.store import store_books_from_csv
-from ingestion.utils import count_csv_data_rows
+from db.ingestion.embeddings import embed_missing_books
+from db.ingestion.store import store_books_from_csv
+from db.ingestion.utils import count_csv_data_rows
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from clients.openai_client import OpenAIClient
 

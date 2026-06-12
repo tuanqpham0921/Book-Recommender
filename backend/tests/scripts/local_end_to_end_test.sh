@@ -25,7 +25,7 @@ make docker-clean-all
 make postgres-start
 sleep 5
 
-LOG_LEVEL=INFO poetry run python -m ingestion.main
+LOG_LEVEL=INFO poetry run python -m db.ingestion.main
 
 LOG_LEVEL=INFO poetry run uvicorn app.main:app --host 127.0.0.1 --port 8000 &
 APP_PID=$!

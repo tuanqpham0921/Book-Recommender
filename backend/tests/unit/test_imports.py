@@ -3,5 +3,5 @@
 def test_core_modules_import():
     import config
     import db.bootstrap
-    import ingestion.main
-    import ingestion.utils
+    import db.ingestion.main
+    import db.ingestion.utils

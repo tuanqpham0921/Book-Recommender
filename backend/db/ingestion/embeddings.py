@@ -10,7 +10,7 @@ from typing import Any, AsyncIterator
 import logging, asyncio
 logger = logging.getLogger(__name__)
 
-from ingestion.store import store_book_embedding, iter_missing_embeddings
+from db.ingestion.store import store_book_embedding, iter_missing_embeddings
 
 def _get_embedding_text(book: dict) -> str:
     """Canonical text used for book description embeddings."""

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import update
 from db.schema import BookModel
-from ingestion.utils import count_csv_data_rows, iter_books_from_csv
+from db.ingestion.utils import count_csv_data_rows, iter_books_from_csv
 from common.operation import OperationResult, task
 from db.readiness import ReadinessResult
 import logging

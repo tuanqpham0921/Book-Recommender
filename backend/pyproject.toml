@@ -7,8 +7,7 @@ packages = [
     { include = "app" },
     { include = "common" },
     { include = "db" },
-    { include = "config" },
-    { include = "ingestion" }
+    { include = "config" }
 ]
 
 [tool.pytest.ini_options]
@@ -44,5 +43,5 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-ingestion = "ingestion.main:main"
+ingestion = "db.ingestion.main:main"
 app = "app.main:main"

@@ -23,7 +23,7 @@ dev:
 # run the ingestion script
 .PHONY: ingestion
 ingestion:
-	LOG_LEVEL=INFO poetry run python -m ingestion.main
+	LOG_LEVEL=INFO poetry run python -m db.ingestion.main
 
 # clear the pycache
 .PHONY: clean
