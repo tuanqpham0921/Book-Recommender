@@ -9,10 +9,14 @@ from typing import Union, Dict, Optional, List, Literal, Any
 
 from app.common.enums import Role
 
+from abc import ABC, abstractmethod
 
-class BaseMessage(BaseModel):
+class BaseMessage(BaseModel, ABC):
+
+    @abstractmethod
     def to_openai_dict(self) -> Dict:
-        raise NotImplementedError
+        ...
+    
 
 
 # --- Role-specific Messages ---
@@ -34,17 +38,21 @@ class UserMessage(BaseMessage):
     def to_openai_dict(self) -> Dict:
         return {"role": self.role, "content": self.content}
 
+class TokenUsage(BaseModel):
+    total: int
+    prompt: int
+    completion: int
 
 class AssistantMessage(BaseMessage):
     role: Literal[Role.ASSISTANT] = Role.ASSISTANT
     id: Optional[str] = None
     content: Optional[str] = None
     tool_calls: Optional[List[ParsedFunctionToolCall]] = None
-    elapsed: Optional[float] = None
     refusal: Optional[str] = None
     created: Optional[str] = Field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
+    token_usage: Optional[TokenUsage] = None
 
     def to_openai_dict(self) -> Dict:
         base = {"role": self.role}
@@ -81,7 +89,6 @@ class ToolMessage(BaseMessage):
         }
 
 
-# --- Discriminated Union of Messages ---
 APIMessage = Annotated[
     Union[SystemMessage, UserMessage, AssistantMessage, ToolMessage],
     Field(discriminator="role"),

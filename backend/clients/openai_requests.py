@@ -37,6 +37,7 @@ class OpenAIBaseRequest(BaseLLMRequest):
             "temperature": self.temperature,
             "top_p": self.top_p,
             "seed": self.seed,
+            "stream_options": {"include_usage": True},
         }
     
     def to_payload(self) -> dict[str, Any]:
@@ -73,15 +74,14 @@ class OpenAIParserRequest(OpenAIBaseRequest):
 
 @dataclass(kw_only=True)
 class OpenAIChatRequest(OpenAIBaseRequest):
-    """ Support only sse stream """
+    """ Support only sse stream no tool choice """
     def __post_init__(self):
         if not self.sse_stream:
             raise ValueError("Usage error: sse_stream must be provided")
         
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
-        if self.sse_stream:
-            payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
+        payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
         return payload
     
 @dataclass(kw_only=True)

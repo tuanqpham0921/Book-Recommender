@@ -8,7 +8,7 @@ from .openai_requests import OpenAIBaseRequest
 from .base import BaseLLMClient
 
 from config.settings import OpenAISettings
-from app.common.messages import AssistantMessage
+from app.common.messages import AssistantMessage, TokenUsage
 from app.common.sse_stream import SSEStream
 from config.constants import OpenAIConstants
 import asyncio
@@ -49,31 +49,28 @@ class OpenAIClient(BaseLLMClient):
             raise
     
     @task
-    async def execute(self, req: OpenAIBaseRequest) -> OperationResult:
+    async def execute(self, req: OpenAIBaseRequest) -> AssistantMessage:
         """Execute the chat completion."""
         #TODO: add semaphore to the execute method
         
         payload = req.to_payload()
-
         final_completion = await self._chat_stream(payload, req.sse_stream)
-
+        
         response_message = final_completion.choices[0].message
         assistant_msg = AssistantMessage(
             id=final_completion.id,
             content=response_message.content,
             tool_calls=response_message.tool_calls,
             refusal=response_message.refusal,
-            elapsed=0.0,
+            token_usage= TokenUsage(
+                total=final_completion.usage.total_tokens,
+                prompt=final_completion.usage.prompt_tokens,
+                completion=final_completion.usage.completion_tokens,
+            ) if final_completion.usage else None,
+            
         )
 
-        # --- Execute ---
-        return OperationResult(
-            name="execute",
-            ok=True,
-            message="OpenAI API call completed successfully",
-            output=assistant_msg,
-            # details={"payload": payload}
-        )
+        return assistant_msg
 
 
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
