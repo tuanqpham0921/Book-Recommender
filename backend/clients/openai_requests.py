@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
-MAX_COMPLETION_TOKENS = 50
+MAX_COMPLETION_TOKENS = 300
 TEMPERATURE = 0.3
 TOP_P = 0.8
 SEED = 42

@@ -27,3 +27,23 @@ def format_exception(error: BaseException) -> dict[str, Any]:
             error.__traceback__,
         ),
     }
+    
+def remove_json_empty_values(value: Any) -> Any:
+    """Drop None, empty strings, and empty collections from summary payloads."""
+    if isinstance(value, dict):
+        cleaned = {key: remove_json_empty_values(item) for key, item in value.items()}
+        return {
+            key: item
+            for key, item in cleaned.items()
+            if item is not None and item != "" and item != [] and item != {}
+        }
+
+    if isinstance(value, list):
+        cleaned = [remove_json_empty_values(item) for item in value]
+        return [
+            item
+            for item in cleaned
+            if item is not None and item != "" and item != [] and item != {}
+        ]
+
+    return value

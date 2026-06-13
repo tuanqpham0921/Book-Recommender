@@ -41,4 +41,4 @@ Constraints:
 EXAMPLE (structure only — adapt to the actual sub_summary):
 User query: "Show me books similar to Pride and Prejudice"
 → Response:
-"I'll look up Pride and Prejudice first, then find books with a similar feel based on that reference. The plan is ready — I'll get started on that now."
+"I'll look up Pride and Prejudice first, then find books with a similar feel based on that reference. I'll get started on that now."

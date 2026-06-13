@@ -229,6 +229,8 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
     success_message = "Task plan created successfully"
     failure_message = "Task plan creation failed"
     ui_loading_message = "Creating task plan..."
+    
+    planner_failure_message = "I couldn't create a task plan for your request. Please try again."
 
     prompt = load_prompt(
         prompt_path="orchestration/planner/prompts/dependency_resolution.txt",
@@ -326,7 +328,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]
     ) -> None:
         if not self.result.ok:
-            self.sse_stream.send_error("unable to generate mermaid diagram")
+            await self.sse_stream.send_char(self.planner_failure_message)
             return
         
         from app.common.mermaid import get_mermaid_diagram
@@ -335,13 +337,8 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             diagram = get_mermaid_diagram(task_plan, node_ids)
         except Exception as e:
             logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
+            await self.sse_stream.send_char(self.planner_failure_message)
             return
 
         await self.sse_stream.send_chars("__My Plan for Your Request__")
         await self.sse_stream.send_mermaid(diagram)
-        await self.sse_stream.send_chars(
-            "_Note:_ This flow shows how your query will run.\n"
-        )
-        await self.sse_stream.send_chars(
-            "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
-        )

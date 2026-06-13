@@ -50,22 +50,6 @@ class OrchestrationOutput(UserFacingOutput):
             "task_plan": task_plan_summary,
         }
 
-    async def to_summary(
-        self,
-        workflow: UserFacingBaseWorkflow,
-        prompt_path: str,
-    ) -> dict[str, Any]:
-        sub_summary = self._sub_summary()
-        prompt = format_prompt(
-            prompt_path,
-            sub_summary=json.dumps(sub_summary, indent=2),
-        )
-        assistant_msg = await workflow.generate_user_response(
-            self.chat_messages, prompt=prompt
-        )
-        return assistant_msg.content
-
-
 class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
@@ -116,7 +100,9 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             return None
 
         if not result.ok:
-            await self.sse_stream.send_error(error_message)
+            if result.run_time_error:
+                await self.sse_stream.send_error(error_message)
+
             self.result.ok = False
             self.result.message = error_message
             return None
@@ -173,9 +159,18 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         if plan_result is None:
             return
 
-        self.output.summary = await self.output.to_summary(
-            self, self.summary_prompt_path
-        )
+        self.output.summary = await self.generate_summary()
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
         await self.sse_stream.send_divider()
+
+    async def generate_summary(self) -> str:
+        from common.utils import remove_json_empty_values
+        sub_summary = remove_json_empty_values(self.output._sub_summary())
+        prompt = format_prompt(
+            self.summary_prompt_path,
+            sub_summary=json.dumps(sub_summary, indent=2),
+        )
+        return await self.generate_user_response(
+            [self.user_message], prompt=prompt
+        )
