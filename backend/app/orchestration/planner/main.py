@@ -13,20 +13,18 @@ from app.orchestration.planner.strategy_classification import (
     StrategyClassificationResult,
 )
 from app.orchestration.planner.task_planner import TaskPlanWorkflow, TaskPlan
-from app.common.workflow import UserFacingBaseWorkflow, UserFacingWorkflowResult
+from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 
 
 @dataclass(slots=True)
-class OrchestrationResult(UserFacingWorkflowResult[None]):
+class OrchestrationOutput(UserFacingOutput):
     session_id: str | None = None
     parse_result: InitialParseResult | None = None
     strategy_result: StrategyClassificationResult | None = None
     task_plan: TaskPlan | None = None
 
 
-class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
-    result_class = OrchestrationResult
-
+class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = "I couldn't understand your request. Please try again."
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
@@ -35,13 +33,13 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
-            output_type=None,
+            output_type=OrchestrationOutput,
         )
         self.user_message = user_message
 
     async def run(self, request_context: RequestContext) -> None:
-        self.result.session_id = request_context.session_id
-        self.result.chat_messages.append(self.user_message)
+        self.output.session_id = request_context.session_id
+        self.output.chat_messages.append(self.user_message)
 
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
         initial_parse_result = await self.run_async_step(
@@ -52,10 +50,12 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
             await self.sse_stream.send_error(self.initial_parse_failure_message)
             return
 
-        self.result.parse_result = initial_parse_result.output
+        self.output.parse_result = initial_parse_result.output.parse_result
+        self.output.chat_messages.extend(initial_parse_result.output.chat_messages)
+        self.output.total_tokens += initial_parse_result.output.total_tokens
         await self.sse_stream.send_divider()
 
-        in_domain_message = initial_parse_result.output.model_dump_json(
+        in_domain_message = initial_parse_result.output.parse_result.model_dump_json(
             include={"user_query_domain", "continue_pipeline", "reasoning"}
         )
         request_context.in_domain_message = in_domain_message
@@ -72,8 +72,10 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
             await self.sse_stream.send_error(self.strategy_classification_failure_message)
             return
 
-        self.result.strategy_result = strategy_classification_result.output
-        node_ids = strategy_classification_result.output.get_accepted_node_ids()
+        self.output.strategy_result = strategy_classification_result.output.strategy_result
+        self.output.chat_messages.extend(strategy_classification_result.output.chat_messages)
+        self.output.total_tokens += strategy_classification_result.output.total_tokens
+        node_ids = strategy_classification_result.output.strategy_result.get_accepted_node_ids()
         if not node_ids:
             await self.sse_stream.send_error(self.strategy_classification_failure_message)
             return
@@ -87,7 +89,9 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
             await self.sse_stream.send_error(self.task_planner_failure_message)
             return
 
-        self.result.task_plan = task_planner_result.output
+        self.output.task_plan = task_planner_result.output.task_plan
+        self.output.chat_messages.extend(task_planner_result.output.chat_messages)
+        self.output.total_tokens += task_planner_result.output.total_tokens
         await self.sse_stream.send_divider()
 
         self.result.ok = True

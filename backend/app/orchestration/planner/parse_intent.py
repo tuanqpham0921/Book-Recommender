@@ -1,11 +1,13 @@
 import logging
 
+from dataclasses import dataclass
+
 from app.common.prompt_loader import load_prompt
 
 from app.common.sse_stream import SSEStream
 from clients import OpenAIParserRequest
 
-from app.common.workflow import UserFacingBaseWorkflow
+from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 
@@ -52,8 +54,6 @@ class InitialParseNode(InitialParseBase):
         description="Confidence between 0 and 1 that query is domain-related",
     )
 
-    # model_config = ConfigDict(json_schema_extra=_examples)
-
     async def __call__(self, confident_tuning: float = 0.5) -> InitialParseResult:
         return InitialParseResult(
             **self.model_dump(exclude={"domain_confidence"}),
@@ -64,7 +64,12 @@ class InitialParseNode(InitialParseBase):
         )
 
 
-class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
+@dataclass(slots=True)
+class InitialParseOutput(UserFacingOutput):
+    parse_result: InitialParseResult | None = None
+
+
+class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
 
@@ -75,7 +80,6 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
         prompt_path="orchestration/planner/prompts/initial_parse_response.txt"
     )
 
-    output_schema = InitialParseResult
     tool_models = [InitialParseNode]
 
     def __init__(
@@ -84,27 +88,28 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
-            output_type=self.output_schema,
+            output_type=InitialParseOutput,
         )
         self.user_message = user_message
 
-    async def run(self) -> InitialParseResult:
+    async def run(self) -> None:
         await self.sse_stream.send_ui_loading("Thinking...")
 
-        # Use pipeline conversation for internal LLM calls
         req = OpenAIParserRequest(
             prompt=self.system_prompt,
             messages=[self.user_message],
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        self.result.chat_messages.append(assistant_msg.output)
-        
-        tool_message = await self.run_async_step(ToolMessage.execute(assistant_msg.output.tool_calls[0]))
-        self.result.chat_messages.append(tool_message.output)
+        self.output.chat_messages.append(assistant_msg.output)
+
+        tool_message = await self.run_async_step(
+            ToolMessage.execute(assistant_msg.output.tool_calls[0])
+        )
+        self.output.chat_messages.append(tool_message.output)
         parse_result = InitialParseResult.model_validate(tool_message.output.content)
 
-        self.result.output = parse_result
+        self.output.parse_result = parse_result
         self.result.ok = bool(
             parse_result.continue_pipeline and parse_result.user_query_domain
         )
@@ -116,5 +121,3 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
             parse_result.to_llm_messages(),
             prompt=self.user_prompt,
         )
-        
-        return parse_result

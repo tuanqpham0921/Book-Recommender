@@ -19,6 +19,14 @@ class Workflow(ABC, Generic[OutputT]):
             output_type=output_type,
         )
         self.stop_on_failure = True
+        if output_type is not None:
+            self.result.output = output_type()
+        
+    @property
+    def output(self) -> OutputT:
+        if self.result.output is None:
+            raise RuntimeError(f"{self.workflow_ref} output was not initialized")
+        return self.result.output
 
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         time_start = time.perf_counter()

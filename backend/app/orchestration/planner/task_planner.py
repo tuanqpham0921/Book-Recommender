@@ -11,8 +11,10 @@ from app.domains.books.types import (
     SINGLE_BOOK_RETRIEVAL,
 )
 
+from dataclasses import dataclass
+
 from app.common.base_node import BaseNode
-from app.common.workflow import UserFacingBaseWorkflow
+from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from app.common.messages import UserMessage, ToolMessage
 from clients.openai_client import OpenAIClient
 from app.common.sse_stream import SSEStream
@@ -209,7 +211,12 @@ class TaskGenerationNode(BaseModel):
         return plan_result
 
 
-class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
+@dataclass(slots=True)
+class TaskPlanOutput(UserFacingOutput):
+    task_plan: TaskPlan | None = None
+
+
+class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
     success_message = "Task plan created successfully"
     failure_message = "Task plan creation failed"
     ui_loading_message = "Creating task plan..."
@@ -225,13 +232,13 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
-            output_type=TaskPlan,
+            output_type=TaskPlanOutput,
         )
         self.user_message = user_message
 
     async def run(
         self, in_domain_message: str, node_ids: dict[str, BaseNode]
-    ) -> TaskPlan:
+    ) -> None:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -261,16 +268,15 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
             temperature=0.4,
             top_p=0.5,
         )
-        # initial parsing, with no streaming or content (forcing tool)
         assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        self.result.chat_messages.append(assistant_msg.output)
-        
+        self.output.chat_messages.append(assistant_msg.output)
+
         tool_message = await self.run_async_step(
             ToolMessage.execute(assistant_msg.output.tool_calls[0], node_ids=node_ids),
             raise_on_failure=False,
         )
-        self.result.chat_messages.append(tool_message.output)
-        
+        self.output.chat_messages.append(tool_message.output)
+
         if not tool_message.ok or tool_message.output is None:
             self.result.ok = False
             self.result.message = self.failure_message
@@ -281,12 +287,10 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
         self.result.message = (
             self.success_message if self.result.ok else self.failure_message
         )
-        self.result.output = plan_result
+        self.output.task_plan = plan_result
 
         if self.result.ok:
             await self.send_mermaid(plan_result, node_ids)
-        
-        return plan_result
 
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
         from openai import pydantic_function_tool

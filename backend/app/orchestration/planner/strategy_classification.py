@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from typing import List
 
 from pydantic import BaseModel, Field
@@ -8,9 +10,8 @@ from app.common.sse_stream import SSEStream
 from app.domains.books.schemas import ClassificationStrategy
 from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
-from app.common.workflow import UserFacingBaseWorkflow
+from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from config import BookConstraints, BookGuides
-from app.common.messages import BaseMessage
 
 
 class StrategyClassificationResult(BaseModel):
@@ -46,7 +47,12 @@ class StrategyClassificationNode(BaseModel):
         return result
 
 
-class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificationResult]):
+@dataclass(slots=True)
+class StrategyClassificationOutput(UserFacingOutput):
+    strategy_result: StrategyClassificationResult | None = None
+
+
+class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificationOutput]):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
     ui_loading_message = "Classifying user query..."
@@ -65,11 +71,11 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
-            output_type=StrategyClassificationResult,
+            output_type=StrategyClassificationOutput,
         )
         self.user_message = user_message
 
-    async def run(self, in_domain_message: str) -> StrategyClassificationResult:
+    async def run(self, in_domain_message: str) -> None:
         """Classify the user query into book-related strategies."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -79,13 +85,17 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        self.result.chat_messages.append(assistant_msg.output)
-        
-        tool_message = await self.run_async_step(ToolMessage.execute(assistant_msg.output.tool_calls[0]))
-        self.result.chat_messages.append(tool_message.output)
-        classification_result = StrategyClassificationResult.model_validate(tool_message.output.content)
-        
-        self.result.output = classification_result
+        self.output.chat_messages.append(assistant_msg.output)
+
+        tool_message = await self.run_async_step(
+            ToolMessage.execute(assistant_msg.output.tool_calls[0])
+        )
+        self.output.chat_messages.append(tool_message.output)
+        classification_result = StrategyClassificationResult.model_validate(
+            tool_message.output.content
+        )
+
+        self.output.strategy_result = classification_result
         self.result.ok = bool(
             classification_result.continue_pipeline
             and not classification_result.refused
@@ -93,5 +103,3 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         self.result.message = (
             self.success_message if self.result.ok else self.failure_message
         )
-        
-        return classification_result
