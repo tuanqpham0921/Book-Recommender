@@ -88,7 +88,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
         )
         self.user_message = user_message
 
-    async def run(self, chat_messages: list[BaseMessage]) -> InitialParseResult:
+    async def run(self) -> InitialParseResult:
         await self.sse_stream.send_ui_loading("Thinking...")
 
         # Use pipeline conversation for internal LLM calls

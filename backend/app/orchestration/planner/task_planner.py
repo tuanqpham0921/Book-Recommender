@@ -230,7 +230,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
         self.user_message = user_message
 
     async def run(
-        self, in_domain_message: str, node_ids: dict[str, BaseNode], chat_messages: list[BaseMessage]
+        self, in_domain_message: str, node_ids: dict[str, BaseNode]
     ) -> TaskPlan:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
@@ -262,14 +262,15 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
             top_p=0.5,
         )
         # initial parsing, with no streaming or content (forcing tool)
-        result = await self.run_async_step(self.llm_client.execute(req))
-
-        assistant_msg = result.output
+        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
+        self.result.chat_messages.append(assistant_msg.output)
+        
         tool_message = await self.run_async_step(
-            ToolMessage.execute(assistant_msg.tool_calls[0], node_ids=node_ids),
+            ToolMessage.execute(assistant_msg.output.tool_calls[0], node_ids=node_ids),
             raise_on_failure=False,
         )
-
+        self.result.chat_messages.append(tool_message.output)
+        
         if not tool_message.ok or tool_message.output is None:
             self.result.ok = False
             self.result.message = self.failure_message

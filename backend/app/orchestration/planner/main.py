@@ -45,7 +45,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
 
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
         initial_parse_result = await self.run_async_step(
-            initial_parse(self.result.chat_messages),
+            initial_parse(),
             raise_on_failure=False,
         )
         if not initial_parse_result.ok:
@@ -64,7 +64,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
             self.sse_stream, self.user_message, self.llm_client
         )
         strategy_classification_result = await self.run_async_step(
-            strategy_classification(in_domain_message, self.result.chat_messages),
+            strategy_classification(in_domain_message),
             raise_on_failure=False,
         )
 
@@ -80,7 +80,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[None]):
 
         task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
         task_planner_result = await self.run_async_step(
-            task_planner(in_domain_message, node_ids, self.result.chat_messages),
+            task_planner(in_domain_message, node_ids),
             raise_on_failure=False,
         )
         if not task_planner_result.ok:
