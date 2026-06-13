@@ -98,10 +98,10 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        chat_messages.append(assistant_msg.output)
+        self.result.chat_messages.append(assistant_msg.output)
         
         tool_message = await self.run_async_step(ToolMessage.execute(assistant_msg.output.tool_calls[0]))
-        chat_messages.append(tool_message.output)
+        self.result.chat_messages.append(tool_message.output)
         parse_result = InitialParseResult.model_validate(tool_message.output.content)
 
         self.result.output = parse_result

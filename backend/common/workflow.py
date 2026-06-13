@@ -13,6 +13,7 @@ OutputT = TypeVar("OutputT")
 class Workflow(ABC, Generic[OutputT]):
     def __init__(self, output_type: type[OutputT] | None = None):
         self.name = self.workflow_ref
+        self.output_type = output_type
         self.result: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
             output_type=output_type,
