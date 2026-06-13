@@ -50,8 +50,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             return
 
         self.output.parse_result = initial_parse_result.output.parse_result
-        self.output.chat_messages.extend(initial_parse_result.output.chat_messages)
-        self.output.total_tokens += initial_parse_result.output.total_tokens
         await self.sse_stream.send_divider()
 
         in_domain_message = initial_parse_result.output.parse_result.model_dump_json(
@@ -71,8 +69,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             return
 
         self.output.strategy_result = strategy_classification_result.output.strategy_result
-        self.output.chat_messages.extend(strategy_classification_result.output.chat_messages)
-        self.output.total_tokens += strategy_classification_result.output.total_tokens
         node_ids = strategy_classification_result.output.strategy_result.get_accepted_node_ids()
         if not node_ids:
             await self.sse_stream.send_error(self.strategy_classification_failure_message)
@@ -88,8 +84,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             return
 
         self.output.task_plan = task_planner_result.output.task_plan
-        self.output.chat_messages.extend(task_planner_result.output.chat_messages)
-        self.output.total_tokens += task_planner_result.output.total_tokens
         await self.sse_stream.send_divider()
 
         self.result.ok = True

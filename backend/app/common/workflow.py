@@ -14,9 +14,10 @@ OutputT = TypeVar("OutputT", bound="UserFacingOutput")
 @dataclass(slots=True)
 class UserFacingOutput:
     """Domain payload stored on OperationResult.output."""
-
+    from app.common.messages import TokenUsage
+    
     chat_messages: list[APIMessage] = field(default_factory=list)
-    total_tokens: int = 0
+    token_usage: TokenUsage = field(default_factory=TokenUsage)
 
 
 class UserFacingBaseWorkflow(Workflow[OutputT]):
@@ -29,6 +30,29 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         super().__init__(output_type)
         self.llm_client = llm_client
         self.sse_stream = sse_stream
+        
+    def _merge_user_facing_output(self, output: Any) -> None:        
+        if output is None:
+            return
+        
+        self.output.token_usage.total += output.token_usage.total
+        self.output.token_usage.prompt += output.token_usage.prompt
+        self.output.token_usage.completion += output.token_usage.completion
+        
+    def add_step(self, step: OperationResult[Any], *, raise_on_failure: bool = True) -> OperationResult[Any]:
+        step = super().add_step(step, raise_on_failure=raise_on_failure)
+        output = step.output
+        
+        if isinstance(output, UserFacingOutput):
+            self.output.chat_messages.extend(output.chat_messages)
+            self._merge_user_facing_output(output)
+        elif isinstance(output, AssistantMessage):
+            self.output.chat_messages.append(output)
+            self._merge_user_facing_output(output)
+        elif isinstance(output, ToolMessage):
+            self.output.chat_messages.append(output)
+            
+        return step
 
     async def generate_user_response(
         self, messages: list[BaseMessage], prompt: str
@@ -43,20 +67,12 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
             top_p=1.0,
         )
         result = await self.run_async_step(self.llm_client.execute(req))
-        if isinstance(result.output, AssistantMessage):
-            self.output.chat_messages.append(result.output)
-            if result.output.token_usage:
-                self.output.total_tokens += result.output.token_usage.total
         return result
 
     async def run_llm_call(self, req: BaseLLMRequest) -> AssistantMessage:
         assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        self.output.chat_messages.append(assistant_msg.output)
-        if assistant_msg.output.token_usage:
-            self.output.total_tokens += assistant_msg.output.token_usage.total
         return assistant_msg
     
     async def run_tool_call(self, tool_call: ParsedFunctionToolCall, **kwargs) -> ToolMessage:
         tool_message = await self.run_async_step(ToolMessage.execute(tool_call, **kwargs))
-        self.output.chat_messages.append(tool_message.output)
         return tool_message

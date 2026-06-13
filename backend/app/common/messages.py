@@ -39,9 +39,9 @@ class UserMessage(BaseMessage):
         return {"role": self.role, "content": self.content}
 
 class TokenUsage(BaseModel):
-    total: int
-    prompt: int
-    completion: int
+    total: int = Field(default=0)
+    prompt: int = Field(default=0)
+    completion: int = Field(default=0)
 
 class AssistantMessage(BaseMessage):
     role: Literal[Role.ASSISTANT] = Role.ASSISTANT
@@ -52,7 +52,7 @@ class AssistantMessage(BaseMessage):
     created: Optional[str] = Field(
         default_factory=lambda: datetime.now(UTC).isoformat()
     )
-    token_usage: Optional[TokenUsage] = None
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
     def to_openai_dict(self) -> Dict:
         base = {"role": self.role}
