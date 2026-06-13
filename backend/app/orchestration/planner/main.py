@@ -57,7 +57,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         in_domain_message = initial_parse_result.output.parse_result.model_dump_json(
             include={"user_query_domain", "continue_pipeline", "reasoning"}
         )
-        request_context.in_domain_message = in_domain_message
 
         strategy_classification = StrategyClassificationWorkflow(
             self.sse_stream, self.user_message, self.llm_client

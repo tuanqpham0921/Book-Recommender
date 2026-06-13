@@ -26,8 +26,3 @@ class RequestContext:
     llm_client: OpenAIClient
     book_store: BookStore
     sse_stream: SSEStream
-    
-    # in-domain message
-    # TODO: move this elsewhere
-    # need it for legacy reasons for now
-    in_domain_message: str | None = None
