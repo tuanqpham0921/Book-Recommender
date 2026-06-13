@@ -277,14 +277,16 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             return
 
         plan_result = TaskPlan.model_validate(tool_message.output.content)
+        self.finalize_result(plan_result)
+        
+        await self.send_mermaid(plan_result, node_ids)
+        
+    def finalize_result(self, plan_result: TaskPlan) -> None:
         self.result.ok = 1 <= len(plan_result.execution_order) <= MAX_TASKS
         self.result.message = (
             self.success_message if self.result.ok else self.failure_message
         )
         self.output.task_plan = plan_result
-
-        if self.result.ok:
-            await self.send_mermaid(plan_result, node_ids)
 
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
         from openai import pydantic_function_tool
@@ -317,6 +319,10 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
     async def send_mermaid(
         self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]
     ) -> None:
+        if not self.result.ok:
+            self.sse_stream.send_error("unable to generate mermaid diagram")
+            return
+        
         from app.common.mermaid import get_mermaid_diagram
 
         try:

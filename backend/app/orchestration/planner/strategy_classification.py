@@ -90,7 +90,9 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         classification_result = StrategyClassificationResult.model_validate(
             tool_message.output.content
         )
+        self.finalize_result(classification_result)
 
+    def finalize_result(self, classification_result: StrategyClassificationResult) -> None:
         self.output.strategy_result = classification_result
         self.result.ok = bool(
             classification_result.continue_pipeline

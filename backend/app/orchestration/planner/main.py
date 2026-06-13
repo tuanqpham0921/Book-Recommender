@@ -12,7 +12,7 @@ from app.orchestration.planner.strategy_classification import (
     StrategyClassificationWorkflow,
     StrategyClassificationResult,
 )
-from app.orchestration.planner.task_planner import TaskPlanWorkflow, TaskPlan
+from app.orchestration.planner.task_planner import TaskPlanWorkflow, TaskPlan, TaskPlanOutput
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 
 
@@ -83,8 +83,10 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             await self.sse_stream.send_error(self.task_planner_failure_message)
             return
 
-        self.output.task_plan = task_planner_result.output.task_plan
+        self.finalize_result(task_planner_result)
         await self.sse_stream.send_divider()
 
+    def finalize_result(self, task_planner_result: TaskPlanOutput) -> None:
+        self.output.task_plan = task_planner_result.output.task_plan
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"

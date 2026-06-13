@@ -105,15 +105,18 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         tool_message = await self.run_tool_call(assistant_msg.output.tool_calls[0])
         parse_result = InitialParseResult.model_validate(tool_message.output.content)
 
+        await self.generate_user_response(
+            parse_result.to_llm_messages(),
+            prompt=self.user_prompt,
+        )
+        self.finalize_result(parse_result)
+        
+        
+    def finalize_result(self, parse_result: InitialParseResult) -> None:
         self.output.parse_result = parse_result
         self.result.ok = bool(
             parse_result.continue_pipeline and parse_result.user_query_domain
         )
         self.result.message = (
             self.success_message if self.result.ok else self.failure_message
-        )
-
-        await self.generate_user_response(
-            parse_result.to_llm_messages(),
-            prompt=self.user_prompt,
         )
