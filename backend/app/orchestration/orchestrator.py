@@ -5,7 +5,6 @@ from app.orchestration.request_context import RequestContext
 
 from common.utils import save_file
 from app.orchestration.planner.main import ConversationOrchestrator
-from app.orchestration.planner.orchestration_result import OrchestrationResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +45,4 @@ class Orchestrator:
         finally:
             if result is not None:
                 save_file(result, file_name="orchestration_result-dev")
-                if isinstance(result.output, OrchestrationResult):
-                    file_name = f"orchestration_outcome-{request_context.session_id}"
-                    result.output.save(file_name=file_name)
             await sse_stream.close()

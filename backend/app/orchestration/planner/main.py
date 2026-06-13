@@ -6,10 +6,21 @@ from app.orchestration.planner.parse_intent import InitialParseWorkflow
 from app.orchestration.planner.strategy_classification import StrategyClassificationWorkflow
 from app.orchestration.planner.task_planner import TaskPlanWorkflow
 from app.common.workflow import UserFacingBaseWorkflow
-from app.orchestration.planner.orchestration_result import (
-    OrchestrationResult,
-    build_orchestration_result,
-)
+
+from app.common.messages import BaseMessage
+from pydantic import BaseModel, Field
+from app.orchestration.planner.parse_intent import InitialParseResult
+from app.orchestration.planner.strategy_classification import StrategyClassificationResult
+from app.orchestration.planner.task_planner import TaskPlan
+
+class OrchestrationResult(BaseModel):
+    session_id: str | None = None
+    pipeline_messages: list[BaseMessage] = Field(default_factory=list)
+    chat_messages: list[BaseMessage] = Field(default_factory=list)
+    parse_result: InitialParseResult | None = None
+    strategy_result: StrategyClassificationResult | None = None
+    task_plan: TaskPlan | None = None
+    total_tokens: int = 0
 
 
 class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationResult]):
@@ -25,20 +36,21 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationResult]):
         )
         self.user_message = user_message
         self.session_id: str | None = None
+        self.chat_messages: list[BaseMessage] = []
 
     def _set_output(self) -> None:
-        self.result.output = build_orchestration_result(
-            self.result,
-            user_message=self.user_message,
+        self.result.output = OrchestrationResult(
             session_id=self.session_id,
+            chat_messages=self.chat_messages,
         )
 
     async def run(self, request_context: RequestContext) -> None:
         self.session_id = request_context.session_id
-
+        self.chat_messages.append(self.user_message)
+        
         initial_parse = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
         initial_parse_result = await self.run_async_step(
-            initial_parse(),
+            initial_parse(self.chat_messages),
             raise_on_failure=False,
         )
         if not initial_parse_result.ok:
@@ -57,7 +69,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationResult]):
             self.sse_stream, self.user_message, self.llm_client
         )
         strategy_classification_result = await self.run_async_step(
-            strategy_classification(in_domain_message),
+            strategy_classification(in_domain_message, self.chat_messages),
             raise_on_failure=False,
         )
 
@@ -74,7 +86,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationResult]):
 
         task_planner = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
         task_planner_result = await self.run_async_step(
-            task_planner(in_domain_message, node_ids),
+            task_planner(in_domain_message, node_ids, self.chat_messages),
             raise_on_failure=False,
         )
         if not task_planner_result.ok:

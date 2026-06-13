@@ -230,7 +230,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
         self.user_message = user_message
 
     async def run(
-        self, in_domain_message: str, node_ids: dict[str, BaseNode]
+        self, in_domain_message: str, node_ids: dict[str, BaseNode], chat_messages: list[BaseMessage]
     ) -> TaskPlan:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
@@ -284,6 +284,8 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlan]):
 
         if self.result.ok:
             await self.send_mermaid(plan_result, node_ids)
+        
+        return plan_result
 
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
         from openai import pydantic_function_tool

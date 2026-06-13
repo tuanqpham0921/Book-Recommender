@@ -88,7 +88,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
         )
         self.user_message = user_message
 
-    async def run(self) -> None:
+    async def run(self, chat_messages: list[BaseMessage]) -> InitialParseResult:
         await self.sse_stream.send_ui_loading("Thinking...")
 
         # Use pipeline conversation for internal LLM calls
@@ -97,13 +97,11 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
             messages=[self.user_message],
             tool_models=self.tool_models,
         )
-        llm_result = await self.run_async_step(self.llm_client.execute(req))
-        assistant_msg = llm_result.output
-
-        tool_message = await self.run_async_step(
-            ToolMessage.execute(assistant_msg.tool_calls[0])
-        )
-
+        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
+        chat_messages.append(assistant_msg.output)
+        
+        tool_message = await self.run_async_step(ToolMessage.execute(assistant_msg.output.tool_calls[0]))
+        chat_messages.append(tool_message.output)
         parse_result = InitialParseResult.model_validate(tool_message.output.content)
 
         self.result.output = parse_result
@@ -118,3 +116,5 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseResult]):
             parse_result.to_llm_messages(),
             prompt=self.user_prompt,
         )
+        
+        return parse_result

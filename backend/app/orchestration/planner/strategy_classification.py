@@ -10,6 +10,7 @@ from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
 from app.common.workflow import UserFacingBaseWorkflow
 from config import BookConstraints, BookGuides
+from app.common.messages import BaseMessage
 
 
 class StrategyClassificationResult(BaseModel):
@@ -68,7 +69,7 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         )
         self.user_message = user_message
 
-    async def run(self, in_domain_message: str) -> StrategyClassificationResult:
+    async def run(self, in_domain_message: str, chat_messages: list[BaseMessage]) -> StrategyClassificationResult:
         """Classify the user query into book-related strategies."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -77,15 +78,13 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
             messages=[AssistantMessage(content=in_domain_message)],
             tool_models=self.tool_models,
         )
-        llm_result = await self.run_async_step(self.llm_client.execute(req))
-
-        assistant_msg = llm_result.output
-
-        tool_message = await self.run_async_step(
-            ToolMessage.execute(assistant_msg.tool_calls[0])
-        )
-
+        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
+        chat_messages.append(assistant_msg.output)
+        
+        tool_message = await self.run_async_step(ToolMessage.execute(assistant_msg.output.tool_calls[0]))
+        chat_messages.append(tool_message.output)
         classification_result = StrategyClassificationResult.model_validate(tool_message.output.content)
+        
         self.result.output = classification_result
         self.result.ok = bool(
             classification_result.continue_pipeline
@@ -94,3 +93,5 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         self.result.message = (
             self.success_message if self.result.ok else self.failure_message
         )
+        
+        return classification_result
