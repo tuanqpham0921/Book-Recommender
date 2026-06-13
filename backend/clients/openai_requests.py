@@ -16,6 +16,7 @@ TEMPERATURE = 0.3
 TOP_P = 0.8
 SEED = 42
 
+
 @dataclass(kw_only=True)
 class OpenAIBaseRequest(BaseLLMRequest):
     model: str = settings.openai.BASE_MODEL
@@ -39,16 +40,18 @@ class OpenAIBaseRequest(BaseLLMRequest):
             "seed": self.seed,
             "stream_options": {"include_usage": True},
         }
-    
+
     def to_payload(self) -> dict[str, Any]:
         return self.base_payload()
 
+
 @dataclass(kw_only=True)
 class OpenAIParserRequest(OpenAIBaseRequest):
-    """ Support only one tool model for parsing 1 request"""
+    """Support only one tool model for parsing 1 request"""
+
     tool_models: list[type]
     tool_override: dict | None = None
-    
+
     def __post_init__(self):
         if len(self.tool_models) != 1:
             raise ValueError("tool_models must be a list of exactly one tool model")
@@ -56,7 +59,11 @@ class OpenAIParserRequest(OpenAIBaseRequest):
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
 
-        payload["tools"] = [self.to_function_tools()] if not self.tool_override else [self.tool_override]
+        payload["tools"] = (
+            [self.to_function_tools()]
+            if not self.tool_override
+            else [self.tool_override]
+        )
         payload["tool_choice"] = {
             "type": "function",
             "function": {"name": self.tool_models[0].__name__},
@@ -72,26 +79,31 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         )
         return tool
 
+
 @dataclass(kw_only=True)
 class OpenAIChatRequest(OpenAIBaseRequest):
-    """ Support only sse stream no tool choice """
+    """Support only sse stream no tool choice"""
+
     def __post_init__(self):
         if not self.sse_stream:
             raise ValueError("Usage error: sse_stream must be provided")
-        
+
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
         payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
         return payload
-    
+
+
 @dataclass(kw_only=True)
 class OpenAIToolRequest(OpenAIBaseRequest):
-    """ Support both sse stream and tool choice """
+    """Support both sse stream and tool choice"""
+
     tool_models: list[type]
+
     def __post_init__(self):
         if not self.tool_models:
             raise ValueError("Usage error: tool_models must be a list of tool models")
-        
+
     def to_function_tools(self) -> list[dict]:
         tools = []
         for tool_model in self.tool_models:
@@ -101,14 +113,13 @@ class OpenAIToolRequest(OpenAIBaseRequest):
                 name=tool_name,
                 # TODO: this is a different description for each tool
                 # and different from the parser request
-                description=f"Fill the schema for {tool_name}", 
+                description=f"Fill the schema for {tool_name}",
             )
             tools.append(tool)
         return tools
-    
+
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
         payload["tools"] = self.to_function_tools()
         payload["tool_choice"] = "auto" if len(self.tool_models) else "none"
         return payload
-    

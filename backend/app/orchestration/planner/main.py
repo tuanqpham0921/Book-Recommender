@@ -1,3 +1,4 @@
+import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
@@ -23,6 +24,7 @@ from app.orchestration.planner.task_planner import (
 )
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from common.operation import OperationResult
+from app.common.prompt_loader import format_prompt
 
 ChildWorkflowT = TypeVar("ChildWorkflowT", bound=UserFacingBaseWorkflow)
 
@@ -33,22 +35,51 @@ class OrchestrationOutput(UserFacingOutput):
     parse_result: InitialParseResult | None = None
     strategy_result: StrategyClassificationResult | None = None
     task_plan: TaskPlan | None = None
-    
-    def to_summary(self) -> dict[str, Any]:
+
+    def _sub_summary(self) -> dict[str, Any]:
+        parse_summary = self.parse_result.to_summary() if self.parse_result else None
+        strategy_summary = (
+            self.strategy_result.to_summary() if self.strategy_result else None
+        )
+        task_plan_summary = self.task_plan.to_summary() if self.task_plan else None
+
         return {
             "session_id": self.session_id,
-            "parse_result": self.parse_result.summary() if self.parse_result else None,
-            "strategy_result": self.strategy_result.summary() if self.strategy_result else None,
-            "task_plan": self.task_plan.summary() if self.task_plan else None,
+            "parse_result": parse_summary,
+            "strategy_result": strategy_summary,
+            "task_plan": task_plan_summary,
         }
+
+    async def to_summary(
+        self,
+        workflow: UserFacingBaseWorkflow,
+        prompt_path: str,
+    ) -> dict[str, Any]:
+        sub_summary = self._sub_summary()
+        prompt = format_prompt(
+            prompt_path,
+            sub_summary=json.dumps(sub_summary, indent=2),
+        )
+        assistant_msg = await workflow.generate_user_response(
+            self.chat_messages, prompt=prompt
+        )
+        return assistant_msg.content
 
 
 class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
-    initial_parse_failure_message = "I couldn't understand your request. Please try again."
+    initial_parse_failure_message = (
+        "I couldn't understand your request. Please try again."
+    )
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
-    def __init__(self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient):
+    summary_prompt_path = (
+        "orchestration/planner/prompts/conversation_orchestration_summary.txt"
+    )
+
+    def __init__(
+        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
+    ):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
@@ -83,7 +114,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         result = await self.run_async_step(workflow_call(), raise_on_failure=False)
         if result is None:
             return None
-        
+
         if not result.ok:
             await self.sse_stream.send_error(error_message)
             self.result.ok = False
@@ -142,7 +173,9 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         if plan_result is None:
             return
 
-        self.output.summary = self.output.to_summary()
+        self.output.summary = await self.output.to_summary(
+            self, self.summary_prompt_path
+        )
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
         await self.sse_stream.send_divider()

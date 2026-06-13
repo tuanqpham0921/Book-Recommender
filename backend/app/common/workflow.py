@@ -80,7 +80,8 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
             temperature=0.7,
             top_p=1.0,
         )
-        return await self.run_async_step(self.llm_client.execute(req))
+        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
+        return assistant_msg.output
 
     async def run_llm_call(self, req: BaseLLMRequest) -> AssistantMessage:
         result = await self.run_async_step(self.llm_client.execute(req))
