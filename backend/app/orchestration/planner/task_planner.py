@@ -269,24 +269,20 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             top_p=0.5,
         )
         assistant_msg = await self.run_llm_call(req)
-        tool_message = await self.run_tool_call(assistant_msg.output.tool_calls[0], node_ids=node_ids)
+        tool_message = await self.run_tool_call(
+            assistant_msg.tool_calls[0], node_ids=node_ids
+        )
 
-        if not tool_message.ok or tool_message.output is None:
-            self.result.ok = False
-            self.result.message = self.failure_message
-            return
-
-        plan_result = TaskPlan.model_validate(tool_message.output.content)
+        plan_result = TaskPlan.model_validate(tool_message.content)
         self.finalize_result(plan_result)
         
         await self.send_mermaid(plan_result, node_ids)
         
     def finalize_result(self, plan_result: TaskPlan) -> None:
-        self.result.ok = 1 <= len(plan_result.execution_order) <= MAX_TASKS
-        self.result.message = (
-            self.success_message if self.result.ok else self.failure_message
-        )
         self.output.task_plan = plan_result
+        super().finalize_result(
+            ok=1 <= len(plan_result.execution_order) <= MAX_TASKS
+        )
 
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
         from openai import pydantic_function_tool

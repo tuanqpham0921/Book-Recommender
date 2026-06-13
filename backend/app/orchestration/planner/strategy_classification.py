@@ -86,18 +86,18 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         )
         assistant_msg = await self.run_llm_call(req)
 
-        tool_message = await self.run_tool_call(assistant_msg.output.tool_calls[0])
+        tool_message = await self.run_tool_call(assistant_msg.tool_calls[0])
         classification_result = StrategyClassificationResult.model_validate(
-            tool_message.output.content
+            tool_message.content
         )
         self.finalize_result(classification_result)
 
     def finalize_result(self, classification_result: StrategyClassificationResult) -> None:
         self.output.strategy_result = classification_result
-        self.result.ok = bool(
-            classification_result.continue_pipeline
-            and not classification_result.refused
-        )
-        self.result.message = (
-            self.success_message if self.result.ok else self.failure_message
+        super().finalize_result(
+            ok=bool(
+                classification_result.continue_pipeline
+                and not classification_result.refused
+                and classification_result.get_accepted_node_ids()
+            )
         )

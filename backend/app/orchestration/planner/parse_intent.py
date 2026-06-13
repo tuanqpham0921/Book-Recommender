@@ -102,8 +102,8 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         )
         assistant_msg = await self.run_llm_call(req)
 
-        tool_message = await self.run_tool_call(assistant_msg.output.tool_calls[0])
-        parse_result = InitialParseResult.model_validate(tool_message.output.content)
+        tool_message = await self.run_tool_call(assistant_msg.tool_calls[0])
+        parse_result = InitialParseResult.model_validate(tool_message.content)
 
         await self.generate_user_response(
             parse_result.to_llm_messages(),
@@ -114,9 +114,6 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         
     def finalize_result(self, parse_result: InitialParseResult) -> None:
         self.output.parse_result = parse_result
-        self.result.ok = bool(
-            parse_result.continue_pipeline and parse_result.user_query_domain
-        )
-        self.result.message = (
-            self.success_message if self.result.ok else self.failure_message
+        super().finalize_result(
+            ok=bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         )

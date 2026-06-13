@@ -1,6 +1,6 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from app.common.sse_stream import SSEStream
 from app.common.messages import UserMessage
@@ -8,15 +8,23 @@ from clients.openai_client import OpenAIClient
 from app.orchestration.request_context import RequestContext
 from app.orchestration.planner.parse_intent import (
     InitialParseWorkflow,
+    InitialParseOutput,
     InitialParseResult,
 )
 from app.orchestration.planner.strategy_classification import (
     StrategyClassificationWorkflow,
+    StrategyClassificationOutput,
     StrategyClassificationResult,
 )
-from app.orchestration.planner.task_planner import TaskPlanWorkflow, TaskPlan
+from app.orchestration.planner.task_planner import (
+    TaskPlanWorkflow,
+    TaskPlanOutput,
+    TaskPlan,
+)
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from common.operation import OperationResult
+
+ChildWorkflowT = TypeVar("ChildWorkflowT", bound=UserFacingBaseWorkflow)
 
 
 @dataclass(slots=True)
@@ -40,6 +48,24 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
         self.user_message = user_message
 
+    def _child_workflow(self, workflow_cls: type[ChildWorkflowT]) -> ChildWorkflowT:
+        return workflow_cls(self.sse_stream, self.user_message, self.llm_client)
+
+    def add_step(
+        self, step: OperationResult[Any], *, raise_on_failure: bool = True
+    ) -> OperationResult[Any]:
+        step = super().add_step(step, raise_on_failure=raise_on_failure)
+        output = step.output
+
+        if isinstance(output, InitialParseOutput):
+            self.output.parse_result = output.parse_result
+        elif isinstance(output, StrategyClassificationOutput):
+            self.output.strategy_result = output.strategy_result
+        elif isinstance(output, TaskPlanOutput):
+            self.output.task_plan = output.task_plan
+
+        return step
+
     async def _run_phase(
         self,
         workflow_call: Callable[[], Awaitable[OperationResult[Any]]],
@@ -55,7 +81,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         return result
 
     async def _run_initial_parse(self) -> OperationResult[Any] | None:
-        workflow = InitialParseWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        workflow = self._child_workflow(InitialParseWorkflow)
         result = await self._run_phase(
             workflow,
             error_message=self.initial_parse_failure_message,
@@ -63,37 +89,22 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         if result is None:
             return None
 
-        self.output.parse_result = result.output.parse_result
         await self.sse_stream.send_divider()
         return result
 
     async def _run_strategy_classification(
         self, in_domain_message: str
     ) -> OperationResult[Any] | None:
-        workflow = StrategyClassificationWorkflow(
-            self.sse_stream, self.user_message, self.llm_client
-        )
-        result = await self._run_phase(
+        workflow = self._child_workflow(StrategyClassificationWorkflow)
+        return await self._run_phase(
             lambda: workflow(in_domain_message),
             error_message=self.strategy_classification_failure_message,
         )
-        if result is None:
-            return None
-
-        self.output.strategy_result = result.output.strategy_result
-        node_ids = result.output.strategy_result.get_accepted_node_ids()
-        if not node_ids:
-            await self.sse_stream.send_error(self.strategy_classification_failure_message)
-            self.result.ok = False
-            self.result.message = self.strategy_classification_failure_message
-            return None
-
-        return result
 
     async def _run_task_planner(
         self, in_domain_message: str, node_ids: dict
     ) -> OperationResult[Any] | None:
-        workflow = TaskPlanWorkflow(self.sse_stream, self.user_message, self.llm_client)
+        workflow = self._child_workflow(TaskPlanWorkflow)
         return await self._run_phase(
             lambda: workflow(in_domain_message, node_ids),
             error_message=self.task_planner_failure_message,
@@ -110,7 +121,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         in_domain_message = self.output.parse_result.model_dump_json(
             include={"user_query_domain", "continue_pipeline", "reasoning"}
         )
-        request_context.in_domain_message = in_domain_message
 
         strategy_result = await self._run_strategy_classification(in_domain_message)
         if strategy_result is None:
@@ -121,7 +131,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         if plan_result is None:
             return
 
-        self.output.task_plan = plan_result.output.task_plan
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
         await self.sse_stream.send_divider()
