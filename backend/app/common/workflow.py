@@ -3,9 +3,10 @@ from typing import Any, Generic, TypeVar
 
 from common.operation import OperationResult
 from common.workflow import Workflow
-from app.common.messages import APIMessage, AssistantMessage, BaseMessage
+from app.common.messages import APIMessage, AssistantMessage, BaseMessage, ToolMessage
 from app.common.sse_stream import SSEStream
-from clients.base import BaseLLMClient
+from clients.base import BaseLLMClient, BaseLLMRequest
+from openai.types.chat import ParsedFunctionToolCall
 
 OutputT = TypeVar("OutputT", bound="UserFacingOutput")
 
@@ -47,3 +48,15 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
             if result.output.token_usage:
                 self.output.total_tokens += result.output.token_usage.total
         return result
+
+    async def run_llm_call(self, req: BaseLLMRequest) -> AssistantMessage:
+        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
+        self.output.chat_messages.append(assistant_msg.output)
+        if assistant_msg.output.token_usage:
+            self.output.total_tokens += assistant_msg.output.token_usage.total
+        return assistant_msg
+    
+    async def run_tool_call(self, tool_call: ParsedFunctionToolCall, **kwargs) -> ToolMessage:
+        tool_message = await self.run_async_step(ToolMessage.execute(tool_call, **kwargs))
+        self.output.chat_messages.append(tool_message.output)
+        return tool_message

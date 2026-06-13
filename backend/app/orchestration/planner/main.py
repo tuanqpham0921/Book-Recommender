@@ -23,7 +23,6 @@ class OrchestrationOutput(UserFacingOutput):
     strategy_result: StrategyClassificationResult | None = None
     task_plan: TaskPlan | None = None
 
-
 class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = "I couldn't understand your request. Please try again."
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."

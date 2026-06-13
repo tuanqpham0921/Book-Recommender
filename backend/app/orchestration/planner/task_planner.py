@@ -268,14 +268,8 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             temperature=0.4,
             top_p=0.5,
         )
-        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        self.output.chat_messages.append(assistant_msg.output)
-
-        tool_message = await self.run_async_step(
-            ToolMessage.execute(assistant_msg.output.tool_calls[0], node_ids=node_ids),
-            raise_on_failure=False,
-        )
-        self.output.chat_messages.append(tool_message.output)
+        assistant_msg = await self.run_llm_call(req)
+        tool_message = await self.run_tool_call(assistant_msg.output.tool_calls[0], node_ids=node_ids)
 
         if not tool_message.ok or tool_message.output is None:
             self.result.ok = False

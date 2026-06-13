@@ -84,13 +84,9 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
             messages=[AssistantMessage(content=in_domain_message)],
             tool_models=self.tool_models,
         )
-        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        self.output.chat_messages.append(assistant_msg.output)
+        assistant_msg = await self.run_llm_call(req)
 
-        tool_message = await self.run_async_step(
-            ToolMessage.execute(assistant_msg.output.tool_calls[0])
-        )
-        self.output.chat_messages.append(tool_message.output)
+        tool_message = await self.run_tool_call(assistant_msg.output.tool_calls[0])
         classification_result = StrategyClassificationResult.model_validate(
             tool_message.output.content
         )
