@@ -36,6 +36,32 @@ class InitialParseResult(InitialParseBase):
         default=False, description="Should the pipeline continue?"
     )
 
+    def to_summary(self) -> dict[str, str | bool | None]:
+        return {
+            "continue_pipeline": self.continue_pipeline,
+            "intent": self._infer_intent(),
+            "query": self.user_query_domain or self.user_query,
+            "reasoning": self.reasoning,
+        }
+
+    def _infer_intent(self) -> str:
+        if self.out_of_scope:
+            return "out_of_scope"
+        if self.small_talk and not self.user_query_domain:
+            return "small_talk"
+        if not self.continue_pipeline:
+            return "unknown"
+
+        query = (self.user_query_domain or self.user_query or "").lower()
+        if any(
+            phrase in query
+            for phrase in ("similar", "recommend", "suggest", "like these", "like this")
+        ):
+            return "book_recommendation"
+        if any(phrase in query for phrase in ("compare", "versus", " vs ", "difference")):
+            return "book_comparison"
+        return "book_query"
+
     def to_llm_messages(self) -> list[BaseMessage]:
         return [
             AssistantMessage(
@@ -114,6 +140,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         
     def finalize_result(self, parse_result: InitialParseResult) -> None:
         self.output.parse_result = parse_result
+        self.output.summary = parse_result.to_summary()
         super().finalize_result(
             ok=bool(parse_result.continue_pipeline and parse_result.user_query_domain)
         )

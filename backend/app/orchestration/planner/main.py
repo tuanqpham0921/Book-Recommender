@@ -33,6 +33,14 @@ class OrchestrationOutput(UserFacingOutput):
     parse_result: InitialParseResult | None = None
     strategy_result: StrategyClassificationResult | None = None
     task_plan: TaskPlan | None = None
+    
+    def to_summary(self) -> dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "parse_result": self.parse_result.summary() if self.parse_result else None,
+            "strategy_result": self.strategy_result.summary() if self.strategy_result else None,
+            "task_plan": self.task_plan.summary() if self.task_plan else None,
+        }
 
 
 class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
@@ -73,6 +81,9 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         error_message: str,
     ) -> OperationResult[Any] | None:
         result = await self.run_async_step(workflow_call(), raise_on_failure=False)
+        if result is None:
+            return None
+        
         if not result.ok:
             await self.sse_stream.send_error(error_message)
             self.result.ok = False
@@ -131,6 +142,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         if plan_result is None:
             return
 
+        self.output.summary = self.output.to_summary()
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
         await self.sse_stream.send_divider()

@@ -47,7 +47,7 @@ class Task(BaseModel):
             return self.model_copy(
                 update={
                     "refusal": True,
-                    "reasoning": f"Task id {self.id} is not a valid node id",
+                    "reasoning": f"Task id {self.id} is not a valid node id (internal error)",
                 }
             )
 
@@ -157,6 +157,15 @@ class TaskPlan(BaseModel):
         )
 
         return order
+
+    def to_summary(self) -> dict[str, int | list[str]]:
+        return {
+            "task_count": len(self.accepted),
+            "execution_order": self.execution_order,
+            "missing_count": len(self.missing_ids),
+            "refused": [task.reasoning for task in self.refused],
+            
+        }
 
 
 class TaskGenerationNode(BaseModel):
@@ -280,6 +289,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         
     def finalize_result(self, plan_result: TaskPlan) -> None:
         self.output.task_plan = plan_result
+        self.output.summary = plan_result.to_summary()
         super().finalize_result(
             ok=1 <= len(plan_result.execution_order) <= MAX_TASKS
         )

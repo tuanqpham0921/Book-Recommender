@@ -23,6 +23,7 @@ class UserFacingOutput:
 
     chat_messages: list[APIMessage] = field(default_factory=list)
     token_usage: TokenUsage = field(default_factory=TokenUsage)
+    summary: dict[str, Any] = field(default_factory=dict)
 
 
 class UserFacingBaseWorkflow(Workflow[OutputT]):

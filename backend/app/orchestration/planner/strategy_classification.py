@@ -25,6 +25,14 @@ class StrategyClassificationResult(BaseModel):
         """Return dict of node_id -> serialized node data."""
         return {node.id: node for node in self.accepted}
 
+    def to_summary(self) -> dict[str, bool | int | list[str]]:
+        return {
+            "continue_pipeline": self.continue_pipeline,
+            "accepted_count": len(self.accepted),
+            "refused_count": len(self.refused),
+            "strategy_ids": [strategy.id for strategy in self.accepted],
+        }
+
 
 class StrategyClassificationNode(BaseModel):
     """Classification node specifically for book domain strategies."""
@@ -94,6 +102,7 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
 
     def finalize_result(self, classification_result: StrategyClassificationResult) -> None:
         self.output.strategy_result = classification_result
+        self.output.summary = classification_result.to_summary()
         super().finalize_result(
             ok=bool(
                 classification_result.continue_pipeline
