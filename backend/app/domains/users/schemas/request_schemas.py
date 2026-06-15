@@ -49,6 +49,8 @@ class UserInfoField(str, Enum):
     ALL = "all"
 
 class UserInfoRequest(BaseNode):
+    """Classification schema for User Info request"""
+    node_type: Literal[NodeType.USER_INFO] = NodeType.USER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")
     fields: list[UserInfoField] = Field(..., description="Fields to update or retrieve")
     values: dict[str, Any] = Field(default_factory=dict, description="Values to update or retrieve")
