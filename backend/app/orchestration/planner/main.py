@@ -165,6 +165,10 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         await self.sse_stream.send_divider()
 
     async def generate_summary(self) -> str:
+        # TODO: this should not be a asisstant message
+        # it should call the reponse to generate a user facing conversation
+        # if you do want to make an assistant message, you can use the generate_user_response method
+        # so it gets added to the chat messages
         from common.utils import remove_json_empty_values
         sub_summary = remove_json_empty_values(self.output._sub_summary())
         prompt = format_prompt(
