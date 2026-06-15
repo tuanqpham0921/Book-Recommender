@@ -30,7 +30,6 @@ from uuid import uuid4
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from enum import Enum
-from typing import Any
 
 from app.domains.users.types import NodeType
 
@@ -38,7 +37,7 @@ class UserInfoAction(str, Enum):
     GET = "get"
     UPDATE = "update"
 
-class UserInfoField(str, Enum):
+class UserInfoEnum(str, Enum):
     NAME = "name"
     AGE = "age"
     BIO = "bio"
@@ -52,8 +51,8 @@ class UserInfoRequest(BaseRequest):
     """Classification schema for User Info request"""
     node_type: Literal[NodeType.USER_INFO] = NodeType.USER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")
-    fields: list[UserInfoField] = Field(..., description="Fields to update or retrieve")
-    values: dict[str, Any] = Field(default_factory=dict, description="Values to update or retrieve")
+    field: UserInfoEnum = Field(..., description="Field to update or retrieve")
+    # value: Optional[str] = Field(..., description="Value to update or retrieve")
     
     def model_post_init(self, __context) -> None:
         if not self.refusal:
@@ -64,25 +63,21 @@ class UserInfoRequest(BaseRequest):
     def get_type(self) -> NodeType:
         return NodeType.USER_INFO_REQUEST
 
-class DeveloperInfoField(str, Enum):
+class DeveloperInfoEnum(str, Enum):
     NAME = "name"
     BIO = "bio"
     EMAIL = "email"
     LINKEDIN_URL = "linkedin_url"
     ALL = "all"
     
-# NOTE: This is to get my own information from the database
-# we can use update to update my own information (required developer access)
-# workflow can check if the request user is a developer to update their own information
-# going towards agentic capabilities. If the validation fails, then we can refuse the request.
-# or just safegaurd to GET functionality only
+
 class DeveloperInfoRequest(BaseRequest):
     """Classification schema for Developer Info request"""
     node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")
 
-    fields: list[DeveloperInfoField] = Field(..., description="Fields to update or retrieve")
-    values: dict[str, Any] = Field(default_factory=dict, description="Values to update or retrieve")
+    field: DeveloperInfoEnum = Field(..., description="Field to update or retrieve")
+    # value: Optional[str] = Field(..., description="Value to update or retrieve")
     
     def model_post_init(self, __context) -> None:
         if not self.refusal:

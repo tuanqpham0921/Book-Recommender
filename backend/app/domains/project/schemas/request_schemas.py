@@ -24,7 +24,6 @@ from uuid import uuid4
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from enum import Enum
-from typing import Any
 from app.domains.project.types import NodeType
 
 class FeedbackRequest(BaseRequest):
@@ -32,9 +31,10 @@ class FeedbackRequest(BaseRequest):
     node_type: Literal[NodeType.FEEDBACK] = NodeType.FEEDBACK
     # NOTE: good place to have a simple HITL (Human In The Loop) for feedback
     # something like awesome "can you please provide your email so we can get back to you? if not it's ok too"
-    contact_info: str = Field(default=None, description=
-                              "Contact information of the user providing the feedback (email, phone, etc.)"
-                            )
+    contact_info: Optional[str] = Field(
+        default=None,
+        description="Contact information of the user providing the feedback (email, phone, etc.)",
+    )
     feedback: str = Field(..., description="User's feedback to the project")
     
     def model_post_init(self, __context) -> None:
@@ -60,7 +60,6 @@ class ProjectInfoRequest(BaseRequest):
     """Classification schema for Project Info request"""
     node_type: Literal[NodeType.PROJECT_INFO] = NodeType.PROJECT_INFO
     fields: list[ProjectInfoField] = Field(..., description="Fields to update or retrieve")
-    values: dict[str, Any] = Field(default_factory=dict, description="Values to update or retrieve")
     
     def model_post_init(self, __context) -> None:
         if not self.refusal:
