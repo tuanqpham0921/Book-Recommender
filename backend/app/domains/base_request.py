@@ -1,11 +1,11 @@
 from uuid import uuid4
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional
 
-from app.domains.books.types import NodeType
+from app.domains.types import NodeType
 
 
-class BaseNode(BaseModel):
+class BaseRequest(BaseModel):
     # Only require what the user/LLM must provide
     id: str = Field(default="", description="Auto-generated unique identifier")
     description: str = Field(

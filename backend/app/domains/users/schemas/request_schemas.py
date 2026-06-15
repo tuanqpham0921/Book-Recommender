@@ -28,7 +28,7 @@ Future Plan (agentic capabilities):
 from typing import Optional, Literal, List
 from uuid import uuid4
 from pydantic import Field
-from app.common.base_node import BaseNode
+from app.domains.base_request import BaseRequest
 from enum import Enum
 from typing import Any
 
@@ -48,7 +48,7 @@ class UserInfoField(str, Enum):
     CURRENT_CONVERSATION = "current_conversation"
     ALL = "all"
 
-class UserInfoRequest(BaseNode):
+class UserInfoRequest(BaseRequest):
     """Classification schema for User Info request"""
     node_type: Literal[NodeType.USER_INFO] = NodeType.USER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")
@@ -76,7 +76,7 @@ class DeveloperInfoField(str, Enum):
 # workflow can check if the request user is a developer to update their own information
 # going towards agentic capabilities. If the validation fails, then we can refuse the request.
 # or just safegaurd to GET functionality only
-class DeveloperInfoRequest(BaseNode):
+class DeveloperInfoRequest(BaseRequest):
     """Classification schema for Developer Info request"""
     node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")

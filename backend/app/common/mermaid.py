@@ -1,7 +1,7 @@
 import re
 from typing import TYPE_CHECKING
 
-from app.common.base_node import BaseNode
+from app.domains.base_request import BaseRequest
 
 if TYPE_CHECKING:
     from app.orchestration.planner.task_planner import TaskPlan
@@ -10,7 +10,7 @@ def clean_string_mermaid(text):
     # Remove parentheses, quotes, and Mermaid-reserved symbols
     return re.sub(r'[()"\'<>{}\[\]|`#%@:;\\/]', "", text)
 
-def get_mermaid_diagram(task_plan: "TaskPlan", node_ids: dict[str, BaseNode]) -> str:
+def get_mermaid_diagram(task_plan: "TaskPlan", node_ids: dict[str, BaseRequest]) -> str:
     accepted_ids = set(task.id for task in task_plan.accepted)
     
     def is_retrieval_node(node_id: str) -> bool:

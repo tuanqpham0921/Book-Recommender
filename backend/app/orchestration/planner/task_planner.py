@@ -13,7 +13,7 @@ from app.domains.books.types import (
 
 from dataclasses import dataclass
 
-from app.common.base_node import BaseNode
+from app.domains.base_request import BaseRequest
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from app.common.messages import UserMessage, ToolMessage
 from clients.openai_client import OpenAIClient
@@ -69,7 +69,7 @@ class TaskPlan(BaseModel):
     missing_strategies: List[str] = Field(default_factory=list)
     execution_order: List[str] = Field(default_factory=list)
 
-    def validate(self, node_ids: dict[str, BaseNode]) -> None:
+    def validate(self, node_ids: dict[str, BaseRequest]) -> None:
         self._validate_dependency_rules(node_ids)
         self._validate_dependency_in_accepted(node_ids)
         self.execution_order = self._create_execution_order()
@@ -85,7 +85,7 @@ class TaskPlan(BaseModel):
                 f"Execution order mismatch. Missing={missing_ids}, extra={extra_ids}"
             )
 
-    def _validate_dependency_in_accepted(self, node_ids: dict[str, BaseNode]) -> None:
+    def _validate_dependency_in_accepted(self, node_ids: dict[str, BaseRequest]) -> None:
         accepted_ids = set(task.id for task in self.accepted)
         for task in self.accepted:
             for dep in task.depends_on:
@@ -95,7 +95,7 @@ class TaskPlan(BaseModel):
                     )
 
     # Here we should know that the ids are valid nodes
-    def _validate_dependency_rules(self, node_ids: dict[str, BaseNode]) -> None:
+    def _validate_dependency_rules(self, node_ids: dict[str, BaseRequest]) -> None:
         """Enforce the rules for accepted strategies. Add to refuse if fails"""
         valid_accepted = []
         for task in self.accepted:
@@ -248,7 +248,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         self.user_message = user_message
 
     async def run(
-        self, in_domain_message: str, node_ids: dict[str, BaseNode]
+        self, in_domain_message: str, node_ids: dict[str, BaseRequest]
     ) -> None:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
@@ -325,7 +325,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         return tool
 
     async def send_mermaid(
-        self, task_plan: TaskPlan, node_ids: dict[str, BaseNode]
+        self, task_plan: TaskPlan, node_ids: dict[str, BaseRequest]
     ) -> None:
         if not self.result.ok:
             await self.sse_stream.send_char(self.planner_failure_message)

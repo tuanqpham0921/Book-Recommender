@@ -21,19 +21,11 @@ RetrievalTask = Union[
     FindByTraitsRetrieval
 ]
 
-ClassificationStrategy = Union[
-    RetrievalTask,
-    AnalyzeTask, 
-]
 
 __all__ = [
     "BooksFilter",
     "AnalyzeTask",
     "RetrievalTask",
-    "ClassificationStrategy",
     "CompareStrategy",
     "RecommendationStrategy",
-    "FindByTitleRetrieval",
-    "FindByISBN13Retrieval",
-    "FindByTraitsRetrieval",
 ]

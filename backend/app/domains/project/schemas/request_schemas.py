@@ -22,12 +22,12 @@ so you can log in as an admin, or develop more advanced features to the system
 from typing import Optional, Literal, List
 from uuid import uuid4
 from pydantic import Field
-from app.common.base_node import BaseNode
+from app.domains.base_request import BaseRequest
 from enum import Enum
 from typing import Any
 from app.domains.project.types import NodeType
 
-class FeedbackRequest(BaseNode):
+class FeedbackRequest(BaseRequest):
     """Classification schema for Feedback request"""
     node_type: Literal[NodeType.FEEDBACK] = NodeType.FEEDBACK
     # NOTE: good place to have a simple HITL (Human In The Loop) for feedback
@@ -54,10 +54,9 @@ class ProjectInfoField(str, Enum):
     PROJECT_GITHUB_URL = "project_github_url"
     PROJECT_GITHUB_REPO_NAME = "project_github_repo_name"
     PROJECT_GITHUB_REPO_URL = "project_github_repo_url"
-    PROJECT_GITHUB_REPO_URL = "project_github_repo_url"
     ALL = "all"
     
-class ProjectInfoRequest(BaseNode):
+class ProjectInfoRequest(BaseRequest):
     """Classification schema for Project Info request"""
     node_type: Literal[NodeType.PROJECT_INFO] = NodeType.PROJECT_INFO
     fields: list[ProjectInfoField] = Field(..., description="Fields to update or retrieve")

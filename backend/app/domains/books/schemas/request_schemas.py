@@ -5,14 +5,14 @@ These are the specific schemas that the LLM should generate during classificatio
 from typing import Optional, Literal, List
 from uuid import uuid4
 from pydantic import Field
-from app.common.base_node import BaseNode
+from app.domains.base_request import BaseRequest
 from app.domains.books.types import NodeType
 from .filter_schemas import BooksFilter
 import logging
 
 logger = logging.getLogger(__name__)
 
-class CompareStrategy(BaseNode):
+class CompareStrategy(BaseRequest):
     """Classification schema for Compare Books strategy"""
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
@@ -36,7 +36,7 @@ class CompareStrategy(BaseNode):
         return NodeType.COMPARE
 
 
-class RecommendationStrategy(BaseNode):
+class RecommendationStrategy(BaseRequest):
     """AI-powered semantic recommendations"""
     node_type: Literal[NodeType.RECOMMENDATION] = NodeType.RECOMMENDATION
     semantic_input: str = Field(..., description="Thematic/conceptual description")
@@ -65,7 +65,7 @@ class RecommendationStrategy(BaseNode):
         return NodeType.RECOMMENDATION
 
 
-class FindByTitleRetrieval(BaseNode):
+class FindByTitleRetrieval(BaseRequest):
     """Classification schema for Find By Title retrieval"""
     node_type: Literal[NodeType.FIND_TITLE] = NodeType.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
@@ -81,7 +81,7 @@ class FindByTitleRetrieval(BaseNode):
         return NodeType.FIND_TITLE
 
 
-class FindByISBN13Retrieval(BaseNode):
+class FindByISBN13Retrieval(BaseRequest):
     """Classification schema for Find By ISBN13 retrieval"""
     node_type: Literal[NodeType.FIND_ISBN13] = NodeType.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
@@ -96,7 +96,7 @@ class FindByISBN13Retrieval(BaseNode):
         return NodeType.FIND_ISBN13
 
 
-class FindByTraitsRetrieval(BaseNode):
+class FindByTraitsRetrieval(BaseRequest):
     """Classification schema for Find By Traits retrieval"""
     node_type: Literal[NodeType.FIND_TRAITS] = NodeType.FIND_TRAITS
     search_criteria: str = Field(..., description="Non-specific search criteria for traits-based search")

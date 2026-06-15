@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.common.messages import AssistantMessage, UserMessage, ToolMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
-from app.domains.books.schemas import ClassificationStrategy
+from app.domains import AllRequests
 from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
@@ -17,8 +17,8 @@ from config import BookConstraints, BookGuides
 class StrategyClassificationResult(BaseModel):
     """Generic classification result for any node type."""
 
-    accepted: List[ClassificationStrategy] = []
-    refused: List[ClassificationStrategy] = []
+    accepted: List[AllRequests] = []
+    refused: List[AllRequests] = []
     continue_pipeline: bool = False
 
     def get_accepted_node_ids(self):
@@ -37,7 +37,7 @@ class StrategyClassificationResult(BaseModel):
 class StrategyClassificationNode(BaseModel):
     """Classification node specifically for book domain strategies."""
 
-    strategies: List[ClassificationStrategy] = Field(
+    strategies: List[AllRequests] = Field(
         ..., max_length=15, description="List of strategies generated from the query"
     )
 
