@@ -8,16 +8,28 @@ from pydantic import Field
 from app.common.base_node import BaseNode
 from app.domains.books.types import NodeType
 from .filter_schemas import BooksFilter
+import logging
+
+logger = logging.getLogger(__name__)
 
 class CompareStrategy(BaseNode):
     """Classification schema for Compare Books strategy"""
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
     
+    depends_on: List[str] = Field(
+        default_factory=list, description="List of task IDs this task depends on"
+    )
+    
     def model_post_init(self, __context) -> None:
         if not self.refusal:
             base_id = str(uuid4())[:8]
             self.id = base_id + "_cmp"
+        if not self.depends_on:
+            logger.warning(f"CompareStrategy {self.id} has no dependencies")
+            self.refusal = True
+            self.reasoning = "No dependencies provided for a compare strategy"
+            
         super().model_post_init(__context)
     
     def get_type(self) -> NodeType:
@@ -32,11 +44,18 @@ class RecommendationStrategy(BaseNode):
     # recommendation_type: Literal["similar_to", "thematic", "mood_based"] = Field(..., description="Type of recommendation")
     filters: Optional[BooksFilter] = Field(None, description="Optional result constraints")
     
+    depends_on: List[str] = Field(
+        default_factory=list, description="List of task IDs this task depends on"
+    )
+    
     def model_post_init(self, __context) -> None:
         if not self.refusal:
             base_id = str(uuid4())[:8]
             self.id = base_id + "_rec"
-        
+        if not self.depends_on:
+            logger.warning(f"RecommendationStrategy {self.id} has no dependencies")
+            self.refusal = True
+            self.reasoning = "No dependencies provided for a recommendation strategy"
         if self.reference_books:
             self.reference_books = list(set(self.reference_books))
             
