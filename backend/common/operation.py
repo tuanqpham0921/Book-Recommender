@@ -16,17 +16,18 @@ class OperationResult(Generic[OutputT]):
     """Outcome of a single named check or step."""
     id: str = field(default_factory=lambda: str(uuid4())[:8])
     start_time: str = field(default_factory=now_iso)
-    
     name: str | None = None
+    
     ok: bool = True
     message: str | None = None
     steps: list["OperationResult[Any]"] = field(default_factory=list)
     details: dict[str, Any] | None = None
-    duration: float | None = None
-    run_time_error: dict[str, Any] | Exception | None = None
     
     output: OutputT | None = None
     output_type: type[OutputT] | None = None
+    
+    run_time_error: dict[str, Any] | Exception | None = None
+    duration: float | None = None
     
     def check_output_type(self) -> None:
         if self.output is None or self.output_type is None:

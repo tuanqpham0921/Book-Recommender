@@ -22,8 +22,8 @@ class UserFacingOutput:
     """Domain payload stored on OperationResult.output."""
 
     chat_messages: list[APIMessage] = field(default_factory=list)
-    token_usage: TokenUsage = field(default_factory=TokenUsage)
     summary: dict[str, Any] = field(default_factory=dict)
+    token_usage: TokenUsage = field(default_factory=TokenUsage)
 
 
 class UserFacingBaseWorkflow(Workflow[OutputT]):
