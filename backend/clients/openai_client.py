@@ -49,11 +49,13 @@ class OpenAIClient(BaseLLMClient):
             raise
     
     @task
-    async def execute(self, req: OpenAIBaseRequest) -> AssistantMessage:
+    async def execute(self, req: OpenAIBaseRequest, save_payload: bool = False) -> AssistantMessage:
         """Execute the chat completion."""
         #TODO: add semaphore to the execute method
         
         payload = req.to_payload()
+        
+        
         final_completion = await self._chat_stream(payload, req.sse_stream)
         
         response_message = final_completion.choices[0].message
@@ -69,7 +71,11 @@ class OpenAIClient(BaseLLMClient):
             ) if final_completion.usage else None,
             
         )
-
+        if save_payload:
+            from common.utils.save_file import save_file
+            payload["id"] = assistant_msg.id
+            save_file(payload, f"openai_payload_{assistant_msg.id}.json")
+            
         return assistant_msg
 
 
