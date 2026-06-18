@@ -23,6 +23,7 @@ from app.orchestration.planner.task_planner import (
     TaskPlan,
 )
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
+from app.domains.base_request import BaseRequest
 from common.operation import OperationResult
 from app.common.prompt_loader import format_prompt
 
@@ -130,7 +131,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
 
     async def _run_task_planner(
-        self, in_domain_message: str, node_ids: dict
+        self, in_domain_message: str, node_ids: dict[str, BaseRequest]
     ) -> OperationResult[Any] | None:
         workflow = self._child_workflow(TaskPlanWorkflow)
         return await self._run_phase(
@@ -164,17 +165,13 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         self.result.message = "Conversation orchestration completed successfully"
         await self.sse_stream.send_divider()
 
-    async def generate_summary(self) -> str:
-        # TODO: this should not be a asisstant message
-        # it should call the reponse to generate a user facing conversation
-        # if you do want to make an assistant message, you can use the generate_user_response method
-        # so it gets added to the chat messages
+    async def generate_summary(self) -> dict[str, Any]:
         from common.utils import remove_json_empty_values
+
         sub_summary = remove_json_empty_values(self.output._sub_summary())
         prompt = format_prompt(
             self.summary_prompt_path,
             sub_summary=json.dumps(sub_summary, indent=2),
         )
-        return await self.generate_user_response(
-            [self.user_message], prompt=prompt
-        )
+        await self.generate_user_response([self.user_message], prompt=prompt)
+        return sub_summary

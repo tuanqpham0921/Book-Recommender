@@ -327,7 +327,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         self, task_plan: TaskPlan, node_ids: dict[str, BaseRequest]
     ) -> None:
         if not self.result.ok:
-            await self.sse_stream.send_chars(self.planner_failure_message)
+            await self.sse_stream.send_error(self.planner_failure_message)
             return
         
         from app.common.mermaid import get_mermaid_diagram
@@ -336,7 +336,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             diagram = get_mermaid_diagram(task_plan, node_ids)
         except Exception as e:
             logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
-            await self.sse_stream.send_chars(self.planner_failure_message)
+            await self.sse_stream.send_error(self.planner_failure_message)
             return
 
         await self.sse_stream.send_chars("__My Plan for Your Request__")
