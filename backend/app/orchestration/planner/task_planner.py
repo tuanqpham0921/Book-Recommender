@@ -99,7 +99,7 @@ class TaskPlan(BaseModel):
         valid_accepted = []
         for task in self.accepted:
             node = node_ids[task.id]
-            type = node.get_type()
+            type = node.node_type
             
             if type is None:
                 continue

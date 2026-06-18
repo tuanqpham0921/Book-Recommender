@@ -1,13 +1,12 @@
 from uuid import uuid4
 from pydantic import BaseModel, Field
-from typing import Optional
-from abc import ABC, abstractmethod
 from app.domains.types import NodeType
 
 import logging
 logger = logging.getLogger(__name__)
 
 class BaseRequest(BaseModel):
+    node_type: NodeType
     id: str = Field(default="", description="Auto-generated unique identifier")
     description: str = Field(
         ..., description="Description of query that attributes to this strategy"
@@ -21,19 +20,12 @@ class BaseRequest(BaseModel):
     refusal: bool = Field(
         default=False, description="Did we refuse this strategy type"
     )
-    
-    def get_type(self) -> NodeType:
-        """Override in subclasses to return the specific node type."""
-        if hasattr(self, "node_type"):
-            return self.node_type
-        return None
 
     def model_post_init(self, __context) -> None:
-        """Auto-generate ID if not provided."""
         if self.refusal:
-            self.id = str(uuid4())[:8] + "_refusal"
-            return
-        self.id = str(uuid4())[:8] + "_" + self.get_type().value
+            self.id = f"{str(uuid4())[:8]}_refusal"
+        else:
+            self.id = f"{str(uuid4())[:8]}_{self.node_type.value}"
 
 class DependentRequest(BaseRequest):
     depends_on: list[str] = Field(
