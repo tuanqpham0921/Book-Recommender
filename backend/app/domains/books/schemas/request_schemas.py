@@ -3,40 +3,27 @@ Classification schemas for book domain strategies.
 These are the specific schemas that the LLM should generate during classification.
 """
 from typing import Optional, Literal, List
-from uuid import uuid4
 from pydantic import Field
-from app.domains.base_request import BaseRequest
+from app.domains.base_request import BaseRequest, DependentRequest
 from app.domains.books.types import NodeType
 from .filter_schemas import BooksFilter
 import logging
 
 logger = logging.getLogger(__name__)
 
-class CompareStrategy(BaseRequest):
+class CompareStrategy(DependentRequest):
     """Classification schema for Compare Books strategy"""
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
     
-    depends_on: List[str] = Field(
-        default_factory=list, description="List of task IDs this task depends on"
-    )
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_cmp"
-        if not self.depends_on:
-            logger.warning(f"CompareStrategy {self.id} has no dependencies")
-            self.refusal = True
-            self.reasoning = "No dependencies provided for a compare strategy"
-            
-        super().model_post_init(__context)
-    
+    def get_suffix(self) -> str:
+        return "_cmp"
+
     def get_type(self) -> NodeType:
         return NodeType.COMPARE
 
 
-class RecommendationStrategy(BaseRequest):
+class RecommendationStrategy(DependentRequest):
     """AI-powered semantic recommendations"""
     node_type: Literal[NodeType.RECOMMENDATION] = NodeType.RECOMMENDATION
     semantic_input: str = Field(..., description="Thematic/conceptual description")
@@ -44,23 +31,15 @@ class RecommendationStrategy(BaseRequest):
     # recommendation_type: Literal["similar_to", "thematic", "mood_based"] = Field(..., description="Type of recommendation")
     filters: Optional[BooksFilter] = Field(None, description="Optional result constraints")
     
-    depends_on: List[str] = Field(
-        default_factory=list, description="List of task IDs this task depends on"
-    )
-    
     def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_rec"
-        if not self.depends_on:
-            logger.warning(f"RecommendationStrategy {self.id} has no dependencies")
-            self.refusal = True
-            self.reasoning = "No dependencies provided for a recommendation strategy"
         if self.reference_books:
             self.reference_books = list(set(self.reference_books))
-            
+
         super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_rec"
+
     def get_type(self) -> NodeType:
         return NodeType.RECOMMENDATION
 
@@ -71,12 +50,9 @@ class FindByTitleRetrieval(BaseRequest):
     title: str = Field(..., description="Book title to search for")
     authors: Optional[list[str]] = Field(default=None, description="Author assoicated with this book")
     
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_tit"
-        super().model_post_init(__context)
-    
+    def get_suffix(self) -> str:
+        return "_tit"
+
     def get_type(self) -> NodeType:
         return NodeType.FIND_TITLE
 
@@ -85,13 +61,10 @@ class FindByISBN13Retrieval(BaseRequest):
     """Classification schema for Find By ISBN13 retrieval"""
     node_type: Literal[NodeType.FIND_ISBN13] = NodeType.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_isbn"
-        super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_isbn"
+
     def get_type(self) -> NodeType:
         return NodeType.FIND_ISBN13
 
@@ -101,13 +74,10 @@ class FindByTraitsRetrieval(BaseRequest):
     node_type: Literal[NodeType.FIND_TRAITS] = NodeType.FIND_TRAITS
     search_criteria: str = Field(..., description="Non-specific search criteria for traits-based search")
     filters: BooksFilter = Field(..., description="Optional filters for database query")
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_traits"
-        super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_traits"
+
     def get_type(self) -> NodeType:
         return NodeType.FIND_TRAITS
 

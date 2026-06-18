@@ -19,8 +19,7 @@ This is where you can really incorperate the agentic capabilities to the system
 so you can log in as an admin, or develop more advanced features to the system
 """
 
-from typing import Optional, Literal, List
-from uuid import uuid4
+from typing import Optional, Literal
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from enum import Enum
@@ -36,13 +35,10 @@ class FeedbackRequest(BaseRequest):
         description="Contact information of the user providing the feedback (email, phone, etc.)",
     )
     feedback: str = Field(..., description="User's feedback to the project")
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_feedback_req"
-        super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_feedback_req"
+
     def get_type(self) -> NodeType:
         return NodeType.FEEDBACK
     
@@ -60,12 +56,9 @@ class ProjectInfoRequest(BaseRequest):
     """Classification schema for Project Info request"""
     node_type: Literal[NodeType.PROJECT_INFO] = NodeType.PROJECT_INFO
     fields: list[ProjectInfoField] = Field(..., description="Fields to update or retrieve")
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_project_info_req"
-        super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_project_info_req"
+
     def get_type(self) -> NodeType:
         return NodeType.PROJECT_INFO

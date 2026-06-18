@@ -25,8 +25,7 @@ Future Plan (agentic capabilities):
 - as an admin, add a new developer to the system giving them access to update their own information
 """
 
-from typing import Optional, Literal, List
-from uuid import uuid4
+from typing import Optional, Literal
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from enum import Enum
@@ -53,13 +52,10 @@ class UserInfoRequest(BaseRequest):
     action: UserInfoAction = Field(..., description="Action to perform on user info")
     field: UserInfoEnum = Field(..., description="Field to update or retrieve")
     # value: Optional[str] = Field(..., description="Value to update or retrieve")
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_usr_req"
-        super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_usr_req"
+
     def get_type(self) -> NodeType:
         return NodeType.USER_INFO
 
@@ -78,12 +74,9 @@ class DeveloperInfoRequest(BaseRequest):
 
     field: DeveloperInfoEnum = Field(..., description="Field to update or retrieve")
     # value: Optional[str] = Field(..., description="Value to update or retrieve")
-    
-    def model_post_init(self, __context) -> None:
-        if not self.refusal:
-            base_id = str(uuid4())[:8]
-            self.id = base_id + "_dev_req"
-        super().model_post_init(__context)
-    
+
+    def get_suffix(self) -> str:
+        return "_dev_req"
+
     def get_type(self) -> NodeType:
         return NodeType.DEVELOPER_INFO

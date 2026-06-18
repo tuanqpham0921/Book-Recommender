@@ -100,6 +100,9 @@ class TaskPlan(BaseModel):
         for task in self.accepted:
             node = node_ids[task.id]
             type = node.get_type()
+            
+            if type is None:
+                continue
 
             # check the dependencie rules for Retrieval and Analyze nodes
             if type in SINGLE_BOOK_RETRIEVAL and len(task.depends_on) != 0:
