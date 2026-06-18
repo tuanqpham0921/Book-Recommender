@@ -65,10 +65,9 @@ class TaskPlan(BaseModel):
     accepted: List[Task] = Field(default_factory=list)
     refused: List[Task] = Field(default_factory=list)
     missing_ids: List[str] = Field(default_factory=list)
-    missing_strategies: List[str] = Field(default_factory=list)
     execution_order: List[str] = Field(default_factory=list)
 
-    def validate(self, node_ids: dict[str, BaseRequest]) -> None:
+    def validate_plan(self, node_ids: dict[str, BaseRequest]) -> None:
         self._validate_dependency_rules(node_ids)
         self._validate_dependency_in_accepted(node_ids)
         self.execution_order = self._create_execution_order()
@@ -212,7 +211,7 @@ class TaskGenerationNode(BaseModel):
             missing_ids=missing_ids,
         )
 
-        plan_result.validate(node_ids=node_ids)
+        plan_result.validate_plan(node_ids=node_ids)
         return plan_result
 
 

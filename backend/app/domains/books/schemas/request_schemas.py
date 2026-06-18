@@ -15,8 +15,16 @@ class CompareStrategy(AnalyzeBaseRequest):
     """Classification schema for Compare Books strategy"""
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
-    reference_books: Optional[List[str]] = Field(None, description="Books titles to base recommendations on")
 
+    def model_post_init(self, __context) -> None:
+        if len(self.depends_on) < 2:
+            logger.warning(
+                f"{self.__class__.__name__} ({self.id}) has less than 2 dependencies, refusing the request"
+            )
+            self.refusal = True
+            self.reasoning = "Less than 2 dependencies provided for a request with dependencies"
+        super().model_post_init(__context)
+            
 
 class RecommendationStrategy(AnalyzeBaseRequest):
     """AI-powered semantic recommendations"""

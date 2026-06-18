@@ -51,12 +51,3 @@ class AnalyzeBaseRequest(BaseRequest):
         description="Descriptions of requests that must complete first",
         max_length=5,
     )
-
-    def model_post_init(self, __context) -> None:
-        if not self.depends_on:
-            logger.warning(
-                f"{self.__class__.__name__} ({self.id}) has no dependencies, refusing the request"
-            )
-            self.refusal = True
-            self.reasoning = "No dependencies provided for a request with dependencies"
-        super().model_post_init(__context)
