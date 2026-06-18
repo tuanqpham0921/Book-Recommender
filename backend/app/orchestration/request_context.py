@@ -1,17 +1,14 @@
 import logging
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
 
-from app.common.enums import Role
-from common.utils import now_iso, save_file
-from app.common.messages import APIMessage, UserMessage, AssistantMessage, ToolMessage
+from common.utils import now_iso
+from app.common.messages import UserMessage
 from db.stores.book_store import BookStore
 from app.common.sse_stream import SSEStream
 
 from clients import OpenAIClient
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class RequestContext:

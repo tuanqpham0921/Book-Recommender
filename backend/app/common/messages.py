@@ -6,14 +6,19 @@ from typing_extensions import Annotated
 from pydantic import BaseModel, Field
 from openai.types.chat import ParsedFunctionToolCall
 from typing import Union, Dict, Optional, List, Literal, Any
-
-from app.common.enums import Role
+from enum import Enum
 
 from abc import ABC, abstractmethod
 import logging
 from common.operation import OperationResult, task
 
 logger = logging.getLogger(__name__)
+
+class Role(str, Enum):
+    SYSTEM    = "system"
+    USER      = "user"
+    ASSISTANT = "assistant"
+    TOOL      = "tool"
 
 class BaseMessage(BaseModel, ABC):
     @abstractmethod

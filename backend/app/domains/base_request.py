@@ -6,21 +6,19 @@ from app.domains.types import NodeType
 
 
 class BaseRequest(BaseModel):
-    # Only require what the user/LLM must provide
     id: str = Field(default="", description="Auto-generated unique identifier")
     description: str = Field(
         ..., description="Description of query that attributes to this strategy"
     )
-
-    # Everything else is optional or auto-generated
-    reasoning: Optional[str] = Field(
-        default=None, description="Reasoning for strategy selection"
+    reasoning: str = Field(
+        ..., description="Reasoning for strategy selection"
     )
-    # inferences: str = Field(default=None, description="Any inference or correction from the query")
     confidence: float = Field(
-        default=0.0, description="Confidence score for the parsed results"
+        ..., description="Confidence score for the parsed results"
     )
-    refusal: bool = Field(default=False, description="Did we refuse this strategy type")
+    refusal: bool = Field(
+        default=False, description="Did we refuse this strategy type"
+    )
     
     def get_type(self) -> Optional[NodeType]:
         """Override in subclasses to return the specific node type."""

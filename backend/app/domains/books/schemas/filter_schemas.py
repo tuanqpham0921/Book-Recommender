@@ -1,9 +1,11 @@
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
 from config import BookConstraints
+from enum import Enum
 
-from app.common.enums import GenreEnum
-
+class GenreEnum(str, Enum):
+    FICTION    = "fiction"
+    NONFICTION = "non-fiction"
 
 class ExclusionBookFilter(BaseModel):
     model_config = ConfigDict(extra="forbid")
