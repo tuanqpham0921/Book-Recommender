@@ -82,12 +82,6 @@ class Workflow(ABC, Generic[OutputT]):
 
         return step
 
-    def format_result(self):
-        self.result.message = (
-            self.success_message if self.result.ok else self.failure_message
-        )
-        self.result.details = self.result.details
-
     @property
     def workflow_ref(self) -> str:
         return f"{type(self).__module__}.{type(self).__qualname__}"

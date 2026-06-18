@@ -1,3 +1,3 @@
-from .external import *
+from .external import ChatIn, SessionOut, HealthStatus
 
-__all__ = ["BooksOut", "ChatIn", "SessionOut", "HealthStatus"]
+__all__ = ["ChatIn", "SessionOut", "HealthStatus"]

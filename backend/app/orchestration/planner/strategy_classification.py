@@ -106,7 +106,7 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         super().finalize_result(
             ok=bool(
                 classification_result.continue_pipeline
-                and not classification_result.refused
+                and len(classification_result.accepted) > 0
                 and classification_result.get_accepted_node_ids()
             )
         )

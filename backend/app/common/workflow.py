@@ -70,7 +70,7 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
 
     async def generate_user_response(
         self, messages: list[BaseMessage], prompt: str
-    ) -> OperationResult[Any]:
+    ) -> AssistantMessage:
         from clients.openai_requests import OpenAIChatRequest
 
         req = OpenAIChatRequest(

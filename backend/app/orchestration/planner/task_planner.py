@@ -1,10 +1,9 @@
 from __future__ import annotations
 import json
 import logging
-import re
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List
 
 from app.domains.books.types import (
     NodeType,
@@ -15,7 +14,7 @@ from dataclasses import dataclass
 
 from app.domains.base_request import BaseRequest
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
-from app.common.messages import UserMessage, ToolMessage
+from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 from app.common.sse_stream import SSEStream
 from app.common.prompt_loader import load_prompt
@@ -328,7 +327,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         self, task_plan: TaskPlan, node_ids: dict[str, BaseRequest]
     ) -> None:
         if not self.result.ok:
-            await self.sse_stream.send_char(self.planner_failure_message)
+            await self.sse_stream.send_chars(self.planner_failure_message)
             return
         
         from app.common.mermaid import get_mermaid_diagram
@@ -337,7 +336,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             diagram = get_mermaid_diagram(task_plan, node_ids)
         except Exception as e:
             logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
-            await self.sse_stream.send_char(self.planner_failure_message)
+            await self.sse_stream.send_chars(self.planner_failure_message)
             return
 
         await self.sse_stream.send_chars("__My Plan for Your Request__")

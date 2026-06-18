@@ -65,6 +65,7 @@ async def _get_bucketed_embeddings(
     async for book in iter_missing_embeddings(session_factory):
         text = _get_embedding_text(book)
         text_tokens = openai_client.token_count(text)
+        # TODO: use the base client over_max_tokens method instead
         if text_bucket and running_token_count + text_tokens > openai_client.max_tokens:
             if len(text_bucket) != len(isbn13_bucket):
                 raise ValueError(f"Text bucket and ISBN13 bucket have different lengths: {len(text_bucket)} != {len(isbn13_bucket)}")

@@ -61,7 +61,7 @@ class UserInfoRequest(BaseRequest):
         super().model_post_init(__context)
     
     def get_type(self) -> NodeType:
-        return NodeType.USER_INFO_REQUEST
+        return NodeType.USER_INFO
 
 class DeveloperInfoEnum(str, Enum):
     NAME = "name"
