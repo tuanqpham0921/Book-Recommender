@@ -27,7 +27,7 @@ class BaseRequest(BaseModel):
         else:
             self.id = f"{str(uuid4())[:8]}_{self.node_type.value}"
 
-class DependentRequest(BaseRequest):
+class AnalyzeBaseRequest(BaseRequest):
     depends_on: list[str] = Field(
         default_factory=list,
         description="Strategy ids from the input map that must complete before this request runs",

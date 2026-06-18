@@ -4,19 +4,21 @@ These are the specific schemas that the LLM should generate during classificatio
 """
 from typing import Optional, Literal, List
 from pydantic import Field
-from app.domains.base_request import BaseRequest, DependentRequest
+from app.domains.base_request import BaseRequest, AnalyzeBaseRequest
 from app.domains.books.types import NodeType
 from .filter_schemas import BooksFilter
 import logging
 
 logger = logging.getLogger(__name__)
 
-class CompareStrategy(DependentRequest):
+class CompareStrategy(AnalyzeBaseRequest):
     """Classification schema for Compare Books strategy"""
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
+    reference_books: Optional[List[str]] = Field(None, description="Books titles to base recommendations on")
 
-class RecommendationStrategy(DependentRequest):
+
+class RecommendationStrategy(AnalyzeBaseRequest):
     """AI-powered semantic recommendations"""
     node_type: Literal[NodeType.RECOMMENDATION] = NodeType.RECOMMENDATION
     semantic_input: str = Field(..., description="Thematic/conceptual description")
