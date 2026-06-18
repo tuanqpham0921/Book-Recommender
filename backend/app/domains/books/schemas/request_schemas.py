@@ -21,7 +21,7 @@ class CompareStrategy(AnalyzeBaseRequest):
 class RecommendationStrategy(AnalyzeBaseRequest):
     """AI-powered semantic recommendations"""
     node_type: Literal[NodeType.RECOMMENDATION] = NodeType.RECOMMENDATION
-    semantic_input: str = Field(..., description="Thematic/conceptual description")
+    semantic_input: Optional[str] = Field(None, description="Thematic/conceptual description from the query")
     reference_books: Optional[List[str]] = Field(None, description="Books titles to base recommendations on")
     # recommendation_type: Literal["similar_to", "thematic", "mood_based"] = Field(..., description="Type of recommendation")
     filters: Optional[BooksFilter] = Field(None, description="Optional result constraints")
