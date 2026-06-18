@@ -23,12 +23,22 @@ class InitialParseBase(BaseModel):
         ...,
         description="Original user query",
     )
-    small_talk: Optional[str] = Field(None, description="Small talk in the request")
-    out_of_scope: Optional[str] = Field(None, description="Out-of-domain content")
+    small_talk: Optional[str] = Field(None, 
+                                      min_length=50,
+                                      max_length=500,
+                                      description="Small talk in the request")
+    out_of_scope: Optional[str] = Field(None, 
+                                        min_length=50,
+                                        max_length=500,
+                                        description="Out-of-domain content")
     user_query_domain: Optional[str] = Field(
-        None, description="In-domain content (books/projects)"
+        None, 
+        description="In-domain content (books/projects)"
     )
-    reasoning: Optional[str] = Field(None, description="Reasoning for classification")
+    reasoning: Optional[str] = Field(None, 
+                                     min_length=10,
+                                     max_length=500,
+                                     description="Reasoning for classification")
 
 
 class InitialParseResult(InitialParseBase):

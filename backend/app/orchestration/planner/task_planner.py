@@ -30,9 +30,9 @@ MAX_TASKS = 10
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
     id: str
-    depends_on: list[str] = Field(default_factory=list)
-    refusal: bool = False
-    reasoning: str = ""
+    depends_on: list[str] = Field(default_factory=list, max_length=5)
+    refusal: bool = Field(default=False, description="Did we refuse this task?")
+    reasoning: str = Field(..., min_length=10, max_length=500, description="Reasoning for task creation")
 
     def model_post_init(self, __context: object) -> None:
         """Validate the dependencies of the task and return a new task with the valid dependencies"""

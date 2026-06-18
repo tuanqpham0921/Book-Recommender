@@ -38,7 +38,10 @@ class StrategyClassificationNode(BaseModel):
     """Classification node specifically for book domain strategies."""
 
     strategies: List[AllRequests] = Field(
-        ..., max_length=15, description="List of strategies generated from the query"
+        ...,
+        min_length=1,
+        max_length=15,
+        description="List of strategies generated from the query"
     )
 
     async def __call__(self, accepted_tuning: float = 0.7):

@@ -19,20 +19,20 @@ class BaseRequest(BaseModel):
         ...,
         min_length=10,
         max_length=500,
-        description="Description of query that attributes to this strategy"
+        description="Description of query that attributes to this node request"
     )
     reasoning: str = Field(
         ...,
         min_length=10,
         max_length=100,
-        description="Reasoning for strategy selection")
+        description="Reasoning for node request")
     confidence: float = Field(
         ...,
         ge=0.0,
         le=1.0,
         description="Confidence score for the parsed results"
     )
-    refusal: bool = Field(default=False, description="Did we refuse this strategy type")
+    refusal: bool = Field(default=False, description="Did we refuse this node request?")
 
     def model_post_init(self, __context) -> None:
         if self.refusal:
