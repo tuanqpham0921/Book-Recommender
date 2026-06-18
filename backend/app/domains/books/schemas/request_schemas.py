@@ -15,13 +15,6 @@ class CompareStrategy(DependentRequest):
     """Classification schema for Compare Books strategy"""
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
-    
-    def get_suffix(self) -> str:
-        return "_cmp"
-
-    def get_type(self) -> NodeType:
-        return NodeType.COMPARE
-
 
 class RecommendationStrategy(DependentRequest):
     """AI-powered semantic recommendations"""
@@ -37,24 +30,12 @@ class RecommendationStrategy(DependentRequest):
 
         super().model_post_init(__context)
 
-    def get_suffix(self) -> str:
-        return "_rec"
-
-    def get_type(self) -> NodeType:
-        return NodeType.RECOMMENDATION
-
 
 class FindByTitleRetrieval(BaseRequest):
     """Classification schema for Find By Title retrieval"""
     node_type: Literal[NodeType.FIND_TITLE] = NodeType.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
     authors: Optional[list[str]] = Field(default=None, description="Author assoicated with this book")
-    
-    def get_suffix(self) -> str:
-        return "_tit"
-
-    def get_type(self) -> NodeType:
-        return NodeType.FIND_TITLE
 
 
 class FindByISBN13Retrieval(BaseRequest):
@@ -62,25 +43,9 @@ class FindByISBN13Retrieval(BaseRequest):
     node_type: Literal[NodeType.FIND_ISBN13] = NodeType.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
 
-    def get_suffix(self) -> str:
-        return "_isbn"
-
-    def get_type(self) -> NodeType:
-        return NodeType.FIND_ISBN13
-
 
 class FindByTraitsRetrieval(BaseRequest):
     """Classification schema for Find By Traits retrieval"""
     node_type: Literal[NodeType.FIND_TRAITS] = NodeType.FIND_TRAITS
     search_criteria: str = Field(..., description="Non-specific search criteria for traits-based search")
     filters: BooksFilter = Field(..., description="Optional filters for database query")
-
-    def get_suffix(self) -> str:
-        return "_traits"
-
-    def get_type(self) -> NodeType:
-        return NodeType.FIND_TRAITS
-
-
-
-

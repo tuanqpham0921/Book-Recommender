@@ -7,7 +7,7 @@ from app.domains.types import NodeType
 import logging
 logger = logging.getLogger(__name__)
 
-class BaseRequest(ABC, BaseModel):
+class BaseRequest(BaseModel):
     id: str = Field(default="", description="Auto-generated unique identifier")
     description: str = Field(
         ..., description="Description of query that attributes to this strategy"
@@ -22,7 +22,7 @@ class BaseRequest(ABC, BaseModel):
         default=False, description="Did we refuse this strategy type"
     )
     
-    def get_type(self) -> Optional[NodeType]:
+    def get_type(self) -> NodeType:
         """Override in subclasses to return the specific node type."""
         if hasattr(self, "node_type"):
             return self.node_type
@@ -33,12 +33,7 @@ class BaseRequest(ABC, BaseModel):
         if self.refusal:
             self.id = str(uuid4())[:8] + "_refusal"
             return
-        self.id = str(uuid4())[:8] + self.get_suffix()
-    
-    @abstractmethod
-    def get_suffix(self) -> str:
-        """Return the id suffix for this request type."""
-        ...
+        self.id = str(uuid4())[:8] + "_" + self.get_type().value
 
 class DependentRequest(BaseRequest):
     depends_on: list[str] = Field(

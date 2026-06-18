@@ -53,12 +53,6 @@ class UserInfoRequest(BaseRequest):
     field: UserInfoEnum = Field(..., description="Field to update or retrieve")
     # value: Optional[str] = Field(..., description="Value to update or retrieve")
 
-    def get_suffix(self) -> str:
-        return "_usr_req"
-
-    def get_type(self) -> NodeType:
-        return NodeType.USER_INFO
-
 class DeveloperInfoEnum(str, Enum):
     NAME = "name"
     BIO = "bio"
@@ -66,7 +60,6 @@ class DeveloperInfoEnum(str, Enum):
     LINKEDIN_URL = "linkedin_url"
     ALL = "all"
     
-
 class DeveloperInfoRequest(BaseRequest):
     """Classification schema for Developer Info request"""
     node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
@@ -74,9 +67,3 @@ class DeveloperInfoRequest(BaseRequest):
 
     field: DeveloperInfoEnum = Field(..., description="Field to update or retrieve")
     # value: Optional[str] = Field(..., description="Value to update or retrieve")
-
-    def get_suffix(self) -> str:
-        return "_dev_req"
-
-    def get_type(self) -> NodeType:
-        return NodeType.DEVELOPER_INFO

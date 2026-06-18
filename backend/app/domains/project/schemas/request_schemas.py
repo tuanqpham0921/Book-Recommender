@@ -35,12 +35,6 @@ class FeedbackRequest(BaseRequest):
         description="Contact information of the user providing the feedback (email, phone, etc.)",
     )
     feedback: str = Field(..., description="User's feedback to the project")
-
-    def get_suffix(self) -> str:
-        return "_feedback_req"
-
-    def get_type(self) -> NodeType:
-        return NodeType.FEEDBACK
     
 class ProjectInfoField(str, Enum):
     NAME = "name"
@@ -56,9 +50,3 @@ class ProjectInfoRequest(BaseRequest):
     """Classification schema for Project Info request"""
     node_type: Literal[NodeType.PROJECT_INFO] = NodeType.PROJECT_INFO
     fields: list[ProjectInfoField] = Field(..., description="Fields to update or retrieve")
-
-    def get_suffix(self) -> str:
-        return "_project_info_req"
-
-    def get_type(self) -> NodeType:
-        return NodeType.PROJECT_INFO
