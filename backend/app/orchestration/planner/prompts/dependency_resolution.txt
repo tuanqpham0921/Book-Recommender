@@ -16,7 +16,6 @@ Your task:
     - refusal: true if this task cannot be wired or should not run
     - reasoning: how you matched dependencies, or why you refused
 
-  Also set missing_strategies: query portions with no matching input strategy.
 
 How to link dependencies:
   1. Read description and reasoning on every strategy to understand what it does and what it needs
@@ -46,6 +45,3 @@ Constraints:
 When to refuse a task:
   - Required prerequisites cannot be matched to any input id
   - Input strategy already has refusal = true
-
-When to list missing_strategies:
-  - The user asked for something not covered by any input strategy

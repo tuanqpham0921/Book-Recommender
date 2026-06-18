@@ -43,7 +43,14 @@ class StrategyClassificationNode(BaseModel):
         max_length=15,
         description="List of strategies generated from the query"
     )
-
+    reasoning: str = Field(
+        ...,
+        min_length=10,
+        max_length=500,
+        description="Reasoning for strategy classification"
+    )
+    
+    
     async def __call__(self, accepted_tuning: float = 0.7):
         """Convert to ClassificationResult format"""
         result = StrategyClassificationResult()

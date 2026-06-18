@@ -19,10 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class InitialParseBase(BaseModel):
-    user_query: str = Field(
-        ...,
-        description="Original user query",
-    )
     small_talk: Optional[str] = Field(None, 
                                       min_length=50,
                                       max_length=500,
@@ -33,7 +29,9 @@ class InitialParseBase(BaseModel):
                                         description="Out-of-domain content")
     user_query_domain: Optional[str] = Field(
         None, 
-        description="In-domain content (books/projects)"
+        min_length=10,
+        max_length=500,
+        description="In-domain content for our system"
     )
     reasoning: Optional[str] = Field(None, 
                                      min_length=10,

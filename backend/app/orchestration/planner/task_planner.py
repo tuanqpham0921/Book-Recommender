@@ -178,12 +178,7 @@ class TaskGenerationNode(BaseModel):
         description=f"Create at most {MAX_TASKS} tasks with resolved dependencies",
         max_length=MAX_TASKS,
     )
-    # TODO: add buffer for overflowing the list of tasks
-
-    missing_strategies: List[str] = Field(
-        ..., description="part of the query that we don't support yet"
-    )
-
+    
     async def __call__(self, node_ids) -> TaskPlan:
         logger.debug("🔍 Processing TaskGenerationNode")
 
@@ -215,7 +210,6 @@ class TaskGenerationNode(BaseModel):
             accepted=accepted,
             refused=refused,
             missing_ids=missing_ids,
-            missing_strategies=self.missing_strategies,
         )
 
         plan_result.validate(node_ids=node_ids)
@@ -299,6 +293,14 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         )
 
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
+        if not valid_ids:
+            raise ValueError("No valid ids provided")
+        
+        if len(valid_ids) > MAX_TASKS:
+            logger.warning(f"⚠️ TaskPlanWorkflow has too many valid ids removing {len(valid_ids) - MAX_TASKS} ids")
+            self.result.details["removed_ids"] = valid_ids[MAX_TASKS:]
+            valid_ids = valid_ids[:MAX_TASKS]
+
         from openai import pydantic_function_tool
 
         tool = pydantic_function_tool(
