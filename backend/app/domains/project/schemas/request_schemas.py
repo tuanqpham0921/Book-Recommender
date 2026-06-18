@@ -26,7 +26,10 @@ from enum import Enum
 from app.domains.project.types import NodeType
 
 class FeedbackRequest(BaseRequest):
-    """Classification schema for Feedback request"""
+    """
+        User's feedback for the project.
+        Fill the contact information of the user providing the feedback (email, phone, etc.)
+    """
     node_type: Literal[NodeType.FEEDBACK] = NodeType.FEEDBACK
     # NOTE: good place to have a simple HITL (Human In The Loop) for feedback
     # something like awesome "can you please provide your email so we can get back to you? if not it's ok too"
@@ -47,6 +50,8 @@ class ProjectInfoField(str, Enum):
     ALL = "all"
     
 class ProjectInfoRequest(BaseRequest):
-    """Classification schema for Project Info request"""
+    """
+        Retrieve project information.
+    """
     node_type: Literal[NodeType.PROJECT_INFO] = NodeType.PROJECT_INFO
-    fields: list[ProjectInfoField] = Field(..., description="Fields to update or retrieve")
+    fields: list[ProjectInfoField] = Field(..., description="Fields to retrieve")

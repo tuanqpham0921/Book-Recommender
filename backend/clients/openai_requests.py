@@ -75,7 +75,7 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         tool = pydantic_function_tool(
             self.tool_models[0],
             name=tool_name,
-            description=f"Fill the schema for {tool_name}",
+            # description=f"Fill the schema for {tool_name}",
         )
         return tool
 

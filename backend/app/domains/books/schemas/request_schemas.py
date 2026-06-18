@@ -12,7 +12,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 class CompareStrategy(AnalyzeBaseRequest):
-    """Classification schema for Compare Books strategy"""
+    """
+        Compare two or more books based on specific criteria.
+        Use the results of the retrieval strategies to compare.
+    """
     node_type: Literal[NodeType.COMPARE] = NodeType.COMPARE
     comparison_criteria: Optional[str] = Field(None, description="Specific fields or aspects to compare")
 
@@ -27,7 +30,10 @@ class CompareStrategy(AnalyzeBaseRequest):
             
 
 class RecommendationStrategy(AnalyzeBaseRequest):
-    """AI-powered semantic recommendations"""
+    """
+        Generate a semantic recommendation based on the results of the retrieval strategies.
+        Use the results of the retrieval strategies to generate a recommendation.
+    """
     node_type: Literal[NodeType.RECOMMENDATION] = NodeType.RECOMMENDATION
     semantic_input: Optional[str] = Field(None, description="Thematic/conceptual description from the query")
     reference_books: Optional[List[str]] = Field(None, description="Books titles to base recommendations on")
@@ -42,20 +48,26 @@ class RecommendationStrategy(AnalyzeBaseRequest):
 
 
 class FindByTitleRetrieval(BaseRequest):
-    """Classification schema for Find By Title retrieval"""
+    """
+        Retrieve a book by title from the database.
+    """
     node_type: Literal[NodeType.FIND_TITLE] = NodeType.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
     authors: Optional[list[str]] = Field(default=None, description="Author assoicated with this book")
 
 
 class FindByISBN13Retrieval(BaseRequest):
-    """Classification schema for Find By ISBN13 retrieval"""
+    """
+        Retrieve a book by ISBN13 from the database.
+    """
     node_type: Literal[NodeType.FIND_ISBN13] = NodeType.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
 
 
 class FindByTraitsRetrieval(BaseRequest):
-    """Classification schema for Find By Traits retrieval"""
+    """
+        Retrieve a book by traits (not isbn13 or title) from the database.
+    """
     node_type: Literal[NodeType.FIND_TRAITS] = NodeType.FIND_TRAITS
     search_criteria: str = Field(..., description="Non-specific search criteria for traits-based search")
     filters: BooksFilter = Field(..., description="Optional filters for database query")

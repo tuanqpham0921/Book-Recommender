@@ -81,6 +81,17 @@ class InitialParseResult(InitialParseBase):
 
 
 class InitialParseNode(InitialParseBase):
+    """
+        Determine whether the user's query should continue through the
+        book recommendation pipeline.
+
+        Classify requests as:
+        - domain-related book requests
+        - small talk
+        - out-of-scope requests
+
+        Extract the normalized user intent and reasoning for the decision.
+    """
     domain_confidence: float = Field(
         default=0.0,
         ge=0.0,

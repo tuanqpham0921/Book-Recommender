@@ -47,7 +47,9 @@ class UserInfoEnum(str, Enum):
     ALL = "all"
 
 class UserInfoRequest(BaseRequest):
-    """Classification schema for User Info request"""
+    """
+        Update or retrieve user information.
+    """
     node_type: Literal[NodeType.USER_INFO] = NodeType.USER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")
     field: UserInfoEnum = Field(..., description="Field to update or retrieve")
@@ -61,7 +63,9 @@ class DeveloperInfoEnum(str, Enum):
     ALL = "all"
     
 class DeveloperInfoRequest(BaseRequest):
-    """Classification schema for Developer Info request"""
+    """
+        Retrieve developer information.
+    """
     node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
     action: UserInfoAction = Field(..., description="Action to perform on user info")
 

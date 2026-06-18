@@ -35,7 +35,10 @@ class StrategyClassificationResult(BaseModel):
 
 
 class StrategyClassificationNode(BaseModel):
-    """Classification node specifically for book domain strategies."""
+    """
+        Generate a set of strategy requests to satisfy the user's request.
+        Each strategy should represent a discrete unit of work.
+    """
 
     strategies: List[AllRequests] = Field(
         ...,

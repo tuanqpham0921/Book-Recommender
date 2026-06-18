@@ -170,6 +170,17 @@ class TaskPlan(BaseModel):
 
 
 class TaskGenerationNode(BaseModel):
+    """
+        Construct a dependency graph for the provided strategies.
+
+        Determine which strategies can execute independently and which
+        require outputs from other strategies. Generate the minimal set
+        of dependencies required for correct execution.
+
+        Use only the provided strategy IDs when creating dependencies.
+        Avoid unnecessary dependencies that would reduce parallelism.
+    """
+
     model_config = {"extra": "forbid"}
 
     tasks: List[Task] = Field(
@@ -305,7 +316,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         tool = pydantic_function_tool(
             tool_model,
             name=tool_model.__name__,
-            description=f"Fill the schema for {tool_model.__name__}",
+            # description=f"Fill the schema for {tool_model.__name__}",
         )
 
         # Modify the schema
