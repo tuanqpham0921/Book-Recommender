@@ -32,10 +32,6 @@ from enum import Enum
 
 from app.domains.users.types import NodeType
 
-class UserInfoAction(str, Enum):
-    GET = "get"
-    UPDATE = "update"
-
 class UserInfoEnum(str, Enum):
     NAME = "name"
     AGE = "age"
@@ -44,30 +40,20 @@ class UserInfoEnum(str, Enum):
     SAVED_MEMORY = "saved_memory"
     PREVIOUS_CONVERSATION = "previous_conversation"
     CURRENT_CONVERSATION = "current_conversation"
-    ALL = "all"
 
 class UserInfoRequest(BaseRequest):
-    """
-        Update or retrieve user information.
-    """
+    """get user information from database"""
     node_type: Literal[NodeType.USER_INFO] = NodeType.USER_INFO
-    action: UserInfoAction = Field(..., description="Action to perform on user info")
-    field: UserInfoEnum = Field(..., description="Field to update or retrieve")
-    # value: Optional[str] = Field(..., description="Value to update or retrieve")
+    field: list[UserInfoEnum] = Field(..., description="Field to retrieve")
+    
 
 class DeveloperInfoEnum(str, Enum):
     NAME = "name"
     BIO = "bio"
     EMAIL = "email"
     LINKEDIN_URL = "linkedin_url"
-    ALL = "all"
     
 class DeveloperInfoRequest(BaseRequest):
-    """
-        Retrieve developer information.
-    """
+    """get developer information from database"""
     node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
-    action: UserInfoAction = Field(..., description="Action to perform on user info")
-
-    field: DeveloperInfoEnum = Field(..., description="Field to update or retrieve")
-    # value: Optional[str] = Field(..., description="Value to update or retrieve")
+    field: list[DeveloperInfoEnum] = Field(..., description="Field to retrieve")

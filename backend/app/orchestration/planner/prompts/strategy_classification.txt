@@ -23,13 +23,13 @@ General guidelines:
 Books domain
 
 Retrieval (lookup / search — no analysis):
-  - FindByTitle: exact title lookup (one per distinct title)
-  - FindByISBN13: exact ISBN13 lookup (one per distinct ISBN)
-  - FindByTraits: trait, genre, rating, page count, or filter-based search
+  - FindByTitle
+  - FindByISBN13
+  - FindByTraits
 
 Analysis (interpretation — requires prerequisite lookups where applicable):
-  - Recommendation: semantic or similarity-based suggestions ("similar to", "like", thematic/mood requests)
-  - Compare: compare two or more books on fields or general characteristics
+  - Recommendation
+  - Compare
 
 Books rules:
   - Retrieval-only queries → use retrieval strategies only, no analysis
@@ -49,15 +49,17 @@ Guides:
 -----------------------------------------------------
 Users domain
 
-  - UserInfo: get or update user profile/preferences (action + field)
-  - DeveloperInfo: get or update developer profile (action + field)
+Available requests:
+  - UserInfo
+  - DeveloperInfo
 
 Use when the query is about the user's account, preferences, memory, or developer profile — not book search.
 
 -----------------------------------------------------
 Project domain
 
-  - ProjectInfo: questions about the app, tech stack, architecture, or project metadata (fields list)
-  - Feedback: user wants to send feedback about the project (feedback text, optional contact_info)
+Available requests:
+  - ProjectInfo
+  - Feedback
 
 Use when the query is about how the system works, project details, or submitting feedback.
