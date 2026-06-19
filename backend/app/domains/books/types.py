@@ -9,11 +9,3 @@ class NodeType(str, Enum):
     # Strategies
     COMPARE = "Analyze_Compare"
     RECOMMENDATION = "Analyze_Recommend"
-
-SINGLE_BOOK_RETRIEVAL = {
-    NodeType.FIND_ISBN13,
-    NodeType.FIND_TITLE,
-    NodeType.FIND_TRAITS,
-}
-
-ALL_BOOK_RETRIEVAL = SINGLE_BOOK_RETRIEVAL

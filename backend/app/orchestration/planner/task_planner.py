@@ -5,11 +5,6 @@ import logging
 from pydantic import BaseModel, Field
 from typing import List
 
-from app.domains.books.types import (
-    NodeType,
-    SINGLE_BOOK_RETRIEVAL,
-)
-
 from dataclasses import dataclass
 
 from app.domains.base_request import BaseRequest
@@ -70,7 +65,6 @@ class TaskPlan(BaseModel):
     execution_order: List[str] = Field(default_factory=list)
 
     def validate_plan(self, node_ids: dict[str, BaseRequest]) -> None:
-        self._validate_dependency_rules(node_ids)
         self._validate_dependency_in_accepted(node_ids)
         self.execution_order = self._create_execution_order()
         self._validate_execution_order()
@@ -95,32 +89,6 @@ class TaskPlan(BaseModel):
                     raise ValueError(
                         f"Dependency {dep} in task {task.id} is not in accepted. Accepted ids: {sorted(accepted_ids)}"
                     )
-
-    # Here we should know that the ids are valid nodes
-    def _validate_dependency_rules(self, node_ids: dict[str, BaseRequest]) -> None:
-        """Enforce the rules for accepted strategies. Add to refuse if fails"""
-        valid_accepted = []
-        for task in self.accepted:
-            node = node_ids[task.id]
-            type = node.node_type
-
-            if type is None:
-                continue
-
-            # check the dependencie rules for Retrieval and Analyze nodes
-            if type in SINGLE_BOOK_RETRIEVAL and len(task.depends_on) != 0:
-                logger.warning(f"⚠️ Single Book Retrieval ID {task.id} has dependencies")
-                task.depends_on = []
-            elif type == NodeType.COMPARE and len(task.depends_on) < 2:
-                logger.warning(
-                    f"⚠️ Compare Book Strategy ID {task.id} doesn't have enough dependencies"
-                )
-                self.refused.append(task)
-                continue
-
-            valid_accepted.append(task)
-
-        self.accepted = valid_accepted
 
     def _create_execution_order(self):
         # Build adjacency list and indegree map
