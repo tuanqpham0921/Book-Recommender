@@ -58,6 +58,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )
+    ui_loading_message = "Starting conversation..."
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
@@ -143,6 +144,8 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
 
     async def run(self, request_context: RequestContext) -> None:
+        await self.sse_stream.send_ui_loading(self.ui_loading_message)
+        
         self.output.session_id = request_context.session_id
         self.output.chat_messages.append(self.user_message)
 

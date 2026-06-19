@@ -133,6 +133,7 @@ class InitialParseOutput(UserFacingOutput):
 class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
+    ui_loading_message = "Thinking..."
 
     _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/0_initial_system.txt"
     _USER_PROMPT_PATH = "orchestration/planner/prompts/1_initial_parse_response.txt"
@@ -150,7 +151,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         self.user_message = user_message
 
     async def run(self) -> None:
-        await self.sse_stream.send_ui_loading("Thinking...")
+        await self.sse_stream.send_ui_loading(self.ui_loading_message)
         
         system_prompt = format_prompt(
             prompt_path=self._SYSTEM_PROMPT_PATH,

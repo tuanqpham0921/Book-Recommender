@@ -77,7 +77,7 @@ class StrategyClassificationWorkflow(
 ):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
-    ui_loading_message = "Classifying user query..."
+    ui_loading_message = "Strategizing way to complete goals..."
 
     _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/2_strategy_classification.txt"
 
