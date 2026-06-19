@@ -6,44 +6,28 @@ from app.domains.base_request import BaseRequest
 if TYPE_CHECKING:
     from app.orchestration.planner.task_planner import TaskPlan
 
-def clean_string_mermaid(text):
-    # Remove parentheses, quotes, and Mermaid-reserved symbols
+
+def clean_string_mermaid(text: str) -> str:
     return re.sub(r'[()"\'<>{}\[\]|`#%@:;\\/]', "", text)
 
+
+def mermaid_id(raw_id: str) -> str:
+    """Sanitize task ids for Mermaid node identifiers."""
+    return re.sub(r"[^\w]", "_", raw_id)
+
+
 def get_mermaid_diagram(task_plan: "TaskPlan", node_ids: dict[str, BaseRequest]) -> str:
-    accepted_ids = set(task.id for task in task_plan.accepted)
-    
-    def is_retrieval_node(node_id: str) -> bool:
-        return node_id.endswith(("_tit", "_isbn", "_traits"))
-    
-    def is_analyze_node(node_id: str) -> bool:
-        return node_id.endswith(("_cmp", "_rec"))
+    lines = ["flowchart LR"]
 
-    result = "flowchart LR\n"
-
-    # Retrieval subgraph
-    
-    retrieval_nodes, analyze_nodes = [], []
-    for id in node_ids:
-        if id not in accepted_ids:
-            continue
-        
-        description = clean_string_mermaid(node_ids[id].description)
-        if is_retrieval_node(id) and id:
-            retrieval_nodes.append(f"\t\t{id}[{description}]")
-        elif is_analyze_node(id):
-            analyze_nodes.append(f"\t\t{id}[{description}]")
-        
-    result += "\n\tsubgraph Retrieval\n\t\tdirection LR\n"
-    result += "\n".join(retrieval_nodes) + "\n\t\tend\n"
-    # Analyze subgraph  
-    result += "\n\tsubgraph Analyze\n\t\tdirection LR\n"
-    result += "\n".join(analyze_nodes) + "\n\t\tend\n"
-
-    # Dependencies
-    result += "\n\tRetrieval ~~~ Analyze\n"
     for task in task_plan.accepted:
-        for depends_on in task.depends_on:
-            result += f"\t{depends_on} ---> {task.id}\n"
+        node = node_ids[task.id]
+        node_id = mermaid_id(task.id)
+        label = clean_string_mermaid(node.id)
+        lines.append(f'\t{node_id}["{label}"]')
 
-    return result
+    for task in task_plan.accepted:
+        
+        for dep in task.depends_on:
+            lines.append(f"\t{mermaid_id(dep)} --> {task.id}")
+
+    return "\n".join(lines) + "\n"

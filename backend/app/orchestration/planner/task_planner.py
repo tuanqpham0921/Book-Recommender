@@ -200,6 +200,7 @@ class TaskGenerationNode(BaseModel):
 @dataclass(slots=True)
 class TaskPlanOutput(UserFacingOutput):
     task_plan: TaskPlan | None = None
+    diagram: str | None = None
 
 
 class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
@@ -262,9 +263,9 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         )
 
         plan_result = TaskPlan.model_validate(tool_message.content)
+        
+        
         self.finalize_result(plan_result)
-
-        await self.send_mermaid(plan_result, node_ids)
 
     def finalize_result(self, plan_result: TaskPlan) -> None:
         self.output.task_plan = plan_result
@@ -308,24 +309,3 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         }
 
         return tool
-
-    async def send_mermaid(
-        self, task_plan: TaskPlan, node_ids: dict[str, BaseRequest]
-    ) -> None:
-        if not self.result.ok:
-            await self.sse_stream.send_error(self.planner_failure_message)
-            return
-
-        from app.common.mermaid import get_mermaid_diagram
-
-        try:
-            diagram = get_mermaid_diagram(task_plan, node_ids)
-        except Exception as e:
-            logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
-            await self.sse_stream.send_error(self.planner_failure_message)
-            return
-
-        await self.sse_stream.send_chars("__My Plan for Your Request__")
-        await self.sse_stream.send_mermaid(diagram)
-        # from common.utils import save_file
-        # save_file(diagram, file_name="task_plan-dev")

@@ -26,9 +26,10 @@ from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from app.domains.base_request import BaseRequest
 from common.operation import OperationResult
 from app.common.prompt_loader import format_prompt
-
+import logging
 ChildWorkflowT = TypeVar("ChildWorkflowT", bound=UserFacingBaseWorkflow)
 
+logger = logging.getLogger(__name__)
 
 @dataclass(slots=True)
 class OrchestrationOutput(UserFacingOutput):
@@ -36,7 +37,8 @@ class OrchestrationOutput(UserFacingOutput):
     parse_result: InitialParseResult | None = None
     strategy_result: StrategyClassificationResult | None = None
     task_plan: TaskPlan | None = None
-
+    diagram: str | None = None
+    
     def _sub_summary(self) -> dict[str, Any]:
         parse_summary = self.parse_result.to_summary() if self.parse_result else None
         strategy_summary = (
@@ -162,6 +164,9 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         if plan_result is None:
             return
 
+        diagram = await self.send_mermaid(plan_result.output.task_plan, node_ids)
+        self.output.diagram = diagram
+
         self.output.summary = await self.generate_summary()
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
@@ -177,3 +182,23 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
         await self.generate_user_response([self.user_message], prompt=prompt)
         return sub_summary
+    
+    async def send_mermaid(
+        self, task_plan: TaskPlan, node_ids: dict[str, BaseRequest]
+    ) -> None:
+        if not self.result.ok:
+            await self.sse_stream.send_error(self.planner_failure_message)
+            return
+
+        from app.common.mermaid import get_mermaid_diagram
+
+        try:
+            diagram = get_mermaid_diagram(task_plan, node_ids)
+        except Exception as e:
+            logger.warning(f"⚠️ Error generating Mermaid diagram: {e}")
+            await self.sse_stream.send_error(self.planner_failure_message)
+            return
+
+        await self.sse_stream.send_chars("__My Plan for Your Request__")
+        await self.sse_stream.send_mermaid(diagram)
+        return diagram
