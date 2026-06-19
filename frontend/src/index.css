@@ -569,9 +569,10 @@
 
 @utility markdown-container {
   white-space: pre-wrap;
-
+  
   & p {
-    @apply mb-5;
+    margin-bottom: 0.5rem;
+    white-space: normal;
   }
 
   & h1 {
@@ -579,19 +580,22 @@
   }
 
   & li {
-    @apply mb-3;
+    @apply mb-0.5;
+    white-space: normal;
   }
 
-  & li:last-child {
-    @apply mb-0;
+  & li:first-child {
+    margin-top: -1rem;
   }
 
   & ol {
-    @apply list-decimal mx-0 mt-0 mb-5 pl-8;
+    @apply list-decimal mx-0 mt-0 mb-2 pl-8;
+    white-space: normal;
   }
 
   & ul {
-    @apply list-disc mx-0 mt-0 mb-5 pl-8;
+    @apply list-disc mx-0 mt-0 mb-2 pl-8;
+    white-space: normal;
   }
 
   & a {
