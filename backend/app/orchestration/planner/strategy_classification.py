@@ -12,13 +12,19 @@ from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from config import BookConstraints, BookGuides
+from app.orchestration.planner.parse_intent import SystemGoal
+import logging
+import json
+logger = logging.getLogger(__name__)
+MAX_GOALS = 15
 
+StrategyType = Union[REQUEST_CLASSES]
 
 class StrategyClassificationResult(BaseModel):
     """Generic classification result for any node type."""
 
-    accepted: List[Union[REQUEST_CLASSES]] = []
-    refused: List[Union[REQUEST_CLASSES]] = []
+    accepted: List[StrategyType] = []
+    refused: List[StrategyType] = []
     continue_pipeline: bool = False
 
     def get_accepted_node_ids(self):
@@ -38,19 +44,13 @@ class StrategyClassificationNode(BaseModel):
     """
     Generate a set of strategy requests to satisfy the user's request.
     Each strategy should represent a discrete unit of work.
+    The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
 
-    strategies: List[Union[REQUEST_CLASSES]] = Field(
-        ...,
-        min_length=1,
+    strategies: List[StrategyType] = Field(
+        default_factory=list,
         max_length=15,
         description="List of strategies generated from the query",
-    )
-    reasoning: str = Field(
-        ...,
-        min_length=10,
-        max_length=500,
-        description="Reasoning for strategy classification",
     )
 
     async def __call__(self, accepted_tuning: float = 0.7):
@@ -58,7 +58,9 @@ class StrategyClassificationNode(BaseModel):
         result = StrategyClassificationResult()
 
         for strategy in self.strategies:
-            if strategy.refusal or strategy.confidence < accepted_tuning:
+            if (strategy.refusal or 
+                strategy.confidence < accepted_tuning or 
+                not strategy.target_goal):
                 result.refused.append(strategy)
             else:
                 result.accepted.append(strategy)
@@ -93,10 +95,13 @@ class StrategyClassificationWorkflow(
         )
         self.user_message = user_message
 
-    async def run(self, system_goals: str) -> None:
+    async def run(self, system_goals: list[SystemGoal]) -> None:
         """Classify the user query into book-related strategies."""
+        if not system_goals:
+            raise ValueError("System goals are required")
+        
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-
+        
         system_prompt = format_prompt(
             prompt_path=self._SYSTEM_PROMPT_PATH,
             book_constraints=str(BookConstraints()),
@@ -104,17 +109,28 @@ class StrategyClassificationWorkflow(
         )
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            messages=[AssistantMessage(content=system_goals)],
+            messages=[self._format_system_goals(system_goals)],
             tool_models=self.tool_models,
         )
-        assistant_msg = await self.run_llm_call(req)
+        assistant_msg = await self.run_llm_call(req, save_payload=True)
 
         tool_message = await self.run_tool_call(assistant_msg.tool_calls[0])
         classification_result = StrategyClassificationResult.model_validate(
             tool_message.content
         )
         self.finalize_result(classification_result)
-
+    
+    def _format_system_goals(self, system_goals: list[SystemGoal]) -> AssistantMessage:
+        payload = [
+            {
+                "id": goal.id,
+                "description": goal.description,
+                "confidence": goal.confidence,
+            }
+            for goal in system_goals
+        ]
+        return AssistantMessage(content=json.dumps(payload))
+        
     def finalize_result(
         self, classification_result: StrategyClassificationResult
     ) -> None:

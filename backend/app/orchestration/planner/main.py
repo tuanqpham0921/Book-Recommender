@@ -22,6 +22,7 @@ from app.orchestration.planner.task_planner import (
     TaskPlanOutput,
     TaskPlan,
 )
+from app.orchestration.planner.parse_intent import SystemGoal
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from app.domains.base_request import BaseRequest
 from common.operation import OperationResult
@@ -126,7 +127,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         return result
 
     async def _run_strategy_classification(
-        self, system_goals: str
+        self, system_goals: list[SystemGoal]
     ) -> OperationResult[Any] | None:
         workflow = self._child_workflow(StrategyClassificationWorkflow)
         return await self._run_phase(
@@ -156,7 +157,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             return
         
         system_goals = parse_result.output.parse_result.system_goals
-        system_goals = "\n".join(["* " + goal.description + "\n" for goal in system_goals])
+        # system_goals = "\n".join(["* " + goal.description + "\n" for goal in system_goals])
 
         strategy_result = await self._run_strategy_classification(system_goals)
         if strategy_result is None:

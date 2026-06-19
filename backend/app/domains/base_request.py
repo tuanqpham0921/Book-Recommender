@@ -23,6 +23,10 @@ class BaseRequest(BaseModel):
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Confidence score for the parsed results"
     )
+    target_goal: list[str] = Field(
+        default_factory=list,
+        description="Goal ids from the previous step (goal_1, goal_2, …) that this strategy fulfills",
+    )
     refusal: bool = Field(default=False, description="Did we refuse this node request?")
 
     def model_post_init(self, __context) -> None:

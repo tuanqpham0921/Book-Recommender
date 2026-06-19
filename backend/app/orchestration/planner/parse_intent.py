@@ -40,9 +40,6 @@ class SystemGoal(BaseModel):
         description="Confidence between 0 and 1 that the system can handle this goal",
     )
 
-    def model_post_init(self, __context: object) -> None:
-        object.__setattr__(self, "_id", str(uuid.uuid4())[:8])
-
     @property
     def id(self) -> str:
         return self._id
@@ -109,6 +106,7 @@ class InitialParseRequest(BaseModel):
         for goal in self.system_goals:
             if goal.confidence >= confident_tuning and len(accepted_system_goals) < MAX_SYSTEM_GOALS:
                 accepted_system_goals.append(goal)
+                goal._id = f"goal_{len(accepted_system_goals)}"
             else:
                 reason = (
                     f"Rejected: confidence too low ({goal.confidence})"
