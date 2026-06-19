@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class BaseRequest(BaseModel):
     node_type: NodeTypeEnum
-    id: str = Field(default="", description="Auto-generated unique identifier")
+    id: str = Field(..., description="assigned a task id to the node request (task_1, task_2, …)")
 
     description: str = Field(
         ...,
@@ -24,24 +24,17 @@ class BaseRequest(BaseModel):
         ..., ge=0.0, le=1.0, description="Confidence score for the parsed results"
     )
     target_goal: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
+        max_length=10,
         description="Goal ids from the previous step (goal_1, goal_2, …) that this strategy fulfills",
     )
     refusal: bool = Field(default=False, description="Did we refuse this node request?")
 
-    def model_post_init(self, __context) -> None:
-        if self.refusal:
-            self.id = f"{str(uuid4())[:8]}_refusal"
-        else:
-            self.id = f"{str(uuid4())[:8]}_{self.node_type.value}"
-
-
-DependencyDescription = Annotated[str, Field(max_length=100)]
-
 
 class AnalyzeBaseRequest(BaseRequest):
-    depends_on: list[DependencyDescription] = Field(
+    depends_on: list[str] = Field(
         default_factory=list,
-        description="Descriptions of requests that must complete first",
+        description="Task ids from the previous step (task_1, task_2, …) that must complete first",
         max_length=10,
     )

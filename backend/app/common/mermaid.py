@@ -23,10 +23,10 @@ def get_mermaid_diagram(task_plan: "TaskPlan", node_ids: dict[str, BaseRequest])
         node = node_ids[task.id]
         node_id = mermaid_id(task.id)
         label = clean_string_mermaid(node.id)
-        lines.append(f'\t{node_id}["{label}"]')
+        lines.append(f'\t{node_id}["{task.id}: {node.node_type.value}"]')
 
     for task in task_plan.accepted:
-        
+
         for dep in task.depends_on:
             lines.append(f"\t{mermaid_id(dep)} --> {task.id}")
 

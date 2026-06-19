@@ -15,7 +15,7 @@ from app.common.sse_stream import SSEStream
 from app.common.prompt_loader import load_prompt
 from app.common.messages import AssistantMessage
 from clients import OpenAIParserRequest
-
+from app.orchestration.planner.parse_intent import SystemGoal
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         )
         self.user_message = user_message
 
-    async def run(self, system_goals: str, node_ids: dict[str, BaseRequest]) -> None:
+    async def run(self, system_goals: list[SystemGoal], node_ids: dict[str, BaseRequest]) -> None:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -241,7 +241,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             formatted_node_ids[id] = node_ids[id].model_dump()
 
         messages = [
-            AssistantMessage(content=system_goals),
+            self._format_system_goals(system_goals),
             AssistantMessage(
                 content=json.dumps(formatted_node_ids, separators=(",", ":"))
             ),
@@ -261,9 +261,19 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         )
 
         plan_result = TaskPlan.model_validate(tool_message.content)
-        
-        
+
         self.finalize_result(plan_result)
+        
+    def _format_system_goals(self, system_goals: list[SystemGoal]) -> AssistantMessage:
+        payload = [
+            {
+                "id": goal.id,
+                "description": goal.description,
+                "confidence": goal.confidence,
+            }
+            for goal in system_goals
+        ]
+        return AssistantMessage(content=json.dumps(payload))
 
     def finalize_result(self, plan_result: TaskPlan) -> None:
         self.output.task_plan = plan_result

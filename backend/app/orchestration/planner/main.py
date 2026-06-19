@@ -136,7 +136,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
 
     async def _run_task_planner(
-        self, system_goals: str, node_ids: dict[str, BaseRequest]
+        self, system_goals: list[SystemGoal], node_ids: dict[str, BaseRequest]
     ) -> OperationResult[Any] | None:
         workflow = self._child_workflow(TaskPlanWorkflow)
         return await self._run_phase(

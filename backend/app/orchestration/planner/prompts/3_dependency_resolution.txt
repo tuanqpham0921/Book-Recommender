@@ -11,7 +11,7 @@ Each strategy entry includes:
 
 Your task:
   For every strategy id in the input map, produce one task with:
-    - id: exactly one of the input ids
+    - id: exactly one of the input ids (request id is in form task_)
     - depends_on: list of prerequisite strategy ids from the input map
     - refusal: true if this task cannot be wired or should not run
     - reasoning: how you matched dependencies, or why you refused
