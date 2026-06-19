@@ -149,20 +149,23 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             # TODO: Handle the case where the initial parse failed
             # with meaningful error message
             return
+        
+        system_goals = parse_result.output.parse_result.system_goals
+        system_goals = "\n".join(["* " + goal.description + "\n" for goal in system_goals])
 
-        # strategy_result = await self._run_strategy_classification(system_goals)
-        # if strategy_result is None:
-        #     return
+        strategy_result = await self._run_strategy_classification(system_goals)
+        if strategy_result is None:
+            return
 
-        # node_ids = self.output.strategy_result.get_accepted_node_ids()
-        # plan_result = await self._run_task_planner(system_goals, node_ids)
-        # if plan_result is None:
-        #     return
+        node_ids = self.output.strategy_result.get_accepted_node_ids()
+        plan_result = await self._run_task_planner(system_goals, node_ids)
+        if plan_result is None:
+            return
 
-        # self.output.summary = await self.generate_summary()
-        # self.result.ok = True
-        # self.result.message = "Conversation orchestration completed successfully"
-        # await self.sse_stream.send_divider()
+        self.output.summary = await self.generate_summary()
+        self.result.ok = True
+        self.result.message = "Conversation orchestration completed successfully"
+        await self.sse_stream.send_divider()
 
     async def generate_summary(self) -> dict[str, Any]:
         from common.utils import remove_json_empty_values
