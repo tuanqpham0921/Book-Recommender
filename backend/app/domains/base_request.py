@@ -1,6 +1,6 @@
 from uuid import uuid4
 from pydantic import BaseModel, Field
-from app.domains.types import NodeType
+from app.domains.types import NodeTypeEnum
 from typing import Annotated
 
 import logging
@@ -9,28 +9,20 @@ logger = logging.getLogger(__name__)
 
 
 class BaseRequest(BaseModel):
-    node_type: NodeType
-    id: str = Field(
-        default="", 
-        description="Auto-generated unique identifier"
-    )
-    
+    node_type: NodeTypeEnum
+    id: str = Field(default="", description="Auto-generated unique identifier")
+
     description: str = Field(
         ...,
         min_length=10,
         max_length=500,
-        description="Description of query that attributes to this node request"
+        description="Description of query that attributes to this node request",
     )
     reasoning: str = Field(
-        ...,
-        min_length=10,
-        max_length=100,
-        description="Reasoning for node request")
+        ..., min_length=10, max_length=100, description="Reasoning for node request"
+    )
     confidence: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description="Confidence score for the parsed results"
+        ..., ge=0.0, le=1.0, description="Confidence score for the parsed results"
     )
     refusal: bool = Field(default=False, description="Did we refuse this node request?")
 
@@ -40,10 +32,9 @@ class BaseRequest(BaseModel):
         else:
             self.id = f"{str(uuid4())[:8]}_{self.node_type.value}"
 
-DependencyDescription = Annotated[
-    str,
-    Field(max_length=100)
-]
+
+DependencyDescription = Annotated[str, Field(max_length=100)]
+
 
 class AnalyzeBaseRequest(BaseRequest):
     depends_on: list[DependencyDescription] = Field(

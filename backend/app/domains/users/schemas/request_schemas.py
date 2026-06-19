@@ -8,8 +8,8 @@ General Idea:
 - Assistant: "What is your preferences for books? are you a developer?"
 - User: "I'm a developer / recruiter. I care more about the internal working of the system"
 - Tool: "Update user info to reflect the user's preferences"
-- Assistant: 
-"Got it! I've remembered your background. 
+- Assistant:
+"Got it! I've remembered your background.
 Now I can:
 1. recommend books that are more relevant to you.
 2. give you the developer information
@@ -29,16 +29,18 @@ from typing import Literal
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from app.domains.users.schemas.filter_schema import DeveloperInfoEnum, UserInfoEnum
-from app.domains.users.types import NodeType
+from app.domains.users.types import NodeTypeEnum
 
 
 class UserInfoRequest(BaseRequest):
     """get user information from database"""
-    node_type: Literal[NodeType.USER_INFO] = NodeType.USER_INFO
+
+    node_type: Literal[NodeTypeEnum.USER_INFO] = NodeTypeEnum.USER_INFO
     field: list[UserInfoEnum] = Field(..., description="Field to retrieve")
-    
+
 
 class DeveloperInfoRequest(BaseRequest):
     """get developer information from database"""
-    node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
+
+    node_type: Literal[NodeTypeEnum.DEVELOPER_INFO] = NodeTypeEnum.DEVELOPER_INFO
     field: list[DeveloperInfoEnum] = Field(..., description="Field to retrieve")
