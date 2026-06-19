@@ -6,7 +6,7 @@ These are the specific schemas that the LLM should generate during classificatio
 from typing import Optional, Literal, List
 from pydantic import Field
 from app.domains.base_request import BaseRequest, AnalyzeBaseRequest
-from app.domains.books.types import NodeTypeEnum
+from app.domains.books.node_types import NodeTypeEnum
 from .filter_schemas import BooksFilter
 import logging
 

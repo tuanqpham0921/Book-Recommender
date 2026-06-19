@@ -23,7 +23,7 @@ from typing import Optional, Literal
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from app.domains.project.schemas.filter_schemas import ProjectInfoField
-from app.domains.project.types import NodeTypeEnum
+from app.domains.project.node_types import NodeTypeEnum
 
 
 class FeedbackRequest(BaseRequest):

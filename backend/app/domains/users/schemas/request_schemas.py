@@ -29,7 +29,7 @@ from typing import Literal
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from app.domains.users.schemas.filter_schema import DeveloperInfoEnum, UserInfoEnum
-from app.domains.users.types import NodeTypeEnum
+from app.domains.users.node_types import NodeTypeEnum
 
 
 class UserInfoRequest(BaseRequest):

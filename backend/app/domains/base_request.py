@@ -1,6 +1,6 @@
 from uuid import uuid4
 from pydantic import BaseModel, Field
-from app.domains.types import NodeTypeEnum
+from app.domains.node_types import NodeTypeEnum
 from typing import Annotated
 
 import logging

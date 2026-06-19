@@ -4,7 +4,7 @@ from app.domains.registry import (
     REQUEST_CLASSES,
     get_request_class,
 )
-from app.domains.types import NodeTypeEnum
+from app.domains.node_types import NodeTypeEnum
 
 __all__ = [
     "AllRequests",

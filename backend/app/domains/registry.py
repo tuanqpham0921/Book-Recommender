@@ -9,18 +9,18 @@ from app.domains.books.schemas.request_schemas import (
     FindByTraitsRetrieval,
     RecommendationStrategy,
 )
-from app.domains.books.types import NodeTypeEnum as BookNodeTypeEnum
+from app.domains.books.node_types import NodeTypeEnum as BookNodeTypeEnum
 from app.domains.project.schemas.request_schemas import (
     FeedbackRequest,
     ProjectInfoRequest,
 )
-from app.domains.project.types import NodeTypeEnum as ProjectNodeTypeEnum
-from app.domains.types import NodeTypeEnum
+from app.domains.project.node_types import NodeTypeEnum as ProjectNodeTypeEnum
+from app.domains.node_types import NodeTypeEnum
 from app.domains.users.schemas.request_schemas import (
     DeveloperInfoRequest,
     UserInfoRequest,
 )
-from app.domains.users.types import NodeTypeEnum as UserNodeTypeEnum
+from app.domains.users.node_types import NodeTypeEnum as UserNodeTypeEnum
 
 # All request schema classes — add new ones here
 REQUEST_CLASSES = (
@@ -60,3 +60,8 @@ AllRequests = Annotated[
     Field(discriminator="node_type"),
 ]
 
+def main():
+    print(NODE_TYPE_TO_CLS)
+
+if __name__ == "__main__":
+    main()
