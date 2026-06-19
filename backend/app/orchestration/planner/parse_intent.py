@@ -70,7 +70,11 @@ class InitialParseResult(BaseModel):
         return [
             AssistantMessage(
                 content=self.model_dump_json(
-                    include={"small_talk", "out_of_scope", "rejected_system_goals", "continue_pipeline", "reasoning"}
+                    include={"small_talk", 
+                             "out_of_scope", 
+                             "rejected_system_goals", 
+                             "continue_pipeline", 
+                             "reasoning"}
                 )
             )
         ]
