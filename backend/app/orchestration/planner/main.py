@@ -150,10 +150,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             # with meaningful error message
             return
 
-        system_goals = self.output.parse_result.system_goals
-        for system_goal in system_goals:
-            await self.sse_stream.send_chars("* " + system_goal.description + "\n")
-
         # strategy_result = await self._run_strategy_classification(system_goals)
         # if strategy_result is None:
         #     return

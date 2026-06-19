@@ -165,10 +165,15 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         tool_message = await self.run_tool_call(assistant_msg.tool_calls[0])
         parse_result = InitialParseResult.model_validate(tool_message.content)
 
+        system_goals = parse_result.system_goals
+        for system_goal in system_goals:
+            await self.sse_stream.send_chars(f"* {system_goal.description}\n")
+            
         await self.generate_user_response(
             parse_result.to_llm_messages(),
             prompt=self.user_prompt,
         )
+        
         
         self.finalize_result(parse_result)
 
