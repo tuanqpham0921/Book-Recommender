@@ -174,9 +174,9 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         )
         
         if system_goals:
-            await self.sse_stream.send_chars("\n\n**System Goals:**\n")
+            await self.sse_stream.send_chars("\n\n# System Goals:\n")
             for system_goal in system_goals:
-                await self.sse_stream.send_chars(f"* {system_goal.description}\n")
+                await self.sse_stream.send_chars(f"- {system_goal.description}\n")
         
         
         self.finalize_result(parse_result)

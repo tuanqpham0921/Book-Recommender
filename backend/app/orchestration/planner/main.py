@@ -202,6 +202,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
             await self.sse_stream.send_error(self.planner_failure_message)
             return
 
-        await self.sse_stream.send_chars("__My Plan for Your Request__")
+        await self.sse_stream.send_chars("# My Plan for Your Request")
         await self.sse_stream.send_mermaid(diagram)
         return diagram
