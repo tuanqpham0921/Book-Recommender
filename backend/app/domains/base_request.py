@@ -30,6 +30,14 @@ class BaseRequest(BaseModel):
         description="Goal ids from the previous step (goal_1, goal_2, …) that this strategy fulfills",
     )
     refusal: bool = Field(default=False, description="Did we refuse this node request?")
+    
+    def model_post_init(self, __context: object) -> None:
+        """Validate the node request and return a new node request with the valid dependencies"""
+        self.target_goal = list(set(self.target_goal))
+        if self.confidence < 0.5:
+            logger.warning(f"Confidence {self.confidence} is less than 0.5; refusing the request")
+            self.refusal = True
+            self.reasoning = f"Confidence {self.confidence} is less than 0.5"
 
 
 class AnalyzeBaseRequest(BaseRequest):
@@ -38,3 +46,10 @@ class AnalyzeBaseRequest(BaseRequest):
         description="Task ids from the previous step (task_1, task_2, …) that must complete first",
         max_length=10,
     )
+    
+    def model_post_init(self, __context: object) -> None:
+        """Validate the dependencies of the task and return a new task with the valid dependencies"""
+        if self.id in self.depends_on:
+            logger.warning(f"Task {self.id} depended on itself; removing dependency")
+            self.depends_on.remove(self.id)
+        super().model_post_init(__context)
