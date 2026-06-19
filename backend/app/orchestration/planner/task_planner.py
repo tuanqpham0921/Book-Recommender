@@ -212,9 +212,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         "I couldn't create a task plan for your request. Please try again."
     )
 
-    prompt = load_prompt(
-        prompt_path="orchestration/planner/prompts/dependency_resolution.txt",
-    )
+    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/dependency_resolution.txt"
     tool_models = [TaskGenerationNode]
 
     def __init__(
@@ -250,7 +248,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         ]
 
         req = OpenAIParserRequest(
-            prompt=self.prompt,
+            prompt=load_prompt(prompt_path=self._SYSTEM_PROMPT_PATH),
             messages=messages,
             tool_models=self.tool_models,
             tool_override=tool_override,

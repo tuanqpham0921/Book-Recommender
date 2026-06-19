@@ -135,9 +135,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     failure_message = "Initial parse failed"
 
     _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/initial_system.txt"
-    user_prompt = load_prompt(
-        prompt_path="orchestration/planner/prompts/initial_parse_response.txt"
-    )
+    _USER_PROMPT_PATH = "orchestration/planner/prompts/initial_parse_response.txt"
 
     tool_models = [InitialParseRequest]
 
@@ -171,7 +169,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         system_goals = parse_result.system_goals
         await self.generate_user_response(
             parse_result.to_llm_messages(),
-            prompt=self.user_prompt,
+            prompt=load_prompt(prompt_path=self._USER_PROMPT_PATH),
         )
         
         if system_goals:

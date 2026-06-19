@@ -61,7 +61,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
-    summary_prompt_path = (
+    _SUMMARY_PROMPT_PATH = (
         "orchestration/planner/prompts/conversation_orchestration_summary.txt"
     )
 
@@ -177,7 +177,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
 
         sub_summary = remove_json_empty_values(self.output._sub_summary())
         prompt = format_prompt(
-            self.summary_prompt_path,
+            self._SUMMARY_PROMPT_PATH,
             sub_summary=json.dumps(sub_summary, indent=2),
         )
         await self.generate_user_response([self.user_message], prompt=prompt)

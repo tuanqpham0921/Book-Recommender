@@ -79,11 +79,7 @@ class StrategyClassificationWorkflow(
     failure_message = "Strategy classification failed"
     ui_loading_message = "Classifying user query..."
 
-    system_prompt = format_prompt(
-        prompt_path="orchestration/planner/prompts/strategy_classification.txt",
-        book_constraints=str(BookConstraints()),
-        book_guides=str(BookGuides()),
-    )
+    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/strategy_classification.txt"
 
     tool_models = [StrategyClassificationNode]
 
@@ -101,8 +97,13 @@ class StrategyClassificationWorkflow(
         """Classify the user query into book-related strategies."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
+        system_prompt = format_prompt(
+            prompt_path=self._SYSTEM_PROMPT_PATH,
+            book_constraints=str(BookConstraints()),
+            book_guides=str(BookGuides()),
+        )
         req = OpenAIParserRequest(
-            prompt=self.system_prompt,
+            prompt=system_prompt,
             messages=[AssistantMessage(content=system_goals)],
             tool_models=self.tool_models,
         )
