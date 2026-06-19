@@ -25,7 +25,7 @@ MAX_TASKS = 10
 class Task(BaseModel):
     model_config = {"extra": "forbid"}
     id: str
-    depends_on: list[str] = Field(default_factory=list, max_length=5)
+    depends_on: list[str] = Field(default_factory=list, max_length=10)
     refusal: bool = Field(default=False, description="Did we refuse this task?")
     reasoning: str = Field(
         ..., min_length=10, max_length=500, description="Reasoning for task creation"

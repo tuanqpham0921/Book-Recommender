@@ -7,7 +7,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 class BaseRequest(BaseModel):
     node_type: NodeTypeEnum
     id: str = Field(default="", description="Auto-generated unique identifier")
@@ -40,5 +39,5 @@ class AnalyzeBaseRequest(BaseRequest):
     depends_on: list[DependencyDescription] = Field(
         default_factory=list,
         description="Descriptions of requests that must complete first",
-        max_length=5,
+        max_length=10,
     )
