@@ -25,7 +25,5 @@ RetrievalTask = Union[
 __all__ = [
     "BooksFilter",
     "AnalyzeTask",
-    "RetrievalTask",
-    "CompareStrategy",
-    "RecommendationStrategy",
+    "RetrievalTask"
 ]

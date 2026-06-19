@@ -25,21 +25,12 @@ Future Plan (agentic capabilities):
 - as an admin, add a new developer to the system giving them access to update their own information
 """
 
-from typing import Optional, Literal
+from typing import Literal
 from pydantic import Field
 from app.domains.base_request import BaseRequest
-from enum import Enum
-
+from app.domains.users.schemas.filter_schema import DeveloperInfoEnum, UserInfoEnum
 from app.domains.users.types import NodeType
 
-class UserInfoEnum(str, Enum):
-    NAME = "name"
-    AGE = "age"
-    BIO = "bio"
-    TOKEN_USAGE = "token_usage"
-    SAVED_MEMORY = "saved_memory"
-    PREVIOUS_CONVERSATION = "previous_conversation"
-    CURRENT_CONVERSATION = "current_conversation"
 
 class UserInfoRequest(BaseRequest):
     """get user information from database"""
@@ -47,12 +38,6 @@ class UserInfoRequest(BaseRequest):
     field: list[UserInfoEnum] = Field(..., description="Field to retrieve")
     
 
-class DeveloperInfoEnum(str, Enum):
-    NAME = "name"
-    BIO = "bio"
-    EMAIL = "email"
-    LINKEDIN_URL = "linkedin_url"
-    
 class DeveloperInfoRequest(BaseRequest):
     """get developer information from database"""
     node_type: Literal[NodeType.DEVELOPER_INFO] = NodeType.DEVELOPER_INFO
