@@ -36,24 +36,23 @@ class StrategyClassificationResult(BaseModel):
 
 class StrategyClassificationNode(BaseModel):
     """
-        Generate a set of strategy requests to satisfy the user's request.
-        Each strategy should represent a discrete unit of work.
+    Generate a set of strategy requests to satisfy the user's request.
+    Each strategy should represent a discrete unit of work.
     """
 
     strategies: List[AllRequests] = Field(
         ...,
         min_length=1,
         max_length=15,
-        description="List of strategies generated from the query"
+        description="List of strategies generated from the query",
     )
     reasoning: str = Field(
         ...,
         min_length=10,
         max_length=500,
-        description="Reasoning for strategy classification"
+        description="Reasoning for strategy classification",
     )
-    
-    
+
     async def __call__(self, accepted_tuning: float = 0.7):
         """Convert to ClassificationResult format"""
         result = StrategyClassificationResult()
@@ -73,7 +72,9 @@ class StrategyClassificationOutput(UserFacingOutput):
     strategy_result: StrategyClassificationResult | None = None
 
 
-class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificationOutput]):
+class StrategyClassificationWorkflow(
+    UserFacingBaseWorkflow[StrategyClassificationOutput]
+):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
     ui_loading_message = "Classifying user query..."
@@ -96,13 +97,13 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         )
         self.user_message = user_message
 
-    async def run(self, in_domain_message: str) -> None:
+    async def run(self, system_goals: str) -> None:
         """Classify the user query into book-related strategies."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         req = OpenAIParserRequest(
             prompt=self.system_prompt,
-            messages=[AssistantMessage(content=in_domain_message)],
+            messages=[AssistantMessage(content=system_goals)],
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_llm_call(req)
@@ -113,7 +114,9 @@ class StrategyClassificationWorkflow(UserFacingBaseWorkflow[StrategyClassificati
         )
         self.finalize_result(classification_result)
 
-    def finalize_result(self, classification_result: StrategyClassificationResult) -> None:
+    def finalize_result(
+        self, classification_result: StrategyClassificationResult
+    ) -> None:
         self.output.strategy_result = classification_result
         self.output.summary = classification_result.to_summary()
         super().finalize_result(

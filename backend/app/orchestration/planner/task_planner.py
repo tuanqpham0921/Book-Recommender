@@ -32,7 +32,9 @@ class Task(BaseModel):
     id: str
     depends_on: list[str] = Field(default_factory=list, max_length=5)
     refusal: bool = Field(default=False, description="Did we refuse this task?")
-    reasoning: str = Field(..., min_length=10, max_length=500, description="Reasoning for task creation")
+    reasoning: str = Field(
+        ..., min_length=10, max_length=500, description="Reasoning for task creation"
+    )
 
     def model_post_init(self, __context: object) -> None:
         """Validate the dependencies of the task and return a new task with the valid dependencies"""
@@ -83,7 +85,9 @@ class TaskPlan(BaseModel):
                 f"Execution order mismatch. Missing={missing_ids}, extra={extra_ids}"
             )
 
-    def _validate_dependency_in_accepted(self, node_ids: dict[str, BaseRequest]) -> None:
+    def _validate_dependency_in_accepted(
+        self, node_ids: dict[str, BaseRequest]
+    ) -> None:
         accepted_ids = set(task.id for task in self.accepted)
         for task in self.accepted:
             for dep in task.depends_on:
@@ -99,7 +103,7 @@ class TaskPlan(BaseModel):
         for task in self.accepted:
             node = node_ids[task.id]
             type = node.node_type
-            
+
             if type is None:
                 continue
 
@@ -165,20 +169,19 @@ class TaskPlan(BaseModel):
             "execution_order": self.execution_order,
             "missing_count": len(self.missing_ids),
             "refused": [task.reasoning for task in self.refused],
-            
         }
 
 
 class TaskGenerationNode(BaseModel):
     """
-        Construct a dependency graph for the provided strategies.
+    Construct a dependency graph for the provided strategies.
 
-        Determine which strategies can execute independently and which
-        require outputs from other strategies. Generate the minimal set
-        of dependencies required for correct execution.
+    Determine which strategies can execute independently and which
+    require outputs from other strategies. Generate the minimal set
+    of dependencies required for correct execution.
 
-        Use only the provided strategy IDs when creating dependencies.
-        Avoid unnecessary dependencies that would reduce parallelism.
+    Use only the provided strategy IDs when creating dependencies.
+    Avoid unnecessary dependencies that would reduce parallelism.
     """
 
     model_config = {"extra": "forbid"}
@@ -188,7 +191,7 @@ class TaskGenerationNode(BaseModel):
         description=f"Create at most {MAX_TASKS} tasks with resolved dependencies",
         max_length=MAX_TASKS,
     )
-    
+
     async def __call__(self, node_ids) -> TaskPlan:
         logger.debug("🔍 Processing TaskGenerationNode")
 
@@ -235,8 +238,10 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
     success_message = "Task plan created successfully"
     failure_message = "Task plan creation failed"
     ui_loading_message = "Creating task plan..."
-    
-    planner_failure_message = "I couldn't create a task plan for your request. Please try again."
+
+    planner_failure_message = (
+        "I couldn't create a task plan for your request. Please try again."
+    )
 
     prompt = load_prompt(
         prompt_path="orchestration/planner/prompts/dependency_resolution.txt",
@@ -253,9 +258,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         )
         self.user_message = user_message
 
-    async def run(
-        self, in_domain_message: str, node_ids: dict[str, BaseRequest]
-    ) -> None:
+    async def run(self, system_goals: str, node_ids: dict[str, BaseRequest]) -> None:
         """Create a task execution plan with dependency resolution."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -271,7 +274,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
             formatted_node_ids[id] = node_ids[id].model_dump()
 
         messages = [
-            AssistantMessage(content=in_domain_message),
+            AssistantMessage(content=system_goals),
             AssistantMessage(
                 content=json.dumps(formatted_node_ids, separators=(",", ":"))
             ),
@@ -292,22 +295,22 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
 
         plan_result = TaskPlan.model_validate(tool_message.content)
         self.finalize_result(plan_result)
-        
+
         await self.send_mermaid(plan_result, node_ids)
-        
+
     def finalize_result(self, plan_result: TaskPlan) -> None:
         self.output.task_plan = plan_result
         self.output.summary = plan_result.to_summary()
-        super().finalize_result(
-            ok=1 <= len(plan_result.execution_order) <= MAX_TASKS
-        )
+        super().finalize_result(ok=1 <= len(plan_result.execution_order) <= MAX_TASKS)
 
     def modify_schema(self, tool_model: type, valid_ids: list[str]):
         if not valid_ids:
             raise ValueError("No valid ids provided")
-        
+
         if len(valid_ids) > MAX_TASKS:
-            logger.warning(f"⚠️ TaskPlanWorkflow has too many valid ids removing {len(valid_ids) - MAX_TASKS} ids")
+            logger.warning(
+                f"⚠️ TaskPlanWorkflow has too many valid ids removing {len(valid_ids) - MAX_TASKS} ids"
+            )
             self.result.details["removed_ids"] = valid_ids[MAX_TASKS:]
             valid_ids = valid_ids[:MAX_TASKS]
 
@@ -344,7 +347,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         if not self.result.ok:
             await self.sse_stream.send_error(self.planner_failure_message)
             return
-        
+
         from app.common.mermaid import get_mermaid_diagram
 
         try:

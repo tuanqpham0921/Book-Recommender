@@ -51,6 +51,7 @@ class OrchestrationOutput(UserFacingOutput):
             "task_plan": task_plan_summary,
         }
 
+
 class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
@@ -122,20 +123,20 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         return result
 
     async def _run_strategy_classification(
-        self, in_domain_message: str
+        self, system_goals: str
     ) -> OperationResult[Any] | None:
         workflow = self._child_workflow(StrategyClassificationWorkflow)
         return await self._run_phase(
-            lambda: workflow(in_domain_message),
+            lambda: workflow(system_goals),
             error_message=self.strategy_classification_failure_message,
         )
 
     async def _run_task_planner(
-        self, in_domain_message: str, node_ids: dict[str, BaseRequest]
+        self, system_goals: str, node_ids: dict[str, BaseRequest]
     ) -> OperationResult[Any] | None:
         workflow = self._child_workflow(TaskPlanWorkflow)
         return await self._run_phase(
-            lambda: workflow(in_domain_message, node_ids),
+            lambda: workflow(system_goals, node_ids),
             error_message=self.task_planner_failure_message,
         )
 
@@ -144,26 +145,28 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         self.output.chat_messages.append(self.user_message)
 
         parse_result = await self._run_initial_parse()
-        if parse_result is None:
+        if parse_result is None or not parse_result.ok:
+            # TODO: Handle the case where the initial parse failed
+            # with meaningful error message
             return
 
-        in_domain_message = self.output.parse_result.model_dump_json(
-            include={"user_query_domain", "continue_pipeline", "reasoning"}
-        )
+        system_goals = self.output.parse_result.system_goals
+        for system_goal in system_goals:
+            await self.sse_stream.send_chars("* " + system_goal.description + "\n")
 
-        strategy_result = await self._run_strategy_classification(in_domain_message)
-        if strategy_result is None:
-            return
+        # strategy_result = await self._run_strategy_classification(system_goals)
+        # if strategy_result is None:
+        #     return
 
-        node_ids = self.output.strategy_result.get_accepted_node_ids()
-        plan_result = await self._run_task_planner(in_domain_message, node_ids)
-        if plan_result is None:
-            return
+        # node_ids = self.output.strategy_result.get_accepted_node_ids()
+        # plan_result = await self._run_task_planner(system_goals, node_ids)
+        # if plan_result is None:
+        #     return
 
-        self.output.summary = await self.generate_summary()
-        self.result.ok = True
-        self.result.message = "Conversation orchestration completed successfully"
-        await self.sse_stream.send_divider()
+        # self.output.summary = await self.generate_summary()
+        # self.result.ok = True
+        # self.result.message = "Conversation orchestration completed successfully"
+        # await self.sse_stream.send_divider()
 
     async def generate_summary(self) -> dict[str, Any]:
         from common.utils import remove_json_empty_values
