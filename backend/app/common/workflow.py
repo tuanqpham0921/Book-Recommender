@@ -83,8 +83,10 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         assistant_msg = await self.run_async_step(self.llm_client.execute(req))
         return assistant_msg.output
 
-    async def run_llm_call(self, req: BaseLLMRequest) -> AssistantMessage:
-        result = await self.run_async_step(self.llm_client.execute(req))
+    async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
+        result = await self.run_async_step(
+            self.llm_client.execute(req, save_payload=save_payload)
+        )
         return result.output
 
     async def run_tool_call(

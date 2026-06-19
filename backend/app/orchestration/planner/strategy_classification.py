@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 
-from typing import List
+from typing import List, Union
 
 from pydantic import BaseModel, Field
 
 from app.common.messages import AssistantMessage, UserMessage, ToolMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
-from app.domains import AllRequests
+from app.domains.registry import REQUEST_CLASSES
 from clients.openai_client import OpenAIClient
 from clients import OpenAIParserRequest
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
@@ -17,8 +17,8 @@ from config import BookConstraints, BookGuides
 class StrategyClassificationResult(BaseModel):
     """Generic classification result for any node type."""
 
-    accepted: List[AllRequests] = []
-    refused: List[AllRequests] = []
+    accepted: List[Union[REQUEST_CLASSES]] = []
+    refused: List[Union[REQUEST_CLASSES]] = []
     continue_pipeline: bool = False
 
     def get_accepted_node_ids(self):
@@ -40,7 +40,7 @@ class StrategyClassificationNode(BaseModel):
     Each strategy should represent a discrete unit of work.
     """
 
-    strategies: List[AllRequests] = Field(
+    strategies: List[Union[REQUEST_CLASSES]] = Field(
         ...,
         min_length=1,
         max_length=15,

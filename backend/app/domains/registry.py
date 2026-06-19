@@ -1,3 +1,4 @@
+import inspect
 from typing import Annotated, Union
 
 from pydantic import Field
@@ -23,17 +24,21 @@ from app.domains.users.schemas.request_schemas import (
 from app.domains.users.node_types import NodeTypeEnum as UserNodeTypeEnum
 
 # All request schema classes — add new ones here
-REQUEST_CLASSES = (
-    CompareStrategy,
-    RecommendationStrategy,
+
+RETRIEVAL_CLASSES = (
     FindByTitleRetrieval,
     FindByISBN13Retrieval,
     FindByTraitsRetrieval,
     UserInfoRequest,
     DeveloperInfoRequest,
     ProjectInfoRequest,
-    FeedbackRequest,
 )
+ANALYZE_CLASSES = (
+    CompareStrategy,
+    RecommendationStrategy,
+)
+
+REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
 
 # Manual node_type → class lookup — add new mappings here
 NODE_TYPE_TO_CLS: dict[str, type] = {
@@ -45,7 +50,6 @@ NODE_TYPE_TO_CLS: dict[str, type] = {
     UserNodeTypeEnum.USER_INFO.value: UserInfoRequest,
     UserNodeTypeEnum.DEVELOPER_INFO.value: DeveloperInfoRequest,
     ProjectNodeTypeEnum.PROJECT_INFO.value: ProjectInfoRequest,
-    ProjectNodeTypeEnum.FEEDBACK.value: FeedbackRequest,
 }
 
 
@@ -54,14 +58,43 @@ def get_request_class(node_type: NodeTypeEnum | str) -> type:
     return NODE_TYPE_TO_CLS[key]
 
 
-# Discriminated union for OpenAI tool schemas (strategy classification)
-AllRequests = Annotated[
-    Union[REQUEST_CLASSES],
-    Field(discriminator="node_type"),
-]
+def class_docstring(cls: type) -> str:
+    docs = inspect.getdoc(cls)
+    if not docs:
+        return "No description"
+    return docs.strip()
 
-def main():
-    print(NODE_TYPE_TO_CLS)
+
+def format_node_type_catalog() -> str:
+    """Build a catalog of supported capabilities grouped by tier."""
+
+    def lines_for(label: str, classes: tuple[type, ...]) -> list[str]:
+        section = [f"{label}:"]
+        for cls in classes:
+            for node_type, mapped_cls in NODE_TYPE_TO_CLS.items():
+                if mapped_cls is cls:
+                    section.append(f"  - {node_type}: {class_docstring(cls)}")
+                    break
+        return section
+
+    catalog = [
+        "Supported capabilities (only these may become system_goals):",
+        *lines_for("Retrieval — lookup or fetch data", RETRIEVAL_CLASSES),
+        "",
+        *lines_for("Analyze — interpret, compare, or recommend using retrieved data", ANALYZE_CLASSES),
+    ]
+
+    listed = set(RETRIEVAL_CLASSES) | set(ANALYZE_CLASSES)
+    extra = [cls for cls in NODE_TYPE_TO_CLS.values() if cls not in listed]
+    if extra:
+        catalog.extend(["", *lines_for("Other supported actions", tuple(dict.fromkeys(extra)))])
+
+    return "\n".join(catalog)
+
+
+def main() -> None:
+    print(format_node_type_catalog())
+
 
 if __name__ == "__main__":
     main()

@@ -29,7 +29,7 @@ class BaseLLMClient(ABC):
     semaphore: asyncio.Semaphore
 
     @abstractmethod
-    async def execute(self, req: BaseLLMRequest):
+    async def execute(self, req: BaseLLMRequest, save_payload: bool = False):
         """Execute a request (stream or not) and return an AssistantMessage."""
         ...
 

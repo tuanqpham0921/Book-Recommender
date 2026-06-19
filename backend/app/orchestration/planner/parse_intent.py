@@ -2,7 +2,7 @@ import logging
 
 from dataclasses import dataclass
 
-from app.common.prompt_loader import load_prompt
+from app.common.prompt_loader import load_prompt, format_prompt
 
 from app.common.sse_stream import SSEStream
 from clients import OpenAIParserRequest
@@ -13,7 +13,8 @@ from clients.openai_client import OpenAIClient
 
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.common.messages import AssistantMessage, BaseMessage, ToolMessage
+from app.common.messages import AssistantMessage, BaseMessage
+from app.domains.registry import format_node_type_catalog
 from typing import Annotated
 from pydantic import PrivateAttr
 import uuid
@@ -133,9 +134,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
 
-    system_prompt = load_prompt(
-        prompt_path="orchestration/planner/prompts/initial_system.txt"
-    )
+    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/initial_system.txt"
     user_prompt = load_prompt(
         prompt_path="orchestration/planner/prompts/initial_parse_response.txt"
     )
@@ -154,9 +153,13 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading("Thinking...")
-
+        
+        system_prompt = format_prompt(
+            prompt_path=self._SYSTEM_PROMPT_PATH,
+            TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
+        )
         req = OpenAIParserRequest(
-            prompt=self.system_prompt,
+            prompt=system_prompt,
             messages=[self.user_message],
             tool_models=self.tool_models,
         )
@@ -166,13 +169,15 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         parse_result = InitialParseResult.model_validate(tool_message.content)
 
         system_goals = parse_result.system_goals
-        for system_goal in system_goals:
-            await self.sse_stream.send_chars(f"* {system_goal.description}\n")
-            
         await self.generate_user_response(
             parse_result.to_llm_messages(),
             prompt=self.user_prompt,
         )
+        
+        if system_goals:
+            await self.sse_stream.send_chars("\n\n**System Goals:**\n")
+            for system_goal in system_goals:
+                await self.sse_stream.send_chars(f"* {system_goal.description}\n")
         
         
         self.finalize_result(parse_result)
