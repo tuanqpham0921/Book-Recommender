@@ -79,7 +79,7 @@ class StrategyClassificationWorkflow(
     failure_message = "Strategy classification failed"
     ui_loading_message = "Classifying user query..."
 
-    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/strategy_classification.txt"
+    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/2_strategy_classification.txt"
 
     tool_models = [StrategyClassificationNode]
 

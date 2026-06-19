@@ -62,7 +62,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
     _SUMMARY_PROMPT_PATH = (
-        "orchestration/planner/prompts/conversation_orchestration_summary.txt"
+        "orchestration/planner/prompts/4_conversation_orchestration_summary.txt"
     )
 
     def __init__(

@@ -212,7 +212,7 @@ class TaskPlanWorkflow(UserFacingBaseWorkflow[TaskPlanOutput]):
         "I couldn't create a task plan for your request. Please try again."
     )
 
-    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/dependency_resolution.txt"
+    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/3_dependency_resolution.txt"
     tool_models = [TaskGenerationNode]
 
     def __init__(
