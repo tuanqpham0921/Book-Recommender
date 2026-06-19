@@ -75,7 +75,6 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         tool = pydantic_function_tool(
             self.tool_models[0],
             name=tool_name,
-            # description=f"Fill the schema for {tool_name}",
         )
         return tool
 
@@ -111,9 +110,6 @@ class OpenAIToolRequest(OpenAIBaseRequest):
             tool = pydantic_function_tool(
                 tool_model,
                 name=tool_name,
-                # TODO: this is a different description for each tool
-                # and different from the parser request
-                description=f"Fill the schema for {tool_name}",
             )
             tools.append(tool)
         return tools
