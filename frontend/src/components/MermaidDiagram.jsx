@@ -1,6 +1,6 @@
 import { useEffect, useRef, memo, useState } from 'react'
 import mermaid from 'mermaid'
-import svgPanZoom from 'svg-pan-zoom'
+import Panzoom from "@panzoom/panzoom";
 
 function MermaidDiagram({ chart }) {
     const containerRef = useRef(null)
@@ -60,16 +60,19 @@ function MermaidDiagram({ chart }) {
 
                     const svgElement = containerRef.current.querySelector('svg')
                     if (svgElement) {
-                        svgPanZoom(svgElement, {
-                            zoomEnabled: true,
-                            panEnabled: true,
-                            controlIconsEnabled: true,
-                            fit: true,
-                            center: true,
-                            mouseWheelZoomEnabled: true,
-                            minZoom: 0.2,
-                            maxZoom: 10,
+                        const panzoom = Panzoom(svgElement, {
+                            maxScale: 10,
+                            minScale: 0.2,
+                    
+                            // Prevent dragging too far
+                            contain: "outside",
                         });
+                    
+                        containerRef.current.addEventListener(
+                            "wheel",
+                            panzoom.zoomWithWheel,
+                            { passive: false }
+                        );
                     }
                 }
 
