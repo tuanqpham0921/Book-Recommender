@@ -68,7 +68,7 @@ class BaseRequest(BaseModel):
     @classmethod
     def check_id(cls, value):
         if (not isinstance(value, str) 
-            or not re.match(TASK_ID_PATTERN, value)):
+            or not re.match(TASK_LLM_ID_PATTERN, value)):
             return f"{ID_PREFIX}{uuid_8()}"
         return value
     
@@ -166,10 +166,11 @@ class AnalyzeBaseRequest(DomainRequest):
             value = [value]
         tasks = []
         for item in value:
-            if (not isinstance(item, str) or
-                not (re.match(TASK_LLM_ID_PATTERN, item) or re.match(TASK_ID_PATTERN, item))):
-                continue
-            tasks.append(item)
+            if isinstance(item, str) and (
+                re.match(TASK_LLM_ID_PATTERN, item) 
+                or re.match(TASK_ID_PATTERN, item)
+            ):
+                tasks.append(item)
 
         if not tasks or len(tasks) < MIN_LIST_LENGTH:
             tasks = [TASK_PLACEHOLDER] * MIN_LIST_LENGTH
