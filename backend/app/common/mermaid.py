@@ -37,7 +37,7 @@ def get_mermaid_diagram(
         node = id_to_node[task]
         node_id = mermaid_id(task)
         label = format_node_label(task, to_jsonable(node))
-        lines.append(f'\t{node_id}["{label}"]')
+        lines.append(f'\t{node_id}["<div style="text-align:left">{label}</div>"]')
 
     for task in execution_order:
         node = id_to_node[task]
