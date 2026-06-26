@@ -316,16 +316,20 @@ class StrategyClassificationWorkflow(
         
         # Check for cycles in the dependency graph
         if len(order) != len(indegree):
-            excepted_nodes = self.output.get_accepted_id_to_node()
-            logger.warning("Cycle detected in dependency graph")
-            remaining_nodes = [node_id for node_id, degree in indegree.items() if degree > 0]
-            for node_id in remaining_nodes:
-                logger.warning(f"Removing node {node_id} from accepted list")
-                if node_id not in excepted_nodes:
-                    continue
-                node = excepted_nodes[node_id]
-                self.output.accepted.remove(node)
-                excepted_nodes.remove(node_id)
-                node._refusal = True
-                node._refusal_reasons.append("Cycle detected in dependency graph")
-                self.output.refused.append(node)
+            self._remove_cycles()
+            
+    def _remove_cycles(self, indegree: dict[str, int]) -> None:
+        """Remove cycles from the dependency graph"""
+        excepted_nodes = self.output.get_accepted_id_to_node()
+        logger.warning("Cycle detected in dependency graph")
+        remaining_nodes = [node_id for node_id, degree in indegree.items() if degree > 0]
+        for node_id in remaining_nodes:
+            logger.warning(f"Removing node {node_id} from accepted list")
+            if node_id not in excepted_nodes:
+                continue
+            node = excepted_nodes[node_id]
+            self.output.accepted.remove(node)
+            excepted_nodes.remove(node_id)
+            node._refusal = True
+            node._refusal_reasons.append("Cycle detected in dependency graph")
+            self.output.refused.append(node)
