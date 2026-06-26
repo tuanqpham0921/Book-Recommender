@@ -67,6 +67,7 @@ def save_file(
 
     json_str = json.dumps(jsonable, indent=2, default=str)
 
+    file_name = file_name.rstrip(".json")
     filepath = path / f"{file_name}.json"
     with open(filepath, "w") as f:
         f.write(json_str)
