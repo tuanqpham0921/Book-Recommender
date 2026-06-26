@@ -1,10 +1,9 @@
 import logging
 
-from uuid import uuid4
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from app.api.schemas import SessionOut
-from common.utils import now_iso
+from common.utils import now_iso, uuid_8
 
 logger = logging.getLogger(__name__)
 # Store assistant instances to access book results
@@ -15,7 +14,7 @@ router = APIRouter(tags=["Session"])
 async def create_new_session(request: Request):
     """Create a new session, initialize metadata."""
     try:
-        session_id = str(uuid4())[:8]
+        session_id = uuid_8()
         logger.info(f"🆕 Created new session {session_id}")
         return SessionOut(id=session_id, created_at=now_iso())
 

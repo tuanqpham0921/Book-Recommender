@@ -21,7 +21,7 @@ from pydantic import create_model, ConfigDict
 from app.domains.registry import NODE_TYPE_TO_CLS
 from functools import reduce
 from operator import or_
-from uuid import uuid4
+from common.utils import uuid_8
 logger = logging.getLogger(__name__)
 
 
@@ -166,7 +166,7 @@ class StrategyClassificationWorkflow(
         for strategy in strategies:
             llm_id = strategy.id
             strategy._llm_id = llm_id
-            strategy.id = f"task_{str(uuid4())[:8]}"
+            strategy.id = f"task_{uuid_8()}"
             llm_to_internal_id[llm_id] = strategy.id
         return llm_to_internal_id
 

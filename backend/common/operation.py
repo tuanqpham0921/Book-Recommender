@@ -5,8 +5,7 @@ import time
 from typing import Callable
 from functools import wraps
 
-from common.utils import now_iso, format_exception
-from uuid import uuid4
+from common.utils import now_iso, format_exception, uuid_8
 
 OutputT = TypeVar("OutputT")
 
@@ -14,7 +13,7 @@ OutputT = TypeVar("OutputT")
 @dataclass(slots=True)
 class OperationResult(Generic[OutputT]):
     """Outcome of a single named check or step."""
-    id: str = field(default_factory=lambda: str(uuid4())[:8])
+    id: str = field(default_factory=lambda: f"op_{uuid_8()}")
     start_time: str = field(default_factory=now_iso)
     name: str | None = None
     

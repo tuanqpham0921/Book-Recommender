@@ -1,4 +1,4 @@
-from uuid import uuid4
+from common.utils import uuid_8
 from pydantic import BaseModel, Field, model_validator, PrivateAttr, field_validator
 from app.domains.node_types import NodeTypeEnum
 from typing import Annotated
@@ -67,7 +67,7 @@ class BaseRequest(BaseModel):
     def check_id(cls, value):
         if (not isinstance(value, str) 
             or not re.match(TASK_ID_PATTERN, value)):
-            return f"{ID_PREFIX}{str(uuid4())[:8]}"
+            return f"{ID_PREFIX}{uuid_8()}"
         return value
     
     @field_validator("description", mode="before")

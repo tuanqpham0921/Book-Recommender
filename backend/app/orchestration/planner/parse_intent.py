@@ -20,7 +20,7 @@ from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
 from clients.openai_client import OpenAIClient
 from clients.openai_requests import OpenAIChatRequest
-from uuid import uuid4
+from common.utils import uuid_8
 logger = logging.getLogger(__name__)
 
 MAX_SYSTEM_GOALS = 10
@@ -47,7 +47,7 @@ class SystemGoal(BaseModel):
 
     _refusal: bool = PrivateAttr(default=False)
     _refusal_reasons: list[str] = PrivateAttr(default_factory=list)
-    _id: str = PrivateAttr(default=f"goal_{str(uuid4())[:8]}")
+    _id: str = PrivateAttr(default_factory=lambda: f"goal_{uuid_8()}")
 
     @property
     def id(self) -> str:
