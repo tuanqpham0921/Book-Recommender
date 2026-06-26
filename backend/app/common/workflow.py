@@ -13,17 +13,21 @@ from app.common.messages import (
 from app.common.sse_stream import SSEStream
 from clients.base import BaseLLMClient, BaseLLMRequest
 from openai.types.chat import ParsedFunctionToolCall
+from abc import ABC, abstractmethod
 
 OutputT = TypeVar("OutputT", bound="UserFacingOutput")
 
 
 @dataclass(slots=True)
-class UserFacingOutput:
+class UserFacingOutput(ABC):
     """Domain payload stored on OperationResult.output."""
 
     chat_messages: list[APIMessage] = field(default_factory=list)
-    summary: dict[str, Any] = field(default_factory=dict)
     token_usage: TokenUsage = field(default_factory=TokenUsage)
+    
+    @abstractmethod
+    def to_summary(self) -> dict[str, Any]:
+        ...
 
 
 class UserFacingBaseWorkflow(Workflow[OutputT]):
@@ -45,6 +49,12 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         self.output.token_usage.prompt += usage.prompt
         self.output.token_usage.completion += usage.completion
 
+    def finalize_result(self, *, ok: bool, message: str | None = None) -> None:
+        self.result.ok = ok
+        self.result.message = message or (
+            self.success_message if ok else self.failure_message
+        )
+
     def add_step(
         self, step: OperationResult[Any], *, raise_on_failure: bool = True
     ) -> OperationResult[Any]:
@@ -61,12 +71,6 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
             self.output.chat_messages.append(output)
 
         return step
-
-    def finalize_result(self, *, ok: bool, message: str | None = None) -> None:
-        self.result.ok = ok
-        self.result.message = message or (
-            self.success_message if ok else self.failure_message
-        )
 
     async def generate_user_response(
         self, messages: list[BaseMessage], prompt: str
@@ -92,5 +96,7 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
     async def run_tool_call(
         self, tool_call: ParsedFunctionToolCall, **kwargs
     ) -> ToolMessage:
-        result = await self.run_async_step(ToolMessage.execute(tool_call, **kwargs))
+        result = await self.run_async_step(
+            ToolMessage.execute(tool_call, **kwargs)
+        )
         return result.output

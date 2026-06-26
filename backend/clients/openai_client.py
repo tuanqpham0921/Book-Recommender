@@ -69,14 +69,21 @@ class OpenAIClient(BaseLLMClient):
                 prompt=final_completion.usage.prompt_tokens,
                 completion=final_completion.usage.completion_tokens,
             ) if final_completion.usage else None,
-            
         )
         if save_payload:
-            from common.utils.save_file import save_file
             payload["id"] = assistant_msg.id
-            save_file(payload, f"openai_payload_{assistant_msg.id}.json")
+            self.save_payload(payload)
             
         return assistant_msg
+    
+    def save_payload(self, payload: dict) -> None:
+        from common.utils.save_file import save_file
+        from config.constants import FilesLocationConstants
+        logger.info(f"Saving payload id {payload['id']}")
+        save_file(payload, 
+                  path=FilesLocationConstants.PAYLOAD_DIR, 
+                  file_name=f"openai_payload_{payload['id']}")
+        
 
 
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):

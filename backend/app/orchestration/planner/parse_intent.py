@@ -1,91 +1,87 @@
+import json
 import logging
-
-from dataclasses import dataclass
-
-from app.common.prompt_loader import load_prompt, format_prompt
-
-from app.common.sse_stream import SSEStream
-from clients import OpenAIParserRequest
-
-from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
-from app.common.messages import UserMessage
-from clients.openai_client import OpenAIClient
-
+from dataclasses import dataclass, field
 from typing import Optional
-from pydantic import BaseModel, Field
-from app.common.messages import AssistantMessage, BaseMessage
-from app.domains.registry import format_node_type_catalog
-from typing import Annotated
-from pydantic import PrivateAttr
-import uuid
-logger = logging.getLogger(__name__)
 
-SystemGoalDescription = Annotated[str, Field(max_length=100)]
+from pydantic import BaseModel, Field, PrivateAttr, field_validator
+
+from app.common.messages import AssistantMessage, UserMessage
+from app.common.prompt_loader import format_prompt, load_prompt
+from app.common.sse_stream import SSEStream
+from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
+from app.domains.base_request import (
+    MAX_CONFIDENCE,
+    MAX_STRING_LENGTH,
+    MIN_CONFIDENCE,
+    MIN_STRING_LENGTH,
+)
+from app.domains.node_types import NodeTypeEnum
+from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
+from clients import OpenAIParserRequest
+from clients.openai_client import OpenAIClient
+from clients.openai_requests import OpenAIChatRequest
+from uuid import uuid4
+logger = logging.getLogger(__name__)
 
 MAX_SYSTEM_GOALS = 10
 
-class SystemGoal(BaseModel):
-    _id: str = PrivateAttr(default="")
 
+class SystemGoal(BaseModel):
     description: str = Field(
         ...,
-        min_length=10,
-        max_length=100,
+        min_length=MIN_STRING_LENGTH,
+        max_length=MAX_STRING_LENGTH,
         description="Description of the system goal",
     )
     confidence: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
+        ...,
+        ge=MIN_CONFIDENCE,
+        le=MAX_CONFIDENCE,
         description="Confidence between 0 and 1 that the system can handle this goal",
     )
+
+    target_node_type: NodeTypeEnum = Field(
+        ...,
+        description="the node type to complete this goal",
+    )
+
+    _refusal: bool = PrivateAttr(default=False)
+    _refusal_reasons: list[str] = PrivateAttr(default_factory=list)
+    _id: str = PrivateAttr(default=f"goal_{str(uuid4())[:8]}")
 
     @property
     def id(self) -> str:
         return self._id
-    
-class InitialParseResult(BaseModel):
-    system_goals: list[SystemGoal] = Field(default_factory=list)
-    rejected_system_goals: list[SystemGoal] = Field(default_factory=list)
-    continue_pipeline: bool = Field(default=False)
-    small_talk: Optional[str] = Field(None)
-    out_of_scope: Optional[str] = Field(None)
-    reasoning: str = Field(default="")
-    def to_summary(self) -> dict[str, str | bool | None]:
-        return {
-            "continue_pipeline": self.continue_pipeline,
-            "total_system_goals": len(self.system_goals),
-            "num_rejected_system": len(self.rejected_system_goals),
-            "num_accepted_system": len(self.system_goals),
-            "system_goals": [goal.description for goal in self.system_goals],
-            "rejected_system_goals": [goal.description for goal in self.rejected_system_goals],
-            "small_talk": self.small_talk,
-            "out_of_scope": self.out_of_scope,
-        }
 
-    def to_llm_messages(self) -> list[BaseMessage]:
-        return [
-            AssistantMessage(
-                content=self.model_dump_json(
-                    include={"small_talk", 
-                             "out_of_scope", 
-                             "rejected_system_goals", 
-                             "continue_pipeline", 
-                             "reasoning"}
-                )
-            )
-        ]
+    @property
+    def refusal_reasons(self) -> list[str]:
+        return self._refusal_reasons
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def check_confidence(cls, value):
+        if not isinstance(value, (float, int)):
+            return MIN_CONFIDENCE
+        if not (MIN_CONFIDENCE <= value <= MAX_CONFIDENCE):
+            return MIN_CONFIDENCE
+        return float(value)
+
 
 class InitialParseRequest(BaseModel):
     """
     Initial parse for the Book Recommender: extract system_goals with confidence,
     and separate small_talk and out_of_scope from in-domain requests.
     """
+
     small_talk: Optional[str] = Field(
-        None, min_length=1, max_length=500, description="Small talk in the request"
+        default=None,
+        max_length=MAX_STRING_LENGTH,
+        description="Small talk in the request",
     )
     out_of_scope: Optional[str] = Field(
-        None, min_length=1, max_length=500, description="Out-of-domain content"
+        default=None,
+        max_length=MAX_STRING_LENGTH,
+        description="Out-of-domain content",
     )
     system_goals: list[SystemGoal] = Field(
         default_factory=list,
@@ -93,43 +89,94 @@ class InitialParseRequest(BaseModel):
         description="System goals for the query",
     )
     reasoning: str = Field(
-        ..., min_length=10, max_length=500, description="Reasoning for classification"
+        ...,
+        min_length=MIN_STRING_LENGTH,
+        max_length=MAX_STRING_LENGTH,
+        description="Reasoning for classification",
     )
-    
-    async def __call__(self, confident_tuning: float = 0.5) -> InitialParseResult:
-        if len(self.system_goals) == 0 and not self.small_talk and not self.out_of_scope:
-            logger.warning("Nothing was classified in the initial parse")
-            return InitialParseResult(reasoning=self.reasoning)
-        
-        accepted_system_goals = []
-        rejected_system_goals = []
-        for goal in self.system_goals:
-            if goal.confidence >= confident_tuning and len(accepted_system_goals) < MAX_SYSTEM_GOALS:
-                accepted_system_goals.append(goal)
-                goal._id = f"goal_{len(accepted_system_goals)}"
-            else:
-                reason = (
-                    f"Rejected: confidence too low ({goal.confidence})"
-                    if goal.confidence < confident_tuning
-                    else f"Rejected: exceeded max goals ({MAX_SYSTEM_GOALS})"
-                )
-                rejected_system_goals.append(
-                    goal.model_copy(update={"description": f"{goal.description} — {reason}"})
-                )
-        
-        return InitialParseResult(
-            system_goals=accepted_system_goals,
-            rejected_system_goals=rejected_system_goals,
-            continue_pipeline=len(accepted_system_goals) > 0,
-            small_talk=self.small_talk,
-            out_of_scope=self.out_of_scope,
-            reasoning=self.reasoning
-        )
+
+    @field_validator("small_talk", mode="before")
+    @classmethod
+    def check_small_talk(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return str(value)
+        if len(value) > MAX_STRING_LENGTH:
+            return value[: MAX_STRING_LENGTH - 4] + "..."
+        return value
+
+    @field_validator("out_of_scope", mode="before")
+    @classmethod
+    def check_out_of_scope(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return str(value)
+        if len(value) > MAX_STRING_LENGTH:
+            return value[: MAX_STRING_LENGTH - 4] + "..."
+        return value
+
+    @field_validator("reasoning", mode="before")
+    @classmethod
+    def check_reasoning(cls, value):
+        if not isinstance(value, str):
+            return f"is not a string, padded to the reasoning"
+        if len(value) < MIN_STRING_LENGTH:
+            value += (
+                f"is less than {MIN_STRING_LENGTH} characters, padded to the reasoning"
+            )
+        if len(value) > MAX_STRING_LENGTH:
+            return value[: MAX_STRING_LENGTH - 4] + "..."
+        return value
+
+    @field_validator("system_goals", mode="before")
+    @classmethod
+    def check_system_goals(cls, value):
+        if not isinstance(value, list):
+            value = [value]
+        if len(value) > MAX_SYSTEM_GOALS:
+            value = value[:MAX_SYSTEM_GOALS]
+        return value
 
 
 @dataclass(slots=True)
 class InitialParseOutput(UserFacingOutput):
-    parse_result: InitialParseResult | None = None
+    accepted_goals: list[SystemGoal] = field(default_factory=list)
+    refused_goals: list[SystemGoal] = field(default_factory=list)
+    buffer_goals: list[SystemGoal] = field(default_factory=list)
+
+    small_talk: Optional[str] = field(default=None)
+    out_of_scope: Optional[str] = field(default=None)
+    reasoning: Optional[str] = field(default=None)
+
+    def to_summary(self) -> dict[str, str | bool | None]:
+        return {
+            "total_system_goals": len(self.accepted_goals) + len(self.refused_goals),
+            "num_rejected_system": len(self.refused_goals),
+            "num_accepted_system": len(self.accepted_goals),
+            "small_talk": self.small_talk,
+            "out_of_scope": self.out_of_scope,
+            "reasoning": self.reasoning,
+        }
+
+    def accepted_goals_ids(self) -> list[str]:
+        return [goal.id for goal in self.accepted_goals]
+
+    def to_llm_messages(self) -> list[AssistantMessage]:
+        payload = {}
+        if self.small_talk:
+            payload["small_talk"] = self.small_talk
+        if self.out_of_scope:
+            payload["out_of_scope"] = self.out_of_scope
+        if self.refused_goals:
+            payload["refused_goals"] = [
+                (g.description, g.refusal_reason) for g in self.refused_goals
+            ]
+        if len(payload) > 0 and self.reasoning:
+            payload["reasoning"] = self.reasoning
+
+        return payload
 
 
 class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
@@ -154,7 +201,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-        
+
         system_prompt = format_prompt(
             prompt_path=self._SYSTEM_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
@@ -165,27 +212,69 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_llm_call(req)
+        tool_call = assistant_msg.tool_calls[0]
+        parse_result = tool_call.function.parsed_arguments
 
-        tool_message = await self.run_tool_call(assistant_msg.tool_calls[0])
-        parse_result = InitialParseResult.model_validate(tool_message.content)
+        self.process_parse_result(parse_result)
+        await self.finalize_result()
+        await self.generate_user_response()
 
-        system_goals = parse_result.system_goals
-        await self.generate_user_response(
-            parse_result.to_llm_messages(),
-            prompt=load_prompt(prompt_path=self._USER_PROMPT_PATH),
+    async def finalize_result(self) -> None:
+        super().finalize_result(ok=bool(self.output.accepted_goals))
+
+    async def generate_user_response(self) -> None:
+        payload = self.output.to_llm_messages()
+        if not payload:
+            return
+        
+        messages = [AssistantMessage(content=json.dumps(payload))]
+        response_prompt = format_prompt(
+            prompt_path=self._USER_PROMPT_PATH,
+            TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
         )
-        
-        if system_goals:
-            await self.sse_stream.send_chars("\n\n# System Goals:\n")
-            for system_goal in system_goals:
-                await self.sse_stream.send_chars(f"- {system_goal.description}\n")
-        
-        
-        self.finalize_result(parse_result)
-
-    def finalize_result(self, parse_result: InitialParseResult) -> None:
-        self.output.parse_result = parse_result
-        self.output.summary = parse_result.to_summary()
-        super().finalize_result(
-            ok=bool(parse_result.continue_pipeline and parse_result.system_goals)
+        await self.run_llm_call(
+            req=OpenAIChatRequest(
+                prompt=response_prompt,
+                messages=messages,
+                sse_stream=self.sse_stream,
+                temperature=0.7,
+                top_p=1.0,
+            ),
         )
+        await self.sse_stream.send_divider()
+
+    def process_parse_result(
+        self, parse_result: InitialParseRequest, confident_tuning: float = 0.5
+    ) -> None:
+        if (
+            len(parse_result.system_goals) == 0
+            and not parse_result.small_talk
+            and not parse_result.out_of_scope
+        ):
+            logger.warning("Nothing was classified in the initial parse")
+            self.result.ok = False
+            self.output.reasoning = "Nothing was classified in the initial parse"
+            return
+
+        self.output.small_talk = parse_result.small_talk
+        self.output.out_of_scope = parse_result.out_of_scope
+        self.output.reasoning = parse_result.reasoning
+
+        for goal in parse_result.system_goals:
+            reason = []
+            if goal.confidence < confident_tuning:
+                goal._refusal = True
+                reason.append(f"Rejected: confidence too low ({goal.confidence})")
+            if goal.target_node_type.value not in NODE_TYPE_TO_CLS.keys():
+                goal._refusal = True
+                reason.append(
+                    f"Rejected: target node type not supported ({goal.target_node_type})"
+                )
+
+            if reason or goal._refusal:
+                goal._refusal_reasons.extend(reason)
+                self.output.refused_goals.append(goal)
+            elif len(self.output.accepted_goals) < MAX_SYSTEM_GOALS:
+                self.output.accepted_goals.append(goal)
+            else:
+                self.output.buffer_goals.append(goal)

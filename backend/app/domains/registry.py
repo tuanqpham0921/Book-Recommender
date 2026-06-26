@@ -10,33 +10,53 @@ from app.domains.books.schemas.request_schemas import (
     FindByTraitsRetrieval,
     RecommendationStrategy,
 )
-from app.domains.books.node_types import NodeTypeEnum as BookNodeTypeEnum
+from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.project.schemas.request_schemas import (
     FeedbackRequest,
     ProjectInfoRequest,
 )
-from app.domains.project.node_types import NodeTypeEnum as ProjectNodeTypeEnum
+from app.domains.project.node_types import ProjectNodeTypeEnum
 from app.domains.node_types import NodeTypeEnum
 from app.domains.users.schemas.request_schemas import (
     DeveloperInfoRequest,
     UserInfoRequest,
 )
-from app.domains.users.node_types import NodeTypeEnum as UserNodeTypeEnum
+from app.domains.users.node_types import UserNodeTypeEnum
 
-# All request schema classes — add new ones here
-
-RETRIEVAL_CLASSES = (
+# -------------------------------------------------------------------
+# BOOK DOMAIN
+BOOK_RETRIEVAL_CLASSES = (
     FindByTitleRetrieval,
     FindByISBN13Retrieval,
     FindByTraitsRetrieval,
-    UserInfoRequest,
-    DeveloperInfoRequest,
-    ProjectInfoRequest,
 )
-ANALYZE_CLASSES = (
+BOOK_ANALYZE_CLASSES = (
     CompareStrategy,
     RecommendationStrategy,
 )
+BOOK_REQUEST_CLASSES = BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES
+
+# -------------------------------------------------------------------
+# PROJECT DOMAIN
+PROJECT_RETRIEVAL_CLASSES = (
+    ProjectInfoRequest,
+)
+
+PROJECT_REQUEST_CLASSES = PROJECT_RETRIEVAL_CLASSES
+
+# -------------------------------------------------------------------
+# USER DOMAIN
+USER_RETRIEVAL_CLASSES = (
+    UserInfoRequest,
+    DeveloperInfoRequest,
+)
+
+USER_REQUEST_CLASSES = USER_RETRIEVAL_CLASSES
+# -------------------------------------------------------------------
+# All request schema classes — add new ones here
+
+RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES + USER_RETRIEVAL_CLASSES + PROJECT_RETRIEVAL_CLASSES
+ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
 
 REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
 
@@ -84,7 +104,7 @@ def format_node_type_catalog() -> str:
         *lines_for("Analyze — interpret, compare, or recommend using retrieved data", ANALYZE_CLASSES),
     ]
 
-    listed = set(RETRIEVAL_CLASSES) | set(ANALYZE_CLASSES)
+    listed =  set(ANALYZE_CLASSES)
     extra = [cls for cls in NODE_TYPE_TO_CLS.values() if cls not in listed]
     if extra:
         catalog.extend(["", *lines_for("Other supported actions", tuple(dict.fromkeys(extra)))])

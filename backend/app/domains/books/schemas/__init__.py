@@ -6,6 +6,7 @@ from .request_schemas import (
     FindByISBN13Retrieval,
     FindByTraitsRetrieval
 )
+
 __all__ = [
     "BooksFilter",
     "CompareStrategy",

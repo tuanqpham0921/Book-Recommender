@@ -5,8 +5,8 @@ These are the specific schemas that the LLM should generate during classificatio
 
 from typing import Optional, Literal, List
 from pydantic import Field
-from app.domains.base_request import BaseRequest, AnalyzeBaseRequest
-from app.domains.books.node_types import NodeTypeEnum
+from app.domains.base_request import DomainRequest, AnalyzeBaseRequest
+from app.domains.books.node_types import BookNodeTypeEnum
 from .filter_schemas import BooksFilter
 import logging
 
@@ -14,11 +14,20 @@ logger = logging.getLogger(__name__)
 
 
 class CompareStrategy(AnalyzeBaseRequest):
-    """Compare two or more books based on specific criteria.
-    Use the results of the retrieval strategies to compare.
+    """Contrast two or more named books — the analyze step when the user asks how titles differ or relate.
+
+    Use when the user wants a side-by-side read on specific books, not when they want new suggestions
+    (Recommendation) or only want to find a single title (FindByTitle / FindByISBN13).
+    Common cases:
+      - Direct compare: "Compare X and Y, "how are X and Y different"
+      - Criteria-focused: "compare their themes", "which is longer / darker / more literary"
+      - Multi-book: three or more titles → separate retrieval per book; depends_on lists all of them.
+
+    comparison_criteria holds the user's comparison lens (theme, tone, length, style, etc.) when stated;
+    omit it when they only ask for a general comparison.
     """
 
-    node_type: Literal[NodeTypeEnum.COMPARE] = NodeTypeEnum.COMPARE
+    node_type: Literal[BookNodeTypeEnum.COMPARE] = BookNodeTypeEnum.COMPARE
     comparison_criteria: Optional[str] = Field(
         None, description="Specific fields or aspects to compare"
     )
@@ -28,7 +37,7 @@ class CompareStrategy(AnalyzeBaseRequest):
             logger.warning(
                 f"{self.__class__.__name__} ({self.id}) has less than 2 dependencies, refusing the request"
             )
-            self.refusal = True
+            self._refusal = True
             self.reasoning = (
                 "Less than 2 dependencies provided for a request with dependencies"
             )
@@ -36,18 +45,28 @@ class CompareStrategy(AnalyzeBaseRequest):
 
 
 class RecommendationStrategy(AnalyzeBaseRequest):
-    """Generate a semantic recommendation based on the results of the retrieval strategies.
-    Use the results of the retrieval strategies to generate a recommendation.
+    """Suggest books that fit the user's ask — the analyze step for most recommendation queries.
+
+    Use when the user wants new titles to read, not when they only want to look up a known book.
+    Common cases:
+      - Similarity: "books like X", "more like X or Y books" → reference_books with those
+      - Thematic / mood: "cozy mysteries", "epic sci-fi with strong world-building" → semantic_input
+        for theme, tone, or concept; optional filters for genre, length, rating, etc.
+      - Mixed: named anchor book(s) plus a twist ("like X but darker/shorter") → reference_books
+        plus semantic_input; depends_on on lookups for the named books.
+
+    semantic_input is for themes and mood only — not titles, authors, or filter fields.
+    filters constrain the recommendation result set; they do not replace retrieval when a reference
+    book must be resolved first.
     """
 
-    node_type: Literal[NodeTypeEnum.RECOMMENDATION] = NodeTypeEnum.RECOMMENDATION
+    node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION
     semantic_input: Optional[str] = Field(
         None, description="Thematic/conceptual description from the query"
     )
     reference_books: Optional[List[str]] = Field(
         None, description="Books titles to base recommendations on"
     )
-    # recommendation_type: Literal["similar_to", "thematic", "mood_based"] = Field(..., description="Type of recommendation")
     filters: Optional[BooksFilter] = Field(
         None, description="Optional result constraints"
     )
@@ -59,29 +78,29 @@ class RecommendationStrategy(AnalyzeBaseRequest):
         super().model_post_init(__context)
 
 
-class FindByTitleRetrieval(BaseRequest):
+class FindByTitleRetrieval(DomainRequest):
     """Retrieve a book by title from the database."""
 
-    node_type: Literal[NodeTypeEnum.FIND_TITLE] = NodeTypeEnum.FIND_TITLE
+    node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
     authors: Optional[list[str]] = Field(
         default=None, description="Author assoicated with this book"
     )
 
 
-class FindByISBN13Retrieval(BaseRequest):
+class FindByISBN13Retrieval(DomainRequest):
     """Retrieve a book by ISBN13 from the database."""
 
-    node_type: Literal[NodeTypeEnum.FIND_ISBN13] = NodeTypeEnum.FIND_ISBN13
+    node_type: Literal[BookNodeTypeEnum.FIND_ISBN13] = BookNodeTypeEnum.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
 
 
-class FindByTraitsRetrieval(BaseRequest):
+class FindByTraitsRetrieval(DomainRequest):
     """Retrieve a book by traits (not isbn13 or title) from the database.
     (trait, genre, rating, page count, or filter-based search)
     """
 
-    node_type: Literal[NodeTypeEnum.FIND_TRAITS] = NodeTypeEnum.FIND_TRAITS
+    node_type: Literal[BookNodeTypeEnum.FIND_TRAITS] = BookNodeTypeEnum.FIND_TRAITS
     search_criteria: str = Field(
         ..., description="Non-specific search criteria for traits-based search"
     )

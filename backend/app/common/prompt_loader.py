@@ -88,6 +88,7 @@ class PromptLoader:
 # TODO: this can be in app context global
 # or in orchestrator global
 # Global prompt loader instance
+# TODO: remove caching 
 prompt_loader = PromptLoader()
 
 

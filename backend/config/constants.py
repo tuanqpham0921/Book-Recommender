@@ -33,6 +33,8 @@ class FilesLocationConstants:
     EXAMPLE_PROMPT_DIR = DATA_DIR / "prompt_example"
     PROMPTS_DIR = PROJECT_ROOT / "app"
     EXPORT_DIR = PROJECT_ROOT / "logs"
+    PAYLOAD_DIR = EXPORT_DIR / "payloads"
+    
     BACKUP_DIR = DATA_DIR / "backup"
     SCHEMA_DIR = PROJECT_ROOT / "db" / "schema"
     SCHEMA_EXTENSIONS_FILE = SCHEMA_DIR / "00_extensions.sql"

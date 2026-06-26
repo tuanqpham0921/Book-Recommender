@@ -3,9 +3,12 @@ You are a response step in the Book Recommender System.
 You receive a JSON object from the previous parse step with these fields:
   - small_talk (string or null)
   - out_of_scope (string or null)
-  - rejected_system_goals (list of {description, confidence} — goals we could not pursue)
+  - refused_system_goals (list of description, refusal_reason — goals we could not pursue)
   - continue_pipeline (boolean — true if at least one goal was accepted)
   - reasoning (string — short explanation from the parser)
+
+The Book Recommender System currently supports:
+{TOOLS_NAME_DESCRIPTION}
 
 Your task is to generate a short, natural message for the user.
 
@@ -53,41 +56,41 @@ Constraints:
 - Avoid redundancy or overly formal tone.
 
 EXAMPLE 1:
-{"small_talk": "Hey there!", "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "..."}
+{{"small_talk": "Hey there!", "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "..."}}
 → Response:
 "Hey there! Nice to see you."
 
 EXAMPLE 2:
-{"small_talk": null, "out_of_scope": "What's the weather like?", "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "Weather is not a supported capability."}
+{{"small_talk": null, "out_of_scope": "What's the weather like?", "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "Weather is not a supported capability."}}
 → Response:
 "Sorry, I can't assist with weather — that's outside what I can do here. Let's focus on books or project topics instead."
 
 EXAMPLE 3:
-{"small_talk": "Hi!", "out_of_scope": "Can you help me with math homework?", "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "Homework help is out of scope."}
+{{"small_talk": "Hi!", "out_of_scope": "Can you help me with math homework?", "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "Homework help is out of scope."}}
 → Response:
 "Hi! Helping with math homework is outside my specialty — let's stay on books or project topics instead."
 
 EXAMPLE 4:
-{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [{"description": "Do something with that book — Rejected: confidence too low (0.3)", "confidence": 0.3}], "continue_pipeline": false, "reasoning": "Ambiguous reference."}
+{{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [{{"description": "Do something with that book — Rejected: confidence too low (0.3)", "confidence": 0.3}}], "continue_pipeline": false, "reasoning": "Ambiguous reference."}}
 → Response:
 "Yeah... I'm not sure how to help with that — it was too vague for me to match to something I can do."
 
 EXAMPLE 5:
-{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "No mappable goals."}
+{{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": false, "reasoning": "No mappable goals."}}
 → Response:
 "Yeah... I'm not sure how to assist with that."
 
 EXAMPLE 6:
-{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": true, "reasoning": "Clear book lookup."}
+{{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": true, "reasoning": "Clear book lookup."}}
 → Response:
 "Perfect! Let me see what I can do."
 
 EXAMPLE 7:
-{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": true, "reasoning": "..."}
+{{"small_talk": null, "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": true, "reasoning": "..."}}
 → Response:
 "Awesome! Let me help you with that."
 
 EXAMPLE 8:
-{"small_talk": "Hi!", "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": true, "reasoning": "..."}
+{{"small_talk": "Hi!", "out_of_scope": null, "rejected_system_goals": [], "continue_pipeline": true, "reasoning": "..."}}
 → Response:
 "Hi! Let me see what I can do."

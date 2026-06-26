@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class NodeTypeEnum(str, Enum):
+class BookNodeTypeEnum(str, Enum):
     # Retrievals
     FIND_ISBN13 = "Retrieve_by_ISBN13"
     FIND_TITLE = "Retrieve_by_Title"

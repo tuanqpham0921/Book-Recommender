@@ -18,7 +18,12 @@ def _to_jsonable(value: Any) -> Any:
         return value.__name__
 
     if isinstance(value, BaseModel):
-        return value.model_dump(mode="json")
+        data = value.model_dump(mode="json")
+        # include private attributes
+        if value.__pydantic_private__:
+            data.update(value.__pydantic_private__)
+
+        return data
 
     if is_dataclass(value):
         return {

@@ -6,8 +6,8 @@ Supported capabilities (name + short description):
 {TOOLS_NAME_DESCRIPTION}
 
 Capability tiers:
-  - Retrieval — lookup or fetch (titles, ISBNs, traits/filters, user info, project info)
-  - Analyze — interpret results (compare books, recommend / similarity)
+  - Retrieval — lookup or fetch
+  - Analyze — interpret results
 
 Your job:
   1. Map each in-domain part of the message to one supported capability above
@@ -29,12 +29,6 @@ When NOT to create a system_goal:
   - Analyze without a retrievable basis when one is required (e.g. compare unnamed books with no titles)
   - Ambiguous ("that one", "do it") → no goals unless context is clear
 
-Fields:
-  - system_goals — list of {{description, confidence}}; [] if none
-  - small_talk — greetings, thanks; null if none
-  - out_of_scope — unsupported or non-capability requests; null if none
-  - reasoning — short explanation
-
 Guidelines:
   - Multi-part requests → separate goals per capability (Retrieval goals before Analyze when both are needed)
   - "Recommend books like Dune" → Retrieval (find reference) + Analyze (recommend) as separate goals when both are implied
@@ -42,29 +36,34 @@ Guidelines:
   - Use external knowledge only to recognize titles/authors — do not answer them here
   - continue_pipeline is computed by the system from goal confidence
 
+Fields per system_goal:
+  - description — task in the user's words (10–100 chars)
+  - confidence — 0.0–1.0
+  - target_node_types — exactly one capability name from the catalog above (e.g. "Retrieve_by_Title")
+
 Examples:
 
 Input: "Hi! Can you recommend books like Dune?"
 → small_talk: "Hi!", system_goals: [
-    {{description: "Find Dune by title", confidence: 1.0}},
-    {{description: "Recommend books similar to Dune", confidence: 1.0}}
+    {{description: "Find Dune by title", confidence: 1.0, target_node_types: "Retrieve_by_Title"}},
+    {{description: "Recommend books similar to Dune", confidence: 1.0, target_node_types: "Analyze_Recommend"}}
   ]
 
 Input: "What's the weather like today?"
 → system_goals: [], out_of_scope: "What's the weather like today?"
 
 Input: "Find sci-fi books over 300 pages"
-→ system_goals: [{{description: "Find sci-fi books over 300 pages", confidence: 1.0}}]
+→ system_goals: [{{description: "Find sci-fi books over 300 pages", confidence: 1.0, target_node_types: "Retrieve_by_Traits"}}]
 
 Input: "Compare Flights and Satantango"
 → system_goals: [
-    {{description: "Find Flights", confidence: 1.0}},
-    {{description: "Find Satantango", confidence: 1.0}},
-    {{description: "Compare Flights and Satantango", confidence: 1.0}}
+    {{description: "Find Flights", confidence: 1.0, target_node_types: "Retrieve_by_Title"}},
+    {{description: "Find Satantango", confidence: 1.0, target_node_types: "Retrieve_by_Title"}},
+    {{description: "Compare Flights and Satantango", confidence: 1.0, target_node_types: "Analyze_Compare"}}
   ]
 
 Input: "What's my saved memory?"
-→ system_goals: [{{description: "Retrieve user saved memory", confidence: 1.0}}]
+→ system_goals: [{{description: "Retrieve user saved memory", confidence: 1.0, target_node_types: "Retrieve_User_Info"}}]
 
 Input: "Can you help me with calculus homework?"
 → system_goals: [], out_of_scope: "Can you help me with calculus homework?"
