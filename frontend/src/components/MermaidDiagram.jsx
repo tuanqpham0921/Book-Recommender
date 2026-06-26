@@ -12,7 +12,7 @@ function MermaidDiagram({ chart }) {
             theme: 'base',
             securityLevel: 'loose',
             themeVariables: {
-                fontSize: '14px',
+                fontSize: '0.875rem',
                 fontFamily: 'var(--font-sans)',
                 primaryColor: '#f5f5f5',
                 primaryTextColor: '#111',
