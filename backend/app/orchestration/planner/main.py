@@ -149,16 +149,15 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     def save_conversation_result(self, name: str = "dev") -> None:
         from common.utils.save_file import save_file
         from dataclasses import asdict
-        data = asdict(self.result)
-        del data["steps"]
-        del data["output"]["chat_messages"]
-        for children in data["output"]:
-            if not isinstance(data['output'][children], dict):
-                continue
 
-            if "chat_messages" in data['output'][children]:
-                del data['output'][children]["chat_messages"]
-        
+        data = asdict(self.result)
+        data.pop("steps", None)
+        if output := data.get("output"):
+            output.pop("chat_messages", None)
+            for child in output.values():
+                if isinstance(child, dict):
+                    child.pop("chat_messages", None)
+
         save_file(data, file_name=f"conversation_result_{name}.json")
 
     def save_chat_messages(self, name: str = "dev") -> None:
