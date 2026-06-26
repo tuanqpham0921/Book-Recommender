@@ -1,5 +1,6 @@
 import { useEffect, useRef, memo, useState } from 'react'
 import mermaid from 'mermaid'
+import svgPanZoom from 'svg-pan-zoom'
 
 function MermaidDiagram({ chart }) {
     const containerRef = useRef(null)
@@ -53,11 +54,23 @@ function MermaidDiagram({ chart }) {
 
                 const { svg } = await mermaid.render(svgId, chart)
 
-                // await sleep(120_000);
-
                 // Only update if container still exists
                 if (containerRef.current) {
                     containerRef.current.innerHTML = svg
+
+                    const svgElement = containerRef.current.querySelector('svg')
+                    if (svgElement) {
+                        svgPanZoom(svgElement, {
+                            zoomEnabled: true,
+                            panEnabled: true,
+                            controlIconsEnabled: true,
+                            fit: true,
+                            center: true,
+                            mouseWheelZoomEnabled: true,
+                            minZoom: 0.2,
+                            maxZoom: 10,
+                        });
+                    }
                 }
 
             } catch (err) {
@@ -89,16 +102,16 @@ function MermaidDiagram({ chart }) {
 
     return (
         <div className="mermaid-container">
-            <div className="mermaid-scroll">
-                {isLoading && (
-                    <div className="loading-wrapper">
-                        {/* <div className="loading-spinner" /> */}
-                        <span className="loading-text">Rendering Mermaid Diagram...</span>
-                    </div>
-                )}
             
-                <div ref={containerRef} className="mermaid-svg" />
-            </div>
+            {isLoading && (
+                <div className="loading-wrapper">
+                    {/* <div className="loading-spinner" /> */}
+                    <span className="loading-text">Rendering Mermaid Diagram...</span>
+                </div>
+            )}
+        
+            <div ref={containerRef} className="mermaid-svg" />
+            
         </div>
     )
 }
