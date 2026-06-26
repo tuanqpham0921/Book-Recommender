@@ -18,7 +18,9 @@ MIN_LIST_LENGTH = 1
 MAX_LIST_LENGTH = 10
 
 ID_PREFIX = "task_"
-TASK_ID_PATTERN = r"^" + ID_PREFIX + r"\d+$"
+TASK_LLM_ID_PATTERN = r"^" + ID_PREFIX + r"\d+$"
+TASK_ID_PATTERN = r"^" + ID_PREFIX + r"[a-f0-9]{8}$"
+
 
 GOAL_PREFIX = "goal_"
 GOAL_ID_PATTERN = r"^" + GOAL_PREFIX + r"[a-f0-9]{8}$"
@@ -165,7 +167,7 @@ class AnalyzeBaseRequest(DomainRequest):
         tasks = []
         for item in value:
             if (not isinstance(item, str) or
-                not re.match(TASK_ID_PATTERN, item)):
+                not (re.match(TASK_LLM_ID_PATTERN, item) or re.match(TASK_ID_PATTERN, item))):
                 continue
             tasks.append(item)
 
