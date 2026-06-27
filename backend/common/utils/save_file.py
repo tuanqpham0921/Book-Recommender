@@ -1,56 +1,12 @@
 import json
 import logging
 from pathlib import Path
-from dataclasses import fields, is_dataclass
-from enum import Enum
-from typing import Any
+
 
 from config import FilesLocationConstants
-from common.utils.format import remove_json_empty_values
-from pydantic import BaseModel
+from common.utils.format import remove_json_empty_values, to_jsonable
 
 logger = logging.getLogger(__name__)
-
-
-def _to_jsonable(value: Any) -> Any:
-    """Convert app/Pydantic objects into readable JSON-compatible values."""
-    if isinstance(value, type):
-        return value.__name__
-
-    if isinstance(value, BaseModel):
-        data = value.model_dump(mode="json")
-        # include private attributes
-        if value.__pydantic_private__:
-            data.update(value.__pydantic_private__)
-
-        return data
-
-    if is_dataclass(value):
-        return {
-            field.name: _to_jsonable(getattr(value, field.name))
-            for field in fields(value)
-        }
-
-    if isinstance(value, Enum):
-        return value.value
-
-    if isinstance(value, BaseException):
-        return {
-            "type": type(value).__name__,
-            "message": str(value),
-        }
-
-    if isinstance(value, Path):
-        return str(value)
-
-    if isinstance(value, dict):
-        return {str(key): _to_jsonable(item) for key, item in value.items()}
-
-    if isinstance(value, (list, tuple, set)):
-        return [_to_jsonable(item) for item in value]
-
-    return value
-
 
 def save_file(
     data,
@@ -61,7 +17,7 @@ def save_file(
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 
-    jsonable = _to_jsonable(data)
+    jsonable = to_jsonable(data)
     if remove_empty_values:
         jsonable = remove_json_empty_values(jsonable)
 
