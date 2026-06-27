@@ -17,7 +17,6 @@ async def ping():
     """Ping the backend - always returns ok if app is running."""
     return {"status": "ok", "timestamp": time.time()}
 
-# TODO: review this (AI generated placeholder)
 @router.get("/ready", response_model=HealthStatus)
 async def detailed_health_check(request: Request):
     """Detailed health check with service status."""

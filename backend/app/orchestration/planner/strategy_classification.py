@@ -1,27 +1,29 @@
-from dataclasses import dataclass
+import json
+import logging
+from dataclasses import dataclass, field
+from functools import reduce
+from operator import or_
+from typing import Union
 
-from typing import List, Union
-
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
 from app.common.messages import AssistantMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
-from app.domains.registry import REQUEST_CLASSES
-from clients.openai_client import OpenAIClient
-from clients import OpenAIParserRequest
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
-from config import BookConstraints, BookGuides
-from app.orchestration.planner.parse_intent import SystemGoal
-import logging
-import json
-from dataclasses import field
 from app.domains.base_request import BaseRequest
-from pydantic import create_model, ConfigDict
-from app.domains.registry import NODE_TYPE_TO_CLS
-from functools import reduce
-from operator import or_
+from app.domains.registry import (
+    BOOK_ANALYZE_CLASSES,
+    BOOK_RETRIEVAL_CLASSES,
+    NODE_TYPE_TO_CLS,
+    REQUEST_CLASSES,
+)
+from app.orchestration.planner.parse_intent import SystemGoal
+from clients import OpenAIParserRequest
+from clients.openai_client import OpenAIClient
 from common.utils import uuid_8
+from config import BookConstraints, BookGuides
+
 logger = logging.getLogger(__name__)
 
 MAX_STRATEGIES = 15
@@ -34,7 +36,7 @@ class StrategyRequest(BaseModel):
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
 
-    strategies: List[StrategyType] = Field(
+    strategies: list[StrategyType] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
         description="List of strategies generated from the query",
@@ -201,8 +203,6 @@ class StrategyClassificationWorkflow(
         self, request_classes: set[type[BaseModel]]
     ) -> None:
         """Best effort to inject missing request classes to the request classes set."""
-        from app.domains.registry import BOOK_RETRIEVAL_CLASSES, BOOK_ANALYZE_CLASSES
-
         inject_classes = set()
         for request_cls in request_classes:
             # if analyze class is present, there should be at least one retrieval class
@@ -235,7 +235,7 @@ class StrategyClassificationWorkflow(
         accepted_tuning: float = 0.7,
     ):
         """Convert to ClassificationResult format"""
-        accepted_goals_ids = set([goal.id for goal in system_goals])
+        accepted_goals_ids = {goal.id for goal in system_goals}
 
         for strategy in strategies:
             reason = []
@@ -312,7 +312,7 @@ class StrategyClassificationWorkflow(
         
         # Check for cycles in the dependency graph
         if len(order) != len(indegree):
-            self._remove_cycles()
+            self._remove_cycles(indegree)
             
     def _remove_cycles(self, indegree: dict[str, int]) -> None:
         """Remove cycles from the dependency graph"""
@@ -325,7 +325,7 @@ class StrategyClassificationWorkflow(
                 continue
             node = excepted_nodes[node_id]
             self.output.accepted.remove(node)
-            excepted_nodes.remove(node_id)
+            excepted_nodes.pop(node_id, None)
             node._refusal = True
             node._refusal_reasons.append("Cycle detected in dependency graph")
             self.output.refused.append(node)

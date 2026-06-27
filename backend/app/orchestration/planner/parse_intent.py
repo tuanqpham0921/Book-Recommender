@@ -21,6 +21,7 @@ from clients import OpenAIParserRequest
 from clients.openai_client import OpenAIClient
 from clients.openai_requests import OpenAIChatRequest
 from common.utils import uuid_8
+
 logger = logging.getLogger(__name__)
 
 MAX_SYSTEM_GOALS = 10

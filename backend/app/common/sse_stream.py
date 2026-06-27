@@ -1,7 +1,7 @@
-import json
 import asyncio
+import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Any
 
 from sse_starlette import ServerSentEvent
 
@@ -48,7 +48,7 @@ class SSEStream:
         except Exception as e:
             logger.exception(f"❌ Error putting data into the queue: {data} with type: {type(data)}", exc_info=e)
     
-    async def send(self, type: str, data: Dict[str, Any]):
+    async def send(self, type: str, data: dict[str, Any] | str):
         """Send an SSE event with structured data."""
         await self.put(json.dumps({"type": type, "data": data}))
        

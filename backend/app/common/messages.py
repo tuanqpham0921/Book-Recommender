@@ -1,15 +1,13 @@
 import json
-
-from pytz import UTC
-from datetime import datetime
-from typing_extensions import Annotated
-from pydantic import BaseModel, Field
-from openai.types.chat import ParsedFunctionToolCall
-from typing import Union, Dict, Optional, List, Literal, Any
-from enum import Enum
-
-from abc import ABC, abstractmethod
 import logging
+from abc import ABC, abstractmethod
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Annotated, Any, Literal, Union
+
+from openai.types.chat import ParsedFunctionToolCall
+from pydantic import BaseModel, Field
+
 from common.operation import OperationResult, task
 
 logger = logging.getLogger(__name__)
@@ -22,49 +20,51 @@ class Role(str, Enum):
 
 class BaseMessage(BaseModel, ABC):
     @abstractmethod
-    def to_openai_dict(self) -> Dict:
+    def to_openai_dict(self) -> dict:
         ...
-    
+
+
 class SystemMessage(BaseMessage):
     role: Literal[Role.SYSTEM] = Role.SYSTEM
     content: str
 
-    def to_openai_dict(self) -> Dict:
+    def to_openai_dict(self) -> dict:
         return {"role": self.role, "content": self.content}
 
 
 class UserMessage(BaseMessage):
     role: Literal[Role.USER] = Role.USER
     content: str
-    created: Optional[str] = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
+    created: str | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
-    def to_openai_dict(self) -> Dict:
+    def to_openai_dict(self) -> dict:
         return {"role": self.role, "content": self.content}
+
 
 class TokenUsage(BaseModel):
     total: int = Field(default=0)
     prompt: int = Field(default=0)
     completion: int = Field(default=0)
 
+
 class AssistantMessage(BaseMessage):
     role: Literal[Role.ASSISTANT] = Role.ASSISTANT
-    id: Optional[str] = None
-    content: Optional[str] = None
-    tool_calls: Optional[List[ParsedFunctionToolCall]] = None
-    refusal: Optional[str] = None
-    created: Optional[str] = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
+    id: str | None = None
+    content: str | None = None
+    tool_calls: list[ParsedFunctionToolCall] | None = None
+    refusal: str | None = None
+    created: str | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
-    def to_openai_dict(self) -> Dict:
+    def to_openai_dict(self) -> dict:
         base = {"role": self.role}
         if self.content:
             base["content"] = self.content
         if self.tool_calls:
-            # convert each tool call to OpenAI schema (list of dicts)
             base["tool_calls"] = [tc.model_dump(exclude=None) for tc in self.tool_calls]
         return base
 
@@ -74,8 +74,8 @@ class ToolMessage(BaseMessage):
     name: str
     tool_call_id: str
     content: Any  # tool results only (raw output)
-    created: Optional[str] = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
+    created: str | None = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     
     @classmethod
@@ -96,9 +96,8 @@ class ToolMessage(BaseMessage):
             content=output,
         )
 
-    def to_openai_dict(self) -> Dict:
-        # TODO: unit test this for other types of content
-        # OpenAI tool messages require string content and no extra fields like name/elapsed
+    def to_openai_dict(self) -> dict:
+        # OpenAI tool messages require string content and no extra fields
         content = self.content
         if isinstance(content, (dict, list)):
             content = json.dumps(content)

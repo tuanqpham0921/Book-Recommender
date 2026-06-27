@@ -103,6 +103,7 @@ class BaseRequest(BaseModel):
             return MIN_CONFIDENCE
         return float(value)
 
+
 class DomainRequest(BaseRequest):
     target_goal: list[str] = Field(
         ...,
@@ -129,7 +130,7 @@ class DomainRequest(BaseRequest):
             goals = [GOAL_PLACEHOLDER] * MIN_LIST_LENGTH
             
         return list(dict.fromkeys(goals))[:MAX_LIST_LENGTH]
-    
+
     @model_validator(mode="before")
     def validate_target_goal(cls, data):
         if not isinstance(data, dict):
@@ -147,6 +148,7 @@ class DomainRequest(BaseRequest):
         else:
             self.target_goal = [goal for goal in self.target_goal if goal != GOAL_PLACEHOLDER]
         super().model_post_init(__context)
+
 
 class AnalyzeBaseRequest(DomainRequest):
     depends_on: list[str] = Field(

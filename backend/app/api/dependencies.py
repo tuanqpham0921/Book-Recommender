@@ -69,6 +69,7 @@ async def get_book_store(
     """Get BookStore instance with injected session."""
     return BookStore(session)
 
+
 def get_app_env(request: Request) -> str:
     """Get the app environment"""
     app_env = getattr(request.app.state, "app_env", None)
@@ -76,13 +77,9 @@ def get_app_env(request: Request) -> str:
         raise HTTPException(status_code=503, detail="App environment not available")
     return app_env
 
+
 def get_sse_stream() -> SSEStream:
-    """Get the SSE stream"""
-    try:
-        return SSEStream()
-    except Exception as e:
-        logger.exception(f"❌ Failed to create SSE stream: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create SSE stream: {e}")
+    return SSEStream()
 
 async def get_request_context_factory(
     llm_client=Depends(get_openai_client),

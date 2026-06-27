@@ -26,15 +26,10 @@ async def generate_chat_response(
     request_context: RequestContext,
     registry: ActiveStreamRegistry,
 ) -> AsyncGenerator[Any, None]:
-    
-    # make sure to register the stream with the registry
     try:
         orchestrator_task = asyncio.create_task(
             orchestrator.run(request_context=request_context)
         )
-        
-        # register the stream with the registry
-        # TODO: make sure this works with the new registry
         await registry.register(
             request_context.session_id,
             request_context.sse_stream,
