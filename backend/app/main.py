@@ -36,10 +36,6 @@ async def lifespan(app: FastAPI):
         
         app.state.orchestrator = Orchestrator()
         logger.info("Orchestrator set")
-
-        from app.active_streams import ActiveStreamRegistry
-        app.state.active_stream_registry = ActiveStreamRegistry()
-        logger.info("Active stream registry set")
         
         yield
     
