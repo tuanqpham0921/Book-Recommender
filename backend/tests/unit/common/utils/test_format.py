@@ -1,51 +1,6 @@
 import pytest
-from common.utils.format import format_exception, remove_json_empty_values
+from common.utils.format import remove_json_empty_values
 
-
-class TestFormatException:
-    def test_returns_correct_keys(self):
-        try:
-            raise ValueError("test error")
-        except ValueError as e:
-            result = format_exception(e)
-
-        assert result["type"] == "ValueError"
-        assert result["message"] == "test error"
-        assert "origin" in result
-        assert "frames" in result
-        assert "traceback" in result
-
-    def test_origin_is_last_frame(self):
-        def _inner():
-            raise RuntimeError("deep")
-
-        try:
-            _inner()
-        except RuntimeError as e:
-            result = format_exception(e)
-
-        assert result["origin"]["function"] == "_inner"
-
-    def test_frames_have_required_keys(self):
-        try:
-            raise TypeError("bad type")
-        except TypeError as e:
-            result = format_exception(e)
-
-        for frame in result["frames"]:
-            assert "file" in frame
-            assert "line" in frame
-            assert "function" in frame
-            assert "code" in frame
-
-    def test_traceback_is_list(self):
-        try:
-            raise Exception("generic")
-        except Exception as e:
-            result = format_exception(e)
-
-        assert isinstance(result["traceback"], list)
-        
 class TestToJsonable:
     ...
 

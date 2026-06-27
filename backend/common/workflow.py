@@ -3,7 +3,7 @@ from common.operation import OperationResult
 import logging
 import time
 from typing import Any, Generic, TypeVar
-from common.utils import format_exception
+import traceback
 
 
 from typing import Coroutine
@@ -44,7 +44,7 @@ class Workflow(ABC, Generic[OutputT]):
             self.logger.exception(f"Workflow failed: {e}")
             self.result.ok = False
             self.result.message = f"Workflow failed: {e}"
-            self.result.run_time_error = format_exception(e)
+            self.result.run_time_error = traceback.format_exception(e)
         finally:
             # final formatting of the result
             self.result.name = self.workflow_ref

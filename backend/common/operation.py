@@ -4,8 +4,9 @@ from typing import Any, Generic, TypeVar
 import time
 from typing import Callable
 from functools import wraps
+import traceback
 
-from common.utils import now_iso, format_exception, uuid_8
+from common.utils import now_iso, uuid_8
 
 OutputT = TypeVar("OutputT")
 
@@ -73,7 +74,7 @@ def task(
                 result = OperationResult(name=func_ref)
                 result.ok = False
                 result.message = f"Task {func_ref} failed: {e}"
-                result.run_time_error = format_exception(e)
+                result.run_time_error = traceback.format_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 return result
                 
