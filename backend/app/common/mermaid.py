@@ -32,6 +32,8 @@ def _format_field_name(key: str) -> str:
 
 
 def format_node_label(task_id: str, data: dict) -> str:
+    # TODO: use llm_id (task and goal ids) for production
+    # and other fields for production
     node_type = clean_string_mermaid(str(data.get("node_type", "")))
     rows = [
         f"<div style='{WRAPPER_STYLE}'>",
