@@ -10,11 +10,11 @@ Unit Test:
 1. test your common repo utils first
     * test your prompt loader and format and such
     * make sure you can save and parse those data correctly
-2. test the base request and request schemas pre-post validators
+2. test your openAI clients and clients request (to payload)
+3. test all your planner logic (dag, accepted, etc...)
+4. test the base request and request schemas pre-post validators
     * create fake openAI response (with ints instead of strs for example)
     * more than the limit the amount of strings
-3. test your openAI clients and clients request (to payload)
-4. test all your planner logic (dag, accepted, etc...)
 5. test your WorkFlow and decorator last
     * focus on raising and throwing errors (logic first)
     * check your logger
