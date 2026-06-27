@@ -3,7 +3,6 @@ import logging
 from dataclasses import dataclass, field
 from functools import reduce
 from operator import or_
-from typing import Union
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator
 
@@ -16,7 +15,6 @@ from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
-    REQUEST_CLASSES,
 )
 from app.orchestration.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -24,10 +22,10 @@ from clients.openai_client import OpenAIClient
 from common.utils import uuid_8
 from config import BookConstraints, BookGuides
 
+
 logger = logging.getLogger(__name__)
 
 MAX_STRATEGIES = 15
-StrategyType = Union[REQUEST_CLASSES]
 
 class StrategyRequest(BaseModel):
     """
@@ -36,7 +34,7 @@ class StrategyRequest(BaseModel):
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
 
-    strategies: list[StrategyType] = Field(
+    strategies: list[BaseRequest] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
         description="List of strategies generated from the query",
@@ -159,7 +157,7 @@ class StrategyClassificationWorkflow(
         self.create_execution_order()
         self.finalize_result()
         
-    def set_llm_id(self, strategies: list[StrategyType]) -> None:
+    def set_llm_id(self, strategies: list[BaseRequest]) -> None:
         llm_to_internal_id = {}
         for strategy in strategies:
             llm_id = strategy.id
@@ -169,7 +167,7 @@ class StrategyClassificationWorkflow(
         return llm_to_internal_id
 
     def map_dependencies_to_internal_ids(self, 
-                                         strategies: list[StrategyType], 
+                                         strategies: list[BaseRequest], 
                                          llm_to_internal_id: dict[str, str]) -> None:
         for strategy in strategies:
             if not hasattr(strategy, "depends_on"):
@@ -230,7 +228,7 @@ class StrategyClassificationWorkflow(
 
     def process_classification_result(
         self,
-        strategies: list[StrategyType],
+        strategies: list[BaseRequest],
         system_goals: list[SystemGoal],
         accepted_tuning: float = 0.7,
     ):
@@ -263,7 +261,7 @@ class StrategyClassificationWorkflow(
             else:
                 self.output.buffer.append(strategy)
 
-    def get_strategies_ids(self, strategies: list[StrategyType]) -> list[str]:
+    def get_strategies_ids(self, strategies: list[BaseRequest]) -> list[str]:
         return set(strategy.id for strategy in strategies)
 
     def finalize_result(self) -> None:
