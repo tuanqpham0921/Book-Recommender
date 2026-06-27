@@ -1,28 +1,16 @@
 """Tests for InitialParseWorkflow.process_parse_result and InitialParseRequest validators."""
-from unittest.mock import MagicMock
-
 import pytest
 
-from app.common.messages import UserMessage
-from app.common.sse_stream import SSEStream
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.orchestration.planner.parse_intent import (
     InitialParseRequest,
-    InitialParseWorkflow,
     SystemGoal,
     MAX_SYSTEM_GOALS,
 )
 from app.domains.base_request import MAX_STRING_LENGTH
 
-
-@pytest.fixture
-def wf():
-    return InitialParseWorkflow(
-        sse_stream=SSEStream(),
-        user_message=UserMessage(content="test message"),
-        llm_client=MagicMock(),
-    )
+# parse_wf fixture comes from tests/unit/app/orchestration/planner/conftest.py
 
 
 def _make_goal(
@@ -83,95 +71,95 @@ def test_out_of_scope_non_string_is_coerced():
 # process_parse_result: empty result
 # ---------------------------------------------------------------------------
 
-def test_empty_parse_result_sets_result_not_ok(wf):
+def test_empty_parse_result_sets_result_not_ok(parse_wf):
     parse_result = _make_parse_result()
-    wf.process_parse_result(parse_result)
-    assert wf.result.ok is False
+    parse_wf.process_parse_result(parse_result)
+    assert parse_wf.result.ok is False
 
 
 # ---------------------------------------------------------------------------
 # process_parse_result: small_talk and out_of_scope
 # ---------------------------------------------------------------------------
 
-def test_small_talk_stored_on_output(wf):
+def test_small_talk_stored_on_output(parse_wf):
     parse_result = _make_parse_result(small_talk="Hello there!")
-    wf.process_parse_result(parse_result)
-    assert wf.output.small_talk == "Hello there!"
+    parse_wf.process_parse_result(parse_result)
+    assert parse_wf.output.small_talk == "Hello there!"
 
 
-def test_out_of_scope_stored_on_output(wf):
+def test_out_of_scope_stored_on_output(parse_wf):
     parse_result = _make_parse_result(out_of_scope="Cooking recipe request")
-    wf.process_parse_result(parse_result)
-    assert wf.output.out_of_scope == "Cooking recipe request"
+    parse_wf.process_parse_result(parse_result)
+    assert parse_wf.output.out_of_scope == "Cooking recipe request"
 
 
 # ---------------------------------------------------------------------------
 # process_parse_result: goal filtering
 # ---------------------------------------------------------------------------
 
-def test_low_confidence_goal_goes_to_refused(wf):
+def test_low_confidence_goal_goes_to_refused(parse_wf):
     goal = _make_goal(confidence=0.3)
     parse_result = _make_parse_result(goals=[goal])
-    wf.process_parse_result(parse_result)
-    assert len(wf.output.refused_goals) == 1
-    assert len(wf.output.accepted_goals) == 0
+    parse_wf.process_parse_result(parse_result)
+    assert len(parse_wf.output.refused_goals) == 1
+    assert len(parse_wf.output.accepted_goals) == 0
     assert goal._refusal is True
 
 
-def test_unsupported_node_type_goes_to_refused(wf):
+def test_unsupported_node_type_goes_to_refused(parse_wf):
     goal = _make_goal(confidence=0.9, node_type=UnknownNodeTypeEnum.UNKNOWN)
     parse_result = _make_parse_result(goals=[goal])
-    wf.process_parse_result(parse_result)
-    assert len(wf.output.refused_goals) == 1
-    assert len(wf.output.accepted_goals) == 0
+    parse_wf.process_parse_result(parse_result)
+    assert len(parse_wf.output.refused_goals) == 1
+    assert len(parse_wf.output.accepted_goals) == 0
 
 
-def test_valid_goal_goes_to_accepted(wf):
+def test_valid_goal_goes_to_accepted(parse_wf):
     goal = _make_goal(confidence=0.9, node_type=BookNodeTypeEnum.FIND_TITLE)
     parse_result = _make_parse_result(goals=[goal])
-    wf.process_parse_result(parse_result)
-    assert len(wf.output.accepted_goals) == 1
-    assert len(wf.output.refused_goals) == 0
+    parse_wf.process_parse_result(parse_result)
+    assert len(parse_wf.output.accepted_goals) == 1
+    assert len(parse_wf.output.refused_goals) == 0
 
 
-def test_goals_beyond_max_go_to_buffer(wf):
+def test_goals_beyond_max_go_to_buffer(parse_wf):
     # Pre-fill accepted_goals to the cap, then run one more valid goal through
     for _ in range(MAX_SYSTEM_GOALS):
-        wf.output.accepted_goals.append(_make_goal())
+        parse_wf.output.accepted_goals.append(_make_goal())
 
     extra = _make_goal()
     parse_result = _make_parse_result(goals=[extra])
-    wf.process_parse_result(parse_result)
-    assert len(wf.output.buffer_goals) == 1
+    parse_wf.process_parse_result(parse_result)
+    assert len(parse_wf.output.buffer_goals) == 1
 
 
-def test_mixed_goals_split_correctly(wf):
+def test_mixed_goals_split_correctly(parse_wf):
     good = _make_goal(confidence=0.9)
     bad = _make_goal(confidence=0.1)
     parse_result = _make_parse_result(goals=[good, bad])
-    wf.process_parse_result(parse_result)
-    assert len(wf.output.accepted_goals) == 1
-    assert len(wf.output.refused_goals) == 1
+    parse_wf.process_parse_result(parse_result)
+    assert len(parse_wf.output.accepted_goals) == 1
+    assert len(parse_wf.output.refused_goals) == 1
 
 
 # ---------------------------------------------------------------------------
 # InitialParseOutput helpers
 # ---------------------------------------------------------------------------
 
-def test_accepted_goals_ids_returns_goal_ids(wf):
+def test_accepted_goals_ids_returns_goal_ids(parse_wf):
     goal = _make_goal()
     parse_result = _make_parse_result(goals=[goal])
-    wf.process_parse_result(parse_result)
-    ids = wf.output.accepted_goals_ids()
+    parse_wf.process_parse_result(parse_result)
+    ids = parse_wf.output.accepted_goals_ids()
     assert ids == [goal.id]
 
 
-def test_to_summary_counts_match(wf):
+def test_to_summary_counts_match(parse_wf):
     good = _make_goal(confidence=0.9)
     bad = _make_goal(confidence=0.1)
     parse_result = _make_parse_result(goals=[good, bad])
-    wf.process_parse_result(parse_result)
-    summary = wf.output.to_summary()
+    parse_wf.process_parse_result(parse_result)
+    summary = parse_wf.output.to_summary()
     assert summary["num_accepted_system"] == 1
     assert summary["num_rejected_system"] == 1
     assert summary["total_system_goals"] == 2
