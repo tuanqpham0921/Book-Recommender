@@ -1,0 +1,352 @@
+[
+  {
+    "id": 1,
+    "difficulty": "easy",
+    "query": "What is the book Dune?",
+    "note": "Single FindByTitle. Simplest possible book lookup — one node, exact title, no ambiguity.",
+    "expected_nodes": ["Retrieve_by_Title"]
+  },
+  {
+    "id": 2,
+    "difficulty": "easy",
+    "query": "Find the book with ISBN 9780385333481.",
+    "note": "Single FindByISBN13. Most precise retrieval — ISBN is unambiguous, zero inference needed.",
+    "expected_nodes": ["Retrieve_by_ISBN13"]
+  },
+  {
+    "id": 3,
+    "difficulty": "easy",
+    "query": "Recommend me a mystery book.",
+    "note": "Single Recommend with semantic input only. One genre keyword, no reference book, no filters.",
+    "expected_nodes": ["Analyze_Recommend"]
+  },
+  {
+    "id": 4,
+    "difficulty": "easy",
+    "query": "Who is the developer of this app?",
+    "note": "Single DeveloperInfo. About-me query for the builder of the project.",
+    "expected_nodes": ["Retrieve_Developer_Info"]
+  },
+  {
+    "id": 5,
+    "difficulty": "easy",
+    "query": "Tell me about this project.",
+    "note": "Single ProjectInfo. Broad info request; fields=[ALL] is the right response.",
+    "expected_nodes": ["Retrieve_Project_Info"]
+  },
+  {
+    "id": 6,
+    "difficulty": "easy",
+    "query": "I want to read something spooky.",
+    "note": "Single Recommend with mood-based semantic input. No genre enum, LLM must infer horror/thriller theme.",
+    "expected_nodes": ["Analyze_Recommend"]
+  },
+  {
+    "id": 7,
+    "difficulty": "easy",
+    "query": "Find Harry Potter and the Sorcerer's Stone by J.K. Rowling.",
+    "note": "Single FindByTitle with optional author hint. Tests that author is stored on the node, not used as a filter.",
+    "expected_nodes": ["Retrieve_by_Title"]
+  },
+  {
+    "id": 8,
+    "difficulty": "easy",
+    "query": "Show me children's books.",
+    "note": "Single FindByTraits with is_children=True. The only filter that needs setting.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 9,
+    "difficulty": "easy",
+    "query": "This app is amazing, keep up the great work!",
+    "note": "Single Feedback with no contact info. Tests that positive small-talk-style text routes to Provide_Feedback, not small_talk.",
+    "expected_nodes": ["Provide_Feedback"]
+  },
+  {
+    "id": 10,
+    "difficulty": "easy",
+    "query": "How many tokens have I used so far?",
+    "note": "Single UserInfo with field=[token_usage]. Simple account-info retrieval.",
+    "expected_nodes": ["Retrieve_User_Info"]
+  },
+  {
+    "id": 11,
+    "difficulty": "easy",
+    "query": "Recommend me a sci-fi novel with at least 4 stars.",
+    "note": "Single Recommend with semantic input and a min_rating filter. One step up from pure semantic.",
+    "expected_nodes": ["Analyze_Recommend"]
+  },
+  {
+    "id": 12,
+    "difficulty": "easy",
+    "query": "Find books with fewer than 200 pages.",
+    "note": "Single FindByTraits with max_pages=200 only. Tests numeric filter mapping.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 13,
+    "difficulty": "easy",
+    "query": "What non-fiction books about history do you have?",
+    "note": "Single FindByTraits with genre=non-fiction and keywords=[history]. Two filters, still one node.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 14,
+    "difficulty": "easy",
+    "query": "Who is the developer and what is their LinkedIn profile?",
+    "note": "Single DeveloperInfo with field=[name, linkedin_url]. Multi-field but still one retrieval node.",
+    "expected_nodes": ["Retrieve_Developer_Info"]
+  },
+  {
+    "id": 15,
+    "difficulty": "easy",
+    "query": "Show me the highest rated books you have.",
+    "note": "Single FindByTraits with sort_by=rating, sort_order=desc. Tests sort filter with no content filter.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 16,
+    "difficulty": "medium",
+    "query": "I loved Dune, what should I read next?",
+    "note": "FindByTitle then Recommend. Classic two-step: resolve the anchor book, then recommend based on it.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 17,
+    "difficulty": "medium",
+    "query": "Compare 1984 and Brave New World.",
+    "note": "Two FindByTitle then Compare. Minimal three-node chain — no criteria, just a general compare.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare"]
+  },
+  {
+    "id": 18,
+    "difficulty": "medium",
+    "query": "What books are similar to ISBN 9780385333481?",
+    "note": "FindByISBN13 then Recommend. Same chain as title-based recommendation but anchored on ISBN.",
+    "expected_nodes": ["Retrieve_by_ISBN13", "Analyze_Recommend"]
+  },
+  {
+    "id": 19,
+    "difficulty": "medium",
+    "query": "Find fantasy books published between 2010 and 2020 sorted by rating.",
+    "note": "Single FindByTraits with keyword, year range, and sort. Multiple filters on one node; tests compound filter composition.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 20,
+    "difficulty": "medium",
+    "query": "Recommend me something like Harry Potter but for adults.",
+    "note": "FindByTitle then Recommend with semantic modifier (adult-oriented). LLM must carry the 'but for adults' into semantic_input.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 21,
+    "difficulty": "medium",
+    "query": "Find me a thriller from the 1990s with more than 300 pages and a rating above 4.",
+    "note": "Single FindByTraits with keyword + year range + min_pages + min_rating. Four simultaneous filters; tests all numeric constraints together.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 22,
+    "difficulty": "medium",
+    "query": "Recommend me books like The Hitchhiker's Guide to the Galaxy sorted by rating.",
+    "note": "FindByTitle then Recommend with sort_by=rating. Two-node chain where the filter travels to the recommend step.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 23,
+    "difficulty": "medium",
+    "query": "Compare the themes of Pride and Prejudice and Jane Eyre.",
+    "note": "Two FindByTitle then Compare with comparison_criteria=themes. The planner must extract criteria from the query.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare"]
+  },
+  {
+    "id": 24,
+    "difficulty": "medium",
+    "query": "What books by Stephen King have over 400 pages?",
+    "note": "Single FindByTraits with author filter + min_pages. Tests author as a filter field rather than a title-level hint.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 25,
+    "difficulty": "medium",
+    "query": "I want a dark fantasy epic — long, highly rated, published after 2000.",
+    "note": "Single Recommend with rich semantic_input plus three filters (min_pages implied, min_rating, min_year). No reference book needed.",
+    "expected_nodes": ["Analyze_Recommend"]
+  },
+  {
+    "id": 26,
+    "difficulty": "medium",
+    "query": "Recommend me something like Dune but shorter and more recent.",
+    "note": "FindByTitle then Recommend with max_pages and min_year constraints. LLM must translate 'shorter' and 'more recent' into filter values.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 27,
+    "difficulty": "medium",
+    "query": "Find me books about artificial intelligence that are non-fiction and highly rated.",
+    "note": "Single FindByTraits with keywords=[AI], genre=non-fiction, min_rating. Three filters on a trait-based search.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 28,
+    "difficulty": "medium",
+    "query": "Recommend me books like The Hunger Games and Divergent.",
+    "note": "Two FindByTitle then Recommend with multiple reference_books. Tests that both titles resolve before the recommendation step.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 29,
+    "difficulty": "medium",
+    "query": "What is the GitHub repo for this project?",
+    "note": "Single ProjectInfo with fields=[project_github_url, project_github_repo_name]. Tests specific project field extraction.",
+    "expected_nodes": ["Retrieve_Project_Info"]
+  },
+  {
+    "id": 30,
+    "difficulty": "medium",
+    "query": "Find me a cozy mystery under 300 pages with a high rating, not too old.",
+    "note": "Single Recommend with semantic_input (cozy mystery) plus max_pages, min_rating, min_year. Four constraints wrapped in one natural sentence.",
+    "expected_nodes": ["Analyze_Recommend"]
+  },
+  {
+    "id": 31,
+    "difficulty": "medium",
+    "query": "Compare Moby Dick, Don Quixote, and War and Peace on length and writing style.",
+    "note": "Three FindByTitle then Compare with comparison_criteria. First three-book compare — depends_on must list all three retrieval nodes.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare"]
+  },
+  {
+    "id": 32,
+    "difficulty": "medium",
+    "query": "Recommend me books like Sapiens and The Subtle Art of Not Giving a F*ck — non-fiction, high rated, under 400 pages, after 2010.",
+    "note": "Two FindByTitle then Recommend with genre + min_rating + max_pages + min_year filters. Complex filter set on a two-reference recommendation.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 33,
+    "difficulty": "medium",
+    "query": "Recommend me books like The Name of the Wind, but exclude anything by Patrick Rothfuss.",
+    "note": "FindByTitle then Recommend with an exclusion filter on author. Tests the ExclusionBookFilter path inside BooksFilter.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 34,
+    "difficulty": "medium",
+    "query": "Find me the top 5 most popular children's books with over 1000 ratings.",
+    "note": "Single FindByTraits with is_children=True, sort_by=rating, limit=5, and a ratings_count proxy via keywords. Tests limit + sort + child filter combination.",
+    "expected_nodes": ["Retrieve_by_Traits"]
+  },
+  {
+    "id": 35,
+    "difficulty": "medium",
+    "query": "What should I read after finishing The Lord of the Rings trilogy?",
+    "note": "FindByTitle then Recommend. Phrasing is about 'after finishing a series' — LLM must map this to a reference-based recommendation.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 36,
+    "difficulty": "hard",
+    "query": "Compare 1984 and Brave New World, then recommend something similar to whichever feels darker.",
+    "note": "Two FindByTitle + Compare + Recommend. Four-node chain where Recommend depends on the Compare output — tests deep dependency chain.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend"]
+  },
+  {
+    "id": 37,
+    "difficulty": "hard",
+    "query": "Who is the developer? Also, are there any books about the technologies they used to build this app?",
+    "note": "DeveloperInfo + ProjectInfo + FindByTraits/Recommend across three domains. The tech stack from ProjectInfo informs the book search — cross-domain dependency.",
+    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_Project_Info", "Retrieve_by_Traits"]
+  },
+  {
+    "id": 38,
+    "difficulty": "hard",
+    "query": "I want fantasy books similar to both Lord of the Rings and A Song of Ice and Fire — highly rated, after 2005, not too long.",
+    "note": "Two FindByTitle then Recommend with multiple filters. Tricky because 'not too long' requires LLM inference for max_pages from context of epic fantasy.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 39,
+    "difficulty": "hard",
+    "query": "I want something completely different — no sci-fi, no fantasy, no romance. Something literary, thought-provoking, 300-500 pages, highly rated, post-2000, and nothing by Cormac McCarthy.",
+    "note": "Single Recommend with complex semantic_input, page range, min_rating, min_year, and multi-field exclusion (categories + author). Tests negative constraint handling.",
+    "expected_nodes": ["Analyze_Recommend"]
+  },
+  {
+    "id": 40,
+    "difficulty": "hard",
+    "query": "Compare Harry Potter and the Philosopher's Stone and The Lion the Witch and the Wardrobe in terms of their magic systems and coming-of-age themes.",
+    "note": "Two FindByTitle + Compare with rich comparison_criteria. The criteria span two distinct dimensions — tests multi-criteria extraction into a single field.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare"]
+  },
+  {
+    "id": 41,
+    "difficulty": "hard",
+    "query": "Who is the developer and what is their email? Also, I'd like to send them some feedback: the recommendation quality is excellent but it could be faster.",
+    "note": "DeveloperInfo + Feedback across two domains in one message. Tests dual-node resolution with contact_info from DeveloperInfo surfacing next to a Feedback node.",
+    "expected_nodes": ["Retrieve_Developer_Info", "Provide_Feedback"]
+  },
+  {
+    "id": 42,
+    "difficulty": "hard",
+    "query": "Find me books like Dune but also like The Lord of the Rings — something epic, philosophically deep, highly rated, over 500 pages, fiction, published after 1980, and please exclude George R.R. Martin.",
+    "note": "Two FindByTitle + Recommend with semantic_input, genre, min_pages, min_rating, min_year, and author exclusion. Six simultaneous constraints on a two-reference recommendation.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 43,
+    "difficulty": "hard",
+    "query": "Compare The Alchemist and The Little Prince on themes, then recommend a modern novel that blends both their themes but is grounded in realism.",
+    "note": "Two FindByTitle + Compare + Recommend. The Recommend semantic_input must synthesize the comparison result — four-node chain with semantic chaining between Compare and Recommend.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend"]
+  },
+  {
+    "id": 44,
+    "difficulty": "hard",
+    "query": "Compare the writing styles of The Old Man and the Sea, The Great Gatsby, and The Sound and the Fury, then recommend a modern novel (post-2000) that echoes the most impactful one, under 400 pages.",
+    "note": "Three FindByTitle + Compare + Recommend. Five nodes with criteria-focused compare and filtered recommendation — tests maximum Compare fan-in before Recommend.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend"]
+  },
+  {
+    "id": 45,
+    "difficulty": "hard",
+    "query": "Hello! What's your name? Also tell me about this project and recommend me a sci-fi book.",
+    "note": "Small talk + ProjectInfo + Recommend. Tests that the planner correctly separates small_talk from two real goals without over-routing.",
+    "expected_nodes": ["Retrieve_Project_Info", "Analyze_Recommend"]
+  },
+  {
+    "id": 46,
+    "difficulty": "hard",
+    "query": "Compare Harry Potter, Narnia, A Wizard of Earthsea, and The Magicians in terms of their magic systems — then recommend something that captures the best of all four.",
+    "note": "Four FindByTitle + Compare + Recommend. Six-node chain — the largest legal fan-in for Compare; tests that all four depends_on ids are resolved before Compare runs.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend"]
+  },
+  {
+    "id": 47,
+    "difficulty": "hard",
+    "query": "I'm a developer who uses this app. Show me my token usage, tell me about the project's tech stack, and recommend sci-fi books about distributed systems.",
+    "note": "UserInfo + ProjectInfo + Recommend across all three domains simultaneously. Three parallel nodes before Recommend — tests multi-domain fan-in.",
+    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Analyze_Recommend"]
+  },
+  {
+    "id": 48,
+    "difficulty": "hard",
+    "query": "I want to explore dystopian fiction. Compare 1984, Brave New World, and Fahrenheit 451 on their visions of government control, then recommend 3 modern novels (post-2010) from non-Western perspectives that continue this tradition — highly rated and not too long.",
+    "note": "Three FindByTitle + Compare + Recommend. Five nodes with thematic comparison_criteria, geographic semantic modifier, multiple filters, and implicit limit=3. Tests the full complexity of the planner pipeline.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend"]
+  },
+  {
+    "id": 49,
+    "difficulty": "hard",
+    "query": "Can you look up my previous conversations, then based on any books I mentioned, recommend something I haven't read yet?",
+    "note": "UserInfo(previous_conversation) + Recommend. The Recommend depends on UserInfo output — cross-domain sequential dependency where book data is derived from user history, not a static reference.",
+    "expected_nodes": ["Retrieve_User_Info", "Analyze_Recommend"]
+  },
+  {
+    "id": 50,
+    "difficulty": "hard",
+    "query": "Compare Dune, Foundation, and Neuromancer on world-building and technology themes. Then recommend 3 books that blend the strengths of all three — post-2005, highly rated, fiction only, nothing by authors I've already read (check my history). Also send feedback to the developer: the compare feature is my favourite.",
+    "note": "Three FindByTitle + Compare + UserInfo + Recommend + Feedback. Seven nodes across book and user domains. The Recommend exclusion depends on UserInfo output; Feedback runs in parallel. Maximum realistic complexity for this system.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_User_Info", "Analyze_Recommend", "Provide_Feedback"]
+  }
+]
