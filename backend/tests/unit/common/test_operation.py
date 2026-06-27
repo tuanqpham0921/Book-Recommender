@@ -1,0 +1,93 @@
+import pytest
+from common.operation import task, OperationResult
+
+
+@task
+async def _returns_plain_value():
+    return "hello"
+
+
+@task
+async def _returns_custom_result():
+    return OperationResult(ok=True, message="custom message", output="custom_output")
+
+
+@task
+async def _raises_value_error():
+    raise ValueError("something went wrong")
+
+
+@task
+async def _returns_none():
+    return None
+
+
+async def test_task_plain_value_wraps_in_operation_result():
+    result = await _returns_plain_value()
+    assert isinstance(result, OperationResult)
+    assert result.ok is True
+    assert result.output == "hello"
+    assert result.duration is not None
+    assert result.name is not None
+
+
+async def test_task_passthrough_when_returns_operation_result():
+    result = await _returns_custom_result()
+    assert isinstance(result, OperationResult)
+    assert result.ok is True
+    assert result.message == "custom message"
+    assert result.output == "custom_output"
+    assert result.duration is not None
+
+
+async def test_task_captures_exception_as_failed_result():
+    result = await _raises_value_error()
+    assert isinstance(result, OperationResult)
+    assert result.ok is False
+    assert "something went wrong" in result.message
+    assert result.run_time_error is not None
+    assert result.duration is not None
+
+
+async def test_task_sets_function_name_on_result():
+    result = await _returns_plain_value()
+    assert "test_operation" in result.name
+    assert "_returns_plain_value" in result.name
+
+
+async def test_task_none_return_produces_ok_result():
+    result = await _returns_none()
+    assert result.ok is True
+    assert result.output is None
+
+
+def test_check_output_type_passes_on_type_match():
+    result = OperationResult(output="hello", output_type=str)
+    result.check_output_type()  # must not raise
+
+
+def test_check_output_type_raises_on_type_mismatch():
+    result = OperationResult(output=42, output_type=str)
+    with pytest.raises(TypeError):
+        result.check_output_type()
+
+
+def test_check_output_type_skips_when_output_is_none():
+    result = OperationResult(output=None, output_type=str)
+    result.check_output_type()  # must not raise
+
+
+def test_check_output_type_skips_when_output_type_is_none():
+    result = OperationResult(output="hello", output_type=None)
+    result.check_output_type()  # must not raise
+
+
+def test_operation_result_defaults():
+    result = OperationResult()
+    assert result.ok is True
+    assert result.message is None
+    assert result.steps == []
+    assert result.output is None
+    assert result.run_time_error is None
+    assert result.duration is None
+    assert result.id.startswith("op_")
