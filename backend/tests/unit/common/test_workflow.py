@@ -34,78 +34,67 @@ class _MultiStepWorkflow(Workflow):
             self.add_step(step, raise_on_failure=False)
 
 
-async def test_successful_workflow_sets_ok_true():
-    result = await _SuccessWorkflow()()
-    assert result.ok is True
+class TestWorkflowExecution:
+    async def test_successful_run_sets_ok_true(self):
+        result = await _SuccessWorkflow()()
+        assert result.ok is True
+
+    async def test_successful_run_records_duration(self):
+        result = await _SuccessWorkflow()()
+        assert result.duration is not None
+        assert result.duration >= 0
+
+    async def test_exception_in_run_sets_ok_false(self):
+        result = await _ExceptionWorkflow()()
+        assert result.ok is False
+        assert "workflow exploded" in result.message
+        assert result.run_time_error is not None
+
+    async def test_exception_in_run_still_records_duration(self):
+        result = await _ExceptionWorkflow()()
+        assert result.duration is not None
 
 
-async def test_successful_workflow_records_duration():
-    result = await _SuccessWorkflow()()
-    assert result.duration is not None
-    assert result.duration >= 0
+class TestAddStep:
+    async def test_success_step_appended_to_steps(self):
+        step = OperationResult(ok=True, name="my_step")
+        result = await _StepWorkflow(step)()
+        assert result.ok is True
+        assert len(result.steps) == 1
+        assert result.steps[0].name == "my_step"
+
+    async def test_failed_step_sets_result_ok_false(self):
+        step = OperationResult(ok=False, name="bad_step", message="bad")
+        result = await _StepWorkflow(step, raise_on_failure=False)()
+        assert result.ok is False
+
+    async def test_failed_step_with_raise_records_run_time_error(self):
+        step = OperationResult(ok=False, name="bad_step", message="bad")
+        result = await _StepWorkflow(step, raise_on_failure=True)()
+        assert result.ok is False
+        assert result.run_time_error is not None
+
+    async def test_failed_step_without_raise_still_appended(self):
+        step = OperationResult(ok=False, name="bad_step", message="bad")
+        result = await _StepWorkflow(step, raise_on_failure=False)()
+        assert len(result.steps) == 1
+
+    async def test_multiple_steps_all_appended(self):
+        steps = [
+            OperationResult(ok=True, name="step_1"),
+            OperationResult(ok=True, name="step_2"),
+            OperationResult(ok=True, name="step_3"),
+        ]
+        result = await _MultiStepWorkflow(steps)()
+        assert len(result.steps) == 3
 
 
-async def test_exception_in_run_sets_ok_false():
-    result = await _ExceptionWorkflow()()
-    assert result.ok is False
-    assert "workflow exploded" in result.message
-    assert result.run_time_error is not None
+class TestWorkflowProperties:
+    def test_workflow_ref_includes_class_name(self):
+        wf = _SuccessWorkflow()
+        assert "_SuccessWorkflow" in wf.workflow_ref
 
-
-async def test_exception_in_run_still_records_duration():
-    result = await _ExceptionWorkflow()()
-    assert result.duration is not None
-
-
-async def test_add_step_success_appends_to_steps():
-    step = OperationResult(ok=True, name="my_step")
-    wf = _StepWorkflow(step)
-    result = await wf()
-    assert result.ok is True
-    assert len(result.steps) == 1
-    assert result.steps[0].name == "my_step"
-
-
-async def test_add_step_failure_sets_result_ok_false():
-    step = OperationResult(ok=False, name="bad_step", message="bad")
-    wf = _StepWorkflow(step, raise_on_failure=False)
-    result = await wf()
-    assert result.ok is False
-
-
-async def test_add_step_failure_with_raise_propagates_as_exception():
-    step = OperationResult(ok=False, name="bad_step", message="bad")
-    wf = _StepWorkflow(step, raise_on_failure=True)
-    result = await wf()
-    # The exception is caught by Workflow.__call__ and recorded
-    assert result.ok is False
-    assert result.run_time_error is not None
-
-
-async def test_add_step_failure_without_raise_still_appends_step():
-    step = OperationResult(ok=False, name="bad_step", message="bad")
-    wf = _StepWorkflow(step, raise_on_failure=False)
-    result = await wf()
-    assert len(result.steps) == 1
-
-
-async def test_multiple_steps_all_appended():
-    steps = [
-        OperationResult(ok=True, name="step_1"),
-        OperationResult(ok=True, name="step_2"),
-        OperationResult(ok=True, name="step_3"),
-    ]
-    wf = _MultiStepWorkflow(steps)
-    result = await wf()
-    assert len(result.steps) == 3
-
-
-def test_workflow_ref_includes_class_name():
-    wf = _SuccessWorkflow()
-    assert "_SuccessWorkflow" in wf.workflow_ref
-
-
-def test_workflow_name_includes_class_name_and_id():
-    wf = _SuccessWorkflow()
-    assert "_SuccessWorkflow" in wf.workflow_name
-    assert wf.result.id in wf.workflow_name
+    def test_workflow_name_includes_class_name_and_id(self):
+        wf = _SuccessWorkflow()
+        assert "_SuccessWorkflow" in wf.workflow_name
+        assert wf.result.id in wf.workflow_name
