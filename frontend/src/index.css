@@ -750,7 +750,7 @@ select {
 
 /* Frame */
 .mermaid-container {
-  width: 100%;
+  width: 90%;
   border: 0.5px solid var(--text-active);
   border-radius: 0.5rem;
   background: var(--bg-primary);
