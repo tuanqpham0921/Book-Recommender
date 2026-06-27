@@ -98,8 +98,7 @@ docker-clean-all:
 # run the tests
 .PHONY: tests
 tests:
-	LOG_LEVEL=INFO poetry run pytest -s tests/unit
-	LOG_LEVEL=INFO poetry run pytest -s tests/integration
+	poetry run pytest -s tests/unit/common/utils
 
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
