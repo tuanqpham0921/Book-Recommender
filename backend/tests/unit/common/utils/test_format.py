@@ -45,6 +45,9 @@ class TestFormatException:
             result = format_exception(e)
 
         assert isinstance(result["traceback"], list)
+        
+class TestToJsonable:
+    ...
 
 
 class TestRemoveJsonEmptyValues:
