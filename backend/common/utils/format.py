@@ -1,5 +1,6 @@
 import traceback
 from typing import Any
+from pydantic import BaseModel
 
 def format_exception(error: BaseException) -> dict[str, Any]:
     """Return a JSON-friendly traceback payload for operation logs."""
@@ -30,6 +31,10 @@ def format_exception(error: BaseException) -> dict[str, Any]:
     
 def remove_json_empty_values(value: Any) -> Any:
     """Drop None, empty strings, and empty collections from summary payloads."""
+    if isinstance(value, BaseModel):
+        data = value.model_dump(mode="json", exclude_none=True)
+        return remove_json_empty_values(data)
+        
     if isinstance(value, dict):
         cleaned = {key: remove_json_empty_values(item) for key, item in value.items()}
         return {
