@@ -29,10 +29,11 @@ class SSEStream:
             return ServerSentEvent(data=data)
         except asyncio.TimeoutError:
             logger.error("⏰ SSE stream timeout")
-            # Don't call send_error here to avoid recursion
+            self._finished = True
             raise StopAsyncIteration
         except Exception as e:
             logger.exception(f"❌ SSE stream error: {e}")
+            self._finished = True
             raise StopAsyncIteration
 
     async def put(self, data: str | dict):
@@ -48,9 +49,9 @@ class SSEStream:
         except Exception as e:
             logger.exception(f"❌ Error putting data into the queue: {data} with type: {type(data)}", exc_info=e)
     
-    async def send(self, type: str, data: dict[str, Any] | str):
+    async def send(self, event_type: str, data: dict[str, Any] | str):
         """Send an SSE event with structured data."""
-        await self.put(json.dumps({"type": type, "data": data}))
+        await self.put(json.dumps({"type": event_type, "data": data}))
        
     async def send_book_card(self, position: int, data: dict):
         """Send raw JSON data."""
@@ -60,24 +61,24 @@ class SSEStream:
     async def send_chars(self, data: str, delay: float = 0.01):
         """Stream text character by character for smoother effect."""
         for ch in data:
-            await self.send(type="content.delta", data=str(ch))
+            await self.send(event_type="content.delta", data=str(ch))
             await asyncio.sleep(delay)
 
     async def send_ui_loading(self, text: str):
         """Send loading message to UI."""
-        await self.send(type="ui.loading", data=text)
+        await self.send(event_type="ui.loading", data=text)
 
     async def send_error(self, text: str):
         """Send error message."""
-        await self.send(type="error", data=text)
+        await self.send(event_type="error", data=text)
 
     async def send_divider(self, data: str = "\n\n---\n\n"):
         """Send divider."""
-        await self.send(type="content.delta", data=data)
+        await self.send(event_type="content.delta", data=data)
 
     async def send_mermaid(self, data: str):
         """Send mermaid diagram."""
-        await self.send(type="mermaid.diagram", data=data)
+        await self.send(event_type="mermaid.diagram", data=data)
     
     async def close(self):
         """Close the stream."""
