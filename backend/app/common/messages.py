@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Annotated, Any, Literal, Union
 
 from openai.types.chat import ParsedFunctionToolCall
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field
 
 from common.operation import OperationResult, TokenUsage, task
 
@@ -53,15 +53,7 @@ class AssistantMessage(BaseMessage):
     created: str | None = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
-    _token_usage: TokenUsage = PrivateAttr(default_factory=TokenUsage)
-
-    @property
-    def token_usage(self) -> TokenUsage:
-        return self._token_usage
-
-    @token_usage.setter
-    def token_usage(self, value: TokenUsage) -> None:
-        self._token_usage = value
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
     def to_openai_dict(self) -> dict:
         base = {"role": self.role}

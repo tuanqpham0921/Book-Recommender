@@ -64,13 +64,12 @@ class OpenAIClient(BaseLLMClient):
             content=response_message.content,
             tool_calls=response_message.tool_calls,
             refusal=response_message.refusal,
-        )
-        if final_completion.usage:
-            assistant_msg.token_usage = TokenUsage(
+            token_usage=TokenUsage(
                 total=final_completion.usage.total_tokens,
                 prompt=final_completion.usage.prompt_tokens,
                 completion=final_completion.usage.completion_tokens,
-            )
+            ) if final_completion.usage else TokenUsage(),
+        )
         if save_payload:
             payload["id"] = assistant_msg.id
             self.save_payload(payload)
