@@ -1,19 +1,18 @@
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Generic, TypeVar
 
-from common.operation import OperationResult
+from common.operation import OperationResult, TokenUsage
 from common.workflow import Workflow
 from app.common.messages import (
     APIMessage,
     AssistantMessage,
     BaseMessage,
-    TokenUsage,
     ToolMessage,
 )
 from app.common.sse_stream import SSEStream
 from clients.base import BaseLLMClient, BaseLLMRequest
 from openai.types.chat import ParsedFunctionToolCall
-from abc import ABC, abstractmethod
 
 OutputT = TypeVar("OutputT", bound="UserFacingOutput")
 
@@ -22,9 +21,6 @@ OutputT = TypeVar("OutputT", bound="UserFacingOutput")
 class UserFacingOutput(ABC):
     """Domain payload stored on OperationResult.output."""
 
-    chat_messages: list[APIMessage] = field(default_factory=list)
-    token_usage: TokenUsage = field(default_factory=TokenUsage)
-    
     @abstractmethod
     def to_summary(self) -> dict[str, Any]:
         ...
@@ -39,15 +35,12 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         llm_client: BaseLLMClient,
         sse_stream: SSEStream,
         output_type: type[OutputT] | None = None,
+        messages: list[APIMessage] | None = None,
     ):
         super().__init__(output_type)
         self.llm_client = llm_client
         self.sse_stream = sse_stream
-
-    def _merge_token_usage(self, usage: TokenUsage) -> None:
-        self.output.token_usage.total += usage.total
-        self.output.token_usage.prompt += usage.prompt
-        self.output.token_usage.completion += usage.completion
+        self.messages: list[APIMessage] = messages if messages is not None else []
 
     def finalize_result(self, *, ok: bool, message: str | None = None) -> None:
         self.result.ok = ok
@@ -59,39 +52,17 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         self, step: OperationResult[Any], *, raise_on_failure: bool = True
     ) -> OperationResult[Any]:
         step = super().add_step(step, raise_on_failure=raise_on_failure)
-        output = step.output
-
-        if isinstance(output, UserFacingOutput):
-            self.output.chat_messages.extend(output.chat_messages)
-            self._merge_token_usage(output.token_usage)
-        elif isinstance(output, AssistantMessage):
-            self.output.chat_messages.append(output)
-            self._merge_token_usage(output._token_usage)
-        elif isinstance(output, ToolMessage):
-            self.output.chat_messages.append(output)
-
+        self.result.token_usage += step.token_usage
         return step
-
-    async def generate_user_response(
-        self, messages: list[BaseMessage], prompt: str
-    ) -> AssistantMessage:
-        from clients.openai_requests import OpenAIChatRequest
-
-        req = OpenAIChatRequest(
-            prompt=prompt,
-            messages=messages,
-            sse_stream=self.sse_stream,
-            temperature=0.7,
-            top_p=1.0,
-        )
-        assistant_msg = await self.run_async_step(self.llm_client.execute(req))
-        return assistant_msg.output
 
     async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         result = await self.run_async_step(
             self.llm_client.execute(req, save_payload=save_payload)
         )
-        return result.output
+        msg: AssistantMessage = result.output
+        self.messages.append(msg)
+        self.result.token_usage += msg._token_usage
+        return msg
 
     async def run_tool_call(
         self, tool_call: ParsedFunctionToolCall, **kwargs
@@ -99,4 +70,5 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         result = await self.run_async_step(
             ToolMessage.execute(tool_call, **kwargs)
         )
+        self.messages.append(result.output)
         return result.output

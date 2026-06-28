@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal, Union
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field, PrivateAttr
 
-from common.operation import OperationResult, task
+from common.operation import OperationResult, TokenUsage, task
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,6 @@ class UserMessage(BaseMessage):
     def to_openai_dict(self) -> dict:
         return {"role": self.role, "content": self.content}
 
-
-class TokenUsage(BaseModel):
-    total: int = Field(default=0)
-    prompt: int = Field(default=0)
-    completion: int = Field(default=0)
 
 
 class AssistantMessage(BaseMessage):

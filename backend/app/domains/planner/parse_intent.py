@@ -195,12 +195,13 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     tool_models = [InitialParseRequest]
 
     def __init__(
-        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
+        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient, messages=None
     ):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
             output_type=InitialParseOutput,
+            messages=messages,
         )
         self.user_message = user_message
 

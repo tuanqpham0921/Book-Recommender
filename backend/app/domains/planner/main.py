@@ -73,10 +73,10 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
-        self.output.chat_messages.append(self.user_message)
+        self.messages.append(self.user_message)
 
         parse_workflow = InitialParseWorkflow(
-            self.sse_stream, self.user_message, self.llm_client
+            self.sse_stream, self.user_message, self.llm_client, messages=self.messages
         )
         parse_result = await self.run_async_step(
             parse_workflow(), raise_on_failure=False
@@ -94,7 +94,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         system_goals = self.output.parse_result.accepted_goals
 
         strategy_workflow = StrategyClassificationWorkflow(
-            self.sse_stream, self.user_message, self.llm_client
+            self.sse_stream, self.user_message, self.llm_client, messages=self.messages
         )
         strategy_result = await self.run_async_step(
             strategy_workflow(self.user_message, system_goals), raise_on_failure=False
@@ -152,21 +152,16 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
 
         data = asdict(self.result)
         data.pop("steps", None)
-        if output := data.get("output"):
-            output.pop("chat_messages", None)
-            for child in output.values():
-                if isinstance(child, dict):
-                    child.pop("chat_messages", None)
-
         save_file(data, file_name=f"conversation_result_{name}.json")
 
     def save_chat_messages(self, name: str = "dev") -> None:
         from common.utils.save_file import save_file
-        if not self.output.chat_messages:
+        from common.utils import to_jsonable
+        if not self.messages:
             return
         logger.info(f"Saving chat messages to {name}.json")
         data = {
-            "chat_messages": self.output.chat_messages,
-            "token_usage": self.output.token_usage
+            "chat_messages": to_jsonable(self.messages),
+            "token_usage": to_jsonable(self.result.token_usage),
         }
         save_file(data, file_name=f"chat_messages_{name}.json")

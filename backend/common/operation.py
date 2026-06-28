@@ -11,6 +11,19 @@ from common.utils import now_iso, uuid_8
 OutputT = TypeVar("OutputT")
 
 
+@dataclass
+class TokenUsage:
+    total: int = 0
+    prompt: int = 0
+    completion: int = 0
+
+    def __iadd__(self, other: "TokenUsage") -> "TokenUsage":
+        self.total += other.total
+        self.prompt += other.prompt
+        self.completion += other.completion
+        return self
+
+
 @dataclass(slots=True)
 class OperationResult(Generic[OutputT]):
     """Outcome of a single named check or step."""
@@ -28,6 +41,7 @@ class OperationResult(Generic[OutputT]):
     
     run_time_error: dict[str, Any] | Exception | None = None
     duration: float | None = None
+    token_usage: TokenUsage = field(default_factory=TokenUsage)
     
     def check_output_type(self) -> None:
         if self.output is None or self.output_type is None:

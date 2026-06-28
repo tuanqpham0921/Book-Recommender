@@ -3,12 +3,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.common.messages import AssistantMessage, TokenUsage, UserMessage
+from app.common.messages import AssistantMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from app.domains.planner.main import ConversationOrchestrator
 from app.domains.planner.parse_intent import InitialParseOutput
 from app.domains.planner.strategy_classification import StrategyClassificationOutput
-from common.operation import OperationResult
+from common.operation import OperationResult, TokenUsage
 
 
 @pytest.fixture
@@ -31,20 +31,21 @@ class TestConversationOrchestratorAddStep:
         orchestrator.add_step(OperationResult(ok=True, output=strategy_output))
         assert orchestrator.output.strategy_result is strategy_output
 
-    def test_merges_chat_messages(self, orchestrator):
-        parse_output = InitialParseOutput()
-        msg = AssistantMessage(content="hello")
-        parse_output.chat_messages.append(msg)
-        orchestrator.add_step(OperationResult(ok=True, output=parse_output))
-        assert msg in orchestrator.output.chat_messages
+    def test_merges_token_usage_from_step_result(self, orchestrator):
+        step = OperationResult(
+            ok=True,
+            output=InitialParseOutput(),
+            token_usage=TokenUsage(total=100, prompt=60, completion=40),
+        )
+        orchestrator.add_step(step)
+        assert orchestrator.result.token_usage.total == 100
+        assert orchestrator.result.token_usage.prompt == 60
+        assert orchestrator.result.token_usage.completion == 40
 
-    def test_merges_token_usage(self, orchestrator):
-        parse_output = InitialParseOutput()
-        parse_output.token_usage = TokenUsage(total=100, prompt=60, completion=40)
-        orchestrator.add_step(OperationResult(ok=True, output=parse_output))
-        assert orchestrator.output.token_usage.total == 100
-        assert orchestrator.output.token_usage.prompt == 60
-        assert orchestrator.output.token_usage.completion == 40
+    def test_shared_messages_list_appended_by_children(self, orchestrator):
+        msg = AssistantMessage(content="hello")
+        orchestrator.messages.append(msg)
+        assert msg in orchestrator.messages
 
     def test_appends_to_result_steps(self, orchestrator):
         step = OperationResult(ok=True, name="some_step", output=InitialParseOutput())
