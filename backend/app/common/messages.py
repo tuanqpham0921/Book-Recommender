@@ -55,6 +55,14 @@ class AssistantMessage(BaseMessage):
     )
     _token_usage: TokenUsage = PrivateAttr(default_factory=TokenUsage)
 
+    @property
+    def token_usage(self) -> TokenUsage:
+        return self._token_usage
+
+    @token_usage.setter
+    def token_usage(self, value: TokenUsage) -> None:
+        self._token_usage = value
+
     def to_openai_dict(self) -> dict:
         base = {"role": self.role}
         if self.content:

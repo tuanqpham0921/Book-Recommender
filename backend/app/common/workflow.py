@@ -61,7 +61,7 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         )
         msg: AssistantMessage = result.output
         self.messages.append(msg)
-        self.result.token_usage += msg._token_usage
+        self.result.token_usage += msg.token_usage
         return msg
 
     async def run_tool_call(

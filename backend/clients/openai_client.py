@@ -66,7 +66,7 @@ class OpenAIClient(BaseLLMClient):
             refusal=response_message.refusal,
         )
         if final_completion.usage:
-            assistant_msg._token_usage = TokenUsage(
+            assistant_msg.token_usage = TokenUsage(
                 total=final_completion.usage.total_tokens,
                 prompt=final_completion.usage.prompt_tokens,
                 completion=final_completion.usage.completion_tokens,
