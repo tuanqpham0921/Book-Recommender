@@ -58,6 +58,10 @@ class SystemGoal(BaseModel):
     def refusal_reasons(self) -> list[str]:
         return self._refusal_reasons
 
+    def refuse(self, *reasons: str) -> None:
+        self._refusal = True
+        self._refusal_reasons.extend(reasons)
+
     @field_validator("confidence", mode="before")
     @classmethod
     def check_confidence(cls, value):
@@ -262,18 +266,13 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         self.output.reasoning = parse_result.reasoning
 
         for goal in parse_result.system_goals:
-            reason = []
+            reasons = []
             if goal.confidence < confident_tuning:
-                goal._refusal = True
-                reason.append(f"Rejected: confidence too low ({goal.confidence})")
+                reasons.append(f"Rejected: confidence too low ({goal.confidence})")
             if goal.target_node_type.value not in NODE_TYPE_TO_CLS.keys():
-                goal._refusal = True
-                reason.append(
-                    f"Rejected: target node type not supported ({goal.target_node_type})"
-                )
-
-            if reason or goal._refusal:
-                goal._refusal_reasons.extend(reason)
+                reasons.append(f"Rejected: target node type not supported ({goal.target_node_type})")
+            if reasons or goal._refusal:
+                goal.refuse(*reasons)
                 self.output.refused_goals.append(goal)
             elif len(self.output.accepted_goals) < MAX_SYSTEM_GOALS:
                 self.output.accepted_goals.append(goal)

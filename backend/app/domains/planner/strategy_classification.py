@@ -173,17 +173,15 @@ class StrategyClassificationWorkflow(
             if not hasattr(strategy, "depends_on"):
                 continue
             if strategy.depends_on is None:
-                strategy._refusal = True
-                strategy._refusal_reasons.append("No dependencies provided")
+                strategy.refuse("No dependencies provided")
                 continue
-            
+
             dependency_ids = []
             for dependency in strategy.depends_on:
                 if dependency in llm_to_internal_id:
                     dependency_ids.append(llm_to_internal_id[dependency])
                 else:
-                    strategy._refusal = True
-                    strategy._refusal_reasons.append(f"Dependency {dependency} not found")
+                    strategy.refuse(f"Dependency {dependency} not found")
                     break
             strategy.depends_on = dependency_ids
 
@@ -236,25 +234,17 @@ class StrategyClassificationWorkflow(
         accepted_goals_ids = {goal.id for goal in system_goals}
 
         for strategy in strategies:
-            reason = []
-
-            missing_goals = [
-                goal_id
-                for goal_id in strategy.target_goal
-                if goal_id not in accepted_goals_ids
-            ]
+            reasons = []
+            missing_goals = [g for g in strategy.target_goal if g not in accepted_goals_ids]
             if missing_goals:
-                strategy._refusal = True
-                reason.append(f"Missing target goals: {missing_goals}")
+                reasons.append(f"Missing target goals: {missing_goals}")
             elif not strategy.target_goal:
-                strategy._refusal = True
-                reason.append("No target goals provided")
+                reasons.append("No target goals provided")
             if strategy.confidence < accepted_tuning:
-                strategy._refusal = True
-                reason.append(f"Confidence {strategy.confidence} below accepted tuning")
-
-            if reason or strategy._refusal:
-                strategy._refusal_reasons.extend(reason)
+                reasons.append(f"Confidence {strategy.confidence} below accepted tuning")
+            
+            if reasons or strategy._refusal:
+                strategy.refuse(*reasons)
                 self.output.refused.append(strategy)
             elif len(self.output.accepted) < MAX_STRATEGIES:
                 self.output.accepted.append(strategy)
