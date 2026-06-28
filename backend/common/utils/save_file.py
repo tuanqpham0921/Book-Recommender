@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 from config import FilesLocationConstants
-from common.utils.format import remove_json_empty_values, to_jsonable
+from common.utils.format import remove_json_empty_values, to_serializable
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ def save_file(
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 
-    jsonable = to_jsonable(data)
+    jsonable = to_serializable(data)
     if remove_empty_values:
         jsonable = remove_json_empty_values(jsonable)
 

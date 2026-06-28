@@ -4,58 +4,58 @@ from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel, PrivateAttr
 
-from common.utils.format import remove_json_empty_values, to_jsonable
+from common.utils.format import remove_json_empty_values, to_serializable
 
 
-class TestToJsonable:
+class TestToSerializable:
     def test_primitives_pass_through(self):
-        assert to_jsonable(1) == 1
-        assert to_jsonable("hello") == "hello"
-        assert to_jsonable(3.14) == 3.14
-        assert to_jsonable(None) is None
-        assert to_jsonable(True) is True
+        assert to_serializable(1) == 1
+        assert to_serializable("hello") == "hello"
+        assert to_serializable(3.14) == 3.14
+        assert to_serializable(None) is None
+        assert to_serializable(True) is True
 
     def test_type_returns_name(self):
-        assert to_jsonable(int) == "int"
-        assert to_jsonable(str) == "str"
+        assert to_serializable(int) == "int"
+        assert to_serializable(str) == "str"
 
     def test_enum_returns_value(self):
         class Color(Enum):
             RED = "red"
             BLUE = 2
 
-        assert to_jsonable(Color.RED) == "red"
-        assert to_jsonable(Color.BLUE) == 2
+        assert to_serializable(Color.RED) == "red"
+        assert to_serializable(Color.BLUE) == 2
 
     def test_path_returns_string(self):
-        assert to_jsonable(Path("/tmp/foo")) == "/tmp/foo"
+        assert to_serializable(Path("/tmp/foo")) == "/tmp/foo"
 
     def test_exception_returns_dict(self):
-        result = to_jsonable(ValueError("bad input"))
+        result = to_serializable(ValueError("bad input"))
         assert result == {"type": "ValueError", "message": "bad input"}
 
     def test_dict_keys_stringified_and_values_converted(self):
         class Color(Enum):
             RED = "red"
 
-        assert to_jsonable({1: Color.RED}) == {"1": "red"}
+        assert to_serializable({1: Color.RED}) == {"1": "red"}
 
     def test_list_items_converted(self):
         class Color(Enum):
             RED = "red"
 
-        assert to_jsonable([Color.RED, 42, "x"]) == ["red", 42, "x"]
+        assert to_serializable([Color.RED, 42, "x"]) == ["red", 42, "x"]
 
     def test_tuple_and_set_converted_to_list(self):
-        assert to_jsonable((1, 2)) == [1, 2]
-        assert sorted(to_jsonable({3, 4})) == [3, 4]
+        assert to_serializable((1, 2)) == [1, 2]
+        assert sorted(to_serializable({3, 4})) == [3, 4]
 
     def test_pydantic_model_dumped(self):
         class M(BaseModel):
             x: int
             y: str = "hi"
 
-        assert to_jsonable(M(x=1)) == {"x": 1, "y": "hi"}
+        assert to_serializable(M(x=1)) == {"x": 1, "y": "hi"}
 
     def test_pydantic_private_attrs_included(self):
         class M(BaseModel):
@@ -63,7 +63,7 @@ class TestToJsonable:
             _secret: str = PrivateAttr(default="hidden")
 
         m = M(x=1)
-        result = to_jsonable(m)
+        result = to_serializable(m)
         assert result["x"] == 1
         assert result["_secret"] == "hidden"
 
@@ -73,7 +73,7 @@ class TestToJsonable:
             x: int
             y: int
 
-        assert to_jsonable(Point(x=3, y=4)) == {"x": 3, "y": 4}
+        assert to_serializable(Point(x=3, y=4)) == {"x": 3, "y": 4}
 
     def test_nested_dataclass(self):
         @dataclass
@@ -84,7 +84,7 @@ class TestToJsonable:
         class Outer:
             inner: Inner
 
-        assert to_jsonable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
+        assert to_serializable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
 
 
 class TestRemoveJsonEmptyValues:

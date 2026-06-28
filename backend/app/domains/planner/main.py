@@ -156,12 +156,12 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
 
     def save_chat_messages(self, name: str = "dev") -> None:
         from common.utils.save_file import save_file
-        from common.utils import to_jsonable
+        from common.utils import to_serializable
         if not self.messages:
             return
         logger.info(f"Saving chat messages to {name}.json")
         data = {
-            "chat_messages": to_jsonable(self.messages),
-            "token_usage": to_jsonable(self.result.token_usage),
+            "chat_messages": to_serializable(self.messages),
+            "token_usage": to_serializable(self.result.token_usage),
         }
         save_file(data, file_name=f"chat_messages_{name}.json")

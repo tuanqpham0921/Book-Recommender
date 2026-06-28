@@ -1,7 +1,7 @@
 import re
 
 from app.domains.base_request import BaseRequest
-from common.utils import to_jsonable, remove_json_empty_values
+from common.utils import to_serializable, remove_json_empty_values
 
 SKIP_LABEL_KEYS = {"id"}
 
@@ -59,7 +59,7 @@ def get_mermaid_diagram(
     for task in execution_order:
         node = id_to_node[task]
         node_id = mermaid_id(task)
-        label = format_node_label(task, to_jsonable(node))
+        label = format_node_label(task, to_serializable(node))
         lines.append(f'\t{node_id}["{label}"]')
 
     for task in execution_order:

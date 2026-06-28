@@ -6,7 +6,7 @@ from enum import Enum
 from typing import Any
 from pathlib import Path
     
-def to_jsonable(value: Any) -> Any:
+def to_serializable(value: Any) -> Any:
     """Convert app/Pydantic objects into readable JSON-compatible values."""
     if isinstance(value, type):
         return value.__name__
@@ -21,7 +21,7 @@ def to_jsonable(value: Any) -> Any:
 
     if is_dataclass(value):
         return {
-            field.name: to_jsonable(getattr(value, field.name))
+            field.name: to_serializable(getattr(value, field.name))
             for field in fields(value)
         }
 
@@ -38,10 +38,10 @@ def to_jsonable(value: Any) -> Any:
         return str(value)
 
     if isinstance(value, dict):
-        return {str(key): to_jsonable(item) for key, item in value.items()}
+        return {str(key): to_serializable(item) for key, item in value.items()}
 
     if isinstance(value, (list, tuple, set)):
-        return [to_jsonable(item) for item in value]
+        return [to_serializable(item) for item in value]
 
     return value
     
