@@ -1,24 +1,3 @@
-"""
-Classification schemas for project domain strategies.
-Use to query or update the project's information database.
-Requires semantic parsing in the chat to understand the user's request.
-Manual or traditional project info updates will be handled by a standard endpoint instead.
-
-Supported queries:
-- Can you send feedback about the project? (HITL)
-- Can you tell me about the project?
-
-Future Plan:
-- support reporting how many active users are using the system
-- support reporting how many active developers are using the system
-- as an admin, add a new developer to the system and grant them admin capabilities
-- as an admin, monitor total token usage by the system
-- as an admin, report the average response time of the system
-
-This is where you can really incorporate agentic capabilities into the system —
-log in as an admin or develop more advanced features.
-"""
-
 from typing import Optional, Literal
 from pydantic import Field
 from app.domains.base_request import DomainRequest
