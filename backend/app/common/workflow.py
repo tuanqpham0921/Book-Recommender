@@ -66,7 +66,7 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
             self._merge_token_usage(output.token_usage)
         elif isinstance(output, AssistantMessage):
             self.output.chat_messages.append(output)
-            self._merge_token_usage(output.token_usage)
+            self._merge_token_usage(output._token_usage)
         elif isinstance(output, ToolMessage):
             self.output.chat_messages.append(output)
 
