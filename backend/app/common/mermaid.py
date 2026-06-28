@@ -1,7 +1,7 @@
 import re
 
 from app.domains.base_request import BaseRequest
-from common.utils import to_jsonable
+from common.utils import to_jsonable, remove_json_empty_values
 
 SKIP_LABEL_KEYS = {"id"}
 
@@ -32,23 +32,18 @@ def _format_field_name(key: str) -> str:
 
 
 def format_node_label(task_id: str, data: dict) -> str:
-    # TODO: use llm_id (task and goal ids) for production
-    # and other fields for production
-    node_type = clean_string_mermaid(str(data.get("node_type", "")))
+    cleaned = remove_json_empty_values(data)
+    node_type = clean_string_mermaid(str(cleaned.get("node_type", "")))
     rows = [
         f"<div style='{WRAPPER_STYLE}'>",
         f"<div style='{HEADER_STYLE}'>{node_type}</div>",
         _format_label_row("Task", task_id),
     ]
 
-    for key, value in data.items():
-        if key.startswith("_") or key in SKIP_LABEL_KEYS or value is None:
-            continue
-        if key == "node_type":
+    for key, value in cleaned.items():
+        if key.startswith("_") or key in SKIP_LABEL_KEYS or key == "node_type":
             continue
         if isinstance(value, list):
-            if not value:
-                continue
             value = ", ".join(str(item) for item in value)
         rows.append(_format_label_row(_format_field_name(key), str(value)))
 
