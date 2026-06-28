@@ -1,8 +1,90 @@
 import pytest
-from common.utils.format import remove_json_empty_values
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from pydantic import BaseModel, PrivateAttr
+
+from common.utils.format import remove_json_empty_values, to_jsonable
+
 
 class TestToJsonable:
-    ...
+    def test_primitives_pass_through(self):
+        assert to_jsonable(1) == 1
+        assert to_jsonable("hello") == "hello"
+        assert to_jsonable(3.14) == 3.14
+        assert to_jsonable(None) is None
+        assert to_jsonable(True) is True
+
+    def test_type_returns_name(self):
+        assert to_jsonable(int) == "int"
+        assert to_jsonable(str) == "str"
+
+    def test_enum_returns_value(self):
+        class Color(Enum):
+            RED = "red"
+            BLUE = 2
+
+        assert to_jsonable(Color.RED) == "red"
+        assert to_jsonable(Color.BLUE) == 2
+
+    def test_path_returns_string(self):
+        assert to_jsonable(Path("/tmp/foo")) == "/tmp/foo"
+
+    def test_exception_returns_dict(self):
+        result = to_jsonable(ValueError("bad input"))
+        assert result == {"type": "ValueError", "message": "bad input"}
+
+    def test_dict_keys_stringified_and_values_converted(self):
+        class Color(Enum):
+            RED = "red"
+
+        assert to_jsonable({1: Color.RED}) == {"1": "red"}
+
+    def test_list_items_converted(self):
+        class Color(Enum):
+            RED = "red"
+
+        assert to_jsonable([Color.RED, 42, "x"]) == ["red", 42, "x"]
+
+    def test_tuple_and_set_converted_to_list(self):
+        assert to_jsonable((1, 2)) == [1, 2]
+        assert sorted(to_jsonable({3, 4})) == [3, 4]
+
+    def test_pydantic_model_dumped(self):
+        class M(BaseModel):
+            x: int
+            y: str = "hi"
+
+        assert to_jsonable(M(x=1)) == {"x": 1, "y": "hi"}
+
+    def test_pydantic_private_attrs_included(self):
+        class M(BaseModel):
+            x: int
+            _secret: str = PrivateAttr(default="hidden")
+
+        m = M(x=1)
+        result = to_jsonable(m)
+        assert result["x"] == 1
+        assert result["_secret"] == "hidden"
+
+    def test_dataclass_fields_converted(self):
+        @dataclass
+        class Point:
+            x: int
+            y: int
+
+        assert to_jsonable(Point(x=3, y=4)) == {"x": 3, "y": 4}
+
+    def test_nested_dataclass(self):
+        @dataclass
+        class Inner:
+            val: int
+
+        @dataclass
+        class Outer:
+            inner: Inner
+
+        assert to_jsonable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
 
 
 class TestRemoveJsonEmptyValues:
