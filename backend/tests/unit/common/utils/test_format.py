@@ -6,7 +6,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from common.utils.format import remove_json_empty_values, to_serializable
 
-
+# TODO: Review
 class TestToSerializable:
     def test_primitives_pass_through(self):
         assert to_serializable(1) == 1
@@ -86,7 +86,7 @@ class TestToSerializable:
 
         assert to_serializable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
 
-
+# TODO: review
 class TestRemoveJsonEmptyValues:
     def test_removes_none(self):
         assert remove_json_empty_values({"a": None, "b": "val"}) == {"b": "val"}
