@@ -4,7 +4,7 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 
 from common.utils import save_file
-from app.orchestration.planner.main import ConversationOrchestrator
+from app.domains.planner import ConversationOrchestrator
 
 logger = logging.getLogger(__name__)
 

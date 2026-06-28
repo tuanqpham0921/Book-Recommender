@@ -6,11 +6,11 @@ from app.common.sse_stream import SSEStream
 from app.common.messages import UserMessage
 from clients.openai_client import OpenAIClient
 from app.orchestration.request_context import RequestContext
-from app.orchestration.planner.parse_intent import (
+from app.domains.planner.parse_intent import (
     InitialParseWorkflow,
     InitialParseOutput,
 )
-from app.orchestration.planner.strategy_classification import (
+from app.domains.planner.strategy_classification import (
     StrategyClassificationWorkflow,
     StrategyClassificationOutput,
 )
@@ -43,7 +43,7 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
     _SUMMARY_PROMPT_PATH = (
-        "orchestration/planner/prompts/3_conversation_orchestration_summary.txt"
+        "domains/planner/prompts/3_conversation_orchestration_summary.txt"
     )
 
     def __init__(

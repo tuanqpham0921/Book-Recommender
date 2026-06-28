@@ -1,7 +1,7 @@
 """Query builder for book-related database operations."""
 
 from sqlalchemy import select, func, or_, and_, text
-from app.domains.books.schemas.request_schemas import BooksFilter
+from db.schema import BooksFilter
 from typing import Optional, List
 
 

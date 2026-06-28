@@ -7,7 +7,7 @@ from typing import Optional, Literal, List
 from pydantic import Field
 from app.domains.base_request import DomainRequest, AnalyzeBaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
-from .filter_schemas import BooksFilter
+from db.schema import BooksFilter
 import logging
 
 logger = logging.getLogger(__name__)

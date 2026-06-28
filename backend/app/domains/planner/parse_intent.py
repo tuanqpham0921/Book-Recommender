@@ -185,8 +185,8 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."
 
-    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/0_initial_system.txt"
-    _USER_PROMPT_PATH = "orchestration/planner/prompts/1_initial_parse_response.txt"
+    _SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
+    _USER_PROMPT_PATH = "domains/planner/prompts/1_initial_parse_response.txt"
 
     tool_models = [InitialParseRequest]
 

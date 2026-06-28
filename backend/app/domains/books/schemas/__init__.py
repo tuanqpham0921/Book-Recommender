@@ -1,4 +1,4 @@
-from .filter_schemas import BooksFilter
+from db.schema import BooksFilter
 from .request_schemas import (
     CompareStrategy,
     RecommendationStrategy,

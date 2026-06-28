@@ -6,7 +6,7 @@ from app.domains.books.schemas.request_schemas import (
     RecommendationStrategy,
 )
 from app.domains.node_types import UnknownNodeTypeEnum
-from app.orchestration.planner.parse_intent import SystemGoal
+from app.domains.planner.parse_intent import SystemGoal
 from app.domains.registry import BOOK_RETRIEVAL_CLASSES
 
 # strategy_wf fixture comes from tests/unit/app/orchestration/planner/conftest.py

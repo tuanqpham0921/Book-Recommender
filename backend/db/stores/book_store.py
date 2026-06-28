@@ -1,6 +1,6 @@
 from typing import List, Optional, Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.domains.books.schemas.request_schemas import BooksFilter
+from db.schema import BooksFilter
 
 from db.schema import BookModel
 from .base_store import BaseStore

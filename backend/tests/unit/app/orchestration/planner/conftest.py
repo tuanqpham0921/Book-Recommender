@@ -5,8 +5,8 @@ import pytest
 
 from app.common.messages import UserMessage
 from app.common.sse_stream import SSEStream
-from app.orchestration.planner.parse_intent import InitialParseWorkflow
-from app.orchestration.planner.strategy_classification import StrategyClassificationWorkflow
+from app.domains.planner.parse_intent import InitialParseWorkflow
+from app.domains.planner.strategy_classification import StrategyClassificationWorkflow
 
 
 @pytest.fixture

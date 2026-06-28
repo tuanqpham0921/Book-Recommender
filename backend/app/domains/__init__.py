@@ -3,6 +3,7 @@ from app.domains.registry import (
     REQUEST_CLASSES,
     get_request_class,
 )
+from app.domains.planner import ConversationOrchestrator
 from app.domains.node_types import NodeTypeEnum
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "NodeTypeEnum",
     "REQUEST_CLASSES",
     "get_request_class",
+    "ConversationOrchestrator"
 ]

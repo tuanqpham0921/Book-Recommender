@@ -16,7 +16,7 @@ from app.domains.registry import (
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
 )
-from app.orchestration.planner.parse_intent import SystemGoal
+from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
 from clients.openai_client import OpenAIClient
 from common.utils import uuid_8
@@ -112,7 +112,7 @@ class StrategyClassificationWorkflow(
     failure_message = "Strategy classification failed"
     ui_loading_message = "Strategizing..."
 
-    _SYSTEM_PROMPT_PATH = "orchestration/planner/prompts/2_strategy_classification.txt"
+    _SYSTEM_PROMPT_PATH = "domains/planner/prompts/2_strategy_classification.txt"
 
     tool_models = [StrategyRequest]
 

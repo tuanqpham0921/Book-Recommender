@@ -5,9 +5,9 @@ import pytest
 
 from app.common.messages import AssistantMessage, TokenUsage, UserMessage
 from app.common.sse_stream import SSEStream
-from app.orchestration.planner.main import ConversationOrchestrator
-from app.orchestration.planner.parse_intent import InitialParseOutput
-from app.orchestration.planner.strategy_classification import StrategyClassificationOutput
+from app.domains.planner.main import ConversationOrchestrator
+from app.domains.planner.parse_intent import InitialParseOutput
+from app.domains.planner.strategy_classification import StrategyClassificationOutput
 from common.operation import OperationResult
 
 

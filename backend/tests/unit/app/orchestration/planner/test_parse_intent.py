@@ -1,7 +1,7 @@
 """Tests for InitialParseWorkflow.process_parse_result and InitialParseRequest validators."""
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.node_types import UnknownNodeTypeEnum
-from app.orchestration.planner.parse_intent import (
+from app.domains.planner.parse_intent import (
     InitialParseRequest,
     SystemGoal,
     MAX_SYSTEM_GOALS,
