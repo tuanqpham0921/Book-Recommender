@@ -41,7 +41,7 @@ def task(
     *,
     log_info: bool = True,
 ) -> Callable[..., Any]:
-    """ for single step operations (for multiple steps, use Workflow)"""
+    """For single-step operations (for multiple steps, use Workflow)."""
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> OperationResult[Any]:

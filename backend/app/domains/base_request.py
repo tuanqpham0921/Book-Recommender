@@ -29,8 +29,8 @@ GOAL_PLACEHOLDER = "goal_placeholder"
 
 class BaseRequest(BaseModel):
     node_type: NodeTypeEnum
-    id: str = Field(..., 
-                    description="assigned a task id to the node request",
+    id: str = Field(...,
+                    description="assign a task id to the node request",
                     example=["task_1", "task_2"]
                     )
     description: str = Field(
@@ -76,9 +76,9 @@ class BaseRequest(BaseModel):
     @classmethod
     def check_description(cls, value):
         if not isinstance(value, str):
-            return f"is not a string, padded to the description"
+            return f"value is not a string; padded to meet description requirements"
         if len(value) < MIN_STRING_LENGTH:
-            value += f"is less than {MIN_STRING_LENGTH} characters, padded to the description"
+            value += f" padded to meet the minimum {MIN_STRING_LENGTH} character description requirement"
         if len(value) > MAX_STRING_LENGTH:
             return value[:MAX_STRING_LENGTH-4] + "..."
         return value
@@ -87,9 +87,9 @@ class BaseRequest(BaseModel):
     @classmethod
     def check_reasoning(cls, value):
         if not isinstance(value, str):
-            return f"is not a string, padded to the reasoning"
+            return f"value is not a string; padded to meet reasoning requirements"
         if len(value) < MIN_STRING_LENGTH:
-            value += f"is less than {MIN_STRING_LENGTH} characters, padded to the reasoning"
+            value += f" padded to meet the minimum {MIN_STRING_LENGTH} character reasoning requirement"
         if len(value) > MAX_STRING_LENGTH:
             return value[:MAX_STRING_LENGTH-4] + "..."
         return value

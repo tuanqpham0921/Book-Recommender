@@ -81,7 +81,7 @@ class FindByTitleRetrieval(DomainRequest):
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
     authors: Optional[list[str]] = Field(
-        default=None, description="Author assoicated with this book"
+        default=None, description="Author associated with this book"
     )
 
 

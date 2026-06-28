@@ -126,10 +126,10 @@ class InitialParseRequest(BaseModel):
     @classmethod
     def check_reasoning(cls, value):
         if not isinstance(value, str):
-            return f"is not a string, padded to the reasoning"
+            return f"value is not a string; padded to meet reasoning requirements"
         if len(value) < MIN_STRING_LENGTH:
             value += (
-                f"is less than {MIN_STRING_LENGTH} characters, padded to the reasoning"
+                f" padded to meet the minimum {MIN_STRING_LENGTH} character reasoning requirement"
             )
         if len(value) > MAX_STRING_LENGTH:
             return value[: MAX_STRING_LENGTH - 4] + "..."

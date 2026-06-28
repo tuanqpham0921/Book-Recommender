@@ -1,22 +1,22 @@
 """
-Classification schemas for project domain strategies
-Use for query the project's information or update the project's information database
-Need semantic parsing in the chat to understand the project's request
-manual or traditional project info update is going to be a standard endpoint instead
+Classification schemas for project domain strategies.
+Use to query or update the project's information database.
+Requires semantic parsing in the chat to understand the user's request.
+Manual or traditional project info updates will be handled by a standard endpoint instead.
 
-support query:
-- Can you send a feedback to the project? (HITL)
+Supported queries:
+- Can you send feedback about the project? (HITL)
 - Can you tell me about the project?
 
 Future Plan:
-- support how many active user is using the system
-- support how many active developers is using the system
-- as an admin, add a new developer to the system giving access to admin capabilities
-- as an admin, monitor how much total token is used by the system
-- as an admin, what's the average response time of the system
+- support reporting how many active users are using the system
+- support reporting how many active developers are using the system
+- as an admin, add a new developer to the system and grant them admin capabilities
+- as an admin, monitor total token usage by the system
+- as an admin, report the average response time of the system
 
-This is where you can really incorperate the agentic capabilities to the system
-so you can log in as an admin, or develop more advanced features to the system
+This is where you can really incorporate agentic capabilities into the system —
+log in as an admin or develop more advanced features.
 """
 
 from typing import Optional, Literal
@@ -27,7 +27,7 @@ from app.domains.project.node_types import ProjectNodeTypeEnum
 
 
 class FeedbackRequest(DomainRequest):
-    """user wants to send feedback about the project (feedback text, optional contact_info)"""
+    """User wants to send feedback about the project (feedback text, optional contact_info)."""
 
     node_type: Literal[ProjectNodeTypeEnum.FEEDBACK] = ProjectNodeTypeEnum.FEEDBACK
     # NOTE: good place to have a simple HITL (Human In The Loop) for feedback
