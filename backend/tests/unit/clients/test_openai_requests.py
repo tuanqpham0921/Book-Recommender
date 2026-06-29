@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import MagicMock
 from pydantic import BaseModel
 
 from app.common.messages import UserMessage

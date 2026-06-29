@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
 from common.operation import OperationResult
-
+from app.common.messages import AssistantMessage
 
 def async_iter(items):
     """Return an async iterable over items."""
@@ -11,7 +11,7 @@ def async_iter(items):
         for item in items:
             yield item
     return _gen()
-from app.common.messages import AssistantMessage
+
 
 
 def make_settings(**overrides):

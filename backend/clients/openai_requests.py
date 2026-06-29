@@ -6,7 +6,6 @@ from .base import BaseLLMRequest
 from config import settings
 from app.common.messages import SystemMessage
 from openai import pydantic_function_tool
-from abc import ABC, abstractmethod
 from pydantic import model_validator, Field
 from typing import Annotated
 
