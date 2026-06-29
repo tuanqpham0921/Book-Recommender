@@ -98,7 +98,8 @@ docker-clean-all:
 # run the tests
 .PHONY: tests
 tests:
-	poetry run pytest -s tests/unit/common/utils --cov=common/utils --cov-report=term-missing
+# 	poetry run pytest -s tests/unit/common/utils --cov=common/utils --cov-report=term-missing
+	poetry run pytest -s tests/unit/clients --cov=clients/ --cov-report=term-missing
 
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
