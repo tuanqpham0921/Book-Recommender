@@ -48,25 +48,13 @@ def to_serializable(value: Any) -> Any:
 
 
 def remove_empty_values(value: Any) -> Any:
-    """Drop None, empty strings, and empty collections from summary payloads."""
-    if isinstance(value, BaseModel):
-        data = value.model_dump(mode="json", exclude_none=True)
-        return remove_empty_values(data)
-
+    """Drop None, empty strings, and empty collections from jsonable data."""
     if isinstance(value, dict):
         cleaned = {key: remove_empty_values(item) for key, item in value.items()}
-        return {
-            key: item
-            for key, item in cleaned.items()
-            if item is not None and item != "" and item != [] and item != {}
-        }
+        return {k: v for k, v in cleaned.items() if v is not None and v != "" and v != [] and v != {}}
 
     if isinstance(value, list):
         cleaned = [remove_empty_values(item) for item in value]
-        return [
-            item
-            for item in cleaned
-            if item is not None and item != "" and item != [] and item != {}
-        ]
+        return [item for item in cleaned if item is not None and item != "" and item != [] and item != {}]
 
     return value

@@ -2,12 +2,10 @@ import pytest
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, Field
 
 from common.utils.format import remove_empty_values, to_serializable
 
-
-# TODO: Review
 class TestToSerializable:
     def test_primitives_pass_through(self):
         assert to_serializable(1) == 1
@@ -27,6 +25,7 @@ class TestToSerializable:
 
         assert to_serializable(Color.RED) == "red"
         assert to_serializable(Color.BLUE) == 2
+        assert to_serializable(Color) == "Color"
 
     def test_path_returns_string(self):
         assert to_serializable(Path("/tmp/foo")) == "/tmp/foo"
@@ -88,7 +87,6 @@ class TestToSerializable:
         assert to_serializable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
 
 
-# TODO: review
 class TestRemoveJsonEmptyValues:
     def test_removes_none(self):
         assert remove_empty_values({"a": None, "b": "val"}) == {"b": "val"}
@@ -118,3 +116,12 @@ class TestRemoveJsonEmptyValues:
     def test_scalar_passthrough(self):
         assert remove_empty_values("hello") == "hello"
         assert remove_empty_values(42) == 42
+
+    def test_pydantic_list(self):
+        class M(BaseModel):
+            x: int
+            y: str = "hi"
+            z: list = [None, None, 'hello']
+
+        instance = M(x=1)
+        assert remove_empty_values(instance) == instance
