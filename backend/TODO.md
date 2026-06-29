@@ -7,9 +7,6 @@ Current:
 =======================================================================
 
 Unit Test:
-1. test your common repo utils first
-    * test your prompt loader and format and such
-    * make sure you can save and parse those data correctly
 2. test your openAI clients and clients request (to payload)
 3. test all your planner logic (dag, accepted, etc...)
 4. test the base request and request schemas pre-post validators
