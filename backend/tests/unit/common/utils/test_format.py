@@ -67,6 +67,52 @@ class TestToSerializable:
         assert result["x"] == 1
         assert result["_secret"] == "hidden"
 
+    def test_pydantic_private_attr_serialized_recursively(self):
+        class Color(Enum):
+            RED = "red"
+
+        class M(BaseModel):
+            x: int
+            _tag: Color = PrivateAttr(default=Color.RED)
+
+        result = to_serializable(M(x=1))
+        assert result["_tag"] == "red"
+
+    def test_pydantic_private_attr_is_dict(self):
+        class Color(Enum):
+            BLUE = "blue"
+
+        class M(BaseModel):
+            x: int
+            _meta: dict = PrivateAttr(default_factory=lambda: {"color": Color.BLUE, "count": 3})
+
+        result = to_serializable(M(x=1))
+        assert result["_meta"] == {"color": "blue", "count": 3}
+
+    def test_pydantic_private_attr_is_dataclass(self):
+        @dataclass
+        class Point:
+            x: int
+            y: int
+
+        class M(BaseModel):
+            name: str
+            _origin: Point = PrivateAttr(default_factory=lambda: Point(0, 0))
+
+        result = to_serializable(M(name="test"))
+        assert result["_origin"] == {"x": 0, "y": 0}
+
+    def test_pydantic_private_attr_is_pydantic(self):
+        class Inner(BaseModel):
+            value: int
+
+        class Outer(BaseModel):
+            name: str
+            _inner: Inner = PrivateAttr(default_factory=lambda: Inner(value=42))
+
+        result = to_serializable(Outer(name="test"))
+        assert result["_inner"] == {"value": 42}
+
     def test_dataclass_fields_converted(self):
         @dataclass
         class Point:

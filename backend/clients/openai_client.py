@@ -117,5 +117,5 @@ class OpenAIClient(BaseLLMClient):
             )
             return response
         except Exception as e:
-            logger.exception(f"❌❌❌ OpenAI API ping failed: {e}")
+            logger.exception(f"OpenAI API ping failed: {e}")
             raise

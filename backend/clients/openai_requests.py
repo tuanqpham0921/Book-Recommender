@@ -64,7 +64,7 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         }
         return payload
 
-    def to_function_tools(self) -> list[dict]:
+    def to_function_tools(self) -> dict:
         tool_name = self.tool_models[0].__name__
         tool = pydantic_function_tool(
             self.tool_models[0],
@@ -115,5 +115,5 @@ class OpenAIToolRequest(OpenAIBaseRequest):
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
         payload["tools"] = self.to_function_tools()
-        payload["tool_choice"] = "auto" if len(self.tool_models) else "none"
+        payload["tool_choice"] = "auto"
         return payload
