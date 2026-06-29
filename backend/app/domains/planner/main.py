@@ -1,5 +1,4 @@
 import json
-from dataclasses import dataclass
 from typing import Any
 
 from app.common.sse_stream import SSEStream
@@ -23,7 +22,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
 class OrchestrationOutput(UserFacingOutput):
     session_id: str | None = None
     parse_result: InitialParseOutput | None = None
@@ -148,9 +146,8 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     
     def save_conversation_result(self, name: str = "dev") -> None:
         from common.utils.save_file import save_file
-        from dataclasses import asdict
 
-        data = asdict(self.result)
+        data = self.result.model_dump()
         data.pop("steps", None)
         save_file(data, file_name=f"conversation_result_{name}.json")
 

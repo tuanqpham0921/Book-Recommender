@@ -1,6 +1,5 @@
 import json
 import logging
-from dataclasses import dataclass, field
 from typing import Optional
 
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
@@ -145,15 +144,14 @@ class InitialParseRequest(BaseModel):
         return value
 
 
-@dataclass(slots=True)
 class InitialParseOutput(UserFacingOutput):
-    accepted_goals: list[SystemGoal] = field(default_factory=list)
-    refused_goals: list[SystemGoal] = field(default_factory=list)
-    buffer_goals: list[SystemGoal] = field(default_factory=list)
+    accepted_goals: list[SystemGoal] = Field(default_factory=list)
+    refused_goals: list[SystemGoal] = Field(default_factory=list)
+    buffer_goals: list[SystemGoal] = Field(default_factory=list)
 
-    small_talk: Optional[str] = field(default=None)
-    out_of_scope: Optional[str] = field(default=None)
-    reasoning: Optional[str] = field(default=None)
+    small_talk: Optional[str] = None
+    out_of_scope: Optional[str] = None
+    reasoning: Optional[str] = None
 
     def to_summary(self) -> dict[str, str | bool | None]:
         return {

@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
 from common.utils import now_iso
 from app.common.messages import UserMessage
@@ -10,16 +10,15 @@ from clients import OpenAIClient
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class RequestContext:
-    """Enhanced request context with separated conversation streams."""
+
+class RequestContext(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     app_env: str
-    
-    # Core identifiers
+
     session_id: str
     user_message: UserMessage
 
-    # Services
     llm_client: OpenAIClient
     book_store: BookStore
     sse_stream: SSEStream

@@ -16,7 +16,7 @@ class Workflow(ABC, Generic[OutputT]):
         self.output_type = output_type
         self.result: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
-            output_type=output_type,
+            output_type=output_type.__name__ if output_type is not None else None,
         )
         self.stop_on_failure = True
         if output_type is not None:

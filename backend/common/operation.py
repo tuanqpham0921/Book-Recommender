@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass, field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Any, Generic, TypeVar
 import time
 from typing import Callable
@@ -11,8 +11,7 @@ from common.utils import now_iso, uuid_8
 OutputT = TypeVar("OutputT")
 
 
-@dataclass
-class TokenUsage:
+class TokenUsage(BaseModel):
     total: int = 0
     prompt: int = 0
     completion: int = 0
@@ -24,32 +23,34 @@ class TokenUsage:
         return self
 
 
-@dataclass(slots=True)
-class OperationResult(Generic[OutputT]):
+class OperationResult(BaseModel, Generic[OutputT]):
     """Outcome of a single named check or step."""
-    id: str = field(default_factory=lambda: f"op_{uuid_8()}")
-    start_time: str = field(default_factory=now_iso)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
+    start_time: str = Field(default_factory=now_iso)
     name: str | None = None
-    
+
     ok: bool = True
     message: str | None = None
-    steps: list["OperationResult[Any]"] = field(default_factory=list)
+    steps: list[Any] = Field(default_factory=list)
     details: dict[str, Any] | None = None
-    
+
     output: OutputT | None = None
-    output_type: type[OutputT] | None = None
-    
+    output_type: str | None = None
+
     run_time_error: dict[str, Any] | Exception | None = None
     duration: float | None = None
-    token_usage: TokenUsage = field(default_factory=TokenUsage)
-    
+    token_usage: TokenUsage = Field(default_factory=TokenUsage)
+
     def check_output_type(self) -> None:
         if self.output is None or self.output_type is None:
             return
-        
-        if self.output_type and not isinstance(self.output, self.output_type):
-            raise TypeError(f"Output {self.output} is of type {type(self.output)} not of type {self.output_type}")
-            
+
+        if self.output_type and type(self.output).__name__ != self.output_type:
+            raise TypeError(f"Output {self.output} is of type {type(self.output).__name__} not of type {self.output_type}")
+
+
 def task(
     func: Callable[..., Any] | None = None,
     *,
@@ -65,23 +66,25 @@ def task(
             try:
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
-                
+
                 output = await func(*args, **kwargs)
-                
+
                 # custom operation result retuned from the task
                 # the task must validate ok and message
                 if isinstance(output, OperationResult):
                     output.name = func_ref
                     output.duration = round(time.perf_counter() - time_start, 2)
                     return output
-                
+
                 # task is not returning an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
-                result = OperationResult(name=func_ref, output=output, output_type=type(output))
+                result = OperationResult(name=func_ref, output=output, output_type=type(output).__name__)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
                 result.message = f"Task {func_ref} completed successfully"
                 result.details = {"output_note": "output is not an operation result, creating a default one"}
+                if hasattr(output, "token_usage") and isinstance(output.token_usage, TokenUsage):
+                    result.token_usage = output.token_usage
                 return result
             except Exception as e:
                 # run time error is recorded, so the task is considered failed
@@ -91,7 +94,7 @@ def task(
                 result.run_time_error = traceback.format_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 return result
-                
+
         return wrapper
 
     if func is None:

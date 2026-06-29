@@ -42,7 +42,6 @@ class Orchestrator:
                 f"Hmm... something went wrong while processing your query."
             )
 
-        
         if result is not None:
             save_file(result, file_name="orchestration_result_dev")
         await sse_stream.close()

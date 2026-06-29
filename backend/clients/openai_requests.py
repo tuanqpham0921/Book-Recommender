@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 from typing import Any
 
 from .base import BaseLLMRequest
@@ -8,6 +7,7 @@ from config import settings
 from app.common.messages import SystemMessage
 from openai import pydantic_function_tool
 from abc import ABC, abstractmethod
+from pydantic import model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,6 @@ TOP_P = 0.8
 SEED = 42
 
 
-@dataclass(kw_only=True)
 class OpenAIBaseRequest(BaseLLMRequest):
     model: str = settings.openai.BASE_MODEL
     temperature: float = TEMPERATURE
@@ -45,16 +44,17 @@ class OpenAIBaseRequest(BaseLLMRequest):
         return self.base_payload()
 
 
-@dataclass(kw_only=True)
 class OpenAIParserRequest(OpenAIBaseRequest):
     """Support only one tool model for parsing 1 request"""
 
     tool_models: list[type]
     tool_override: dict | None = None
 
-    def __post_init__(self):
+    @model_validator(mode="after")
+    def check_tool_models(self) -> "OpenAIParserRequest":
         if len(self.tool_models) != 1:
             raise ValueError("tool_models must be a list of exactly one tool model")
+        return self
 
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
@@ -79,13 +79,14 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         return tool
 
 
-@dataclass(kw_only=True)
 class OpenAIChatRequest(OpenAIBaseRequest):
     """Support only sse stream no tool choice"""
 
-    def __post_init__(self):
+    @model_validator(mode="after")
+    def check_sse_stream(self) -> "OpenAIChatRequest":
         if not self.sse_stream:
             raise ValueError("Usage error: sse_stream must be provided")
+        return self
 
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
@@ -93,15 +94,16 @@ class OpenAIChatRequest(OpenAIBaseRequest):
         return payload
 
 
-@dataclass(kw_only=True)
 class OpenAIToolRequest(OpenAIBaseRequest):
     """Support both sse stream and tool choice"""
 
     tool_models: list[type]
 
-    def __post_init__(self):
+    @model_validator(mode="after")
+    def check_tool_models(self) -> "OpenAIToolRequest":
         if not self.tool_models:
             raise ValueError("Usage error: tool_models must be a list of tool models")
+        return self
 
     def to_function_tools(self) -> list[dict]:
         tools = []

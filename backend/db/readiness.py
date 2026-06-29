@@ -9,8 +9,7 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
 from common.operation import OperationResult, task
-from dataclasses import dataclass
-from dataclasses import field
+from pydantic import BaseModel, Field
 from db.stores.book_store import BookStore
 
 @task
@@ -107,15 +106,14 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
     
 
 
-@dataclass(slots=True)
-class ReadinessResult:
+class ReadinessResult(BaseModel):
     database_connected: bool = False
     need_db_bootstrap: bool = False
     enough_rows: bool = False
     need_extensions: bool = False
     num_missing_embeddings: int = 0
-    
-    missing_extensions: list[str] = field(default_factory=list)
+
+    missing_extensions: list[str] = Field(default_factory=list)
     
 @task
 async def is_ready(

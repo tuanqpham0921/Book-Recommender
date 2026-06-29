@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Any, Generic, TypeVar
 
 from common.operation import OperationResult, TokenUsage
@@ -17,8 +17,7 @@ from openai.types.chat import ParsedFunctionToolCall
 OutputT = TypeVar("OutputT", bound="UserFacingOutput")
 
 
-@dataclass(slots=True)
-class UserFacingOutput(ABC):
+class UserFacingOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.output."""
 
     @abstractmethod

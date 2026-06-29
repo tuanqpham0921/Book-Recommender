@@ -2,24 +2,26 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import asyncio
-from dataclasses import dataclass
-from app.common.messages import APIMessage, SystemMessage
+from pydantic import BaseModel, ConfigDict
+from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
-from config import settings
 
 import logging
 logger = logging.getLogger(__name__)
 
-@dataclass(kw_only=True)
-class BaseLLMRequest(ABC):
+
+class BaseLLMRequest(BaseModel, ABC):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     prompt: str
     messages: list[APIMessage]
     model: str
     sse_stream: SSEStream | None = None
-    
+
     @abstractmethod
     def to_payload(self) -> dict[str, Any]:
         ...
+
 
 class BaseLLMClient(ABC):
     """Abstract base interface for all LLM providers."""

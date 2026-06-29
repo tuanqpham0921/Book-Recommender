@@ -1,6 +1,5 @@
 import json
 import logging
-from dataclasses import dataclass, field
 from functools import reduce
 from operator import or_
 
@@ -88,12 +87,11 @@ class StrategyRequest(BaseModel):
         return deduped[:MAX_STRATEGIES]
 
 
-@dataclass(slots=True)
 class StrategyClassificationOutput(UserFacingOutput):
-    accepted: list[BaseRequest] = field(default_factory=list)
-    refused: list[BaseRequest] = field(default_factory=list)
-    buffer: list[BaseRequest] = field(default_factory=list)
-    execution_order: list[str] = field(default_factory=list)
+    accepted: list[BaseRequest] = Field(default_factory=list)
+    refused: list[BaseRequest] = Field(default_factory=list)
+    buffer: list[BaseRequest] = Field(default_factory=list)
+    execution_order: list[str] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, bool | int | list[str]]:
         return {

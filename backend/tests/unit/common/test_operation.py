@@ -70,16 +70,16 @@ class TestOperationResult:
         assert result.id.startswith("op_")
 
     def test_check_output_type_passes_on_type_match(self):
-        result = OperationResult(output="hello", output_type=str)
+        result = OperationResult(output="hello", output_type="str")
         result.check_output_type()  # must not raise
 
     def test_check_output_type_raises_on_type_mismatch(self):
-        result = OperationResult(output=42, output_type=str)
+        result = OperationResult(output=42, output_type="str")
         with pytest.raises(TypeError):
             result.check_output_type()
 
     def test_check_output_type_skips_when_output_is_none(self):
-        result = OperationResult(output=None, output_type=str)
+        result = OperationResult(output=None, output_type="str")
         result.check_output_type()  # must not raise
 
     def test_check_output_type_skips_when_output_type_is_none(self):
