@@ -176,7 +176,7 @@ class InitialParseOutput(UserFacingOutput):
             payload["out_of_scope"] = self.out_of_scope
         if self.refused_goals:
             payload["refused_goals"] = [
-                (g.description, g.refusal_reason) for g in self.refused_goals
+                (g.description, g.refusal_reasons) for g in self.refused_goals
             ]
         if len(payload) > 0 and self.reasoning:
             payload["reasoning"] = self.reasoning
