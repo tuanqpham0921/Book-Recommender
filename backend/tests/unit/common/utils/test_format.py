@@ -4,7 +4,8 @@ from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel, PrivateAttr
 
-from common.utils.format import remove_json_empty_values, to_serializable
+from common.utils.format import remove_empty_values, to_serializable
+
 
 # TODO: Review
 class TestToSerializable:
@@ -86,33 +87,34 @@ class TestToSerializable:
 
         assert to_serializable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
 
+
 # TODO: review
 class TestRemoveJsonEmptyValues:
     def test_removes_none(self):
-        assert remove_json_empty_values({"a": None, "b": "val"}) == {"b": "val"}
+        assert remove_empty_values({"a": None, "b": "val"}) == {"b": "val"}
 
     def test_removes_empty_string(self):
-        assert remove_json_empty_values({"a": "", "b": "x"}) == {"b": "x"}
+        assert remove_empty_values({"a": "", "b": "x"}) == {"b": "x"}
 
     def test_removes_empty_list(self):
-        assert remove_json_empty_values({"a": [], "b": [1]}) == {"b": [1]}
+        assert remove_empty_values({"a": [], "b": [1]}) == {"b": [1]}
 
     def test_removes_empty_dict(self):
-        assert remove_json_empty_values({"a": {}, "b": {"c": 1}}) == {"b": {"c": 1}}
+        assert remove_empty_values({"a": {}, "b": {"c": 1}}) == {"b": {"c": 1}}
 
     def test_nested_cleanup(self):
         data = {"outer": {"inner": None, "keep": 1}, "empty": {}}
-        assert remove_json_empty_values(data) == {"outer": {"keep": 1}}
+        assert remove_empty_values(data) == {"outer": {"keep": 1}}
 
     def test_list_of_mixed_empties(self):
-        assert remove_json_empty_values([None, "a", "", [], {}]) == ["a"]
+        assert remove_empty_values([None, "a", "", [], {}]) == ["a"]
 
     def test_preserves_zero_and_false(self):
-        assert remove_json_empty_values({"a": 0, "b": False, "c": None}) == {
+        assert remove_empty_values({"a": 0, "b": False, "c": None}) == {
             "a": 0,
             "b": False,
         }
 
     def test_scalar_passthrough(self):
-        assert remove_json_empty_values("hello") == "hello"
-        assert remove_json_empty_values(42) == 42
+        assert remove_empty_values("hello") == "hello"
+        assert remove_empty_values(42) == 42

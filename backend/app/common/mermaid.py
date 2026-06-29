@@ -1,7 +1,7 @@
 import re
 
 from app.domains.base_request import BaseRequest
-from common.utils import to_serializable, remove_json_empty_values
+from common.utils import to_serializable, remove_empty_values
 
 SKIP_LABEL_KEYS = {"id"}
 
@@ -32,7 +32,7 @@ def _format_field_name(key: str) -> str:
 
 
 def format_node_label(task_id: str, data: dict) -> str:
-    cleaned = remove_json_empty_values(data)
+    cleaned = remove_empty_values(data)
     node_type = clean_string_mermaid(str(cleaned.get("node_type", "")))
     rows = [
         f"<div style='{WRAPPER_STYLE}'>",

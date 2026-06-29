@@ -30,7 +30,8 @@ class Orchestrator:
 
             # Core work
             result = await self._run_conversation_step(request_context, sse_stream)
-
+            if result is not None:
+                save_file(result, file_name="orchestration_result_dev")
             # Normal completion
             await sse_stream.send("complete", {"status": "completed"})
             logger.info("✅ Orchestration completed successfully")
@@ -42,6 +43,4 @@ class Orchestrator:
                 f"Hmm... something went wrong while processing your query."
             )
 
-        if result is not None:
-            save_file(result, file_name="orchestration_result_dev")
         await sse_stream.close()

@@ -74,14 +74,14 @@ What built-ins/libs cover:
 
 pydantic's model_dump(mode="json") handles to_serializable for pure Pydantic models, including Enum and Path recursively inside fields
 orjson handles Enum, Path, dataclass, and datetime natively and is much faster than json.dumps — it would replace most of to_serializable for the non-Pydantic types
-model_dump(exclude_none=True) covers the "drop None" part of remove_json_empty_values
+model_dump(exclude_none=True) covers the "drop None" part of remove_empty_values
 Why you still need the custom ones:
 
 Pydantic private attributes (format.py:17-18) — model_dump() explicitly skips __pydantic_private__ by design. No standard serializer touches these. That's the main reason to_serializable has to exist.
 
 Mixed-type recursive pass — you're serializing objects that contain both Pydantic models and plain dataclasses and Exceptions in the same tree (e.g., OperationResult is a dataclass that holds a BaseModel output). No single library handles that mix without custom glue.
 
-remove_json_empty_values is stricter than Pydantic — exclude_none=True only drops None. You also drop empty strings and empty collections, which is application-specific behavior.
+remove_empty_values is stricter than Pydantic — exclude_none=True only drops None. You also drop empty strings and empty collections, which is application-specific behavior.
 
 What you could simplify:
 
