@@ -103,3 +103,7 @@ tests:
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
+
+# .Phony: lint
+# lint:
+# 	poetry run ruff check --fix ...
