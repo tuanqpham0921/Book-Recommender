@@ -37,6 +37,7 @@ async def generate_chat_response(
         await asyncio.wait_for(orchestrator_task, timeout=300.0)
         
     except Exception as e:
+        # TODO: cancel the task if things failed
         raise HTTPException(status_code=500, detail="Orchestration error") from e
 
 

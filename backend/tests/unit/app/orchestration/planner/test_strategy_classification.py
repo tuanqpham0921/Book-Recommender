@@ -161,6 +161,7 @@ class TestInjectBookRequestClasses:
             assert cls in request_classes
 
     def test_no_injection_when_retrieval_already_present(self, strategy_wf):
+        # TODO: test for equality
         request_classes = {RecommendationStrategy, FindByTitleRetrieval}
         original_size = len(request_classes)
         strategy_wf._inject_book_request_classes(request_classes)

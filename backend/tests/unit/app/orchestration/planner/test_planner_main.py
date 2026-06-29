@@ -43,6 +43,7 @@ class TestConversationOrchestratorAddStep:
         assert orchestrator.result.token_usage.completion == 40
 
     def test_shared_messages_list_appended_by_children(self, orchestrator):
+        # TODO: fix this
         msg = AssistantMessage(content="hello")
         orchestrator.messages.append(msg)
         assert msg in orchestrator.messages

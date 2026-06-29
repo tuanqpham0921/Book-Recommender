@@ -252,7 +252,7 @@ class StrategyClassificationWorkflow(
             else:
                 self.output.buffer.append(strategy)
 
-    def get_strategies_ids(self, strategies: list[BaseRequest]) -> list[str]:
+    def get_strategies_ids(self, strategies: list[BaseRequest]) -> set[str]:
         return set(strategy.id for strategy in strategies)
 
     def finalize_result(self) -> None:
