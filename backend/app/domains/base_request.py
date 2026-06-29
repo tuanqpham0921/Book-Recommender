@@ -132,6 +132,7 @@ class DomainRequest(BaseRequest):
         return list(dict.fromkeys(goals))[:MAX_LIST_LENGTH]
 
     @model_validator(mode="before")
+    @classmethod
     def validate_target_goal(cls, data):
         if not isinstance(data, dict):
             return data
