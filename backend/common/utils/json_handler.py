@@ -1,17 +1,13 @@
+# Common utility function for handling json
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 from config import FilesLocationConstants
 from common.utils.format import remove_empty_values, to_serializable
+
 logger = logging.getLogger(__name__)
-
-
-import json
-
-from typing import Any
-from common.utils.format import to_serializable
-
 
 def print_json(data: Any, name: str | None = None, indent: int = 2, color: bool = True):
     """Pretty-print JSON data with an optional label."""
@@ -39,6 +35,7 @@ def save_file(
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
     remove_empty: bool = True,
 ):
+    """ Save Json to file """
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 
@@ -59,6 +56,7 @@ def load_json(
     file_name: str,
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
 ) -> dict | list | None:
+    """ load json from file """
     path = Path(path)
     file_name = file_name.rstrip(".json")
     filepath = path / f"{file_name}.json"
