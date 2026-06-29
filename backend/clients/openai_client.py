@@ -77,7 +77,7 @@ class OpenAIClient(BaseLLMClient):
         return assistant_msg
     
     def save_payload(self, payload: dict) -> None:
-        from common.utils.save_file import save_file
+        from common.utils import save_file
         from config.constants import FilesLocationConstants
         logger.info(f"Saving payload id {payload['id']}")
         save_file(payload, 
