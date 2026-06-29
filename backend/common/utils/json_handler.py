@@ -9,6 +9,7 @@ from common.utils.format import remove_empty_values, to_serializable
 
 logger = logging.getLogger(__name__)
 
+
 def print_json(data: Any, name: str | None = None, indent: int = 2, color: bool = True):
     """Pretty-print JSON data with an optional label."""
     serializable = to_serializable(data)
@@ -20,14 +21,17 @@ def print_json(data: Any, name: str | None = None, indent: int = 2, color: bool 
     if color:
         try:
             from pygments import highlight, lexers, formatters
-            output = highlight(output, lexers.JsonLexer(), formatters.TerminalFormatter())
+
+            output = highlight(
+                output, lexers.JsonLexer(), formatters.TerminalFormatter()
+            )
         except ImportError:
             pass
 
     print(output)
     if name:
         print("******************************\n")
-        
+
 
 def save_file(
     data,
@@ -35,7 +39,7 @@ def save_file(
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
     remove_empty: bool = True,
 ):
-    """ Save Json to file """
+    """Save Json to file"""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
 
@@ -52,11 +56,12 @@ def save_file(
 
     logger.info(f"📋 log written to {filepath}")
 
+
 def load_json(
     file_name: str,
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
 ) -> dict | list | None:
-    """ load json from file """
+    """load json from file"""
     path = Path(path)
     file_name = file_name.rstrip(".json")
     filepath = path / f"{file_name}.json"

@@ -51,10 +51,18 @@ def remove_empty_values(value: Any) -> Any:
     """Drop None, empty strings, and empty collections from jsonable data."""
     if isinstance(value, dict):
         cleaned = {key: remove_empty_values(item) for key, item in value.items()}
-        return {k: v for k, v in cleaned.items() if v is not None and v != "" and v != [] and v != {}}
+        return {
+            k: v
+            for k, v in cleaned.items()
+            if v is not None and v != "" and v != [] and v != {}
+        }
 
     if isinstance(value, list):
         cleaned = [remove_empty_values(item) for item in value]
-        return [item for item in cleaned if item is not None and item != "" and item != [] and item != {}]
+        return [
+            item
+            for item in cleaned
+            if item is not None and item != "" and item != [] and item != {}
+        ]
 
     return value

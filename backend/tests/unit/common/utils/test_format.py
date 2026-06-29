@@ -5,6 +5,7 @@ from pydantic import BaseModel, PrivateAttr
 
 from common.utils.format import remove_empty_values, to_serializable
 
+
 class TestToSerializable:
     def test_primitives_pass_through(self):
         assert to_serializable(1) == 1
@@ -120,7 +121,7 @@ class TestRemoveEmptyValues:
         class M(BaseModel):
             x: int
             y: str = "hi"
-            z: list = [None, None, 'hello']
+            z: list = [None, None, "hello"]
 
         instance = M(x=1)
         assert remove_empty_values(instance) == instance

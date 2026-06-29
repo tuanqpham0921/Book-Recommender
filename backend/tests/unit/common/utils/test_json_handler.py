@@ -23,12 +23,16 @@ class TestSaveFile:
         assert (nested / "out.json").exists()
 
     def test_remove_empty_drops_none_values(self, tmp_path):
-        save_file({"a": 1, "b": None}, file_name="out", path=tmp_path, remove_empty=True)
+        save_file(
+            {"a": 1, "b": None}, file_name="out", path=tmp_path, remove_empty=True
+        )
         result = json.loads((tmp_path / "out.json").read_text())
         assert "b" not in result
 
     def test_remove_empty_false_keeps_none(self, tmp_path):
-        save_file({"a": 1, "b": None}, file_name="out", path=tmp_path, remove_empty=False)
+        save_file(
+            {"a": 1, "b": None}, file_name="out", path=tmp_path, remove_empty=False
+        )
         result = json.loads((tmp_path / "out.json").read_text())
         assert "b" in result
 
@@ -36,6 +40,7 @@ class TestSaveFile:
         class M(BaseModel):
             x: int
             y: str = "hi"
+
         save_file(M(x=1), file_name="out", path=tmp_path, remove_empty=False)
         result = json.loads((tmp_path / "out.json").read_text())
         assert result == {"x": 1, "y": "hi"}
@@ -43,7 +48,10 @@ class TestSaveFile:
     def test_serializes_enum(self, tmp_path):
         class Color(Enum):
             RED = "red"
-        save_file({"color": Color.RED}, file_name="out", path=tmp_path, remove_empty=False)
+
+        save_file(
+            {"color": Color.RED}, file_name="out", path=tmp_path, remove_empty=False
+        )
         result = json.loads((tmp_path / "out.json").read_text())
         assert result == {"color": "red"}
 
@@ -127,7 +135,7 @@ class TestSaveFile:
         data = Outer(name="book", inner=Inner(score=4.5))
         save_file(data, file_name="out", path=tmp_path, remove_empty=False)
         result = json.loads((tmp_path / "out.json").read_text())
-        assert result == {"name": "book", "inner": {"score": 4.5, "_secret":"hidden"}}
+        assert result == {"name": "book", "inner": {"score": 4.5, "_secret": "hidden"}}
 
 
 class TestLoadJson:
@@ -178,8 +186,10 @@ class TestPrintJson:
 
     def test_serializes_non_primitive(self, capsys):
         from enum import Enum
+
         class Color(Enum):
             RED = "red"
+
         print_json(Color.RED, color=False)
         out = capsys.readouterr().out
         assert "red" in out
@@ -214,18 +224,21 @@ class TestPrintJson:
 class TestSaveFileLogger:
     def test_logs_file_path_on_save(self, tmp_path, caplog):
         import logging
+
         with caplog.at_level(logging.INFO, logger="common.utils.json_handler"):
             save_file({"x": 1}, file_name="out", path=tmp_path)
         assert any("out.json" in m for m in caplog.messages)
 
     def test_logs_warning_on_missing_file(self, tmp_path, caplog):
         import logging
+
         with caplog.at_level(logging.WARNING, logger="common.utils.json_handler"):
             load_json("nonexistent", path=tmp_path)
         assert any("nonexistent" in m for m in caplog.messages)
 
     def test_logs_file_path_on_load(self, tmp_path, caplog):
         import logging
+
         (tmp_path / "data.json").write_text('{"x": 1}')
         with caplog.at_level(logging.INFO, logger="common.utils.json_handler"):
             load_json("data", path=tmp_path)
