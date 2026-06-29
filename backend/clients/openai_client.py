@@ -1,19 +1,19 @@
-import time
+import asyncio
 import logging
+from typing import Optional
 
 from openai import AsyncOpenAI
-from typing import List, Optional
 
-from .openai_requests import OpenAIBaseRequest
 from .base import BaseLLMClient
-
-from config.settings import OpenAISettings
+from .openai_requests import OpenAIBaseRequest
 from app.common.messages import AssistantMessage, TokenUsage
 from app.common.sse_stream import SSEStream
-from config.constants import OpenAIConstants
-import asyncio
+from common.operation import task
+from common.utils import save_file
+from config.constants import FilesLocationConstants, OpenAIConstants
+from config.settings import OpenAISettings
+
 logger = logging.getLogger(__name__)
-from common.operation import task, OperationResult
 
 class OpenAIClient(BaseLLMClient):
     def __init__(self, openai_settings: OpenAISettings):
@@ -45,7 +45,7 @@ class OpenAIClient(BaseLLMClient):
                 
             return [data.embedding for data in response.data]
         except Exception as e:
-            logger.exception(f"❌❌❌ OpenAI embedding API call failed: {e}")
+            logger.exception(f"OpenAI embedding API call failed: {e}")
             raise
     
     @task
@@ -54,8 +54,7 @@ class OpenAIClient(BaseLLMClient):
         #TODO: add semaphore to the execute method
         
         payload = req.to_payload()
-        
-        
+
         final_completion = await self._chat_stream(payload, req.sse_stream)
         
         response_message = final_completion.choices[0].message
@@ -70,19 +69,14 @@ class OpenAIClient(BaseLLMClient):
                 completion=final_completion.usage.completion_tokens,
             ) if final_completion.usage else TokenUsage(),
         )
+        
         if save_payload:
             payload["id"] = assistant_msg.id
-            self.save_payload(payload)
-            
-        return assistant_msg
-    
-    def save_payload(self, payload: dict) -> None:
-        from common.utils import save_file
-        from config.constants import FilesLocationConstants
-        logger.info(f"Saving payload id {payload['id']}")
-        save_file(payload, 
+            save_file(payload, 
                   path=FilesLocationConstants.PAYLOAD_DIR, 
                   file_name=f"openai_payload_{payload['id']}")
+            
+        return assistant_msg
         
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
         """Stream the chat completion."""
@@ -121,6 +115,7 @@ class OpenAIClient(BaseLLMClient):
                 model="gpt-5-nano",
                 input="ping"
             )
+            return response
         except Exception as e:
             logger.exception(f"❌❌❌ OpenAI API ping failed: {e}")
             raise
