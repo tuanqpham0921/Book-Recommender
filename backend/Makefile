@@ -107,4 +107,5 @@ local-end-to-end-test:
 
 # .Phony: lint
 # lint:
-# 	poetry run ruff check --fix ...
+# 	poetry run ruff check --fix clients/ tests/unit/clients/
+#   poetry run black common/utils/ tests/unit/common/utils/

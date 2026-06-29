@@ -5,13 +5,13 @@ Current:
 3. deploy your app without DB
 
 Reminder:
-1. add timeout to @task and @workflow (should be able to handle them)
-2. might need to add back the tool calls so there's a link between Assistant msg and tool
+1. need to create one executor for @task and workflow
+2. add timeout to @task and @workflow (should be able to handle them)
+3. might need to add back the tool calls so there's a link between Assistant msg and tool
    * you might run into problems when loading messages back
 =======================================================================
 
 Unit Test:
-2. test your openAI clients and clients request (to payload)
 3. test all your planner logic (dag, accepted, etc...)
 4. test the base request and request schemas pre-post validators
     * create fake openAI response (with ints instead of strs for example)
