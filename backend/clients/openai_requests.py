@@ -4,7 +4,7 @@ from typing import Any
 from .base import BaseLLMRequest
 
 from config import settings
-from app.common.messages import SystemMessage
+from app.common.messages import AssistantMessage, SystemMessage, ToolMessage
 from openai import pydantic_function_tool
 from pydantic import model_validator, Field
 from typing import Annotated
@@ -22,6 +22,28 @@ class OpenAIBaseRequest(BaseLLMRequest):
     temperature: float = TEMPERATURE
     top_p: float = TOP_P
     seed: int = SEED
+
+    @model_validator(mode="after")
+    def check_tool_message_linkage(self) -> "OpenAIBaseRequest":
+        assistant_tool_call_ids = {
+            tc.id
+            for m in self.messages
+            if isinstance(m, AssistantMessage) and m.tool_calls
+            for tc in m.tool_calls
+        }
+        tool_message_ids = {
+            m.tool_call_id for m in self.messages if isinstance(m, ToolMessage)
+        }
+
+        orphaned = tool_message_ids - assistant_tool_call_ids
+        if orphaned:
+            raise ValueError(f"ToolMessage has no matching assistant tool_call: {orphaned}")
+
+        unanswered = assistant_tool_call_ids - tool_message_ids
+        if unanswered:
+            raise ValueError(f"Assistant tool_call has no ToolMessage reply: {unanswered}")
+
+        return self
 
     def to_messages_payload(self) -> list[dict[str, Any]]:
         messages = []

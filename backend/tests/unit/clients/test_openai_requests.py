@@ -1,7 +1,8 @@
 import pytest
+from unittest.mock import MagicMock
 from pydantic import BaseModel
 
-from app.common.messages import UserMessage
+from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from clients.openai_requests import (
     MAX_COMPLETION_TOKENS,
@@ -61,6 +62,23 @@ class TestOpenAIBaseRequest:
     def test_to_payload_returns_base_payload(self):
         req = OpenAIBaseRequest(prompt="p", messages=[USER_MSG])
         assert req.to_payload() == req.base_payload()
+
+    def test_tool_message_without_assistant_tool_call_raises(self):
+        tool_msg = ToolMessage(name="search", tool_call_id="tc_1", content="result")
+        with pytest.raises(ValueError, match="no matching assistant tool_call"):
+            OpenAIBaseRequest(prompt="p", messages=[USER_MSG, tool_msg])
+
+    def test_unanswered_assistant_tool_call_raises(self):
+        assistant_msg = AssistantMessage.model_construct(tool_calls=[MagicMock(id="tc_1")])
+        with pytest.raises(ValueError, match="no ToolMessage reply"):
+            OpenAIBaseRequest(prompt="p", messages=[USER_MSG, assistant_msg])
+
+    def test_matched_tool_call_and_reply_passes(self):
+        assistant_msg = AssistantMessage.model_construct(tool_calls=[MagicMock(id="tc_1")])
+        tool_msg = ToolMessage(name="search", tool_call_id="tc_1", content="result")
+        req = OpenAIBaseRequest(prompt="p", messages=[USER_MSG, assistant_msg, tool_msg])
+        payload = req.to_messages_payload()
+        assert len(payload) == 4  # system + user + assistant + tool
 
 
 class TestOpenAIParserRequest:

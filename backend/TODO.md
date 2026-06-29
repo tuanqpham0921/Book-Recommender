@@ -4,6 +4,10 @@ Current:
 2. then a script to send all those to the frontend for you to review
 3. deploy your app without DB
 
+Reminder:
+1. add timeout to @task and @workflow (should be able to handle them)
+2. might need to add back the tool calls so there's a link between Assistant msg and tool
+   * you might run into problems when loading messages back
 =======================================================================
 
 Unit Test:
