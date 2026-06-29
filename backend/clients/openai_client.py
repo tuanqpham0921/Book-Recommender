@@ -84,8 +84,6 @@ class OpenAIClient(BaseLLMClient):
                   path=FilesLocationConstants.PAYLOAD_DIR, 
                   file_name=f"openai_payload_{payload['id']}")
         
-
-
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
         """Stream the chat completion."""
         async with self.client.beta.chat.completions.stream(**payload) as stream:

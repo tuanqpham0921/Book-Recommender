@@ -7,7 +7,8 @@ from config import settings
 from app.common.messages import SystemMessage
 from openai import pydantic_function_tool
 from abc import ABC, abstractmethod
-from pydantic import model_validator
+from pydantic import model_validator, Field
+from typing import Annotated
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +48,8 @@ class OpenAIBaseRequest(BaseLLMRequest):
 class OpenAIParserRequest(OpenAIBaseRequest):
     """Support only one tool model for parsing 1 request"""
 
-    tool_models: list[type]
+    tool_models: Annotated[list[type], Field(min_length=1, max_length=1)]
     tool_override: dict | None = None
-
-    @model_validator(mode="after")
-    def check_tool_models(self) -> "OpenAIParserRequest":
-        if len(self.tool_models) != 1:
-            raise ValueError("tool_models must be a list of exactly one tool model")
-        return self
 
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
@@ -81,6 +76,8 @@ class OpenAIParserRequest(OpenAIBaseRequest):
 
 class OpenAIChatRequest(OpenAIBaseRequest):
     """Support only sse stream no tool choice"""
+    
+    max_complete_chat_tokens: int = Field(default = MAX_COMPLETION_TOKENS)
 
     @model_validator(mode="after")
     def check_sse_stream(self) -> "OpenAIChatRequest":
@@ -90,7 +87,7 @@ class OpenAIChatRequest(OpenAIBaseRequest):
 
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
-        payload["max_completion_tokens"] = MAX_COMPLETION_TOKENS
+        payload["max_completion_tokens"] = self.max_complete_chat_tokens
         return payload
 
 
