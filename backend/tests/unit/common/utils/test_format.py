@@ -1,8 +1,7 @@
-import pytest
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from pydantic import BaseModel, PrivateAttr, Field
+from pydantic import BaseModel, PrivateAttr
 
 from common.utils.format import remove_empty_values, to_serializable
 
@@ -87,7 +86,7 @@ class TestToSerializable:
         assert to_serializable(Outer(inner=Inner(val=7))) == {"inner": {"val": 7}}
 
 
-class TestRemoveJsonEmptyValues:
+class TestRemoveEmptyValues:
     def test_removes_none(self):
         assert remove_empty_values({"a": None, "b": "val"}) == {"b": "val"}
 
