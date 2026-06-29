@@ -13,7 +13,7 @@ def to_serializable(value: Any) -> Any:
         return value.__name__
 
     if isinstance(value, BaseModel):
-        data = value.model_dump(exclude_none=True)
+        data = value.model_dump()
         # include private attributes
         if value.__pydantic_private__:
             data.update(value.__pydantic_private__)
