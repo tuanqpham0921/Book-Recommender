@@ -1,15 +1,25 @@
 """Tests for app/common/messages.py"""
+
 import json
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-from openai.types.chat.parsed_function_tool_call import ParsedFunction, ParsedFunctionToolCall
+from openai.types.chat.parsed_function_tool_call import (
+    ParsedFunction,
+    ParsedFunctionToolCall,
+)
 
-from app.common.messages import AssistantMessage, SystemMessage, ToolMessage, UserMessage
+from app.common.messages import (
+    AssistantMessage,
+    SystemMessage,
+    ToolMessage,
+    UserMessage,
+)
 from common.operation import OperationResult, TokenUsage
 
 
-def _make_tool_call(call_id="call_abc", name="FindByTitle", arguments='{}') -> ParsedFunctionToolCall:
+def _make_tool_call(
+    call_id="call_abc", name="FindByTitle", arguments="{}"
+) -> ParsedFunctionToolCall:
     return ParsedFunctionToolCall(
         id=call_id,
         type="function",
@@ -79,7 +89,9 @@ class TestAssistantMessage:
 
 class TestToolMessageToOpenaiDict:
     def test_dict_content_serialized_as_json(self):
-        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content={"title": "Dune"})
+        msg = ToolMessage(
+            name="FindByTitle", tool_call_id="call_1", content={"title": "Dune"}
+        )
         result = msg.to_openai_dict()
         assert result["content"] == json.dumps({"title": "Dune"})
 
@@ -89,7 +101,9 @@ class TestToolMessageToOpenaiDict:
         assert result["content"] == json.dumps(["a", "b"])
 
     def test_string_content_passed_through(self):
-        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content="raw string")
+        msg = ToolMessage(
+            name="FindByTitle", tool_call_id="call_1", content="raw string"
+        )
         result = msg.to_openai_dict()
         assert result["content"] == "raw string"
 
@@ -150,13 +164,18 @@ class TestToolMessageExecute:
         tool_instance.assert_awaited_once_with(db="mock_db", user_id=42)
 
     async def test_unwraps_operation_result_output(self):
-        tool_call = self._make_tool_call("FindByTitle", OperationResult(ok=True, output={"title": "Dune"}))
+        tool_call = self._make_tool_call(
+            "FindByTitle", OperationResult(ok=True, output={"title": "Dune"})
+        )
         result = await ToolMessage.execute(tool_call)
         assert result.output.content == {"title": "Dune"}
 
     async def test_unwraps_operation_result_logs_warning(self, caplog):
         import logging
-        tool_call = self._make_tool_call("FindByTitle", OperationResult(ok=True, output="some result"))
+
+        tool_call = self._make_tool_call(
+            "FindByTitle", OperationResult(ok=True, output="some result")
+        )
         with caplog.at_level(logging.WARNING, logger="app.common.messages"):
             await ToolMessage.execute(tool_call)
         assert any("operation result" in r.message for r in caplog.records)

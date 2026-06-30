@@ -12,16 +12,17 @@ from common.operation import OperationResult, TokenUsage, task
 
 logger = logging.getLogger(__name__)
 
+
 class Role(str, Enum):
-    SYSTEM    = "system"
-    USER      = "user"
+    SYSTEM = "system"
+    USER = "user"
     ASSISTANT = "assistant"
-    TOOL      = "tool"
+    TOOL = "tool"
+
 
 class BaseMessage(BaseModel, ABC):
     @abstractmethod
-    def to_openai_dict(self) -> dict:
-        ...
+    def to_openai_dict(self) -> dict: ...
 
 
 class SystemMessage(BaseMessage):
@@ -41,7 +42,6 @@ class UserMessage(BaseMessage):
 
     def to_openai_dict(self) -> dict:
         return {"role": self.role, "content": self.content}
-
 
 
 class AssistantMessage(BaseMessage):
@@ -72,19 +72,23 @@ class ToolMessage(BaseMessage):
     created: str | None = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
-    
+
     @classmethod
     @task
-    async def execute(cls, tool_call: ParsedFunctionToolCall, **kwargs) -> "ToolMessage":
+    async def execute(
+        cls, tool_call: ParsedFunctionToolCall, **kwargs
+    ) -> "ToolMessage":
         tool_name = tool_call.function.name
         tool_instance = tool_call.function.parsed_arguments
         output = await tool_instance(**kwargs)
-        
+
         # NOTE: make sure the tool calls return just the output
         if isinstance(output, OperationResult):
-            logger.warning(f"Tool {tool_name} returned an operation result, not a raw output")
+            logger.warning(
+                f"Tool {tool_name} returned an operation result, not a raw output"
+            )
             output = output.output
-        
+
         return cls(
             name=tool_name,
             tool_call_id=tool_call.id,
