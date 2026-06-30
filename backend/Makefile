@@ -102,7 +102,8 @@ tests:
 	poetry run pytest -s tests/unit/clients --cov=clients/ --cov-report=term-missing
 	poetry run pytest -s tests/unit/app/common/test_messages.py --cov=app.common.messages --cov-report=term-missing
 	poetry run pytest -s tests/unit/app/common/test_mermaid.py --cov=app.common.mermaid --cov-report=term-missing
-	poetry run pytest -s tests/unit/app/common/test_prompt_loader.py --cov=app.common.prompt_loader --cov-report=term-missing 2>&1 | tail -20
+	poetry run pytest -s tests/unit/app/common/test_prompt_loader.py --cov=app.common.prompt_loader --cov-report=term-missing
+	poetry run pytest -s tests/unit/db/test_async_engine.py --cov=db.async_engine --cov-report=term-missing
 
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
