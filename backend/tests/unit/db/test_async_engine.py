@@ -1,7 +1,7 @@
 """Tests for db/async_engine.py"""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from config.settings import SQLAlchemySettings
@@ -91,6 +91,7 @@ class TestGetSessionFactory:
 
     def test_uses_async_session_class(self):
         from sqlalchemy.ext.asyncio import AsyncSession
+
         with patch("db.async_engine.async_sessionmaker") as mock_maker:
             get_session_factory(MagicMock(spec=AsyncEngine))
         assert mock_maker.call_args.kwargs["class_"] is AsyncSession
