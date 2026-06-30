@@ -104,6 +104,7 @@ tests:
 	poetry run pytest -s tests/unit/app/common/test_mermaid.py --cov=app.common.mermaid --cov-report=term-missing
 	poetry run pytest -s tests/unit/app/common/test_prompt_loader.py --cov=app.common.prompt_loader --cov-report=term-missing
 	poetry run pytest -s tests/unit/db/test_async_engine.py --cov=db.async_engine --cov-report=term-missing
+	poetry run pytest -s tests/unit/config/test_settings.py --cov=config.settings --cov-report=term-missing 
 
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
