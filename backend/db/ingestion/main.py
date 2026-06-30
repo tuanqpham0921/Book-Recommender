@@ -12,7 +12,8 @@ from config import (
     FilesLocationConstants,
     Settings,
 )
-from db import bootstrap_schema, is_ready
+from db.bootstrap import bootstrap_schema
+from db.readiness import is_ready
 from db.schema import BookModel
 from db.ingestion.embeddings import embed_missing_books
 from db.ingestion.store import store_books_from_csv
