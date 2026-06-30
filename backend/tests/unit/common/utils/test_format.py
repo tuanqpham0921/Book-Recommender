@@ -113,6 +113,56 @@ class TestToSerializable:
         result = to_serializable(Outer(name="test"))
         assert result["_inner"] == {"value": 42}
 
+    def test_subclass_fields_preserved_when_typed_as_parent(self):
+        """model_dump() on list[Parent] serializes items as Parent, losing subclass
+        fields and private attrs. to_serializable must use getattr so the actual
+        runtime type is preserved when recursing."""
+
+        class Parent(BaseModel):
+            x: int
+            _tag: str = PrivateAttr(default=None)
+
+        class Child(Parent):
+            extra: str
+
+        class Container(BaseModel):
+            items: list[Parent]
+
+        child = Child(x=1, extra="subclass_field")
+        child._tag = "set_on_child"
+
+        result = to_serializable(Container(items=[child]))
+        item = result["items"][0]
+
+        assert item["x"] == 1
+        assert item["extra"] == "subclass_field"
+        assert item["_tag"] == "set_on_child"
+
+    def test_model_dump_loses_subclass_fields_for_parent_typed_list(self):
+        """Demonstrates why model_dump() alone is not enough: items in a
+        list[Parent] field are serialized using the declared type, dropping
+        Child-specific fields and private attrs entirely."""
+
+        class Parent(BaseModel):
+            x: int
+            _tag: str = PrivateAttr(default=None)
+
+        class Child(Parent):
+            extra: str
+
+        class Container(BaseModel):
+            items: list[Parent]
+
+        child = Child(x=1, extra="subclass_field")
+        child._tag = "set_on_child"
+
+        dumped = Container(items=[child]).model_dump()
+        item = dumped["items"][0]
+
+        assert item["x"] == 1
+        assert "extra" not in item   # subclass field is lost
+        assert "_tag" not in item    # private attr is lost
+
     def test_dataclass_fields_converted(self):
         @dataclass
         class Point:
@@ -171,3 +221,17 @@ class TestRemoveEmptyValues:
 
         instance = M(x=1)
         assert remove_empty_values(instance) == instance
+
+    def test_private_attr_none_stripped_set_kept(self):
+        class M(BaseModel):
+            x: int
+            _set_field: str = PrivateAttr(default=None)
+            _none_field: str = PrivateAttr(default=None)
+
+        m = M(x=1)
+        m._set_field = "hello"
+        # _none_field stays None
+
+        result = remove_empty_values(to_serializable(m))
+        assert result["_set_field"] == "hello"
+        assert "_none_field" not in result

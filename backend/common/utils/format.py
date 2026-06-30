@@ -13,12 +13,19 @@ def to_serializable(value: Any) -> Any:
         return value.__name__
 
     if isinstance(value, BaseModel):
-        data = value.model_dump()
-        # include private attributes
+        # model_dump() serializes list[BaseClass] fields using the declared type,
+        # stripping subclass fields and losing private attrs before recursion.
+        # Iterating via getattr preserves actual runtime types so recursive calls
+        # see the full subclass schema and private attrs.
+        data = {
+            name: to_serializable(getattr(value, name))
+            for name, info in type(value).model_fields.items()
+            if not info.exclude
+        }
         if value.__pydantic_private__:
-            data.update(value.__pydantic_private__)
-
-        return to_serializable(data)
+            for k, v in value.__pydantic_private__.items():
+                data[k] = to_serializable(v)
+        return data
 
     if is_dataclass(value):
         return {
