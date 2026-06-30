@@ -5,7 +5,7 @@ from typing import Optional
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
 from app.common.messages import AssistantMessage, UserMessage
-from app.common.prompt_loader import format_prompt, load_prompt
+from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
 from app.domains.base_request import (
@@ -24,7 +24,9 @@ from common.utils import uuid_8
 logger = logging.getLogger(__name__)
 
 INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
-INITIAL_PARSE_RESPONSE_PROMPT_PATH = "domains/planner/prompts/1_initial_parse_response.txt"
+INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
+    "domains/planner/prompts/1_initial_parse_response.txt"
+)
 
 MAX_SYSTEM_GOALS = 10
 
@@ -128,11 +130,9 @@ class InitialParseRequest(BaseModel):
     @classmethod
     def check_reasoning(cls, value):
         if not isinstance(value, str):
-            return f"value is not a string; padded to meet reasoning requirements"
+            return "value is not a string; padded to meet reasoning requirements"
         if len(value) < MIN_STRING_LENGTH:
-            value += (
-                f" padded to meet the minimum {MIN_STRING_LENGTH} character reasoning requirement"
-            )
+            value += f" padded to meet the minimum {MIN_STRING_LENGTH} character reasoning requirement"
         if len(value) > MAX_STRING_LENGTH:
             return value[: MAX_STRING_LENGTH - 4] + "..."
         return value
@@ -193,7 +193,11 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     tool_models = [InitialParseRequest]
 
     def __init__(
-        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient, messages=None
+        self,
+        sse_stream: SSEStream,
+        user_message: UserMessage,
+        llm_client: OpenAIClient,
+        messages=None,
     ):
         super().__init__(
             llm_client=llm_client,
@@ -230,7 +234,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         payload = self.output.to_llm_messages()
         if not payload:
             return
-        
+
         messages = [AssistantMessage(content=json.dumps(payload))]
         response_prompt = format_prompt(
             prompt_path=INITIAL_PARSE_RESPONSE_PROMPT_PATH,
@@ -269,7 +273,9 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
             if goal.confidence < confident_tuning:
                 reasons.append(f"Rejected: confidence too low ({goal.confidence})")
             if goal.target_node_type.value not in NODE_TYPE_TO_CLS.keys():
-                reasons.append(f"Rejected: target node type not supported ({goal.target_node_type})")
+                reasons.append(
+                    f"Rejected: target node type not supported ({goal.target_node_type})"
+                )
             if reasons or goal._refusal:
                 goal.refuse(*reasons)
                 self.output.refused_goals.append(goal)

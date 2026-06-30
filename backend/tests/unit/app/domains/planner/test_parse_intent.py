@@ -1,4 +1,5 @@
 """Tests for InitialParseWorkflow.process_parse_result and InitialParseRequest validators."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 from app.domains.books.node_types import BookNodeTypeEnum
@@ -25,7 +26,9 @@ def _make_goal(
     )
 
 
-def _make_parse_result(goals=None, small_talk=None, out_of_scope=None, reasoning="Parsed the user request"):
+def _make_parse_result(
+    goals=None, small_talk=None, out_of_scope=None, reasoning="Parsed the user request"
+):
     return InitialParseRequest(
         system_goals=goals or [],
         small_talk=small_talk,
@@ -63,7 +66,9 @@ class TestInitialParseRequestValidators:
         assert len(req.reasoning) >= 10
 
     def test_reasoning_truncated_when_over_max(self):
-        req = InitialParseRequest(system_goals=[], reasoning="x" * (MAX_STRING_LENGTH + 50))
+        req = InitialParseRequest(
+            system_goals=[], reasoning="x" * (MAX_STRING_LENGTH + 50)
+        )
         assert len(req.reasoning) <= MAX_STRING_LENGTH
         assert req.reasoning.endswith("...")
 
@@ -77,7 +82,9 @@ class TestInitialParseRequestValidators:
         assert req.small_talk.endswith("...")
 
     def test_small_talk_none_stays_none(self):
-        req = InitialParseRequest(system_goals=[], reasoning="Parsed the request cleanly")
+        req = InitialParseRequest(
+            system_goals=[], reasoning="Parsed the request cleanly"
+        )
         assert req.small_talk is None
 
     def test_small_talk_non_string_is_coerced(self):
@@ -107,13 +114,17 @@ class TestInitialParseRequestValidators:
 
     def test_system_goals_non_list_is_wrapped_in_list(self):
         goal = _make_goal()
-        req = InitialParseRequest(system_goals=goal, reasoning="Parsed the request cleanly")
+        req = InitialParseRequest(
+            system_goals=goal, reasoning="Parsed the request cleanly"
+        )
         assert isinstance(req.system_goals, list)
         assert len(req.system_goals) == 1
 
     def test_system_goals_truncated_when_over_max(self):
         goals = [_make_goal() for _ in range(MAX_SYSTEM_GOALS + 3)]
-        req = InitialParseRequest(system_goals=goals, reasoning="Parsed the request cleanly")
+        req = InitialParseRequest(
+            system_goals=goals, reasoning="Parsed the request cleanly"
+        )
         assert len(req.system_goals) == MAX_SYSTEM_GOALS
 
 
@@ -140,7 +151,9 @@ class TestProcessParseResult:
         assert parse_wf.output.small_talk == "Hello there!"
 
     def test_out_of_scope_stored_on_output(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result(out_of_scope="Cooking recipe request"))
+        parse_wf.process_parse_result(
+            _make_parse_result(out_of_scope="Cooking recipe request")
+        )
         assert parse_wf.output.out_of_scope == "Cooking recipe request"
 
     def test_reasoning_stored_on_output(self, parse_wf):
@@ -160,7 +173,9 @@ class TestProcessParseResult:
     def test_low_confidence_attaches_reason(self, parse_wf):
         goal = _make_goal(confidence=0.3)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert any("confidence" in r for r in parse_wf.output.refused_goals[0].refusal_reasons)
+        assert any(
+            "confidence" in r for r in parse_wf.output.refused_goals[0].refusal_reasons
+        )
 
     def test_confidence_exactly_at_default_threshold_is_accepted(self, parse_wf):
         # default confident_tuning=0.5; condition is `< 0.5`, so 0.5 itself passes
@@ -177,7 +192,9 @@ class TestProcessParseResult:
     def test_unsupported_node_type_attaches_reason(self, parse_wf):
         goal = _make_goal(confidence=0.9, node_type=UnknownNodeTypeEnum.UNKNOWN)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert any("node type" in r for r in parse_wf.output.refused_goals[0].refusal_reasons)
+        assert any(
+            "node type" in r for r in parse_wf.output.refused_goals[0].refusal_reasons
+        )
 
     def test_low_confidence_and_unsupported_type_attach_two_reasons(self, parse_wf):
         goal = _make_goal(confidence=0.3, node_type=UnknownNodeTypeEnum.UNKNOWN)
@@ -212,21 +229,29 @@ class TestProcessParseResult:
         assert bad_goal in parse_wf.output.refused_goals
 
     def test_mixed_goals_split_correctly(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result(goals=[
-            _make_goal(confidence=0.9),
-            _make_goal(confidence=0.1),
-        ]))
+        parse_wf.process_parse_result(
+            _make_parse_result(
+                goals=[
+                    _make_goal(confidence=0.9),
+                    _make_goal(confidence=0.1),
+                ]
+            )
+        )
         assert len(parse_wf.output.accepted_goals) == 1
         assert len(parse_wf.output.refused_goals) == 1
 
     def test_custom_confident_tuning_refuses_goal_below_threshold(self, parse_wf):
         goal = _make_goal(confidence=0.6)
-        parse_wf.process_parse_result(_make_parse_result(goals=[goal]), confident_tuning=0.7)
+        parse_wf.process_parse_result(
+            _make_parse_result(goals=[goal]), confident_tuning=0.7
+        )
         assert len(parse_wf.output.refused_goals) == 1
 
     def test_custom_confident_tuning_accepts_goal_above_threshold(self, parse_wf):
         goal = _make_goal(confidence=0.8)
-        parse_wf.process_parse_result(_make_parse_result(goals=[goal]), confident_tuning=0.7)
+        parse_wf.process_parse_result(
+            _make_parse_result(goals=[goal]), confident_tuning=0.7
+        )
         assert len(parse_wf.output.accepted_goals) == 1
 
 
@@ -295,13 +320,17 @@ class TestRun:
 
         await parse_wf.run()
 
-        parse_wf.sse_stream.send_ui_loading.assert_called_once_with(parse_wf.ui_loading_message)
+        parse_wf.sse_stream.send_ui_loading.assert_called_once_with(
+            parse_wf.ui_loading_message
+        )
 
     async def test_accepted_goals_populated_from_tool_call(self, parse_wf):
         # TODO: add make fail goals, and overload
         parse_result = _make_parse_result(goals=[_make_goal()])
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
-        parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg(parse_result))
+        parse_wf.run_llm_call = AsyncMock(
+            return_value=_mock_assistant_msg(parse_result)
+        )
         parse_wf.generate_user_response = AsyncMock()
 
         await parse_wf.run()
@@ -311,7 +340,9 @@ class TestRun:
     async def test_result_ok_set_after_processing(self, parse_wf):
         parse_result = _make_parse_result(goals=[_make_goal()])
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
-        parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg(parse_result))
+        parse_wf.run_llm_call = AsyncMock(
+            return_value=_mock_assistant_msg(parse_result)
+        )
         parse_wf.generate_user_response = AsyncMock()
 
         await parse_wf.run()
@@ -355,10 +386,14 @@ class TestInitialParseOutputHelpers:
         assert parse_wf.output.accepted_goals_ids() == [goal.id]
 
     def test_to_summary_counts_match(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result(goals=[
-            _make_goal(confidence=0.9),
-            _make_goal(confidence=0.1),
-        ]))
+        parse_wf.process_parse_result(
+            _make_parse_result(
+                goals=[
+                    _make_goal(confidence=0.9),
+                    _make_goal(confidence=0.1),
+                ]
+            )
+        )
         summary = parse_wf.output.to_summary()
         assert summary["num_accepted_system"] == 1
         assert summary["num_rejected_system"] == 1
