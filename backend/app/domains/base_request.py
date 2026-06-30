@@ -53,16 +53,19 @@ class BaseRequest(BaseModel):
         description="Confidence score for the parsed results (1.0 is highest confidence)",
     )
     _refusal: bool = PrivateAttr(default=False)
-    _refusal_reasons: list[str] = PrivateAttr(default_factory=list)
     _llm_id: str = PrivateAttr(default=None)
-
+    _details: list[str] = PrivateAttr(default_factory=list)
+    
     @property
     def refusal(self) -> bool:
         return self._refusal
 
-    def refuse(self, *reasons: str) -> None:
+    def refuse(self, reason: str) -> None:
         self._refusal = True
-        self._refusal_reasons.extend(reasons)
+        self.add_details(f"Rejected: {reason}")
+        
+    def add_details(self, message: str) -> None:
+        self._details.append(message)
     
     @field_validator("id", mode="before")
     @classmethod
