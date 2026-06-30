@@ -80,10 +80,10 @@ class ToolMessage(BaseMessage):
         tool_instance = tool_call.function.parsed_arguments
         output = await tool_instance(**kwargs)
         
-        # TODO: handle this when you have a tool that returns an operation result
-        # should keep it in the output field, but not in the content field
+        # NOTE: make sure the tool calls return just the output
         if isinstance(output, OperationResult):
             logger.warning(f"Tool {tool_name} returned an operation result, not a raw output")
+            output = output.output
         
         return cls(
             name=tool_name,
