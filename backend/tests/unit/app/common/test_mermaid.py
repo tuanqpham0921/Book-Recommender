@@ -1,4 +1,5 @@
 """Tests for app/common/mermaid.py diagram generation."""
+
 from app.common.mermaid import clean_string_mermaid, mermaid_id, get_mermaid_diagram
 from app.domains.base_request import AnalyzeBaseRequest
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
