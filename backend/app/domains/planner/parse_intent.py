@@ -23,6 +23,9 @@ from common.utils import uuid_8
 
 logger = logging.getLogger(__name__)
 
+INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
+INITIAL_PARSE_RESPONSE_PROMPT_PATH = "domains/planner/prompts/1_initial_parse_response.txt"
+
 MAX_SYSTEM_GOALS = 10
 
 
@@ -187,9 +190,6 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
     failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."
 
-    _SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
-    _USER_PROMPT_PATH = "domains/planner/prompts/1_initial_parse_response.txt"
-
     tool_models = [InitialParseRequest]
 
     def __init__(
@@ -207,7 +207,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         system_prompt = format_prompt(
-            prompt_path=self._SYSTEM_PROMPT_PATH,
+            prompt_path=INITIAL_SYSTEM_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
         )
         req = OpenAIParserRequest(
@@ -233,7 +233,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         
         messages = [AssistantMessage(content=json.dumps(payload))]
         response_prompt = format_prompt(
-            prompt_path=self._USER_PROMPT_PATH,
+            prompt_path=INITIAL_PARSE_RESPONSE_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
         )
         await self.run_llm_call(

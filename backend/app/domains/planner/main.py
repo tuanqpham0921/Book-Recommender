@@ -21,6 +21,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+CONVERSATION_SUMMARY_PROMPT_PATH = "domains/planner/prompts/3_conversation_orchestration_summary.txt"
+
 
 class OrchestrationOutput(UserFacingOutput):
     session_id: str | None = None
@@ -39,10 +41,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
     ui_loading_message = "Starting conversation..."
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
-
-    _SUMMARY_PROMPT_PATH = (
-        "domains/planner/prompts/3_conversation_orchestration_summary.txt"
-    )
 
     def __init__(
         self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient

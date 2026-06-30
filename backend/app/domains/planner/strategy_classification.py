@@ -24,6 +24,8 @@ from config import BookConstraints, BookGuides
 
 logger = logging.getLogger(__name__)
 
+STRATEGY_CLASSIFICATION_PROMPT_PATH = "domains/planner/prompts/2_strategy_classification.txt"
+
 MAX_STRATEGIES = 15
 
 class StrategyRequest(BaseModel):
@@ -110,8 +112,6 @@ class StrategyClassificationWorkflow(
     failure_message = "Strategy classification failed"
     ui_loading_message = "Strategizing..."
 
-    _SYSTEM_PROMPT_PATH = "domains/planner/prompts/2_strategy_classification.txt"
-
     tool_models = [StrategyRequest]
 
     def __init__(
@@ -135,7 +135,7 @@ class StrategyClassificationWorkflow(
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         system_prompt = format_prompt(
-            prompt_path=self._SYSTEM_PROMPT_PATH,
+            prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH,
             book_constraints=str(BookConstraints()),
             book_guides=str(BookGuides()),
         )
