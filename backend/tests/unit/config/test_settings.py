@@ -1,5 +1,4 @@
 """Tests for config/settings/"""
-import pytest
 
 from config.settings import AppSettings, OpenAISettings, Settings, SQLAlchemySettings
 
@@ -19,12 +18,24 @@ def make_sqlalchemy(**overrides) -> SQLAlchemySettings:
 
 class TestSQLAlchemySettingsUrl:
     def test_tcp_url_format(self):
-        s = make_sqlalchemy(HOST="localhost", PORT=5432, DB="mydb", USER="alice", PASSWORD="secret")
-        assert s.sqlalchemy_url == "postgresql+asyncpg://alice:secret@localhost:5432/mydb"
+        s = make_sqlalchemy(
+            HOST="localhost", PORT=5432, DB="mydb", USER="alice", PASSWORD="secret"
+        )
+        assert (
+            s.sqlalchemy_url == "postgresql+asyncpg://alice:secret@localhost:5432/mydb"
+        )
 
     def test_cloudsql_url_format(self):
-        s = make_sqlalchemy(HOST="/cloudsql/project:region:instance", DB="mydb", USER="alice", PASSWORD="secret")
-        assert s.sqlalchemy_url == "postgresql+asyncpg://alice:secret@/mydb?host=/cloudsql/project:region:instance"
+        s = make_sqlalchemy(
+            HOST="/cloudsql/project:region:instance",
+            DB="mydb",
+            USER="alice",
+            PASSWORD="secret",
+        )
+        assert (
+            s.sqlalchemy_url
+            == "postgresql+asyncpg://alice:secret@/mydb?host=/cloudsql/project:region:instance"
+        )
 
     def test_tcp_when_host_does_not_start_with_cloudsql(self):
         s = make_sqlalchemy(HOST="10.0.0.1", PORT=5432)
