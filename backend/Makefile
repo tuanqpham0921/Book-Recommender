@@ -101,7 +101,7 @@ tests:
 	poetry run pytest -s tests/unit/common/utils --cov=common/utils --cov-report=term-missing
 	poetry run pytest -s tests/unit/clients --cov=clients/ --cov-report=term-missing
 	poetry run pytest -s tests/unit/app/common/test_messages.py --cov=app.common.messages --cov-report=term-missing
-	
+	poetry run pytest -s tests/unit/app/common/test_mermaid.py --cov=app.common.mermaid --cov-report=term-missing
 
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
