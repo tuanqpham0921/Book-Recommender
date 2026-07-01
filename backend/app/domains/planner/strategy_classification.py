@@ -14,8 +14,7 @@ from app.domains.base_request import BaseRequest
 from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
-    NODE_TYPE_TO_CLS,
-    REQUEST_CLASSES_UNION,
+    NODE_TYPE_TO_CLS
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -36,7 +35,7 @@ class StrategyRequest(BaseModel):
     Each strategy should represent a discrete unit of work.
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
-    strategies: list[REQUEST_CLASSES_UNION] = Field(
+    strategies: list[BaseModel] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
         description="List of strategies generated from the query",
@@ -103,13 +102,13 @@ class StrategyRequest(BaseModel):
 
 
 class StrategyClassificationOutput(UserFacingOutput):
-    accepted: list[REQUEST_CLASSES_UNION] = Field(default_factory=list)
+    accepted: list[BaseModel] = Field(default_factory=list)
     execution_order: list[str] = Field(default_factory=list)
 
     # NOTE: this can be private or not?
     # for retries, continuation, or summaries
-    buffer: list[REQUEST_CLASSES_UNION] = Field(default_factory=list)
-    refused: list[REQUEST_CLASSES_UNION] = Field(default_factory=list)
+    buffer: list[BaseModel] = Field(default_factory=list)
+    refused: list[BaseModel] = Field(default_factory=list)
 
     invalid: list[Any] = Field(default_factory=list)
     

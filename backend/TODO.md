@@ -4,10 +4,6 @@ Continue:
    * different id same content(?)
 * when rejecting a request, make sure to reject all the ones depends_on it
 
-0. make sure it runs ends to end
-   * maybe write a unit test that run end to end
-   * check the json file saved has all the fields (private and such)
-
 3. update your tests (test all different graph cases)
    * make sure it can remove the cycle paths
    * retain information from LLM
