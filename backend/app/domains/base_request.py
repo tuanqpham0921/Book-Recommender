@@ -112,6 +112,9 @@ class BaseRequest(BaseModel):
             raise TypeError(f"Data is of type {type(data)}, expected dict")
         # use the node types to rebuild
         raise NotImplementedError("Rebuild Json is not implmented yet")
+    
+    def get_depends_on(self):
+        return getattr(self, "depends_on", [])
         
 
 class DomainRequest(BaseRequest):

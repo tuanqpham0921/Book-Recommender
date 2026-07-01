@@ -19,7 +19,7 @@ from app.domains.registry import (
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
 from clients.openai_client import OpenAIClient
-from common.utils import uuid_8
+from common.utils import uuid_8, to_serializable, remove_empty_values
 from config import BookConstraints, BookGuides
 
 
@@ -165,6 +165,8 @@ class StrategyClassificationWorkflow(
             logger.warning(f"LLM created {len(parse_result._overflow_strategies)} overflow strategies")
         
         all_strategies = parse_result.strategies + parse_result._overflow_strategies
+        all_strategies = self._remove_duplicates(all_strategies)
+        
         # assign and validate ids
         llm_to_internal_id = self._set_llm_id(all_strategies)
         self._map_dependencies_to_internal_ids(all_strategies, llm_to_internal_id)
@@ -238,6 +240,47 @@ class StrategyClassificationWorkflow(
             for goal in system_goals
         ]
         return AssistantMessage(content=json.dumps(payload))
+    
+    DUPLICATE_CONTENT_IGNORE_KEYS = {"id", "reasoning", "confidence", "description", "target_goal"}
+
+    def _remove_duplicates(self, strategies: list[BaseRequest]) -> list[BaseRequest]:
+        id_to_node = {strat.id: strat for strat in strategies}
+        content_to_id = {}
+        map_to_existing = {}
+        for strat in strategies:
+            serializable = to_serializable(strat)
+            serializable = remove_empty_values(serializable)
+            for key in self.DUPLICATE_CONTENT_IGNORE_KEYS:
+                serializable.pop(key, None)
+            data = json.dumps(serializable, sort_keys=True)
+            if data in content_to_id:
+                canonical_id = content_to_id[data]
+                map_to_existing[strat.id] = canonical_id
+                self._merge_target_goal(id_to_node[canonical_id], strat)
+            else:
+                content_to_id[data] = strat.id
+
+        return self._reassign_dependencies(strategies, map_to_existing)
+
+    def _merge_target_goal(self, canonical: BaseRequest, duplicate: BaseRequest) -> None:
+        """Keep the goal(s) a dropped duplicate served attached to the surviving node."""
+        if not hasattr(canonical, "target_goal") or not hasattr(duplicate, "target_goal"):
+            return
+        canonical.target_goal = list(dict.fromkeys(canonical.target_goal + duplicate.target_goal))
+    
+    def _reassign_dependencies(self, strategies: list[BaseRequest], map_to_existing: dict[str, str]) -> list[BaseRequest]:
+        if not map_to_existing:
+            return strategies
+        logger.warning(f"There are {len(map_to_existing)} of duplicate tasks")
+        for strat in strategies:
+            if strat.id in map_to_existing:
+                continue
+            depends_on = strat.get_depends_on()
+            for i in range(len(depends_on)):
+                if depends_on[i] in map_to_existing:
+                    depends_on[i] = map_to_existing[depends_on[i]]
+                    
+        return [strat for strat in strategies if strat.id not in map_to_existing]
         
     def _set_llm_id(self, strategies: list[BaseRequest]) -> dict[str, str]:
         llm_to_internal_id = {}

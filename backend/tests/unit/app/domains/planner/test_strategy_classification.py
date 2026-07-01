@@ -195,6 +195,53 @@ class TestFilterCandidates:
         assert len(downstream._details) == 1
 
 
+class TestRemoveDuplicates:
+    def test_no_duplicates_returns_all(self, strategy_wf):
+        r1 = _make_retrieval("task_1", title="Book A")
+        r2 = _make_retrieval("task_2", title="Book B")
+        result = strategy_wf._remove_duplicates([r1, r2])
+        assert result == [r1, r2]
+
+    def test_same_content_different_wording_is_deduplicated(self, strategy_wf):
+        # description/reasoning/confidence differ, but the fields that
+        # actually matter (title, target_goal) are identical
+        r1 = _make_retrieval("task_1", title="Pride and Prejudice")
+        r1.description = "Looking for Pride and Prejudice by Austen"
+        r2 = _make_retrieval("task_2", title="Pride and Prejudice", confidence=0.95)
+        r2.description = "User wants the book Pride and Prejudice"
+
+        result = strategy_wf._remove_duplicates([r1, r2])
+
+        assert result == [r1]
+
+    def test_different_content_is_kept(self, strategy_wf):
+        r1 = _make_retrieval("task_1", title="Book A")
+        r2 = _make_retrieval("task_2", title="Book B")
+        result = strategy_wf._remove_duplicates([r1, r2])
+        assert len(result) == 2
+
+    def test_dependents_are_reassigned_to_surviving_duplicate(self, strategy_wf):
+        r1 = _make_retrieval("task_1", title="Same Book")
+        r2 = _make_retrieval("task_2", title="Same Book")
+        dependent = _make_analyze("task_3", depends_on_ids=["task_2"])
+
+        result = strategy_wf._remove_duplicates([r1, r2, dependent])
+
+        assert result == [r1, dependent]
+        assert dependent.get_depends_on() == ["task_1"]
+
+    def test_same_content_different_goal_is_deduplicated_and_goals_merged(self, strategy_wf):
+        # same title, but each targets a different goal - still the same
+        # underlying task, so the survivor should carry both goal ids
+        r1 = _make_retrieval("task_1", title="Same Book", goal_id="goal_a1b2c3d4")
+        r2 = _make_retrieval("task_2", title="Same Book", goal_id="goal_ffffffff")
+
+        result = strategy_wf._remove_duplicates([r1, r2])
+
+        assert result == [r1]
+        assert r1.target_goal == ["goal_a1b2c3d4", "goal_ffffffff"]
+
+
 class TestAddToAccepted:
     def test_excess_strategies_go_to_buffer(self, strategy_wf):
         goal = _make_goal()
