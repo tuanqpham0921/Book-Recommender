@@ -70,8 +70,8 @@ class BaseRequest(BaseModel):
     @field_validator("id", mode="before")
     @classmethod
     def check_id(cls, value):
-        if (not isinstance(value, str) 
-            or not re.match(TASK_LLM_ID_PATTERN, value)):
+        if (not isinstance(value, str)
+            or not (re.match(TASK_LLM_ID_PATTERN, value) or re.match(TASK_ID_PATTERN, value))):
             return f"{ID_PREFIX}{uuid_8()}"
         return value
     
