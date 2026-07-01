@@ -65,9 +65,20 @@ class Workflow(ABC, Generic[OutputT]):
         result = await function
         return self.add_step(result, raise_on_failure=raise_on_failure)
 
+    def run_step(
+        self,
+        result: OperationResult[Any],
+        *,
+        raise_on_failure: bool = True,
+    ) -> OperationResult[Any]:
+        return self.add_step(result, raise_on_failure=raise_on_failure)
+
     def add_step(
         self, step: OperationResult[Any], *, raise_on_failure: bool = True
     ) -> OperationResult[Any]:
+        # if isinstance(step, OperationResult[Any]):
+        #     raise ValueError(f"Step is of type {type(step)} not OperationResult")
+        
         self.result.steps.append(step)
 
         if step.ok:

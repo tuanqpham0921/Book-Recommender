@@ -21,6 +21,7 @@ from clients import OpenAIParserRequest
 from clients.openai_client import OpenAIClient
 from common.utils import uuid_8, to_serializable, remove_empty_values
 from config import BookConstraints, BookGuides
+from common.operation import task
 
 
 logger = logging.getLogger(__name__)
@@ -157,6 +158,22 @@ class StrategyClassificationWorkflow(
 
         tool_call = await self._run_llm_args_parse(system_goals)
         parse_result = tool_call.function.parsed_arguments
+
+        dag_step = await self.run_async_step(
+            self._create_dag(parse_result, system_goals), raise_on_failure=False
+        )
+        if not dag_step.ok:
+            self.result.ok = False
+            self.result.message = self.failure_message
+            return
+
+        self.finalize_result(tool_call)
+        
+    @task
+    async def _create_dag(self, parse_result, system_goals) -> None:
+        if parse_result is None:
+            raise ValueError("No parse_result provided")
+        
         if parse_result._invalid_strategies:
             logger.warning(f"LLM created {len(parse_result._invalid_strategies)} invalid strategies")
             self.output.invalid = parse_result._invalid_strategies
@@ -182,8 +199,6 @@ class StrategyClassificationWorkflow(
         
         self._add_to_accepted(order, id_to_node)
         self.output.execution_order = [strat.id for strat in self.output.accepted]
-        
-        self.finalize_result(tool_call)
     
     async def _run_llm_args_parse(self, system_goals: list[SystemGoal]) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(

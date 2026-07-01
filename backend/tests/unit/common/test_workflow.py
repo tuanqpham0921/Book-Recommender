@@ -34,6 +34,20 @@ class _MultiStepWorkflow(Workflow):
             self.add_step(step, raise_on_failure=False)
 
 
+class _RunStepWorkflow(Workflow):
+    """run_step is the synchronous counterpart to run_async_step - it takes an
+    already-produced OperationResult (from a sync method call) instead of
+    awaiting a coroutine."""
+
+    def __init__(self, step: OperationResult, raise_on_failure: bool = True):
+        super().__init__()
+        self._step = step
+        self._raise = raise_on_failure
+
+    async def run(self, *args, **kwargs):
+        self.run_step(self._step, raise_on_failure=self._raise)
+
+
 class TestWorkflowExecution:
     async def test_successful_run_sets_ok_true(self):
         result = await _SuccessWorkflow()()
@@ -87,6 +101,26 @@ class TestAddStep:
         ]
         result = await _MultiStepWorkflow(steps)()
         assert len(result.steps) == 3
+
+
+class TestRunStep:
+    async def test_success_step_appended_to_steps(self):
+        step = OperationResult(ok=True, name="my_sync_step")
+        result = await _RunStepWorkflow(step)()
+        assert result.ok is True
+        assert len(result.steps) == 1
+        assert result.steps[0].name == "my_sync_step"
+
+    async def test_failed_step_sets_result_ok_false(self):
+        step = OperationResult(ok=False, name="bad_step", message="bad")
+        result = await _RunStepWorkflow(step, raise_on_failure=False)()
+        assert result.ok is False
+
+    async def test_failed_step_with_raise_records_run_time_error(self):
+        step = OperationResult(ok=False, name="bad_step", message="bad")
+        result = await _RunStepWorkflow(step, raise_on_failure=True)()
+        assert result.ok is False
+        assert result.run_time_error is not None
 
 
 class TestWorkflowProperties:
