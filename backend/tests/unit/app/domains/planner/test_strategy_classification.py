@@ -499,6 +499,37 @@ class TestBuildModel:
         assert len(instance.strategies) == 1
 
 
+class TestStrategyRequestExtraFields:
+    """StrategyRequest only declares `strategies` - if the LLM's tool-call
+    payload includes any other top-level key, it must never leak into the
+    model (no attribute, no model_extra, absent from model_dump)."""
+
+    def test_model_only_declares_strategies_field(self):
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        assert list(model.model_fields.keys()) == ["strategies"]
+
+    def test_extra_field_does_not_become_an_attribute(self):
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        instance = model(strategies=[], unexpected_field="sneaky value")
+        assert not hasattr(instance, "unexpected_field")
+
+    def test_extra_field_is_not_tracked_as_model_extra(self):
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        instance = model(strategies=[], unexpected_field="sneaky value")
+        assert instance.model_extra is None
+
+    def test_extra_field_absent_from_model_dump(self):
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        instance = model(strategies=[], unexpected_field="sneaky value")
+        assert "unexpected_field" not in instance.model_dump()
+
+    def test_extra_fields_do_not_raise(self):
+        # extra="ignore" is the default; extra keys are silently dropped
+        # rather than causing construction to fail
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        model(strategies=[], unexpected_field="a", another_bad_one=123)
+
+
 class TestCaptureAndFilter:
     """capture_and_filter only accepts raw dicts (as the LLM response
     delivers them) — it looks up the concrete class via NODE_TYPE_TO_CLS
