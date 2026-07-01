@@ -426,7 +426,7 @@ class StrategyClassificationWorkflow(
         indegree = defaultdict(int)
         for strat in candidates:
             task_id = strat.id
-            if not hasattr(task, "depends_on"):
+            if not hasattr(strat, "depends_on"):
                 indegree[task_id] = 0
                 continue
 

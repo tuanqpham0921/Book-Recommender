@@ -107,6 +107,8 @@ tests:
 	poetry run pytest -s tests/unit/config/test_settings.py --cov=config.settings --cov-report=term-missing 
 	poetry run pytest -s tests/unit/app/domains/planner --cov=app/domains/planner --cov-report=term-missing
 
+# poetry run pytest -s tests/unit/app/domains/planner/test_strategy_classification.py
+
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
