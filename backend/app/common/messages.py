@@ -7,8 +7,8 @@ from typing import Annotated, Any, Literal, Union
 
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
-
 from common.operation import OperationResult, TokenUsage, task
+from common.utils import to_serializable, remove_empty_values
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +97,12 @@ class ToolMessage(BaseMessage):
 
     def to_openai_dict(self) -> dict:
         # OpenAI tool messages require string content and no extra fields
+        # TODO: add unit tests for the new logic
+        # content can be pydantic
         content = self.content
-        if isinstance(content, (dict, list)):
-            content = json.dumps(content)
-        else:
-            content = str(content)
+        jsonable = to_serializable(content)
+        jsonable = remove_empty_values(jsonable)
+        content = json.dumps(jsonable)
 
         return {
             "role": self.role,

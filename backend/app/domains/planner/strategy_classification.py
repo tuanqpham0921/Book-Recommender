@@ -5,8 +5,8 @@ from functools import reduce
 from operator import or_
 from collections import defaultdict, deque
 from pydantic import BaseModel, Field, PrivateAttr, create_model, model_validator, ValidationError
-
-from app.common.messages import AssistantMessage, UserMessage
+from openai.types.chat import ParsedFunctionToolCall
+from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
@@ -154,22 +154,8 @@ class StrategyClassificationWorkflow(
 
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        system_prompt = format_prompt(
-            prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH,
-            book_constraints=str(BookConstraints()),
-            book_guides=str(BookGuides()),
-        )
-        strategy_request = self.build_strategy_request(system_goals)
-        req = OpenAIParserRequest(
-            prompt=system_prompt,
-            # TODO: I think there's a warning here
-            messages=[self.user_message, self._format_system_goals(system_goals)],
-            tool_models=[strategy_request],
-        )
-        assistant_msg = await self.run_llm_call(req)
-        tool_call = assistant_msg.tool_calls[0]
+        tool_call = await self._run_llm_args_parse(system_goals)
         parse_result = tool_call.function.parsed_arguments
-        
         if parse_result._invalid_strategies:
             logger.warning(f"LLM created {len(parse_result._invalid_strategies)} invalid strategies")
             self.output.invalid = parse_result._invalid_strategies
@@ -193,9 +179,26 @@ class StrategyClassificationWorkflow(
         self._add_to_accepted(order, id_to_node)
         self.output.execution_order = [strat.id for strat in self.output.accepted]
         
-        self.finalize_result()
-        
-    def build_strategy_request(self, system_goals: list[SystemGoal]) -> StrategyRequest:
+        self.finalize_result(tool_call)
+    
+    async def _run_llm_args_parse(self, system_goals: list[SystemGoal]) -> ParsedFunctionToolCall:
+        system_prompt = format_prompt(
+            prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH,
+            book_constraints=str(BookConstraints()),
+            book_guides=str(BookGuides()),
+        )
+        strategy_request = self._build_strategy_request(system_goals)
+        req = OpenAIParserRequest(
+            prompt=system_prompt,
+            # TODO: I think there's a warning here
+            messages=[self.user_message, self._format_system_goals(system_goals)],
+            tool_models=[strategy_request],
+        )
+        assistant_msg = await self.run_llm_call(req)
+        tool_call = assistant_msg.tool_calls[0]
+        return tool_call
+    
+    def _build_strategy_request(self, system_goals: list[SystemGoal]) -> StrategyRequest:
         request_classes = set()
         for goal in system_goals:
             if goal.target_node_type.value in NODE_TYPE_TO_CLS:
@@ -368,8 +371,15 @@ class StrategyClassificationWorkflow(
                 node.add_details("Waiting over limit, waiting")
                 self.output.buffer.append(node)        
         
-    def finalize_result(self) -> None:
+    def finalize_result(self, tool_call: ParsedFunctionToolCall) -> None:
         # NOTE: here you can do output.validate?
+        self.messages.append(
+            ToolMessage(
+                name=tool_call.function.name,
+                tool_call_id=tool_call.id,
+                content=self.output,
+            )
+        )
         super().finalize_result(
             ok=bool(self.output.accepted)
         )

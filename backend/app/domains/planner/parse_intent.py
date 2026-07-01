@@ -1,10 +1,10 @@
 import json
 import logging
 from typing import Optional
-
+from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
-from app.common.messages import AssistantMessage, UserMessage
+from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
@@ -209,7 +209,13 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-
+        tool_call = await self._run_llm_args_parse()
+        parse_result = tool_call.function.parsed_arguments
+        self.process_parse_result(parse_result)
+        await self.finalize_result(tool_call)
+        await self.generate_user_response()
+        
+    async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
             prompt_path=INITIAL_SYSTEM_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
@@ -221,13 +227,16 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         )
         assistant_msg = await self.run_llm_call(req)
         tool_call = assistant_msg.tool_calls[0]
-        parse_result = tool_call.function.parsed_arguments
+        return tool_call
 
-        self.process_parse_result(parse_result)
-        await self.finalize_result()
-        await self.generate_user_response()
-
-    async def finalize_result(self) -> None:
+    async def finalize_result(self, tool_call: ParsedFunctionToolCall) -> None:
+        self.messages.append(
+            ToolMessage(
+                name=tool_call.function.name,
+                tool_call_id=tool_call.id,
+                content=self.output,
+            )
+        )
         super().finalize_result(ok=bool(self.output.accepted_goals))
 
     async def generate_user_response(self) -> None:
