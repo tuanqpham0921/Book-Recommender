@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Any
 from functools import reduce
 from operator import or_
 from collections import defaultdict, deque
@@ -14,6 +15,7 @@ from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
+    AnyStrategyRequest,
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -35,7 +37,7 @@ class StrategyRequest(BaseModel):
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
 
-    strategies: list[BaseRequest] = Field(
+    strategies: list[AnyStrategyRequest] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
         description="List of strategies generated from the query",
@@ -73,7 +75,9 @@ class StrategyRequest(BaseModel):
     @classmethod
     def capture_and_filter(cls, data, handler):
         raw = data.get('strategies', []) if isinstance(data, dict) else []
-        
+        if not isinstance(raw, list):
+            raw = [raw]
+
         valid, invalid = [], []
         for item in raw:
             if isinstance(item, BaseRequest):
@@ -97,15 +101,15 @@ class StrategyRequest(BaseModel):
 
 
 class StrategyClassificationOutput(UserFacingOutput):
-    accepted: list[BaseRequest] = Field(default_factory=list)
+    accepted: list[AnyStrategyRequest] = Field(default_factory=list)
     execution_order: list[str] = Field(default_factory=list)
-    
+
     # NOTE: this can be private or not?
     # for retries, continuation, or summaries
-    buffer: list[BaseRequest] = Field(default_factory=list)
-    refused: list[BaseRequest] = Field(default_factory=list)
-    
-    invalid: list[BaseRequest] = Field(default_factory=list)
+    buffer: list[AnyStrategyRequest] = Field(default_factory=list)
+    refused: list[AnyStrategyRequest] = Field(default_factory=list)
+
+    invalid: list[Any] = Field(default_factory=list)
     
     def to_summary(self) -> dict[str, bool | int | list[str]]:
         return {
@@ -174,30 +178,21 @@ class StrategyClassificationWorkflow(
             logger.warning(f"LLM created {len(parse_result._overflow_strategies)} overflow strategies")
         
         all_strategies = parse_result.strategies + parse_result._overflow_strategies
-        # print("here1", all_strategies)
-        # assign and valid ids
+        # assign and validate ids
         llm_to_internal_id = self._set_llm_id(all_strategies)
-        # print("here1", llm_to_internal_id )
         self._map_dependencies_to_internal_ids(all_strategies, llm_to_internal_id)
-        # print("here2")
+ 
         # process the goals and confidence
         id_to_node = {task.id:task for task in all_strategies}
         candidates = self._get_candidates(all_strategies, system_goals)
-        # print("here3", candidates)
-        
-        # from common.utils import save_file
-        # save_file(self.output, "dev")
         
         # topological sort and remove bad nodes
         graph, indegree = self._get_graph_indegree(candidates)
         order = self._create_execution_order(graph, indegree, id_to_node)
         
-        # print("here4")
         self._add_to_accepted(order, id_to_node)
         self.output.execution_order = [strat.id for strat in self.output.accepted]
         
-        # print("here5", self.output.accepted)
-        print(self.output)
         self.finalize_result()
         
     def build_strategy_request(self, system_goals: list[SystemGoal]) -> StrategyRequest:
@@ -323,9 +318,10 @@ class StrategyClassificationWorkflow(
         if len(order) != len(indegree):
             logger.warning("Cycle detected in dependency graph")
             remove_ids = set()
-            for cycle_node in indegree:
+            cycle_nodes = set(indegree) - set(order)
+            for cycle_node in cycle_nodes:
                 self._remove_cycles(graph, cycle_node, remove_ids, id_to_node)
-            
+
             order = [id for id in order if id not in remove_ids]
         
         return order    

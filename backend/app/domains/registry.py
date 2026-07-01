@@ -60,6 +60,26 @@ ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
 
 REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
 
+# Discriminated union of every concrete strategy type.
+# Pydantic uses `node_type` (a Literal on each class) to pick the right
+# subclass when validating or serializing — so model_dump() and model_validate()
+# both see the full subclass schema, not just BaseRequest fields.
+# Add new strategy classes here alongside NODE_TYPE_TO_CLS.
+AnyStrategyRequest = Annotated[
+    Union[
+        CompareStrategy,
+        RecommendationStrategy,
+        FindByTitleRetrieval,
+        FindByISBN13Retrieval,
+        FindByTraitsRetrieval,
+        UserInfoRequest,
+        DeveloperInfoRequest,
+        FeedbackRequest,
+        ProjectInfoRequest,
+    ],
+    Field(discriminator="node_type"),
+]
+
 # Manual node_type → class lookup — add new mappings here
 NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.COMPARE.value: CompareStrategy,

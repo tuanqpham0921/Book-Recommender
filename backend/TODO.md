@@ -1,3 +1,20 @@
+Continue:
+0. make sure it runs ends to end
+   * maybe write a unit test that run end to end
+   * check the json file saved has all the fields (private and such)
+
+1. look at your new AnyRequestType (make sure it doesn't have feedback)
+   * go back to the old format and see if it works now
+   * might need one for capbilities and 1 for planner types
+2. put type hints and make it cleaner 
+   * move the openAI call to a func
+3. update your tests (test all different graph cases)
+   * make sure it can remove the cycle paths
+   * retain information from LLM
+4. before testing your BaseRequest
+   * make a re-use able validator (should be good for list, str, etc...)
+   * make sure you keep track of what comes back from LLM
+
 Current:
 1. create a way to run all your test queries (pod mode)
 2. show rejected quries and resuls
