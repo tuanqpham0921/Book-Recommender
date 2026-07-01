@@ -172,6 +172,7 @@ class StrategyClassificationWorkflow(
         # process the goals and confidence
         id_to_node = {task.id:task for task in all_strategies}
         candidates = self._get_candidates(all_strategies, system_goals)
+        candidates = self._filter_candidates(candidates, id_to_node)
         
         # topological sort and remove bad nodes
         graph, indegree = self._get_graph_indegree(candidates)
@@ -280,7 +281,7 @@ class StrategyClassificationWorkflow(
     ) -> list[BaseRequest]:
         """Validate confidence and goals ids"""
         accepted_goals_ids = {goal.id for goal in system_goals}
-        pass_strategies = []
+        candidates = []
         for strategy in strategies:
             missing_goals = [g for g in strategy.target_goal if g not in accepted_goals_ids]
             if missing_goals:
@@ -294,9 +295,26 @@ class StrategyClassificationWorkflow(
             if strategy.refusal:
                 self.output.refused.append(strategy)
             else:
-                pass_strategies.append(strategy)
-        
-        return pass_strategies
+                candidates.append(strategy)
+            
+        return candidates
+    
+    def _filter_candidates(self, 
+                           candidates: list[BaseRequest],
+                           id_to_node: dict[str, BaseRequest]) -> list[BaseRequest]:
+        if not len(self.output.refused):
+            return candidates
+        rejected = self.output.get_refused_id_to_node()
+        graph, _ = self._get_graph_indegree(candidates)
+        remove_ids = set()
+        for rejected_id in rejected:
+            remove_ids.add(rejected_id)
+            for nei in graph[rejected_id]:
+                self._reject_dependent_on(graph, 
+                                        nei, 
+                                        remove_ids, 
+                                        id_to_node)
+        return [strat for strat in candidates if strat.id not in remove_ids]
             
     def _get_graph_indegree(
         self, candidates: list[BaseRequest]
@@ -331,7 +349,12 @@ class StrategyClassificationWorkflow(
             remove_ids = set()
             cycle_nodes = set(indegree) - set(order)
             for cycle_node in cycle_nodes:
-                self._remove_cycles(graph, cycle_node, remove_ids, id_to_node)
+                self._reject_dependent_on(
+                    graph, 
+                    cycle_node, 
+                    remove_ids, 
+                    id_to_node,
+                    message="Node in a cycle path")
 
             order = [id for id in order if id not in remove_ids]
         
@@ -357,26 +380,27 @@ class StrategyClassificationWorkflow(
                     queue.append(neighbor)
         return order
             
-    def _remove_cycles(
+    def _reject_dependent_on(
         self,
         graph: defaultdict[str, list[str]],
         cur: str,
         remove_ids: set[str],
         id_to_node: dict[str, BaseRequest],
+        message: str = "Node depends on a rejected node"
     ) -> None:
-        """Remove cycles from the dependency graph"""
+        """Remove rejected nodes from the dependency graph"""
         if cur in remove_ids:
             return
         
         # refuse this node
         remove_ids.add(cur)
         node = id_to_node[cur]
-        node.refuse("In graph cycle path")
+        node.refuse(message)
         self.output.refused.append(node)
         
         # all the nodes depends on this
         for nei in graph[cur]:
-            self._remove_cycles(graph, nei, remove_ids, id_to_node)
+            self._reject_dependent_on(graph, nei, remove_ids, id_to_node)
         
             
     def _add_to_accepted(self, order: list[str], id_to_node: dict[str, BaseRequest]) -> None:

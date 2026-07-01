@@ -131,6 +131,71 @@ class TestProcessClassificationResult:
         strategy_wf.process_classification_result([r], [goal])
         assert len(strategy_wf.output.refused) == 1
 
+
+class TestFilterCandidates:
+    def test_no_refused_returns_candidates_unchanged(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        result = strategy_wf._filter_candidates([r], {r.id: r})
+        assert result == [r]
+
+    def test_dependent_of_refused_node_is_removed_and_refused(self, strategy_wf):
+        goal = _make_goal()
+        refused = _make_retrieval("task_1", goal_id=goal.id)
+        refused.refuse("low confidence")
+        strategy_wf.output.refused.append(refused)
+
+        dependent = _make_analyze("task_2", depends_on_ids=["task_1"], goal_id=goal.id)
+        id_to_node = {refused.id: refused, dependent.id: dependent}
+
+        result = strategy_wf._filter_candidates([dependent], id_to_node)
+
+        assert result == []
+        assert dependent in strategy_wf.output.refused
+        assert dependent._refusal is True
+        assert len(strategy_wf.output.refused) == 2
+        assert len(refused._details) == 1
+        assert len(dependent._details) == 1
+
+    def test_unrelated_candidate_is_kept(self, strategy_wf):
+        goal = _make_goal()
+        refused = _make_retrieval("task_1", goal_id=goal.id)
+        refused.refuse("low confidence")
+        refused.refuse("no matching goals")
+        strategy_wf.output.refused.append(refused)
+
+        unrelated = _make_retrieval("task_3", goal_id=goal.id, title="Other Book")
+        id_to_node = {refused.id: refused, unrelated.id: unrelated}
+
+        result = strategy_wf._filter_candidates([unrelated], id_to_node)
+
+        assert result == [unrelated]
+        assert unrelated not in strategy_wf.output.refused
+        assert len(strategy_wf.output.refused) == 1
+        assert len(refused._details) == 2
+
+    def test_propagates_transitively_through_chain(self, strategy_wf):
+        goal = _make_goal()
+        refused = _make_retrieval("task_1", goal_id=goal.id)
+        refused.refuse("low confidence")
+        refused.refuse("no matching goals")
+        strategy_wf.output.refused.append(refused)
+
+        mid = _make_analyze("task_2", depends_on_ids=["task_1"], goal_id=goal.id)
+        downstream = _make_analyze("task_3", depends_on_ids=["task_2"], goal_id=goal.id)
+        id_to_node = {refused.id: refused, mid.id: mid, downstream.id: downstream}
+
+        result = strategy_wf._filter_candidates([mid, downstream], id_to_node)
+
+        assert result == []
+        assert mid in strategy_wf.output.refused
+        assert downstream in strategy_wf.output.refused
+        assert len(strategy_wf.output.refused) == 3
+        assert len(refused._details) == 2
+        assert len(mid._details) == 1
+        assert len(downstream._details) == 1
+
+
+class TestAddToAccepted:
     def test_excess_strategies_go_to_buffer(self, strategy_wf):
         goal = _make_goal()
         strategy_wf.output.accepted = [
