@@ -58,6 +58,59 @@ def _make_goal(node_type=BookNodeTypeEnum.FIND_TITLE, goal_id=None, confidence=0
     return g
 
 
+class TestGetGraphIndegree:
+    def test_retrieval_only_has_zero_indegree_and_empty_graph(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        graph, indegree = strategy_wf._get_graph_indegree([r])
+        assert indegree[r.id] == 0
+        assert graph[r.id] == []
+
+    def test_single_dependency_increments_indegree_and_adds_edge(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        a = _make_analyze("task_2", depends_on_ids=["task_1"])
+        graph, indegree = strategy_wf._get_graph_indegree([r, a])
+        assert indegree[a.id] == 1
+        assert indegree[r.id] == 0
+        assert graph[r.id] == [a.id]
+        assert len(graph) == 1
+        assert len(indegree) == 2
+
+    def test_multiple_dependencies_sum_indegree(self, strategy_wf):
+        r1 = _make_retrieval("task_1", title="Book A")
+        r2 = _make_retrieval("task_2", title="Book B")
+        a = _make_analyze("task_3", depends_on_ids=["task_1", "task_2"])
+        graph, indegree = strategy_wf._get_graph_indegree([r1, r2, a])
+        assert indegree[a.id] == 2
+        assert indegree[r1.id] == 0
+        assert indegree[r2.id] == 0
+        assert graph[r1.id] == [a.id]
+        assert graph[r2.id] == [a.id]
+        assert len(graph) == 2
+        assert len(indegree) == 3
+
+    def test_fan_out_appends_all_dependents_to_same_edge(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        a1 = _make_analyze("task_2", depends_on_ids=["task_1"])
+        a2 = _make_analyze("task_3", depends_on_ids=["task_1"])
+        graph, indegree = strategy_wf._get_graph_indegree([r, a1, a2])
+        assert graph[r.id] == [a1.id, a2.id]
+        assert indegree[a1.id] == 1
+        assert indegree[a2.id] == 1
+
+    def test_dependency_outside_candidates_has_no_indegree_entry(self, strategy_wf):
+        # only the analyze node is passed in; its dependency was filtered out
+        # upstream and never gets its own indegree entry
+        a = _make_analyze("task_2", depends_on_ids=["task_1"])
+        graph, indegree = strategy_wf._get_graph_indegree([a])
+        assert "task_1" not in indegree
+        assert graph["task_1"] == [a.id]
+
+    def test_empty_candidates_returns_empty_graph_and_indegree(self, strategy_wf):
+        graph, indegree = strategy_wf._get_graph_indegree([])
+        assert dict(graph) == {}
+        assert dict(indegree) == {}
+
+
 class TestExecutionOrder:
     def test_single_retrieval(self, strategy_wf):
         r = _make_retrieval("task_1")
