@@ -36,7 +36,6 @@ class StrategyRequest(BaseModel):
     Each strategy should represent a discrete unit of work.
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
-
     strategies: list[REQUEST_CLASSES_UNION] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
@@ -80,13 +79,16 @@ class StrategyRequest(BaseModel):
 
         valid, invalid = [], []
         for item in raw:
-            if isinstance(item, BaseRequest):
-                valid.append(item)
-            elif isinstance(item, dict):
+            if isinstance(item, dict):
+                request_cls = NODE_TYPE_TO_CLS.get(item.get("node_type"))
+                if request_cls is None:
+                    invalid.append(item)
+                    continue
                 try:
-                    BaseRequest.model_validate(item)
+                    request_cls.model_validate(item)
                     valid.append(item)
-                except ValidationError:
+                except ValidationError as e:
+                    logger.exception(e)
                     invalid.append(item)
             else:
                 invalid.append(item)
