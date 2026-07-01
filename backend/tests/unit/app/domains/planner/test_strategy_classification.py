@@ -522,10 +522,10 @@ class TestCaptureAndFilter:
     def test_invalid_items_are_filtered_into_invalid_strategies(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
         r = _make_retrieval("task_1").model_dump()
-        instance = model(strategies=[{"no_id_key": "value"}, r])
+        instance = model(strategies=[{"no_id_key": "value"}, 3, r, None])
         assert len(instance.strategies) == 1
         assert instance.strategies[0].id == r["id"]
-        assert instance._invalid_strategies == [{"no_id_key": "value"}]
+        assert instance._invalid_strategies == [{"no_id_key": "value"}, 3, None]
 
     def test_strategies_truncated_to_max_overflow_captured(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
@@ -543,8 +543,8 @@ class TestCaptureAndFilter:
         model = StrategyRequest.build_model([FindByTitleRetrieval])
         r = _make_retrieval("task_1")
         instance = model(strategies=[r])
-        assert instance.strategies == []
-        assert instance._invalid_strategies == [r]
+        assert instance.strategies == [r]
+        assert instance._invalid_strategies == []
 
 
 class TestGetAcceptedIdToNode:

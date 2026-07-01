@@ -1,8 +1,6 @@
 Continue:
 
 3. update your tests (test all different graph cases)
-   * make sure it can remove the cycle paths
-   * retain information from LLM
    * add test for your messages
 4. before testing your BaseRequest
    * make a re-use able validator (should be good for list, str, etc...)

@@ -89,7 +89,11 @@ class StrategyRequest(BaseModel):
 
         valid, invalid = [], []
         for item in raw:
-            if isinstance(item, dict):
+            if isinstance(item, BaseRequest):
+                # NOTE: This might be important when you serializable
+                # and load back for continuation
+                valid.append(item)
+            elif isinstance(item, dict):
                 request_cls = NODE_TYPE_TO_CLS.get(item.get("node_type"))
                 if request_cls is None:
                     invalid.append(item)
