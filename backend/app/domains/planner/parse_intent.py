@@ -212,7 +212,8 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         tool_call = await self._run_llm_args_parse()
         parse_result = tool_call.function.parsed_arguments
         self.process_parse_result(parse_result)
-        await self.finalize_result(tool_call)
+        self._record_tool_call(tool_call)
+        await self.finalize_result()
         await self.generate_user_response()
         
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
@@ -229,7 +230,7 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         tool_call = assistant_msg.tool_calls[0]
         return tool_call
 
-    async def finalize_result(self, tool_call: ParsedFunctionToolCall) -> None:
+    def _record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
         self.messages.append(
             ToolMessage(
                 name=tool_call.function.name,
@@ -237,6 +238,8 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
                 content=self.output,
             )
         )
+
+    async def finalize_result(self) -> None:
         super().finalize_result(ok=bool(self.output.accepted_goals))
 
     async def generate_user_response(self) -> None:

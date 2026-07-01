@@ -306,6 +306,8 @@ def _mock_assistant_msg(parse_result=None):
     if parse_result is None:
         parse_result = _make_parse_result()
     tool_call = MagicMock()
+    tool_call.id = "call_1"
+    tool_call.function.name = "InitialParseRequest"
     tool_call.function.parsed_arguments = parse_result
     msg = MagicMock()
     msg.tool_calls = [tool_call]
