@@ -6,7 +6,7 @@ from collections import defaultdict
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.common.messages import UserMessage
+from app.common.messages import ToolMessage, UserMessage
 from app.domains.base_request import AnalyzeBaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import (
@@ -109,6 +109,85 @@ class TestGetGraphIndegree:
         graph, indegree = strategy_wf._get_graph_indegree([])
         assert dict(graph) == {}
         assert dict(indegree) == {}
+
+
+class TestSortGraph:
+    """Pure Kahn's-algorithm topological sort - given a raw graph/indegree,
+    independent of how _get_graph_indegree built them."""
+
+    def test_no_dependencies_all_nodes_in_order(self, strategy_wf):
+        indegree = defaultdict(int, {"task_1": 0, "task_2": 0})
+        order = strategy_wf._sort_graph(defaultdict(list), indegree)
+        assert set(order) == {"task_1", "task_2"}
+        assert len(order) == 2
+
+    def test_simple_chain_respects_dependency_order(self, strategy_wf):
+        indegree = defaultdict(int, {"task_1": 0, "task_2": 1})
+        graph = defaultdict(list, {"task_1": ["task_2"]})
+        order = strategy_wf._sort_graph(graph, indegree)
+        assert order == ["task_1", "task_2"]
+
+    def test_fan_in_both_predecessors_precede_dependent(self, strategy_wf):
+        indegree = defaultdict(int, {"task_1": 0, "task_2": 0, "task_3": 2})
+        graph = defaultdict(list, {"task_1": ["task_3"], "task_2": ["task_3"]})
+        order = strategy_wf._sort_graph(graph, indegree)
+        assert order.index("task_1") < order.index("task_3")
+        assert order.index("task_2") < order.index("task_3")
+
+    def test_cycle_produces_incomplete_order(self, strategy_wf):
+        indegree = defaultdict(int, {"task_1": 1, "task_2": 1})
+        graph = defaultdict(list, {"task_1": ["task_2"], "task_2": ["task_1"]})
+        order = strategy_wf._sort_graph(graph, indegree)
+        assert order == []
+        assert len(order) != len(indegree)
+
+    def test_empty_graph_returns_empty_order(self, strategy_wf):
+        order = strategy_wf._sort_graph(defaultdict(list), defaultdict(int))
+        assert order == []
+
+
+class TestCreateExecutionOrder:
+    """_create_execution_order = _sort_graph + cycle cleanup, exercised here
+    with hand-built graph/indegree rather than through _get_graph_indegree."""
+
+    def test_no_cycle_returns_full_order_unchanged(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        id_to_node = {r.id: r}
+        order = strategy_wf._create_execution_order(
+            defaultdict(list), defaultdict(int, {r.id: 0}), id_to_node
+        )
+        assert order == [r.id]
+        assert strategy_wf.output.refused == []
+
+    def test_cycle_nodes_removed_from_order_and_refused(self, strategy_wf):
+        a = _make_analyze("task_1", depends_on_ids=["task_2"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        id_to_node = {a.id: a, b.id: b}
+        graph = defaultdict(list, {"task_1": ["task_2"], "task_2": ["task_1"]})
+        indegree = defaultdict(int, {"task_1": 1, "task_2": 1})
+
+        order = strategy_wf._create_execution_order(graph, indegree, id_to_node)
+
+        assert order == []
+        assert a in strategy_wf.output.refused
+        assert b in strategy_wf.output.refused
+        # cycle_nodes is a set, so which of a/b gets the custom message vs.
+        # the recursive default varies - just confirm the custom message
+        # from _create_execution_order was actually used on one of them
+        assert "Rejected: Node in a cycle path" in a._details + b._details
+
+    def test_non_cycle_node_survives_alongside_a_cycle(self, strategy_wf):
+        a = _make_analyze("task_1", depends_on_ids=["task_2"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        r = _make_retrieval("task_3")
+        id_to_node = {a.id: a, b.id: b, r.id: r}
+        graph = defaultdict(list, {"task_1": ["task_2"], "task_2": ["task_1"]})
+        indegree = defaultdict(int, {"task_1": 1, "task_2": 1, "task_3": 0})
+
+        order = strategy_wf._create_execution_order(graph, indegree, id_to_node)
+
+        assert order == [r.id]
+        assert r not in strategy_wf.output.refused
 
 
 class TestExecutionOrder:
@@ -553,6 +632,34 @@ class TestFormatSystemGoals:
         data = json.loads(msg.content)
         assert len(data) == 2
         assert {d["id"] for d in data} == {g1.id, g2.id}
+
+
+class TestRecordToolCall:
+    def test_appends_tool_message(self, strategy_wf):
+        tool_call = MagicMock()
+        tool_call.id = "call_1"
+        tool_call.function.name = "StrategyRequest"
+
+        strategy_wf._record_tool_call(tool_call)
+
+        assert len(strategy_wf.messages) == 1
+        msg = strategy_wf.messages[0]
+        assert isinstance(msg, ToolMessage)
+        assert msg.name == "StrategyRequest"
+        assert msg.tool_call_id == "call_1"
+        assert msg.content is strategy_wf.output
+
+    def test_multiple_calls_append_multiple_messages(self, strategy_wf):
+        tool_call_1 = MagicMock(id="call_1")
+        tool_call_1.function.name = "StrategyRequest"
+        tool_call_2 = MagicMock(id="call_2")
+        tool_call_2.function.name = "StrategyRequest"
+
+        strategy_wf._record_tool_call(tool_call_1)
+        strategy_wf._record_tool_call(tool_call_2)
+
+        assert len(strategy_wf.messages) == 2
+        assert [m.tool_call_id for m in strategy_wf.messages] == ["call_1", "call_2"]
 
 
 class TestFinalizeResult:
