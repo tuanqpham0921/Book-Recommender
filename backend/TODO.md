@@ -1,6 +1,5 @@
 Continue:
 
-3. update your tests (test all different graph cases)
 4. before testing your BaseRequest
    * make a re-use able validator (should be good for list, str, etc...)
    * make sure you keep track of what comes back from LLM
@@ -21,7 +20,6 @@ Reminder:
 =======================================================================
 
 Unit Test:
-3. test all your planner logic (dag, accepted, etc...)
 4. test the base request and request schemas pre-post validators
     * create fake openAI response (with ints instead of strs for example)
     * more than the limit the amount of strings
@@ -54,19 +52,11 @@ Front End:
 =======================================================================
 
 Claude Suggestions (code review findings):
-1. [CRASH] Fix `g.refusal_reason` → `g.refusal_reasons` in parse_intent.py:179
-   * crashes generate_user_response any time a goal is refused
 2. [BUG] Token usage double-counted in app/common/workflow.py:64
    * run_llm_call adds token_usage twice (once via add_step, once manually) — remove line 64
 3. [LEAK] Cancel `orchestrator_task` on exception in chat_message.py:39
    * task keeps running into a dead SSE stream on client disconnect
 4. [SILENT ERROR] Replace HTTPException in SSE generator with a yield error event (chat_message.py:40)
-   * 200 OK already sent — raising HTTPException just closes the stream silently
-5. [LATENT] Add `@classmethod` to `validate_target_goal` model validator in base_request.py:134
-   * Pydantic v2 requires it for mode="before"; will hard-fail on future upgrade
-6. [TYPE] Fix `get_strategies_ids` return type: returns set, annotated as list (strategy_classification.py:255)
-7. [TEST] Replace `test_shared_messages_list_appended_by_children` — it only tests list.append, not orchestrator behavior
-8. [TEST] Fix `test_no_injection_when_retrieval_already_present` to assert set equality, not just length
 
 =======================================================================
 

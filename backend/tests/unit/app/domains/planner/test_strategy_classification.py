@@ -245,6 +245,45 @@ class TestCycleDetection:
         assert r._refusal is False
         assert r not in strategy_wf.output.refused
 
+    def test_three_node_cycle_is_fully_detected(self, strategy_wf):
+        # A -> B -> C -> A: no 2-node shortcut, exercises the full recursive
+        # walk around a longer cycle rather than a single back-and-forth hop
+        a = _make_analyze("task_1", depends_on_ids=["task_3"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        c = _make_analyze("task_3", depends_on_ids=["task_2"])
+        strategy_wf._build_execution_order([a, b, c])
+        assert strategy_wf.output.execution_order == []
+        assert len(strategy_wf.output.refused) == 3
+        assert a._refusal is True
+        assert b._refusal is True
+        assert c._refusal is True
+
+    def test_external_dependent_of_cycle_member_is_also_refused(self, strategy_wf):
+        # D depends on A, and A is part of the A<->B cycle - D's indegree can
+        # never reach 0 either, so it never resolves and gets rejected too.
+        # Note: D ends up in the same `cycle_nodes` set as A/B (anything that
+        # never resolves, not just the true cycle members), so whether D is
+        # visited directly by the outer loop or reached via A's recursion -
+        # and thus which of the two refusal messages it gets - depends on
+        # set iteration order. Only the outcome (rejected) is guaranteed.
+        a = _make_analyze("task_1", depends_on_ids=["task_2"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        d = _make_analyze("task_4", depends_on_ids=["task_1"])
+        strategy_wf._build_execution_order([a, b, d])
+        assert strategy_wf.output.execution_order == []
+        assert d in strategy_wf.output.refused
+        assert d._refusal is True
+        assert d._details  # some rejection reason was recorded
+
+    def test_two_independent_cycles_are_both_detected(self, strategy_wf):
+        a = _make_analyze("task_1", depends_on_ids=["task_2"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        c = _make_analyze("task_3", depends_on_ids=["task_4"])
+        d = _make_analyze("task_4", depends_on_ids=["task_3"])
+        strategy_wf._build_execution_order([a, b, c, d])
+        assert strategy_wf.output.execution_order == []
+        assert len(strategy_wf.output.refused) == 4
+
 
 class TestGetCandidates:
     def test_good_strategy_passes(self, strategy_wf):
@@ -275,6 +314,56 @@ class TestGetCandidates:
         result = strategy_wf._get_candidates([r], [goal])
         assert len(strategy_wf.output.refused) == 1
         assert len(result) == 0
+
+
+class TestPartialAcceptance:
+    """A realistic mixed batch - some strategies fail for entirely different
+    reasons at different pipeline stages (confidence, cascading dependency,
+    a cycle), while unrelated ones sail through untouched. Runs the same
+    three-stage sequence _create_dag uses: _get_candidates -> _filter_candidates
+    -> _build_execution_order."""
+
+    def test_mixed_batch_only_valid_independent_nodes_are_accepted(self, strategy_wf):
+        goal = _make_goal()
+
+        good1 = _make_retrieval("task_1", goal_id=goal.id, title="Good Book 1")
+        low_conf = _make_retrieval(
+            "task_2", goal_id=goal.id, title="Low Confidence Book", confidence=0.2
+        )
+        cascade = _make_analyze("task_3", depends_on_ids=["task_2"], goal_id=goal.id)
+        cycle_a = _make_analyze("task_4", depends_on_ids=["task_5"], goal_id=goal.id)
+        cycle_b = _make_analyze("task_5", depends_on_ids=["task_4"], goal_id=goal.id)
+        good2 = _make_retrieval("task_6", goal_id=goal.id, title="Good Book 2")
+
+        all_strategies = [good1, low_conf, cascade, cycle_a, cycle_b, good2]
+        id_to_node = {s.id: s for s in all_strategies}
+
+        candidates = strategy_wf._get_candidates(all_strategies, [goal])
+        candidates = strategy_wf._filter_candidates(candidates, id_to_node)
+        strategy_wf._build_execution_order(candidates)
+
+        assert strategy_wf.output.accepted == [good1, good2]
+        assert strategy_wf.output.execution_order == [good1.id, good2.id]
+        assert len(strategy_wf.output.refused) == 4
+        for node in (low_conf, cascade, cycle_a, cycle_b):
+            assert node in strategy_wf.output.refused
+
+    def test_each_refused_node_carries_its_own_reason(self, strategy_wf):
+        goal = _make_goal()
+
+        low_conf = _make_retrieval(
+            "task_2", goal_id=goal.id, title="Low Confidence Book", confidence=0.2
+        )
+        cascade = _make_analyze("task_3", depends_on_ids=["task_2"], goal_id=goal.id)
+        all_strategies = [low_conf, cascade]
+        id_to_node = {s.id: s for s in all_strategies}
+
+        candidates = strategy_wf._get_candidates(all_strategies, [goal])
+        candidates = strategy_wf._filter_candidates(candidates, id_to_node)
+        strategy_wf._build_execution_order(candidates)
+
+        assert any("Confidence" in d for d in low_conf._details)
+        assert any("Node depends on a rejected node" in d for d in cascade._details)
 
 
 class TestFilterCandidates:
@@ -410,6 +499,36 @@ class TestAddToAccepted:
         strategy_wf._add_to_accepted([r.id], {r.id: r})
         assert strategy_wf.output.accepted == [r]
         assert strategy_wf.output.buffer == []
+
+    def test_partial_batch_some_fit_remaining_capacity_some_overflow(self, strategy_wf):
+        # simulate a prior batch already having filled most of the capacity,
+        # then a new batch arrives where only some of it still fits
+        already_accepted = [
+            _make_retrieval(f"task_prior_{i}", title=f"Prior {i}")
+            for i in range(MAX_STRATEGIES - 2)
+        ]
+        strategy_wf.output.accepted = list(already_accepted)
+
+        new_batch = [
+            _make_retrieval(f"task_new_{i}", title=f"New {i}") for i in range(4)
+        ]
+        id_to_node = {n.id: n for n in new_batch}
+        order = [n.id for n in new_batch]
+
+        strategy_wf._add_to_accepted(order, id_to_node)
+
+        # only the first 2 of the new batch fit in the remaining capacity
+        assert strategy_wf.output.accepted == already_accepted + new_batch[:2]
+        assert strategy_wf.output.buffer == new_batch[2:]
+
+    def test_buffered_nodes_are_annotated_with_a_detail(self, strategy_wf):
+        strategy_wf.output.accepted = [
+            _make_retrieval(f"task_prior_{i}", title=f"Prior {i}")
+            for i in range(MAX_STRATEGIES)
+        ]
+        overflow = _make_retrieval("task_overflow")
+        strategy_wf._add_to_accepted([overflow.id], {overflow.id: overflow})
+        assert "Waiting over limit, waiting" in overflow._details
 
 
 class TestSetLlmId:
