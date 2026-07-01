@@ -237,7 +237,7 @@ class StrategyClassificationWorkflow(
         ]
         return AssistantMessage(content=json.dumps(payload))
         
-    def _set_llm_id(self, strategies: list[BaseRequest]) -> None:
+    def _set_llm_id(self, strategies: list[BaseRequest]) -> dict[str, str]:
         llm_to_internal_id = {}
         for strategy in strategies:
             llm_id = strategy.id
@@ -276,7 +276,7 @@ class StrategyClassificationWorkflow(
         strategies: list[BaseRequest],
         system_goals: list[SystemGoal],
         accepted_tuning: float = 0.7,
-    ):
+    ) -> list[BaseRequest]:
         """Validate confidence and goals ids"""
         accepted_goals_ids = {goal.id for goal in system_goals}
         pass_strategies = []
@@ -297,7 +297,9 @@ class StrategyClassificationWorkflow(
         
         return pass_strategies
             
-    def _get_graph_indegree(self, candidates):
+    def _get_graph_indegree(
+        self, candidates: list[BaseRequest]
+    ) -> tuple[defaultdict[str, list[str]], defaultdict[str, int]]:
         """ create the graph and indegree """
         graph = defaultdict(list)
         indegree = defaultdict(int)
@@ -313,7 +315,12 @@ class StrategyClassificationWorkflow(
                 
         return graph, indegree
 
-    def _create_execution_order(self, graph, indegree, id_to_node) -> list[str]:
+    def _create_execution_order(
+        self,
+        graph: defaultdict[str, list[str]],
+        indegree: defaultdict[str, int],
+        id_to_node: dict[str, BaseRequest],
+    ) -> list[str]:
         # Build adjacency list and indegree map
         order = self._sort_graph(graph, indegree)
         
@@ -329,7 +336,11 @@ class StrategyClassificationWorkflow(
         
         return order    
     
-    def _sort_graph(self, graph, indegree):
+    def _sort_graph(
+        self,
+        graph: defaultdict[str, list[str]],
+        indegree: defaultdict[str, int],
+    ) -> list[str]:
         """ Sort the graph and return the indegree"""
         
         # Start with nodes that have no dependencies
@@ -345,7 +356,13 @@ class StrategyClassificationWorkflow(
                     queue.append(neighbor)
         return order
             
-    def _remove_cycles(self, graph, cur, remove_ids, id_to_node) -> None:
+    def _remove_cycles(
+        self,
+        graph: defaultdict[str, list[str]],
+        cur: str,
+        remove_ids: set[str],
+        id_to_node: dict[str, BaseRequest],
+    ) -> None:
         """Remove cycles from the dependency graph"""
         if cur in remove_ids:
             return
@@ -361,7 +378,7 @@ class StrategyClassificationWorkflow(
             self._remove_cycles(graph, nei, remove_ids, id_to_node)
         
             
-    def _add_to_accepted(self, order, id_to_node):
+    def _add_to_accepted(self, order: list[str], id_to_node: dict[str, BaseRequest]) -> None:
         """ Add as mainly low level as possible for parrallelism"""
         for id in order:
             node = id_to_node[id]
