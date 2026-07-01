@@ -97,12 +97,14 @@ class ToolMessage(BaseMessage):
 
     def to_openai_dict(self) -> dict:
         # OpenAI tool messages require string content and no extra fields
-        # TODO: add unit tests for the new logic
         # content can be pydantic
         content = self.content
-        jsonable = to_serializable(content)
-        jsonable = remove_empty_values(jsonable)
-        content = json.dumps(jsonable)
+        if content is None:
+            content = ""
+        elif not isinstance(content, str):
+            jsonable = to_serializable(content)
+            jsonable = remove_empty_values(jsonable)
+            content = json.dumps(jsonable)
 
         return {
             "role": self.role,

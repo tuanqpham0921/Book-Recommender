@@ -1,7 +1,6 @@
 Continue:
 
 3. update your tests (test all different graph cases)
-   * add test for your messages
 4. before testing your BaseRequest
    * make a re-use able validator (should be good for list, str, etc...)
    * make sure you keep track of what comes back from LLM

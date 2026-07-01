@@ -7,6 +7,7 @@ from openai.types.chat.parsed_function_tool_call import (
     ParsedFunction,
     ParsedFunctionToolCall,
 )
+from pydantic import BaseModel, PrivateAttr
 
 from app.common.messages import (
     AssistantMessage,
@@ -15,6 +16,11 @@ from app.common.messages import (
     UserMessage,
 )
 from common.operation import OperationResult, TokenUsage
+
+
+class _FakeResult(BaseModel):
+    title: str
+    _internal_note: str = PrivateAttr(default="fetched via cache")
 
 
 def _make_tool_call(
@@ -120,6 +126,48 @@ class TestToolMessageToOpenaiDict:
     def test_role_is_always_tool(self):
         msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content="ok")
         assert msg.role == "tool"
+
+    def test_pydantic_content_serialized_including_private_attrs(self):
+        msg = ToolMessage(
+            name="FindByTitle", tool_call_id="call_1", content=_FakeResult(title="Dune")
+        )
+        result = msg.to_openai_dict()
+        assert result["content"] == json.dumps(
+            {"title": "Dune", "_internal_note": "fetched via cache"}
+        )
+
+    def test_empty_dict_content_serialized_as_empty_json_object(self):
+        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content={})
+        result = msg.to_openai_dict()
+        assert result["content"] == "{}"
+
+    def test_empty_list_content_serialized_as_empty_json_array(self):
+        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content=[])
+        result = msg.to_openai_dict()
+        assert result["content"] == "[]"
+
+    def test_none_content_becomes_empty_string(self):
+        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content=None)
+        result = msg.to_openai_dict()
+        assert result["content"] == ""
+
+    def test_falsy_non_none_scalars_are_still_stringified(self):
+        # 0 and False must not be treated like None - they're meaningful
+        # tool output, not "no content"
+        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content=0)
+        assert msg.to_openai_dict()["content"] == "0"
+
+        msg = ToolMessage(name="FindByTitle", tool_call_id="call_1", content=False)
+        assert msg.to_openai_dict()["content"] == "false"
+
+    def test_none_values_stripped_from_dict_content(self):
+        msg = ToolMessage(
+            name="FindByTitle",
+            tool_call_id="call_1",
+            content={"title": "Dune", "author": None},
+        )
+        result = msg.to_openai_dict()
+        assert result["content"] == json.dumps({"title": "Dune"})
 
 
 class TestToolMessageExecute:
