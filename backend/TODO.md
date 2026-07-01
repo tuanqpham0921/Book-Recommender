@@ -1,8 +1,4 @@
 Continue:
-* make sure duplicate tasks are removed
-   * same id but different content (vs same id same content)
-   * different id same content(?)
-* when rejecting a request, make sure to reject all the ones depends_on it
 
 3. update your tests (test all different graph cases)
    * make sure it can remove the cycle paths

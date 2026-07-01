@@ -1,4 +1,5 @@
 """Tests for StrategyClassificationWorkflow pure logic methods."""
+
 import json
 from collections import defaultdict
 
@@ -17,11 +18,14 @@ from app.domains.planner.parse_intent import SystemGoal
 from app.domains.planner.strategy_classification import MAX_STRATEGIES, StrategyRequest
 from app.domains.registry import BOOK_RETRIEVAL_CLASSES
 
+
 class _FakeAnalyze(AnalyzeBaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
 
 
-def _make_retrieval(id_str="task_1", goal_id="goal_a1b2c3d4", title="Test Book", confidence=0.9):
+def _make_retrieval(
+    id_str="task_1", goal_id="goal_a1b2c3d4", title="Test Book", confidence=0.9
+):
     return FindByTitleRetrieval(
         id=id_str,
         title=title,
@@ -52,6 +56,7 @@ def _make_goal(node_type=BookNodeTypeEnum.FIND_TITLE, goal_id=None, confidence=0
     if goal_id:
         g._id = goal_id
     return g
+
 
 class TestExecutionOrder:
     def test_single_retrieval(self, strategy_wf):
@@ -238,7 +243,9 @@ class TestRemoveDuplicates:
         assert result == [r1, dependent]
         assert dependent.get_depends_on() == ["task_1"]
 
-    def test_same_content_different_goal_is_deduplicated_and_goals_merged(self, strategy_wf):
+    def test_same_content_different_goal_is_deduplicated_and_goals_merged(
+        self, strategy_wf
+    ):
         # same title, but each targets a different goal - still the same
         # underlying task, so the survivor should carry both goal ids
         r1 = _make_retrieval("task_1", title="Same Book", goal_id="goal_a1b2c3d4")
@@ -252,7 +259,10 @@ class TestRemoveDuplicates:
 
 class TestAddToAccepted:
     def test_excess_strategies_go_to_buffer(self, strategy_wf):
-        nodes = [_make_retrieval(f"task_{i}", title=f"Book {i}") for i in range(MAX_STRATEGIES)]
+        nodes = [
+            _make_retrieval(f"task_{i}", title=f"Book {i}")
+            for i in range(MAX_STRATEGIES)
+        ]
         extra = _make_retrieval("task_extra")
         id_to_node = {n.id: n for n in nodes + [extra]}
         order = [n.id for n in nodes] + [extra.id]
@@ -554,7 +564,9 @@ class TestRemoveCycles:
         r = _make_retrieval("task_1")
         graph = defaultdict(list)
         id_to_node = {r.id: r}
-        strategy_wf._reject_dependent_on(graph, r.id, set(), id_to_node, message="custom test reason")
+        strategy_wf._reject_dependent_on(
+            graph, r.id, set(), id_to_node, message="custom test reason"
+        )
         assert "Rejected: custom test reason" in r._details
 
 
@@ -568,7 +580,9 @@ class TestRun:
         goal = _make_goal()
         r = _make_retrieval("task_1", goal_id=goal.id)
         # capture_and_filter only accepts raw dicts, not already-built instances
-        parse_result = StrategyRequest.build_model([FindByTitleRetrieval])(strategies=[r.model_dump()])
+        parse_result = StrategyRequest.build_model([FindByTitleRetrieval])(
+            strategies=[r.model_dump()]
+        )
 
         tool_call = MagicMock()
         tool_call.id = "call_1"

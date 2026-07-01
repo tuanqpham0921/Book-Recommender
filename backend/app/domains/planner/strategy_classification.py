@@ -4,7 +4,14 @@ from typing import Any
 from functools import reduce
 from operator import or_
 from collections import defaultdict, deque
-from pydantic import BaseModel, Field, PrivateAttr, create_model, model_validator, ValidationError
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    create_model,
+    model_validator,
+    ValidationError,
+)
 from openai.types.chat import ParsedFunctionToolCall
 from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
@@ -14,7 +21,7 @@ from app.domains.base_request import BaseRequest
 from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
-    NODE_TYPE_TO_CLS
+    NODE_TYPE_TO_CLS,
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -23,12 +30,14 @@ from common.utils import uuid_8, to_serializable, remove_empty_values
 from config import BookConstraints, BookGuides
 from common.operation import task
 
-
 logger = logging.getLogger(__name__)
 
-STRATEGY_CLASSIFICATION_PROMPT_PATH = "domains/planner/prompts/2_strategy_classification.txt"
+STRATEGY_CLASSIFICATION_PROMPT_PATH = (
+    "domains/planner/prompts/2_strategy_classification.txt"
+)
 
 MAX_STRATEGIES = 15
+
 
 class StrategyRequest(BaseModel):
     """
@@ -36,12 +45,13 @@ class StrategyRequest(BaseModel):
     Each strategy should represent a discrete unit of work.
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
+
     strategies: list[BaseModel] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
         description="List of strategies generated from the query",
     )
-    
+
     # invisible to LLM output
     # internal use only
     _overflow_strategies: list = PrivateAttr(default_factory=list)
@@ -59,7 +69,7 @@ class StrategyRequest(BaseModel):
 
         return create_model(
             "StrategyRequest",
-             __base__=StrategyRequest,
+            __base__=StrategyRequest,
             strategies=(
                 list[strategy_union],
                 Field(
@@ -70,10 +80,10 @@ class StrategyRequest(BaseModel):
             ),
         )
 
-    @model_validator(mode='wrap')
+    @model_validator(mode="wrap")
     @classmethod
     def capture_and_filter(cls, data, handler):
-        raw = data.get('strategies', []) if isinstance(data, dict) else []
+        raw = data.get("strategies", []) if isinstance(data, dict) else []
         if not isinstance(raw, list):
             raw = [raw]
 
@@ -92,10 +102,10 @@ class StrategyRequest(BaseModel):
                     invalid.append(item)
             else:
                 invalid.append(item)
-        
+
         if isinstance(data, dict):
-            data['strategies'] = valid[:MAX_STRATEGIES]
-        
+            data["strategies"] = valid[:MAX_STRATEGIES]
+
         instance = handler(data)  # Pydantic builds the instance
         instance._overflow_strategies = valid[MAX_STRATEGIES:]
         instance._invalid_strategies = invalid
@@ -112,7 +122,7 @@ class StrategyClassificationOutput(UserFacingOutput):
     refused: list[BaseModel] = Field(default_factory=list)
 
     invalid: list[Any] = Field(default_factory=list)
-    
+
     def to_summary(self) -> dict[str, bool | int | list[str]]:
         return {
             "strategy_ids": [strategy.id for strategy in self.accepted],
@@ -121,7 +131,7 @@ class StrategyClassificationOutput(UserFacingOutput):
     def get_accepted_id_to_node(self):
         """Return dict of node_id -> serialized node data."""
         return {node.id: node for node in self.accepted}
-    
+
     def get_refused_id_to_node(self):
         """Return dict of node_id -> serialized node data."""
         return {node.id: node for node in self.refused}
@@ -137,7 +147,11 @@ class StrategyClassificationWorkflow(
     tool_models = [StrategyRequest]
 
     def __init__(
-        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient, messages=None
+        self,
+        sse_stream: SSEStream,
+        user_message: UserMessage,
+        llm_client: OpenAIClient,
+        messages=None,
     ):
         super().__init__(
             llm_client=llm_client,
@@ -169,28 +183,32 @@ class StrategyClassificationWorkflow(
 
         self._record_tool_call(tool_call)
         self.finalize_result()
-        
+
     @task
     async def _create_dag(self, parse_result, system_goals) -> None:
         if parse_result is None:
             raise ValueError("No parse_result provided")
-        
+
         if parse_result._invalid_strategies:
-            logger.warning(f"LLM created {len(parse_result._invalid_strategies)} invalid strategies")
+            logger.warning(
+                f"LLM created {len(parse_result._invalid_strategies)} invalid strategies"
+            )
             self.output.invalid = parse_result._invalid_strategies
-        
+
         if parse_result._overflow_strategies:
-            logger.warning(f"LLM created {len(parse_result._overflow_strategies)} overflow strategies")
-        
+            logger.warning(
+                f"LLM created {len(parse_result._overflow_strategies)} overflow strategies"
+            )
+
         all_strategies = parse_result.strategies + parse_result._overflow_strategies
         all_strategies = self._remove_duplicates(all_strategies)
-        
+
         # assign and validate ids
         llm_to_internal_id = self._set_llm_id(all_strategies)
         self._map_dependencies_to_internal_ids(all_strategies, llm_to_internal_id)
- 
+
         # process the goals and confidence
-        id_to_node = {task.id:task for task in all_strategies}
+        id_to_node = {task.id: task for task in all_strategies}
         candidates = self._get_candidates(all_strategies, system_goals)
         candidates = self._filter_candidates(candidates, id_to_node)
 
@@ -206,8 +224,10 @@ class StrategyClassificationWorkflow(
         self._add_to_accepted(order, id_to_node)
         self.output.execution_order = [strat.id for strat in self.output.accepted]
         return order
-    
-    async def _run_llm_args_parse(self, system_goals: list[SystemGoal]) -> ParsedFunctionToolCall:
+
+    async def _run_llm_args_parse(
+        self, system_goals: list[SystemGoal]
+    ) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
             prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH,
             book_constraints=str(BookConstraints()),
@@ -223,8 +243,10 @@ class StrategyClassificationWorkflow(
         assistant_msg = await self.run_llm_call(req)
         tool_call = assistant_msg.tool_calls[0]
         return tool_call
-    
-    def _build_strategy_request(self, system_goals: list[SystemGoal]) -> StrategyRequest:
+
+    def _build_strategy_request(
+        self, system_goals: list[SystemGoal]
+    ) -> StrategyRequest:
         request_classes = set()
         for goal in system_goals:
             if goal.target_node_type.value in NODE_TYPE_TO_CLS:
@@ -247,7 +269,7 @@ class StrategyClassificationWorkflow(
                 ]
                 if not retrieval_cls:
                     logger.warning(
-                        f"No retrieval class for analyze class. Injecting all retrieval classes."
+                        "No retrieval class for analyze class. Injecting all retrieval classes."
                     )
                     inject_classes.update(BOOK_RETRIEVAL_CLASSES)
 
@@ -262,8 +284,14 @@ class StrategyClassificationWorkflow(
             for goal in system_goals
         ]
         return AssistantMessage(content=json.dumps(payload))
-    
-    DUPLICATE_CONTENT_IGNORE_KEYS = {"id", "reasoning", "confidence", "description", "target_goal"}
+
+    DUPLICATE_CONTENT_IGNORE_KEYS = {
+        "id",
+        "reasoning",
+        "confidence",
+        "description",
+        "target_goal",
+    }
 
     def _remove_duplicates(self, strategies: list[BaseRequest]) -> list[BaseRequest]:
         id_to_node = {strat.id: strat for strat in strategies}
@@ -284,13 +312,21 @@ class StrategyClassificationWorkflow(
 
         return self._reassign_dependencies(strategies, map_to_existing)
 
-    def _merge_target_goal(self, canonical: BaseRequest, duplicate: BaseRequest) -> None:
+    def _merge_target_goal(
+        self, canonical: BaseRequest, duplicate: BaseRequest
+    ) -> None:
         """Keep the goal(s) a dropped duplicate served attached to the surviving node."""
-        if not hasattr(canonical, "target_goal") or not hasattr(duplicate, "target_goal"):
+        if not hasattr(canonical, "target_goal") or not hasattr(
+            duplicate, "target_goal"
+        ):
             return
-        canonical.target_goal = list(dict.fromkeys(canonical.target_goal + duplicate.target_goal))
-    
-    def _reassign_dependencies(self, strategies: list[BaseRequest], map_to_existing: dict[str, str]) -> list[BaseRequest]:
+        canonical.target_goal = list(
+            dict.fromkeys(canonical.target_goal + duplicate.target_goal)
+        )
+
+    def _reassign_dependencies(
+        self, strategies: list[BaseRequest], map_to_existing: dict[str, str]
+    ) -> list[BaseRequest]:
         if not map_to_existing:
             return strategies
         logger.warning(f"There are {len(map_to_existing)} of duplicate tasks")
@@ -301,9 +337,9 @@ class StrategyClassificationWorkflow(
             for i in range(len(depends_on)):
                 if depends_on[i] in map_to_existing:
                     depends_on[i] = map_to_existing[depends_on[i]]
-                    
+
         return [strat for strat in strategies if strat.id not in map_to_existing]
-        
+
     def _set_llm_id(self, strategies: list[BaseRequest]) -> dict[str, str]:
         llm_to_internal_id = {}
         for strategy in strategies:
@@ -312,16 +348,16 @@ class StrategyClassificationWorkflow(
                 # create new one so tasks depends on this gets refused
                 llm_id = f"task_{uuid_8()}"
                 strategy.add_details("duplicate llm_id, created a new one")
-                
+
             strategy._llm_id = llm_id
             strategy.id = f"task_{uuid_8()}"
             llm_to_internal_id[llm_id] = strategy.id
-        
+
         return llm_to_internal_id
 
-    def _map_dependencies_to_internal_ids(self, 
-                                         strategies: list[BaseRequest], 
-                                         llm_to_internal_id: dict[str, str]) -> None:
+    def _map_dependencies_to_internal_ids(
+        self, strategies: list[BaseRequest], llm_to_internal_id: dict[str, str]
+    ) -> None:
         for strategy in strategies:
             if not hasattr(strategy, "depends_on"):
                 continue
@@ -348,25 +384,29 @@ class StrategyClassificationWorkflow(
         accepted_goals_ids = {goal.id for goal in system_goals}
         candidates = []
         for strategy in strategies:
-            missing_goals = [g for g in strategy.target_goal if g not in accepted_goals_ids]
+            missing_goals = [
+                g for g in strategy.target_goal if g not in accepted_goals_ids
+            ]
             if missing_goals:
                 strategy.refuse(f"Missing target goals: {missing_goals}")
             elif not strategy.target_goal:
                 strategy.refuse("No target goals provided")
-            
+
             if strategy.confidence < accepted_tuning:
-                strategy.refuse(f"Confidence {strategy.confidence} below accepted tuning")
-            
+                strategy.refuse(
+                    f"Confidence {strategy.confidence} below accepted tuning"
+                )
+
             if strategy.refusal:
                 self.output.refused.append(strategy)
             else:
                 candidates.append(strategy)
-            
+
         return candidates
-    
-    def _filter_candidates(self, 
-                           candidates: list[BaseRequest],
-                           id_to_node: dict[str, BaseRequest]) -> list[BaseRequest]:
+
+    def _filter_candidates(
+        self, candidates: list[BaseRequest], id_to_node: dict[str, BaseRequest]
+    ) -> list[BaseRequest]:
         if not len(self.output.refused):
             return candidates
         rejected = self.output.get_refused_id_to_node()
@@ -375,28 +415,25 @@ class StrategyClassificationWorkflow(
         for rejected_id in rejected:
             remove_ids.add(rejected_id)
             for nei in graph[rejected_id]:
-                self._reject_dependent_on(graph, 
-                                        nei, 
-                                        remove_ids, 
-                                        id_to_node)
+                self._reject_dependent_on(graph, nei, remove_ids, id_to_node)
         return [strat for strat in candidates if strat.id not in remove_ids]
-            
+
     def _get_graph_indegree(
         self, candidates: list[BaseRequest]
     ) -> tuple[defaultdict[str, list[str]], defaultdict[str, int]]:
-        """ create the graph and indegree """
+        """create the graph and indegree"""
         graph = defaultdict(list)
         indegree = defaultdict(int)
-        for task in candidates:
-            task_id = task.id
+        for strat in candidates:
+            task_id = strat.id
             if not hasattr(task, "depends_on"):
                 indegree[task_id] = 0
                 continue
-            
-            for dep in task.depends_on:
+
+            for dep in strat.depends_on:
                 graph[dep].append(task_id)
                 indegree[task_id] += 1
-                
+
         return graph, indegree
 
     def _create_execution_order(
@@ -407,7 +444,7 @@ class StrategyClassificationWorkflow(
     ) -> list[str]:
         # Build adjacency list and indegree map
         order = self._sort_graph(graph, indegree)
-        
+
         # Check for cycles in the dependency graph
         if len(order) != len(indegree):
             logger.warning("Cycle detected in dependency graph")
@@ -415,23 +452,24 @@ class StrategyClassificationWorkflow(
             cycle_nodes = set(indegree) - set(order)
             for cycle_node in cycle_nodes:
                 self._reject_dependent_on(
-                    graph, 
-                    cycle_node, 
-                    remove_ids, 
+                    graph,
+                    cycle_node,
+                    remove_ids,
                     id_to_node,
-                    message="Node in a cycle path")
+                    message="Node in a cycle path",
+                )
 
             order = [id for id in order if id not in remove_ids]
-        
-        return order    
-    
+
+        return order
+
     def _sort_graph(
         self,
         graph: defaultdict[str, list[str]],
         indegree: defaultdict[str, int],
     ) -> list[str]:
-        """ Sort the graph and return the indegree"""
-        
+        """Sort the graph and return the indegree"""
+
         # Start with nodes that have no dependencies
         queue = deque([t for t, d in indegree.items() if d == 0])
         order = []
@@ -444,40 +482,41 @@ class StrategyClassificationWorkflow(
                 if indegree[neighbor] == 0:
                     queue.append(neighbor)
         return order
-            
+
     def _reject_dependent_on(
         self,
         graph: defaultdict[str, list[str]],
         cur: str,
         remove_ids: set[str],
         id_to_node: dict[str, BaseRequest],
-        message: str = "Node depends on a rejected node"
+        message: str = "Node depends on a rejected node",
     ) -> None:
         """Remove rejected nodes from the dependency graph"""
         if cur in remove_ids:
             return
-        
+
         # refuse this node
         remove_ids.add(cur)
         node = id_to_node[cur]
         node.refuse(message)
         self.output.refused.append(node)
-        
+
         # all the nodes depends on this
         for nei in graph[cur]:
             self._reject_dependent_on(graph, nei, remove_ids, id_to_node)
-        
-            
-    def _add_to_accepted(self, order: list[str], id_to_node: dict[str, BaseRequest]) -> None:
-        """ Add as mainly low level as possible for parrallelism"""
+
+    def _add_to_accepted(
+        self, order: list[str], id_to_node: dict[str, BaseRequest]
+    ) -> None:
+        """Add as mainly low level as possible for parrallelism"""
         for id in order:
             node = id_to_node[id]
             if len(self.output.accepted) < MAX_STRATEGIES:
                 self.output.accepted.append(node)
             else:
                 node.add_details("Waiting over limit, waiting")
-                self.output.buffer.append(node)        
-        
+                self.output.buffer.append(node)
+
     def _record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
         self.messages.append(
             ToolMessage(
@@ -488,6 +527,4 @@ class StrategyClassificationWorkflow(
         )
 
     def finalize_result(self) -> None:
-        super().finalize_result(
-            ok=bool(self.output.accepted)
-        )
+        super().finalize_result(ok=bool(self.output.accepted))
