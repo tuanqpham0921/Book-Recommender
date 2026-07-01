@@ -106,6 +106,13 @@ class BaseRequest(BaseModel):
             return MIN_CONFIDENCE
         return float(value)
 
+    @classmethod
+    def rebuild_json(cls, data):
+        if not isinstance(data, dict):
+            raise TypeError(f"Data is of type {type(data)}, expected dict")
+        # use the node types to rebuild
+        raise NotImplementedError("Rebuild Json is not implmented yet")
+        
 
 class DomainRequest(BaseRequest):
     target_goal: list[str] = Field(
