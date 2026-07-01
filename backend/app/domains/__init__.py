@@ -1,6 +1,7 @@
 from app.domains.registry import (
     NODE_TYPE_TO_CLS,
     REQUEST_CLASSES,
+    REQUEST_CLASSES_UNION,
     get_request_class,
 )
 from app.domains.planner import ConversationOrchestrator
@@ -10,6 +11,7 @@ __all__ = [
     "NODE_TYPE_TO_CLS",
     "NodeTypeEnum",
     "REQUEST_CLASSES",
+    "REQUEST_CLASSES_UNION",
     "get_request_class",
     "ConversationOrchestrator"
 ]

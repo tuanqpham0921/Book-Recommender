@@ -2,14 +2,12 @@ Continue:
 * make sure duplicate tasks are removed
    * same id but different content (vs same id same content)
    * different id same content(?)
+* when rejecting a request, make sure to reject all the ones depends_on it
 
 0. make sure it runs ends to end
    * maybe write a unit test that run end to end
    * check the json file saved has all the fields (private and such)
 
-1. look at your new AnyRequestType (make sure it doesn't have feedback)
-   * go back to the old format and see if it works now
-   * might need one for capbilities and 1 for planner types
 3. update your tests (test all different graph cases)
    * make sure it can remove the cycle paths
    * retain information from LLM
