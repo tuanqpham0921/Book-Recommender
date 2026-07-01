@@ -13,10 +13,6 @@ Current:
 Reminder:
 1. need to create one executor for @task and workflow
 2. add timeout to @task and @workflow (should be able to handle them)
-3. might need to add back the tool calls so there's a link between Assistant msg and tool
-   * you might run into problems when loading messages back
-4. add test query with prompt injections
-   * ex: user "ignore system prompt..."
 =======================================================================
 
 Unit Test:
