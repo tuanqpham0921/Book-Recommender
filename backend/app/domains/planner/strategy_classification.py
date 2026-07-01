@@ -167,7 +167,8 @@ class StrategyClassificationWorkflow(
             self.result.message = self.failure_message
             return
 
-        self.finalize_result(tool_call)
+        self._record_tool_call(tool_call)
+        self.finalize_result()
         
     @task
     async def _create_dag(self, parse_result, system_goals) -> None:
@@ -192,13 +193,19 @@ class StrategyClassificationWorkflow(
         id_to_node = {task.id:task for task in all_strategies}
         candidates = self._get_candidates(all_strategies, system_goals)
         candidates = self._filter_candidates(candidates, id_to_node)
-        
-        # topological sort and remove bad nodes
+
+        self._build_execution_order(candidates)
+
+    def _build_execution_order(self, candidates: list[BaseRequest]) -> list[str]:
+        """Topologically sort candidates, drop cycle-involved nodes, and
+        populate self.output.accepted/execution_order."""
+        id_to_node = {c.id: c for c in candidates}
         graph, indegree = self._get_graph_indegree(candidates)
         order = self._create_execution_order(graph, indegree, id_to_node)
-        
+
         self._add_to_accepted(order, id_to_node)
         self.output.execution_order = [strat.id for strat in self.output.accepted]
+        return order
     
     async def _run_llm_args_parse(self, system_goals: list[SystemGoal]) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
@@ -471,8 +478,7 @@ class StrategyClassificationWorkflow(
                 node.add_details("Waiting over limit, waiting")
                 self.output.buffer.append(node)        
         
-    def finalize_result(self, tool_call: ParsedFunctionToolCall) -> None:
-        # NOTE: here you can do output.validate?
+    def _record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
         self.messages.append(
             ToolMessage(
                 name=tool_call.function.name,
@@ -480,6 +486,8 @@ class StrategyClassificationWorkflow(
                 content=self.output,
             )
         )
+
+    def finalize_result(self) -> None:
         super().finalize_result(
             ok=bool(self.output.accepted)
         )

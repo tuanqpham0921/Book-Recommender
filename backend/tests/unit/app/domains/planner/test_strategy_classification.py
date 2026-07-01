@@ -1,5 +1,7 @@
 """Tests for StrategyClassificationWorkflow pure logic methods."""
 import json
+from collections import defaultdict
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -51,34 +53,29 @@ def _make_goal(node_type=BookNodeTypeEnum.FIND_TITLE, goal_id=None, confidence=0
         g._id = goal_id
     return g
 
-
 class TestExecutionOrder:
     def test_single_retrieval(self, strategy_wf):
         r = _make_retrieval("task_1")
-        strategy_wf.output.accepted = [r]
-        strategy_wf.create_execution_order()
+        strategy_wf._build_execution_order([r])
         assert strategy_wf.output.execution_order == [r.id]
 
     def test_simple_chain(self, strategy_wf):
         r = _make_retrieval("task_1")
         a = _make_analyze("task_2", depends_on_ids=["task_1"])
-        strategy_wf.output.accepted = [r, a]
-        strategy_wf.create_execution_order()
+        strategy_wf._build_execution_order([r, a])
         assert strategy_wf.output.execution_order == [r.id, a.id]
 
     def test_parallel_retrievals(self, strategy_wf):
         r1 = _make_retrieval("task_1", title="Book A")
         r2 = _make_retrieval("task_2", title="Book B")
-        strategy_wf.output.accepted = [r1, r2]
-        strategy_wf.create_execution_order()
+        strategy_wf._build_execution_order([r1, r2])
         assert set(strategy_wf.output.execution_order) == {r1.id, r2.id}
 
     def test_fan_in_respects_dependency_order(self, strategy_wf):
         r1 = _make_retrieval("task_1", title="Book A")
         r2 = _make_retrieval("task_2", title="Book B")
         a = _make_analyze("task_3", depends_on_ids=["task_1", "task_2"])
-        strategy_wf.output.accepted = [r1, r2, a]
-        strategy_wf.create_execution_order()
+        strategy_wf._build_execution_order([r1, r2, a])
         order = strategy_wf.output.execution_order
         assert order.index(r1.id) < order.index(a.id)
         assert order.index(r2.id) < order.index(a.id)
@@ -88,48 +85,59 @@ class TestCycleDetection:
     def test_cycle_produces_empty_execution_order(self, strategy_wf):
         a = _make_analyze("task_1", depends_on_ids=["task_2"])
         b = _make_analyze("task_2", depends_on_ids=["task_1"])
-        strategy_wf.output.accepted = [a, b]
-        strategy_wf.create_execution_order()
+        strategy_wf._build_execution_order([a, b])
         assert strategy_wf.output.execution_order == []
 
     def test_cycle_moves_nodes_to_refused(self, strategy_wf):
         a = _make_analyze("task_1", depends_on_ids=["task_2"])
         b = _make_analyze("task_2", depends_on_ids=["task_1"])
-        strategy_wf.output.accepted = [a, b]
-        strategy_wf.create_execution_order()
+        strategy_wf._build_execution_order([a, b])
         assert len(strategy_wf.output.refused) == 2
         assert len(strategy_wf.output.accepted) == 0
         assert a._refusal is True
         assert b._refusal is True
 
+    def test_non_cycle_nodes_are_not_refused(self, strategy_wf):
+        # task_1/task_2 form a cycle, task_3 has no dependencies and should
+        # pass through untouched
+        a = _make_analyze("task_1", depends_on_ids=["task_2"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        r = _make_retrieval("task_3")
+        strategy_wf._build_execution_order([a, b, r])
+        assert strategy_wf.output.execution_order == [r.id]
+        assert r._refusal is False
+        assert r not in strategy_wf.output.refused
 
-class TestProcessClassificationResult:
-    def test_good_strategy_goes_to_accepted(self, strategy_wf):
+
+class TestGetCandidates:
+    def test_good_strategy_passes(self, strategy_wf):
         goal = _make_goal()
         r = _make_retrieval(id_str="task_1", goal_id=goal.id)
-        strategy_wf.process_classification_result([r], [goal])
-        assert len(strategy_wf.output.accepted) == 1
+        result = strategy_wf._get_candidates([r], [goal])
+        assert result == [r]
         assert len(strategy_wf.output.refused) == 0
 
     def test_low_confidence_goes_to_refused(self, strategy_wf):
         goal = _make_goal()
         r = _make_retrieval(id_str="task_1", goal_id=goal.id, confidence=0.3)
-        strategy_wf.process_classification_result([r], [goal])
+        result = strategy_wf._get_candidates([r], [goal])
+        assert result == []
         assert len(strategy_wf.output.refused) == 1
-        assert len(strategy_wf.output.accepted) == 0
 
     def test_missing_target_goal_goes_to_refused(self, strategy_wf):
         goal = _make_goal()
         r = _make_retrieval(id_str="task_1", goal_id="goal_ffffffff")
-        strategy_wf.process_classification_result([r], [goal])
+        result = strategy_wf._get_candidates([r], [goal])
         assert len(strategy_wf.output.refused) == 1
+        assert result == []
 
     def test_empty_target_goal_goes_to_refused(self, strategy_wf):
         goal = _make_goal()
         r = _make_retrieval(id_str="task_1", goal_id=goal.id)
         r.target_goal = []
-        strategy_wf.process_classification_result([r], [goal])
+        result = strategy_wf._get_candidates([r], [goal])
         assert len(strategy_wf.output.refused) == 1
+        assert len(result) == 0
 
 
 class TestFilterCandidates:
@@ -244,21 +252,29 @@ class TestRemoveDuplicates:
 
 class TestAddToAccepted:
     def test_excess_strategies_go_to_buffer(self, strategy_wf):
-        goal = _make_goal()
-        strategy_wf.output.accepted = [
-            _make_retrieval(f"task_{i}", title=f"Book {i}") for i in range(MAX_STRATEGIES)
-        ]
-        extra = _make_retrieval("task_16", goal_id=goal.id)
-        strategy_wf.process_classification_result([extra], [goal])
+        nodes = [_make_retrieval(f"task_{i}", title=f"Book {i}") for i in range(MAX_STRATEGIES)]
+        extra = _make_retrieval("task_extra")
+        id_to_node = {n.id: n for n in nodes + [extra]}
+        order = [n.id for n in nodes] + [extra.id]
+
+        strategy_wf._add_to_accepted(order, id_to_node)
+
+        assert len(strategy_wf.output.accepted) == MAX_STRATEGIES
         assert len(strategy_wf.output.buffer) == 1
         assert strategy_wf.output.buffer[0] is extra
+
+    def test_within_limit_all_go_to_accepted(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        strategy_wf._add_to_accepted([r.id], {r.id: r})
+        assert strategy_wf.output.accepted == [r]
+        assert strategy_wf.output.buffer == []
 
 
 class TestSetLlmId:
     def test_replaces_id_with_internal_format(self, strategy_wf):
         r = _make_retrieval("task_1")
         original_llm_id = r.id
-        mapping = strategy_wf.set_llm_id([r])
+        mapping = strategy_wf._set_llm_id([r])
         assert r.id != original_llm_id
         assert mapping[original_llm_id] == r.id
         assert r._llm_id == original_llm_id
@@ -266,94 +282,63 @@ class TestSetLlmId:
     def test_returns_complete_mapping(self, strategy_wf):
         r1 = _make_retrieval("task_1", title="A")
         r2 = _make_retrieval("task_2", title="B")
-        assert len(strategy_wf.set_llm_id([r1, r2])) == 2
+        assert len(strategy_wf._set_llm_id([r1, r2])) == 2
 
-    def test_duplicate_llm_id_is_removed_from_mapping(self, strategy_wf, caplog):
-        import logging
+    def test_duplicate_llm_id_keeps_first_occurrence_in_mapping(self, strategy_wf):
         r1 = _make_retrieval("task_1", title="First")
         r2 = _make_retrieval("task_1", title="Second")
-        with caplog.at_level(logging.WARNING):
-            mapping = strategy_wf.set_llm_id([r1, r2])
-        # the duplicate id is purged from the mapping entirely so no dependent
-        # strategy can silently resolve to the wrong retrieval
-        assert "task_1" not in mapping
-        assert r2.id == "task_1"
-        assert "Duplicate id" in caplog.text
+        mapping = strategy_wf._set_llm_id([r1, r2])
+        # the first occurrence keeps its original llm_id mapping untouched
+        assert mapping["task_1"] == r1.id
+        assert r1._llm_id == "task_1"
 
-    def test_duplicate_id_causes_dependent_analyses_to_be_refused(self, strategy_wf, caplog):
-        import logging
+    def test_duplicate_llm_id_gets_new_random_id(self, strategy_wf):
+        r1 = _make_retrieval("task_1", title="First")
+        r2 = _make_retrieval("task_1", title="Second")
+        mapping = strategy_wf._set_llm_id([r1, r2])
+        # the duplicate is assigned a fresh random llm_id so nothing can
+        # legitimately depend on it
+        assert r2._llm_id != "task_1"
+        assert r2._llm_id in mapping
+        assert mapping[r2._llm_id] == r2.id
+        assert len(mapping) == 2
+
+    def test_duplicate_llm_id_adds_detail_note(self, strategy_wf):
+        r1 = _make_retrieval("task_1", title="First")
+        r2 = _make_retrieval("task_1", title="Second")
+        strategy_wf._set_llm_id([r1, r2])
+        assert "duplicate llm_id, created a new one" in r2._details
+
+    def test_dependents_resolve_to_first_occurrence_on_duplicate(self, strategy_wf):
         goal = _make_goal()
-        # LLM assigned "task_1" to both retrievals by mistake — should have been task_1 and task_2
         r1 = _make_retrieval("task_1", title="Harry Potter", goal_id=goal.id)
         r2 = _make_retrieval("task_1", title="Lord of the Rings", goal_id=goal.id)
         a1 = _make_analyze("task_3", depends_on_ids=["task_1"], goal_id=goal.id)
-        a2 = _make_analyze("task_4", depends_on_ids=["task_1"], goal_id=goal.id)
 
-        with caplog.at_level(logging.WARNING):
-            mapping = strategy_wf.set_llm_id([r1, r2, a1, a2])
+        mapping = strategy_wf._set_llm_id([r1, r2, a1])
+        strategy_wf._map_dependencies_to_internal_ids([r1, r2, a1], mapping)
 
-        assert "Duplicate id: task_1" in caplog.text
-        # "task_1" is removed from the mapping because it was a duplicate —
-        # pointing both analyses to r1 would be wrong
-        assert "task_1" not in mapping
-        assert len(mapping) == 2
-
-        strategy_wf.map_dependencies_to_internal_ids([r1, r2, a1, a2], mapping)
-
-        # a1 and a2 both depended on "task_1", which is no longer in the mapping —
-        # they are refused rather than silently resolved to the wrong retrieval
-        assert a1._refusal is True
-        assert a2._refusal is True
-
-    def test_duplicate_retrieval_refuses_dependent_and_its_downstream(self, strategy_wf, caplog):
-        import logging
-        goal = _make_goal()
-        # tasks refusal should propagate downstream
-        r1 = _make_retrieval("task_1", title="Book A", goal_id=goal.id)
-        r2 = _make_retrieval("task_1", title="Book B", goal_id=goal.id)
-        a2 = _make_analyze("task_4", depends_on_ids=["task_1"], goal_id=goal.id)
-        a3 = _make_analyze("task_5", depends_on_ids=["task_4"], goal_id=goal.id)
-
-        r3 = _make_retrieval("task_2", title="Book C", goal_id=goal.id)
-        a1 = _make_analyze("task_3", depends_on_ids=["task_2"], goal_id=goal.id)
-        a4 = _make_analyze("task_6", depends_on_ids=["task_3"], goal_id=goal.id)
-
-
-        with caplog.at_level(logging.WARNING):
-            mapping = strategy_wf.set_llm_id([r1, r2, r3, a1])
-
-        assert "task_1" in mapping
-        assert "task_2" in mapping
-        assert "task_3" in mapping
-        assert "task_4" not in mapping
-        assert "task_5" not in mapping
-        assert "task_6" in mapping
-
-        strategy_wf.map_dependencies_to_internal_ids([r1, r2, r3, a1, a2, a3, a4], mapping)
-
-        assert a2.refusal == True
-        assert a3.refusal == True
-        
-        
+        assert a1.depends_on == [r1.id]
+        assert a1._refusal is False
 
 
 class TestMapDependencies:
     def test_translates_llm_ids_to_internal(self, strategy_wf):
         r = _make_retrieval("task_1")
         a = _make_analyze("task_2", depends_on_ids=["task_1"])
-        llm_to_internal = strategy_wf.set_llm_id([r, a])
-        strategy_wf.map_dependencies_to_internal_ids([r, a], llm_to_internal)
+        llm_to_internal = strategy_wf._set_llm_id([r, a])
+        strategy_wf._map_dependencies_to_internal_ids([r, a], llm_to_internal)
         assert a.depends_on[0] == r.id
 
     def test_flags_refusal_on_missing_dep(self, strategy_wf):
         a = _make_analyze("task_2", depends_on_ids=["task_99"])
-        strategy_wf.map_dependencies_to_internal_ids([a], {})
+        strategy_wf._map_dependencies_to_internal_ids([a], {})
         assert a._refusal is True
 
     def test_none_depends_on_marks_strategy_refused(self, strategy_wf):
         a = _make_analyze("task_1", depends_on_ids=["task_2"])
         a.depends_on = None
-        strategy_wf.map_dependencies_to_internal_ids([a], {})
+        strategy_wf._map_dependencies_to_internal_ids([a], {})
         assert a._refusal is True
 
 
@@ -365,46 +350,59 @@ class TestBuildModel:
     def test_returned_model_has_strategies_field(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
         assert "strategies" in model.model_fields
- 
+
     def test_returned_model_instantiates_with_matching_strategy(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        instance = model(strategies=[_make_retrieval("task_1")])
+        instance = model(strategies=[_make_retrieval("task_1").model_dump()])
         assert len(instance.strategies) == 1
 
 
-class TestCheckStrategies:
+class TestCaptureAndFilter:
+    """capture_and_filter only accepts raw dicts (as the LLM response
+    delivers them) — it looks up the concrete class via NODE_TYPE_TO_CLS
+    using each dict's `node_type` key, so items must be dicts, not
+    already-constructed BaseRequest instances."""
+
     def test_non_list_is_wrapped_in_list(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        instance = model(strategies=_make_retrieval("task_1"))
+        instance = model(strategies=_make_retrieval("task_1").model_dump())
         assert len(instance.strategies) == 1
 
-    def test_duplicate_ids_are_deduplicated(self):
+    def test_duplicate_ids_are_not_deduplicated_at_model_level(self):
+        # dedup now happens later, during _set_llm_id — the model itself
+        # keeps every syntactically valid strategy
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        r1 = _make_retrieval("task_1", title="First Book")
-        r2 = _make_retrieval("task_1", title="Second Book")
+        r1 = _make_retrieval("task_1", title="First Book").model_dump()
+        r2 = _make_retrieval("task_1", title="Second Book").model_dump()
         instance = model(strategies=[r1, r2])
-  
-        assert len(instance.strategies) == 1
+        assert len(instance.strategies) == 2
 
-    def test_first_occurrence_is_kept_on_dedup(self):
+    def test_invalid_items_are_filtered_into_invalid_strategies(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        r1 = _make_retrieval("task_1", title="First Book")
-        r2 = _make_retrieval("task_1", title="Second Book")
-        instance = model(strategies=[r1, r2])
-        assert instance.strategies[0].title == "First Book"
-
-    def test_none_id_items_are_skipped(self):
-        model = StrategyRequest.build_model([FindByTitleRetrieval])
-        r = _make_retrieval("task_1")
+        r = _make_retrieval("task_1").model_dump()
         instance = model(strategies=[{"no_id_key": "value"}, r])
         assert len(instance.strategies) == 1
-        assert instance.strategies[0].id == r.id
+        assert instance.strategies[0].id == r["id"]
+        assert instance._invalid_strategies == [{"no_id_key": "value"}]
 
-    def test_strategies_truncated_to_max(self):
+    def test_strategies_truncated_to_max_overflow_captured(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        items = [_make_retrieval(f"task_{i}", title=f"Book {i}") for i in range(MAX_STRATEGIES + 3)]
+        items = [
+            _make_retrieval(f"task_{i}", title=f"Book {i}").model_dump()
+            for i in range(MAX_STRATEGIES + 3)
+        ]
         instance = model(strategies=items)
         assert len(instance.strategies) == MAX_STRATEGIES
+        assert len(instance._overflow_strategies) == 3
+
+    def test_already_constructed_instance_is_rejected(self):
+        # only raw dicts are accepted; a pre-built BaseRequest instance
+        # falls into the `else` branch and is treated as invalid
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        r = _make_retrieval("task_1")
+        instance = model(strategies=[r])
+        assert instance.strategies == []
+        assert instance._invalid_strategies == [r]
 
 
 class TestGetAcceptedIdToNode:
@@ -461,19 +459,19 @@ class TestInjectBookRequestClasses:
 class TestBuildStrategyRequest:
     def test_returns_model_for_retrieval_goal(self, strategy_wf):
         goal = _make_goal(node_type=BookNodeTypeEnum.FIND_TITLE)
-        model = strategy_wf.build_strategy_request([goal])
+        model = strategy_wf._build_strategy_request([goal])
         assert "strategies" in model.model_fields
 
     def test_analyze_goal_injects_retrieval_classes(self, strategy_wf):
         goal = _make_goal(node_type=BookNodeTypeEnum.RECOMMENDATION)
-        model = strategy_wf.build_strategy_request([goal])
+        model = strategy_wf._build_strategy_request([goal])
         assert "strategies" in model.model_fields
 
     def test_unsupported_node_type_raises(self, strategy_wf):
         goal = _make_goal(node_type=UnknownNodeTypeEnum.UNKNOWN)
         # TODO: add a longer lists of goals and get size
         with pytest.raises(TypeError):
-            strategy_wf.build_strategy_request([goal])
+            strategy_wf._build_strategy_request([goal])
 
 
 class TestFormatSystemGoals:
@@ -494,16 +492,6 @@ class TestFormatSystemGoals:
         assert {d["id"] for d in data} == {g1.id, g2.id}
 
 
-class TestGetStrategiesIds:
-    def test_returns_set_of_strategy_ids(self, strategy_wf):
-        r1 = _make_retrieval("task_1")
-        r2 = _make_retrieval("task_2", title="Book B")
-        assert strategy_wf.get_strategies_ids([r1, r2]) == {r1.id, r2.id}
-
-    def test_empty_list_returns_empty_set(self, strategy_wf):
-        assert strategy_wf.get_strategies_ids([]) == set()
-
-
 class TestFinalizeResult:
     def test_ok_when_order_and_accepted(self, strategy_wf):
         r = _make_retrieval("task_1")
@@ -512,11 +500,12 @@ class TestFinalizeResult:
         strategy_wf.finalize_result()
         assert strategy_wf.result.ok is True
 
-    def test_not_ok_when_no_execution_order(self, strategy_wf):
+    def test_ok_when_accepted_even_without_execution_order(self, strategy_wf):
+        # finalize_result only looks at accepted now
         r = _make_retrieval("task_1")
         strategy_wf.output.accepted = [r]
         strategy_wf.finalize_result()
-        assert strategy_wf.result.ok is False
+        assert strategy_wf.result.ok is True
 
     def test_not_ok_when_no_accepted(self, strategy_wf):
         strategy_wf.output.execution_order = ["task_1"]
@@ -525,39 +514,48 @@ class TestFinalizeResult:
 
 
 class TestRemoveCycles:
-    def test_skips_node_id_not_in_accepted(self, strategy_wf, caplog):
-        import logging
-        with caplog.at_level(logging.WARNING):
-            strategy_wf._remove_cycles({"phantom_id": 1})
-        assert "phantom_id" in caplog.text
-        assert strategy_wf.output.refused == []
-
     def test_cycle_node_moves_to_refused(self, strategy_wf):
         r = _make_retrieval("task_1")
-        strategy_wf.output.accepted = [r]
-        strategy_wf._remove_cycles({r.id: 1})
+        graph = defaultdict(list)
+        id_to_node = {r.id: r}
+        remove_ids = set()
+        strategy_wf._reject_dependent_on(graph, r.id, remove_ids, id_to_node)
         assert r in strategy_wf.output.refused
-        assert r not in strategy_wf.output.accepted
-
-    def test_cycle_node_marked_as_refused(self, strategy_wf):
-        r = _make_retrieval("task_1")
-        strategy_wf.output.accepted = [r]
-        strategy_wf._remove_cycles({r.id: 1})
         assert r._refusal is True
+        assert remove_ids == {r.id}
+
+    def test_already_removed_node_is_skipped(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        graph = defaultdict(list)
+        id_to_node = {r.id: r}
+        remove_ids = {r.id}
+        strategy_wf._reject_dependent_on(graph, r.id, remove_ids, id_to_node)
+        assert strategy_wf.output.refused == []
+
+    def test_propagates_to_downstream_dependents(self, strategy_wf):
+        a = _make_analyze("task_1", depends_on_ids=["task_2"])
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        graph = defaultdict(list, {a.id: [b.id]})
+        id_to_node = {a.id: a, b.id: b}
+        remove_ids = set()
+        strategy_wf._reject_dependent_on(graph, a.id, remove_ids, id_to_node)
+        assert a in strategy_wf.output.refused
+        assert b in strategy_wf.output.refused
+        assert remove_ids == {a.id, b.id}
 
     def test_cycle_reason_recorded_on_node(self, strategy_wf):
         r = _make_retrieval("task_1")
-        strategy_wf.output.accepted = [r]
-        strategy_wf._remove_cycles({r.id: 1})
-        assert "Cycle detected in dependency graph" in r._refusal_reasons
-        assert r in strategy_wf.output.refused
+        graph = defaultdict(list)
+        id_to_node = {r.id: r}
+        strategy_wf._reject_dependent_on(graph, r.id, set(), id_to_node)
+        assert "Rejected: Node depends on a rejected node" in r._details
 
-    def test_degree_zero_node_is_not_moved(self, strategy_wf):
+    def test_custom_message_is_recorded(self, strategy_wf):
         r = _make_retrieval("task_1")
-        strategy_wf.output.accepted = [r]
-        strategy_wf._remove_cycles({r.id: 0})
-        assert r in strategy_wf.output.accepted
-        assert strategy_wf.output.refused == []
+        graph = defaultdict(list)
+        id_to_node = {r.id: r}
+        strategy_wf._reject_dependent_on(graph, r.id, set(), id_to_node, message="custom test reason")
+        assert "Rejected: custom test reason" in r._details
 
 
 class TestRun:
@@ -569,9 +567,12 @@ class TestRun:
     async def test_happy_path_accepts_strategy(self, strategy_wf):
         goal = _make_goal()
         r = _make_retrieval("task_1", goal_id=goal.id)
-        parse_result = StrategyRequest.build_model([FindByTitleRetrieval])(strategies=[r])
+        # capture_and_filter only accepts raw dicts, not already-built instances
+        parse_result = StrategyRequest.build_model([FindByTitleRetrieval])(strategies=[r.model_dump()])
 
         tool_call = MagicMock()
+        tool_call.id = "call_1"
+        tool_call.function.name = "StrategyRequest"
         tool_call.function.parsed_arguments = parse_result
         assistant_msg = MagicMock()
         assistant_msg.tool_calls = [tool_call]
