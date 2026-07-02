@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 from functools import reduce
 from operator import or_
 from collections import defaultdict, deque
@@ -33,6 +33,11 @@ from common.operation import task
 
 logger = logging.getLogger(__name__)
 
+# ------------------------------------
+from .node_types import PlannerNodeTypeEnum
+
+# ------------------------------------
+
 STRATEGY_CLASSIFICATION_PROMPT_PATH = (
     "domains/planner/prompts/2_strategy_classification.txt"
 )
@@ -46,6 +51,8 @@ class StrategyRequest(BaseModel):
     Each strategy should represent a discrete unit of work.
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
+    node_type: Literal[PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION] = PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION
+
 
     strategies: list[AnyStrategyRequest] = Field(
         default_factory=list,

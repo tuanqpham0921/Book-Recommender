@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional
+from typing import Optional, Literal
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field, PrivateAttr, field_validator
 
@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------
+from .node_types import PlannerNodeTypeEnum
 from common.pydantic_validators import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
@@ -42,6 +43,8 @@ MAX_SYSTEM_GOALS = 10
 
 
 class SystemGoal(BaseModel):
+    node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = PlannerNodeTypeEnum.SYSTEM_GOAL
+
     description: str = Field(
         ...,
         min_length=MIN_STRING_LENGTH,
@@ -81,6 +84,7 @@ class InitialParseRequest(BaseModel):
     Initial parse for the Book Recommender: extract system_goals with confidence,
     and separate small_talk and out_of_scope from in-domain requests.
     """
+    node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = PlannerNodeTypeEnum.PARSE_INTENT
 
     small_talk: Optional[str] = Field(
         default=None,

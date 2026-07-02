@@ -623,9 +623,9 @@ class TestStrategyRequestExtraFields:
     payload includes any other top-level key, it must never leak into the
     model (no attribute, no model_extra, absent from model_dump)."""
 
-    def test_model_only_declares_strategies_field(self):
+    def test_model_only_declares_provided_fields(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        assert list(model.model_fields.keys()) == ["strategies"]
+        assert set(model.model_fields.keys()) == {"node_type","strategies"}
 
     def test_extra_field_does_not_become_an_attribute(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
