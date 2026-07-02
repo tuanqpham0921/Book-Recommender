@@ -15,39 +15,6 @@ from typing import Callable, Annotated
 from pydantic import BeforeValidator
 
 
-def bounded_string(
-    max_length: int,
-    *,
-    min_length: int | None = None,
-    label: str = "value",
-    allow_none: bool = False,
-) -> BeforeValidator:
-    """Coerce to a string within [min_length, max_length].
-
-    - allow_none=True: None passes through as None; non-strings are cast via
-      str(value); no minimum-length padding is applied (used for optional
-      free-text fields like small_talk/out_of_scope).
-    - allow_none=False: non-strings (including None) become a fallback
-      placeholder message; strings under min_length get padded with a note.
-    Either way, strings over max_length are truncated with a trailing "...".
-    """
-
-    def validate(value):
-        if allow_none and value is None:
-            return None
-        if not isinstance(value, str):
-            if allow_none:
-                return str(value)
-            return f"value is not a string; padded to meet {label} requirements"
-        if min_length is not None and len(value) < min_length:
-            value += f" padded to meet the minimum {min_length} character {label} requirement"
-        if len(value) > max_length:
-            return value[: max_length - 4] + "..."
-        return value
-
-    return BeforeValidator(validate)
-
-
 def id_list(
     is_valid_id: Callable[[str], bool],
     placeholder: str,
@@ -110,3 +77,36 @@ def bounded_confidence(min_confidence: float, max_confidence: float) -> BeforeVa
 MIN_CONFIDENCE = 0.0
 MAX_CONFIDENCE = 1.0
 ConfidenceFloat = Annotated[float, bounded_confidence(MIN_CONFIDENCE, MAX_CONFIDENCE)]
+
+# ---------------------------------------------------------------
+
+def bounded_required_string(
+    max_length: int,
+    min_length: int,
+) -> BeforeValidator:
+    """Coerce to a string within [min_length, max_length]"""
+
+    def validate(value):
+        if not isinstance(value, str):
+            return f"value is not a string; padded to meet reasoning requirements"
+        if len(value) < min_length:
+            value += f" padded to meet the minimum {min_length} character reasoning requirement"
+        if len(value) > max_length:
+            return value[:max_length-4] + "..."
+        return value
+
+    return BeforeValidator(validate)
+
+MIN_STRING_LENGTH = 10
+MAX_STRING_LENGTH = 500
+ReasoningStr = Annotated[str, bounded_required_string(
+    max_length=MAX_STRING_LENGTH, 
+    min_length=MIN_STRING_LENGTH)]
+
+DescriptionStr = Annotated[str, bounded_required_string(
+    max_length=MAX_STRING_LENGTH, 
+    min_length=MIN_STRING_LENGTH)]
+
+# OptionalStr = Annotated[str, bounded_string(
+#     max_length=MAX_STRING_LENGTH,
+#     allow_none=True)]

@@ -11,14 +11,14 @@ logger = logging.getLogger(__name__)
 from common.pydantic_validators import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
-    ConfidenceFloat
+    MIN_STRING_LENGTH,
+    MAX_STRING_LENGTH,
+    ConfidenceFloat,
+    DescriptionStr,
+    ReasoningStr
 )
 
 # ------------------------------------
-
-MIN_STRING_LENGTH = 10
-MAX_STRING_LENGTH = 500
-
 
 MIN_LIST_LENGTH = 1
 MAX_LIST_LENGTH = 10
@@ -39,13 +39,13 @@ class BaseRequest(BaseModel):
                     description="assign a task id to the node request",
                     example=["task_1", "task_2"]
                     )
-    description: str = Field(
+    description: DescriptionStr = Field(
         ...,
         min_length=MIN_STRING_LENGTH,
         max_length=MAX_STRING_LENGTH,
         description="Description of query that attributes to this node request",
     )
-    reasoning: str = Field(
+    reasoning: ReasoningStr = Field(
         ..., 
         min_length=MIN_STRING_LENGTH, 
         max_length=MAX_STRING_LENGTH, 
@@ -79,28 +79,6 @@ class BaseRequest(BaseModel):
         if (not isinstance(value, str)
             or not (re.match(TASK_LLM_ID_PATTERN, value) or re.match(TASK_ID_PATTERN, value))):
             return f"{ID_PREFIX}{uuid_8()}"
-        return value
-    
-    @field_validator("description", mode="before")
-    @classmethod
-    def check_description(cls, value):
-        if not isinstance(value, str):
-            return f"value is not a string; padded to meet description requirements"
-        if len(value) < MIN_STRING_LENGTH:
-            value += f" padded to meet the minimum {MIN_STRING_LENGTH} character description requirement"
-        if len(value) > MAX_STRING_LENGTH:
-            return value[:MAX_STRING_LENGTH-4] + "..."
-        return value
-    
-    @field_validator("reasoning", mode="before")
-    @classmethod
-    def check_reasoning(cls, value):
-        if not isinstance(value, str):
-            return f"value is not a string; padded to meet reasoning requirements"
-        if len(value) < MIN_STRING_LENGTH:
-            value += f" padded to meet the minimum {MIN_STRING_LENGTH} character reasoning requirement"
-        if len(value) > MAX_STRING_LENGTH:
-            return value[:MAX_STRING_LENGTH-4] + "..."
         return value
     
     @classmethod

@@ -29,9 +29,12 @@ from .node_types import PlannerNodeTypeEnum
 from common.pydantic_validators import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
-    ConfidenceFloat
+    MIN_STRING_LENGTH,
+    MAX_STRING_LENGTH,
+    ConfidenceFloat,
+    DescriptionStr,
+    ReasoningStr
 )
-
 # ------------------------------------
 
 INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
@@ -45,7 +48,7 @@ MAX_SYSTEM_GOALS = 10
 class SystemGoal(BaseModel):
     node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = PlannerNodeTypeEnum.SYSTEM_GOAL
 
-    description: str = Field(
+    description: DescriptionStr = Field(
         ...,
         min_length=MIN_STRING_LENGTH,
         max_length=MAX_STRING_LENGTH,
@@ -101,7 +104,7 @@ class InitialParseRequest(BaseModel):
         max_length=MAX_SYSTEM_GOALS,
         description="System goals for the query",
     )
-    reasoning: str = Field(
+    reasoning: ReasoningStr = Field(
         ...,
         min_length=MIN_STRING_LENGTH,
         max_length=MAX_STRING_LENGTH,
@@ -126,17 +129,6 @@ class InitialParseRequest(BaseModel):
             return None
         if not isinstance(value, str):
             return str(value)
-        if len(value) > MAX_STRING_LENGTH:
-            return value[: MAX_STRING_LENGTH - 4] + "..."
-        return value
-
-    @field_validator("reasoning", mode="before")
-    @classmethod
-    def check_reasoning(cls, value):
-        if not isinstance(value, str):
-            return "value is not a string; padded to meet reasoning requirements"
-        if len(value) < MIN_STRING_LENGTH:
-            value += f" padded to meet the minimum {MIN_STRING_LENGTH} character reasoning requirement"
         if len(value) > MAX_STRING_LENGTH:
             return value[: MAX_STRING_LENGTH - 4] + "..."
         return value
