@@ -23,6 +23,16 @@ from common.utils import uuid_8
 
 logger = logging.getLogger(__name__)
 
+
+# ------------------------------------
+from common.pydantic_validators import (
+    MIN_CONFIDENCE,
+    MAX_CONFIDENCE,
+    ConfidenceFloat
+)
+
+# ------------------------------------
+
 INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
 INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
     "domains/planner/prompts/1_initial_parse_response.txt"
@@ -38,7 +48,7 @@ class SystemGoal(BaseModel):
         max_length=MAX_STRING_LENGTH,
         description="Description of the system goal",
     )
-    confidence: float = Field(
+    confidence: ConfidenceFloat = Field(
         ...,
         ge=MIN_CONFIDENCE,
         le=MAX_CONFIDENCE,
@@ -65,16 +75,6 @@ class SystemGoal(BaseModel):
     def refuse(self, *reasons: str) -> None:
         self._refusal = True
         self._refusal_reasons.extend(reasons)
-
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def check_confidence(cls, value):
-        if not isinstance(value, (float, int)):
-            return MIN_CONFIDENCE
-        if not (MIN_CONFIDENCE <= value <= MAX_CONFIDENCE):
-            return MIN_CONFIDENCE
-        return float(value)
-
 
 class InitialParseRequest(BaseModel):
     """

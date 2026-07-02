@@ -10,10 +10,12 @@ Usage: build an Annotated type alias once, reuse it on any field/model:
     class Foo(BaseModel):
         confidence: ConfidenceFloat = Field(...)
 """
-from typing import Callable
+from typing import Callable, Annotated
 
 from pydantic import BeforeValidator
 
+MIN_CONFIDENCE = 0.0
+MAX_CONFIDENCE = 1.0
 
 def bounded_string(
     max_length: int,
@@ -104,3 +106,6 @@ def id_or_generate(
         return value
 
     return BeforeValidator(validate)
+
+
+ConfidenceFloat = Annotated[float, bounded_confidence(0.0, 1.0)]

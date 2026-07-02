@@ -7,12 +7,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ------------------------------------
+from common.pydantic_validators import (
+    MIN_CONFIDENCE,
+    MAX_CONFIDENCE,
+    ConfidenceFloat
+)
+
+# ------------------------------------
 
 MIN_STRING_LENGTH = 10
 MAX_STRING_LENGTH = 500
 
-MIN_CONFIDENCE = 0.0
-MAX_CONFIDENCE = 1.0
 
 MIN_LIST_LENGTH = 1
 MAX_LIST_LENGTH = 10
@@ -46,7 +52,7 @@ class BaseRequest(BaseModel):
         description="Thought process that led to the node request",
         example="The user is asking for a book about the history of the universe"
     )
-    confidence: float = Field(
+    confidence: ConfidenceFloat = Field(
         ..., 
         ge=MIN_CONFIDENCE, 
         le=MAX_CONFIDENCE, 
@@ -97,15 +103,6 @@ class BaseRequest(BaseModel):
             return value[:MAX_STRING_LENGTH-4] + "..."
         return value
     
-    @field_validator("confidence", mode="before")
-    @classmethod
-    def check_confidence(cls, value):
-        if not isinstance(value, (float, int)):
-            return MIN_CONFIDENCE
-        if not (MIN_CONFIDENCE <= value <= MAX_CONFIDENCE):
-            return MIN_CONFIDENCE
-        return float(value)
-
     @classmethod
     def rebuild_json(cls, data):
         if not isinstance(data, dict):
