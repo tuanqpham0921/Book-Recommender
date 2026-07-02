@@ -22,6 +22,7 @@ from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
+    AnyStrategyRequest 
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -46,7 +47,7 @@ class StrategyRequest(BaseModel):
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
 
-    strategies: list[BaseModel] = Field(
+    strategies: list[AnyStrategyRequest] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
         description="List of strategies generated from the query",
@@ -117,13 +118,13 @@ class StrategyRequest(BaseModel):
 
 
 class StrategyClassificationOutput(UserFacingOutput):
-    accepted: list[BaseModel] = Field(default_factory=list)
+    accepted: list[AnyStrategyRequest] = Field(default_factory=list)
     execution_order: list[str] = Field(default_factory=list)
 
     # NOTE: this can be private or not?
     # for retries, continuation, or summaries
-    buffer: list[BaseModel] = Field(default_factory=list)
-    refused: list[BaseModel] = Field(default_factory=list)
+    buffer: list[AnyStrategyRequest] = Field(default_factory=list)
+    refused: list[AnyStrategyRequest] = Field(default_factory=list)
 
     invalid: list[Any] = Field(default_factory=list)
 

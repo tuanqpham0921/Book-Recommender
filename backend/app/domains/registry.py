@@ -59,7 +59,20 @@ RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES + USER_RETRIEVAL_CLASSES + PROJECT_RE
 ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
 
 REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
-REQUEST_CLASSES_UNION = Union[REQUEST_CLASSES]
+AnyStrategyRequest = Annotated[
+    Union[
+        CompareStrategy,
+        RecommendationStrategy,
+        FindByTitleRetrieval,
+        FindByISBN13Retrieval,
+        FindByTraitsRetrieval,
+        UserInfoRequest,
+        DeveloperInfoRequest,
+        FeedbackRequest,
+        ProjectInfoRequest,
+    ],
+    Field(discriminator="node_type"),
+]
 
 
 # Manual node_type → class lookup — add new mappings here

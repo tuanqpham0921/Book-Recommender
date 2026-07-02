@@ -21,42 +21,7 @@ def orchestrator():
         user_message=UserMessage(content="test"),
         llm_client=MagicMock(),
     )
-
-
-class TestConversationOrchestratorAddStep:
-    def test_stores_initial_parse_output(self, orchestrator):
-        parse_output = InitialParseOutput()
-        orchestrator.add_step(OperationResult(ok=True, output=parse_output))
-        assert orchestrator.output.parse_result is parse_output
-
-    def test_stores_strategy_classification_output(self, orchestrator):
-        strategy_output = StrategyClassificationOutput()
-        orchestrator.add_step(OperationResult(ok=True, output=strategy_output))
-        assert orchestrator.output.strategy_result is strategy_output
-
-    def test_merges_token_usage_from_step_result(self, orchestrator):
-        step = OperationResult(
-            ok=True,
-            output=InitialParseOutput(),
-            token_usage=TokenUsage(total=100, prompt=60, completion=40),
-        )
-        orchestrator.add_step(step)
-        assert orchestrator.result.token_usage.total == 100
-        assert orchestrator.result.token_usage.prompt == 60
-        assert orchestrator.result.token_usage.completion == 40
-
-    def test_shared_messages_list_appended_by_children(self, orchestrator):
-        # TODO: fix this
-        msg = AssistantMessage(content="hello")
-        orchestrator.messages.append(msg)
-        assert msg in orchestrator.messages
-
-    def test_appends_to_result_steps(self, orchestrator):
-        step = OperationResult(ok=True, name="some_step", output=InitialParseOutput())
-        orchestrator.add_step(step)
-        assert step in orchestrator.result.steps
-
-
+    
 def _make_goal():
     goal = SystemGoal(
         description="Find a book about machine learning topics",
@@ -94,6 +59,39 @@ def _make_orchestration_output() -> OrchestrationOutput:
         diagram="graph TD;\nA-->B;",
     )
 
+
+class TestConversationOrchestratorAddStep:
+    def test_stores_initial_parse_output(self, orchestrator):
+        parse_output = InitialParseOutput()
+        orchestrator.add_step(OperationResult(ok=True, output=parse_output))
+        assert orchestrator.output.parse_result is parse_output
+
+    def test_stores_strategy_classification_output(self, orchestrator):
+        strategy_output = StrategyClassificationOutput()
+        orchestrator.add_step(OperationResult(ok=True, output=strategy_output))
+        assert orchestrator.output.strategy_result is strategy_output
+
+    def test_merges_token_usage_from_step_result(self, orchestrator):
+        step = OperationResult(
+            ok=True,
+            output=InitialParseOutput(),
+            token_usage=TokenUsage(total=100, prompt=60, completion=40),
+        )
+        orchestrator.add_step(step)
+        assert orchestrator.result.token_usage.total == 100
+        assert orchestrator.result.token_usage.prompt == 60
+        assert orchestrator.result.token_usage.completion == 40
+
+    def test_shared_messages_list_appended_by_children(self, orchestrator):
+        # TODO: fix this
+        msg = AssistantMessage(content="hello")
+        orchestrator.messages.append(msg)
+        assert msg in orchestrator.messages
+
+    def test_appends_to_result_steps(self, orchestrator):
+        step = OperationResult(ok=True, name="some_step", output=InitialParseOutput())
+        orchestrator.add_step(step)
+        assert step in orchestrator.result.steps
 
 class TestOrchestrationOutputJsonRoundTrip:
     """model_dump_json / model_validate_json round-trip of OrchestrationOutput.
@@ -137,6 +135,8 @@ class TestOrchestrationOutputJsonRoundTrip:
         assert restored_goal.confidence == original_goal.confidence
         assert restored_goal.target_node_type == original_goal.target_node_type
 
+    # NOTE: these tests require update
+    # currently we are not sure about the private attributes
     def test_strategy_private_attrs_do_not_survive_round_trip(self):
         output = _make_orchestration_output()
         original_strategy = output.strategy_result.accepted[0]
