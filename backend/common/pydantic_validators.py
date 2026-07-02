@@ -14,8 +14,6 @@ from typing import Callable, Annotated
 
 from pydantic import BeforeValidator
 
-MIN_CONFIDENCE = 0.0
-MAX_CONFIDENCE = 1.0
 
 def bounded_string(
     max_length: int,
@@ -46,19 +44,6 @@ def bounded_string(
         if len(value) > max_length:
             return value[: max_length - 4] + "..."
         return value
-
-    return BeforeValidator(validate)
-
-
-def bounded_confidence(min_confidence: float, max_confidence: float) -> BeforeValidator:
-    """Clamp a confidence-like float; anything unusable falls back to min_confidence."""
-
-    def validate(value):
-        if not isinstance(value, (float, int)):
-            return min_confidence
-        if not (min_confidence <= value <= max_confidence):
-            return min_confidence
-        return float(value)
 
     return BeforeValidator(validate)
 
@@ -107,5 +92,21 @@ def id_or_generate(
 
     return BeforeValidator(validate)
 
+# ---------------------------------------------------------------
 
-ConfidenceFloat = Annotated[float, bounded_confidence(0.0, 1.0)]
+def bounded_confidence(min_confidence: float, max_confidence: float) -> BeforeValidator:
+    """Clamp a confidence-like float; 
+    anything unusable falls back to min_confidence."""
+
+    def validate(value):
+        if not isinstance(value, (float, int)):
+            return min_confidence
+        if not (min_confidence <= value <= max_confidence):
+            return min_confidence
+        return float(value)
+
+    return BeforeValidator(validate)
+
+MIN_CONFIDENCE = 0.0
+MAX_CONFIDENCE = 1.0
+ConfidenceFloat = Annotated[float, bounded_confidence(MIN_CONFIDENCE, MAX_CONFIDENCE)]
