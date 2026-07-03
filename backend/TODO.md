@@ -13,13 +13,9 @@ Reminder:
 =======================================================================
 
 Unit Test:
-4. test the base request and request schemas pre-post validators
-    * create fake openAI response (with ints instead of strs for example)
-    * more than the limit the amount of strings
 5. test your WorkFlow and decorator last
     * focus on raising and throwing errors (logic first)
     * check your logger
-6. tests all tools have docstrings at least
 
 lower priority:
 * test your sse stream (might change later, and working right now)
