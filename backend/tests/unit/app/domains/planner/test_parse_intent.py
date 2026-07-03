@@ -10,6 +10,7 @@ from app.domains.planner.parse_intent import (
     MAX_SYSTEM_GOALS,
 )
 from app.domains.base_request import MAX_STRING_LENGTH, MIN_CONFIDENCE
+from common.pydantic_validators import REASONING_FALLBACK
 
 # parse_wf fixture comes from tests/unit/app/orchestration/planner/conftest.py
 
@@ -56,14 +57,17 @@ class TestSystemGoalValidators:
 
 
 class TestInitialParseRequestValidators:
-    def test_reasoning_padded_when_too_short(self):
+    def test_short_reasoning_passes_through_unchanged(self):
         req = InitialParseRequest(system_goals=[], reasoning="short")
-        assert len(req.reasoning) >= 10
+        assert req.reasoning == "short"
 
-    def test_reasoning_non_string_returns_placeholder(self):
+    def test_reasoning_non_string_is_stringified(self):
         req = InitialParseRequest(system_goals=[], reasoning=42)
-        assert isinstance(req.reasoning, str)
-        assert len(req.reasoning) >= 10
+        assert req.reasoning == "42"
+
+    def test_blank_reasoning_gets_fallback(self):
+        req = InitialParseRequest(system_goals=[], reasoning="  ")
+        assert req.reasoning == REASONING_FALLBACK
 
     def test_reasoning_truncated_when_over_max(self):
         req = InitialParseRequest(

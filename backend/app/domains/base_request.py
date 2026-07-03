@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 from common.pydantic_validators import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
-    MIN_STRING_LENGTH,
     MAX_STRING_LENGTH,
     ConfidenceFloat,
     DescriptionStr,
@@ -41,14 +40,12 @@ class BaseRequest(BaseModel):
                     )
     description: DescriptionStr = Field(
         ...,
-        min_length=MIN_STRING_LENGTH,
         max_length=MAX_STRING_LENGTH,
         description="Description of query that attributes to this node request",
     )
     reasoning: ReasoningStr = Field(
-        ..., 
-        min_length=MIN_STRING_LENGTH, 
-        max_length=MAX_STRING_LENGTH, 
+        ...,
+        max_length=MAX_STRING_LENGTH,
         description="Thought process that led to the node request",
         example="The user is asking for a book about the history of the universe"
     )

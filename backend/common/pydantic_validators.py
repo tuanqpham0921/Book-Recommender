@@ -80,51 +80,40 @@ ConfidenceFloat = Annotated[float, bounded_confidence(MIN_CONFIDENCE, MAX_CONFID
 
 # ---------------------------------------------------------------
 
-def bounded_required_string(
+def bounded_string(
     max_length: int,
-    min_length: int,
+    fallback: str | None = None,
 ) -> BeforeValidator:
-    """Coerce to a string within [min_length, max_length]"""
+    """Coerce to a non-blank string capped at max_length. Non-strings are
+    salvaged via str(); None/blank values become fallback. Short-but-real
+    content passes through unchanged. With the default fallback=None the
+    field behaves as optional (annotate it str | None)."""
 
     def validate(value):
-        if not isinstance(value, str) or not value.strip():
-            return f"value is not a string; padded to meet reasoning requirements"
-        
+        if value is None:
+            return fallback
+        if not isinstance(value, str):
+            value = str(value)
         value = value.strip()
-        if len(value) < min_length:
-            value += f" padded to meet the minimum {min_length} character reasoning requirement"
+        if not value:
+            return fallback
         if len(value) > max_length:
             return value[:max_length-3] + "..."
         return value
 
     return BeforeValidator(validate)
 
-MIN_STRING_LENGTH = 10
 MAX_STRING_LENGTH = 500
-ReasoningStr = Annotated[str, bounded_required_string(
-    max_length=MAX_STRING_LENGTH, 
-    min_length=MIN_STRING_LENGTH)]
+REASONING_FALLBACK = "(no reasoning provided)"
+DESCRIPTION_FALLBACK = "(no description provided)"
 
-DescriptionStr = Annotated[str, bounded_required_string(
-    max_length=MAX_STRING_LENGTH, 
-    min_length=MIN_STRING_LENGTH)]
+ReasoningStr = Annotated[str, bounded_string(
+    max_length=MAX_STRING_LENGTH,
+    fallback=REASONING_FALLBACK)]
 
-# ---------------------------------------------------------------
+DescriptionStr = Annotated[str, bounded_string(
+    max_length=MAX_STRING_LENGTH,
+    fallback=DESCRIPTION_FALLBACK)]
 
-
-def bounded_optional_string(
-    max_length: int,
-) -> BeforeValidator:
-    """Truncate to max_length; anything that isn't a non-blank string becomes None."""
-
-    def validate(value):
-        if not isinstance(value, str) or not value.strip():
-            return None
-        if len(value) > max_length:
-            return value[:max_length-3] + "..."
-        return value
-
-    return BeforeValidator(validate)
-
-OptionalStr = Annotated[str | None, bounded_optional_string(
+OptionalStr = Annotated[str | None, bounded_string(
     max_length=MAX_STRING_LENGTH)]

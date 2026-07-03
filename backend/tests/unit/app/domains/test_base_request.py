@@ -2,13 +2,13 @@
 import re
 
 from app.domains.base_request import (
-    MIN_STRING_LENGTH,
     MAX_STRING_LENGTH,
     TASK_ID_PATTERN,
     GOAL_PLACEHOLDER,
     DomainRequest,
     AnalyzeBaseRequest,
 )
+from common.pydantic_validators import DESCRIPTION_FALLBACK, REASONING_FALLBACK
 from app.domains.node_types import UnknownNodeTypeEnum
 
 
@@ -57,8 +57,8 @@ class TestIdValidator:
 
 
 class TestDescriptionValidator:
-    def test_below_min_length_is_padded(self):
-        assert len(_make_domain(description="short").description) >= MIN_STRING_LENGTH
+    def test_short_string_passes_through_unchanged(self):
+        assert _make_domain(description="short").description == "short"
 
     def test_exactly_at_max_length_is_kept(self):
         long = "x" * MAX_STRING_LENGTH
@@ -69,20 +69,27 @@ class TestDescriptionValidator:
         assert len(req.description) <= MAX_STRING_LENGTH
         assert req.description.endswith("...")
 
-    def test_non_string_gets_placeholder(self):
-        req = _make_domain(description=12345)
-        assert isinstance(req.description, str)
-        assert len(req.description) >= MIN_STRING_LENGTH
+    def test_non_string_is_stringified(self):
+        assert _make_domain(description=12345).description == "12345"
+
+    def test_blank_string_gets_fallback(self):
+        assert _make_domain(description="   ").description == DESCRIPTION_FALLBACK
+
+    def test_none_gets_fallback(self):
+        assert _make_domain(description=None).description == DESCRIPTION_FALLBACK
 
 
 class TestReasoningValidator:
-    def test_below_min_length_is_padded(self):
-        assert len(_make_domain(reasoning="short").reasoning) >= MIN_STRING_LENGTH
+    def test_short_string_passes_through_unchanged(self):
+        assert _make_domain(reasoning="short").reasoning == "short"
 
     def test_over_max_length_is_truncated(self):
         req = _make_domain(reasoning="y" * (MAX_STRING_LENGTH + 50))
         assert len(req.reasoning) <= MAX_STRING_LENGTH
         assert req.reasoning.endswith("...")
+
+    def test_blank_string_gets_fallback(self):
+        assert _make_domain(reasoning="").reasoning == REASONING_FALLBACK
 
 
 class TestConfidenceValidator:

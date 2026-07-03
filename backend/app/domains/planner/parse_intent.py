@@ -8,12 +8,6 @@ from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
-from app.domains.base_request import (
-    MAX_CONFIDENCE,
-    MAX_STRING_LENGTH,
-    MIN_CONFIDENCE,
-    MIN_STRING_LENGTH,
-)
 from app.domains.node_types import NodeTypeEnum
 from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
@@ -29,11 +23,11 @@ from .node_types import PlannerNodeTypeEnum
 from common.pydantic_validators import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
-    MIN_STRING_LENGTH,
     MAX_STRING_LENGTH,
     ConfidenceFloat,
     DescriptionStr,
-    ReasoningStr
+    ReasoningStr,
+    OptionalStr
 )
 # ------------------------------------
 
@@ -50,7 +44,6 @@ class SystemGoal(BaseModel):
 
     description: DescriptionStr = Field(
         ...,
-        min_length=MIN_STRING_LENGTH,
         max_length=MAX_STRING_LENGTH,
         description="Description of the system goal",
     )
@@ -89,12 +82,12 @@ class InitialParseRequest(BaseModel):
     """
     node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = PlannerNodeTypeEnum.PARSE_INTENT
 
-    small_talk: Optional[str] = Field(
+    small_talk: OptionalStr = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
         description="Small talk in the request",
     )
-    out_of_scope: Optional[str] = Field(
+    out_of_scope: OptionalStr = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
         description="Out-of-domain content",
@@ -106,7 +99,6 @@ class InitialParseRequest(BaseModel):
     )
     reasoning: ReasoningStr = Field(
         ...,
-        min_length=MIN_STRING_LENGTH,
         max_length=MAX_STRING_LENGTH,
         description="Reasoning for classification",
     )
