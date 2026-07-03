@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ------------------------------------
-from common.pydantic_validators import (
+from app.domains.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
     MAX_STRING_LENGTH,

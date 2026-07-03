@@ -10,7 +10,7 @@ from app.domains.planner.parse_intent import (
     MAX_SYSTEM_GOALS,
 )
 from app.domains.base_request import MAX_STRING_LENGTH, MIN_CONFIDENCE
-from common.pydantic_validators import REASONING_FALLBACK
+from app.domains.field_types import REASONING_FALLBACK
 
 # parse_wf fixture comes from tests/unit/app/orchestration/planner/conftest.py
 

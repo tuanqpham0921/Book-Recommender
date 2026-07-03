@@ -8,7 +8,7 @@ from app.domains.base_request import (
     DomainRequest,
     AnalyzeBaseRequest,
 )
-from common.pydantic_validators import DESCRIPTION_FALLBACK, REASONING_FALLBACK
+from app.domains.field_types import DESCRIPTION_FALLBACK, REASONING_FALLBACK
 from app.domains.node_types import UnknownNodeTypeEnum
 
 

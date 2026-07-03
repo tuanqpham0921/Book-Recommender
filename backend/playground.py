@@ -1,4 +1,4 @@
-"""Playground: exercise the coercion aliases from common.pydantic_validators —
+"""Playground: exercise the coercion field types from app.domains.field_types —
 first locally with raw LLM-ish garbage, then against a real tool call where
 the LLM is instructed to return bad values."""
 
@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from config.settings import settings
 from common.utils import print_json
-from common.pydantic_validators import (
+from app.domains.field_types import (
     ConfidenceFloat,
     DescriptionStr,
     ReasoningStr,
