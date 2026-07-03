@@ -1,7 +1,6 @@
 from common.utils import uuid_8
 from pydantic import BaseModel, Field, model_validator, PrivateAttr, field_validator
 from app.domains.node_types import NodeTypeEnum
-from typing import Annotated
 import re
 import logging
 
@@ -23,10 +22,6 @@ MIN_LIST_LENGTH = 1
 MAX_LIST_LENGTH = 10
 
 ID_PREFIX = "task_"
-TASK_LLM_ID_PATTERN = r"^" + ID_PREFIX + r"\d+$"
-TASK_ID_PATTERN = r"^" + ID_PREFIX + r"[a-f0-9]{8}$"
-
-
 GOAL_PREFIX = "goal_"
 GOAL_ID_PATTERN = r"^" + GOAL_PREFIX + r"[a-f0-9]{8}$"
 TASK_PLACEHOLDER = "task_placeholder"
@@ -69,15 +64,17 @@ class BaseRequest(BaseModel):
         
     def add_details(self, message: str) -> None:
         self._details.append(message)
-    
+
+    # Keep whatever id the LLM produced (even off-format ones like "1") so
+    # depends_on references to it stay resolvable; only generate when there
+    # is nothing to recover. Referential consistency is checked at plan level.
     @field_validator("id", mode="before")
     @classmethod
     def check_id(cls, value):
-        if (not isinstance(value, str)
-            or not (re.match(TASK_LLM_ID_PATTERN, value) or re.match(TASK_ID_PATTERN, value))):
+        if value is None or not str(value).strip():
             return f"{ID_PREFIX}{uuid_8()}"
-        return value
-    
+        return str(value).strip()
+
     @classmethod
     def rebuild_json(cls, data):
         if not isinstance(data, dict):
@@ -98,38 +95,40 @@ class DomainRequest(BaseRequest):
         example=["goal_1", "goal_2"]
     )
     
-    @field_validator("target_goal", mode="before")
+    _overflow_target_goal: list[str] = PrivateAttr(default_factory=list)
+    _invalid_target_goal:  list[str] = PrivateAttr(default_factory=list)
+    
+    @model_validator(mode="wrap")
     @classmethod
-    def check_target_goal(cls, value):
-        if not isinstance(value, list):
-            value = [value]
-        
-        goals = []
-        for item in value:
-            if (not isinstance(item, str) or
-                not re.match(GOAL_ID_PATTERN, item)):
-                continue
-            goals.append(item)
-            
-        if not goals or len(goals) < MIN_LIST_LENGTH:
-            goals = [GOAL_PLACEHOLDER] * MIN_LIST_LENGTH
-            
-        return list(dict.fromkeys(goals))[:MAX_LIST_LENGTH]
+    def capture_target_goal(cls, data, handler):
+        raw = data.get("target_goal", []) if isinstance(data, dict) else []
+        if not isinstance(raw, list):
+            raw = [raw]
 
-    @model_validator(mode="before")
-    @classmethod
-    def validate_target_goal(cls, data):
-        if not isinstance(data, dict):
-            return data
-        
-        if not data.get("target_goal", None):
-            data["target_goal"] = [GOAL_PLACEHOLDER] * MIN_LIST_LENGTH
-        return data
+        valid, invalid = [], []
+        for item in raw:
+            if not isinstance(item, str) or (
+                not re.match(GOAL_ID_PATTERN, item) and item != GOAL_PLACEHOLDER
+            ):
+                invalid.append(item)
+            else:
+                valid.append(item)
+
+        valid = list(dict.fromkeys(valid))
+        if not valid:
+            valid = [GOAL_PLACEHOLDER] * MIN_LIST_LENGTH
+
+        if isinstance(data, dict):
+            data["target_goal"] = valid[:MAX_LIST_LENGTH]
+
+        instance = handler(data)  # Pydantic builds the instance
+        instance._overflow_target_goal = valid[MAX_LIST_LENGTH:]
+        instance._invalid_target_goal = invalid
+        return instance
     
     def model_post_init(self, __context) -> None:
         if self.target_goal.count(GOAL_PLACEHOLDER) == len(self.target_goal):
-            self.target_goal = [GOAL_PLACEHOLDER] * MIN_LIST_LENGTH
-            self.refuse("No valid target goals provided")
+            self.refuse("(No valid target goals provided)")
         else:
             self.target_goal = [goal for goal in self.target_goal if goal != GOAL_PLACEHOLDER]
         super().model_post_init(__context)
@@ -145,43 +144,38 @@ class AnalyzeBaseRequest(DomainRequest):
     )
     
     _llm_depends_on: list[str] = PrivateAttr(default_factory=list)
+    _overflow_depends_on: list[str] = PrivateAttr(default_factory=list)
     
-    # TODO: use wrap, and put refuse if 
-    # there's only place holder
-    # do the same for target goals
-    @field_validator("depends_on", mode="before")
+    # Keep off-format ids (e.g. a hallucinated "1") so they can still be
+    # matched against node ids at plan level; stringify non-strings and drop
+    # blanks — those carry nothing to recover.
+    @model_validator(mode="wrap")
     @classmethod
-    def check_depends_on(cls, value):
-        if not isinstance(value, list):
-            value = [value]
-        tasks = []
-        for item in value:
-            if isinstance(item, str) and (
-                re.match(TASK_LLM_ID_PATTERN, item) 
-                or re.match(TASK_ID_PATTERN, item)
-            ):
-                tasks.append(item)
+    def capture_depends_on(cls, data, handler):
+        raw = data.get("depends_on", []) if isinstance(data, dict) else []
+        if not isinstance(raw, list):
+            raw = [raw]
 
-        if not tasks or len(tasks) < MIN_LIST_LENGTH:
+        tasks = [
+            str(item).strip() for item in raw
+            if item is not None and str(item).strip()
+        ]
+        tasks = list(dict.fromkeys(tasks))
+        if not tasks:
             tasks = [TASK_PLACEHOLDER] * MIN_LIST_LENGTH
 
-        return list(dict.fromkeys(tasks))[:MAX_LIST_LENGTH]
+        if isinstance(data, dict):
+            data["depends_on"] = tasks[:MAX_LIST_LENGTH]
 
-    @model_validator(mode="before")
-    @classmethod
-    def validate_depends_on(cls, data):
-        if not isinstance(data, dict):
-            return data
-
-        if not data.get("depends_on", None):
-            data["depends_on"] = [TASK_PLACEHOLDER] * MIN_LIST_LENGTH
-        return data
+        instance = handler(data)  # Pydantic builds the instance
+        instance._overflow_depends_on = tasks[MAX_LIST_LENGTH:]
+        instance._llm_depends_on = raw.copy()
+        return instance
 
     def model_post_init(self, __context) -> None:
-        self._llm_depends_on = self.depends_on.copy()
-        
         if self.id in self.depends_on:
             self.depends_on.remove(self.id)
+            self.add_details("Removed depend on self id")
         if not self.depends_on or self.depends_on.count(TASK_PLACEHOLDER) == len(self.depends_on):
             self.depends_on = [TASK_PLACEHOLDER] * MIN_LIST_LENGTH
             self.refuse("No valid dependencies provided")

@@ -3,7 +3,7 @@ first locally with raw LLM-ish garbage, then against a real tool call where
 the LLM is instructed to return bad values."""
 
 from openai import OpenAI, pydantic_function_tool
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from config.settings import settings
 from common.utils import print_json
@@ -30,6 +30,12 @@ class Response(BaseModel):
     confidence: ConfidenceFloat = Field(
         description="Confidence of the response between 0 and 1"
     )
+    
+    @model_validator(mode="wrap")
+    @classmethod
+    def capture_and_filter(cls, data, handler):
+        instance = handler(data)
+        return instance
 
 
 # --- local demo: raw values an LLM might plausibly return -------------------

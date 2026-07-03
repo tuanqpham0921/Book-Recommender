@@ -1,9 +1,10 @@
 """Tests for BaseRequest / DomainRequest / AnalyzeBaseRequest validators."""
-import re
+from pydantic import model_validator
 
 from app.domains.base_request import (
+    ID_PREFIX,
+    MAX_LIST_LENGTH,
     MAX_STRING_LENGTH,
-    TASK_ID_PATTERN,
     GOAL_PLACEHOLDER,
     DomainRequest,
     AnalyzeBaseRequest,
@@ -47,13 +48,19 @@ class TestIdValidator:
     def test_valid_llm_format_is_kept(self):
         assert _make_domain(id="task_42").id == "task_42"
 
-    def test_invalid_format_is_replaced_with_uuid(self):
-        req = _make_domain(id="bad-id")
-        assert req.id != "bad-id"
-        assert re.match(TASK_ID_PATTERN, req.id)
+    def test_off_format_id_is_kept_for_recovery(self):
+        assert _make_domain(id="1").id == "1"
 
-    def test_non_string_is_replaced(self):
-        assert re.match(TASK_ID_PATTERN, _make_domain(id=999).id)
+    def test_non_string_is_stringified(self):
+        assert _make_domain(id=999).id == "999"
+
+    def test_blank_id_is_generated(self):
+        req = _make_domain(id="   ")
+        assert req.id.startswith(ID_PREFIX)
+        assert len(req.id) > len(ID_PREFIX)
+
+    def test_none_id_is_generated(self):
+        assert _make_domain(id=None).id.startswith(ID_PREFIX)
 
 
 class TestDescriptionValidator:
@@ -141,11 +148,19 @@ class TestDependsOnValidator:
     def test_internal_uuid_format_is_accepted(self):
         assert "task_a1b2c3d4" in _make_analyze(id="task_1", depends_on=["task_a1b2c3d4"]).depends_on
 
-    def test_invalid_ids_are_filtered(self):
-        assert _make_analyze(id="task_1", depends_on=["bad-dep", "task_2"]).depends_on == ["task_2"]
+    def test_off_format_ids_are_kept_for_recovery(self):
+        req = _make_analyze(id="task_1", depends_on=["1", "task_2"])
+        assert req.depends_on == ["1", "task_2"]
+        assert req.refusal is False
 
-    def test_all_invalid_triggers_refusal(self):
-        assert _make_analyze(id="task_1", depends_on=["bad-dep"]).refusal is True
+    def test_non_string_is_stringified(self):
+        assert _make_analyze(id="task_1", depends_on=[42]).depends_on == ["42"]
+
+    def test_blank_entries_are_dropped(self):
+        assert _make_analyze(id="task_1", depends_on=["  ", "task_2"]).depends_on == ["task_2"]
+
+    def test_empty_list_triggers_refusal(self):
+        assert _make_analyze(id="task_1", depends_on=[]).refusal is True
 
     def test_self_reference_is_removed(self):
         req = _make_analyze(id="task_1", depends_on=["task_1", "task_2"])
@@ -154,3 +169,79 @@ class TestDependsOnValidator:
 
     def test_only_self_reference_triggers_refusal(self):
         assert _make_analyze(id="task_1", depends_on=["task_1"]).refusal is True
+
+
+class TestAnalyzeTargetGoalValidator:
+    """Regression tests: the target_goal wrap validator must also run on
+    AnalyzeBaseRequest (it was previously shadowed by a same-named validator)."""
+
+    def test_excess_valid_goals_are_truncated_not_rejected(self):
+        goals = [f"goal_{i:08d}" for i in range(MAX_LIST_LENGTH + 2)]
+        req = _make_analyze(target_goal=goals)
+        assert req.target_goal == goals[:MAX_LIST_LENGTH]
+        assert req._overflow_target_goal == goals[MAX_LIST_LENGTH:]
+
+    def test_missing_target_goal_refuses_instead_of_raising(self):
+        req = _FakeAnalyze(
+            id="task_1",
+            depends_on=["task_2"],
+            description="A sufficiently long description for the test",
+            reasoning="A sufficiently long reasoning for the test",
+            confidence=0.9,
+        )
+        assert req.refusal is True
+
+    def test_invalid_goals_are_captured(self):
+        req = _make_analyze(target_goal=["not-a-goal", "goal_a1b2c3d4"])
+        assert req.target_goal == ["goal_a1b2c3d4"]
+        assert req._invalid_target_goal == ["not-a-goal"]
+
+
+class TestWrapValidatorOrdering:
+    """A wrap model validator's pre-handler code runs before any field
+    validation, so raw-data mutations made there still pass through the
+    field types' coercion — the wrap cannot smuggle invalid values in."""
+
+    def test_pre_handler_mutation_reaches_field_validators(self):
+        class InjectBadConfidence(_FakeDomain):
+            @model_validator(mode="wrap")
+            @classmethod
+            def inject(cls, data, handler):
+                if isinstance(data, dict):
+                    data["confidence"] = 1.5  # out of range on purpose
+                return handler(data)
+
+        req = InjectBadConfidence(
+            id="task_1",
+            target_goal=["goal_a1b2c3d4"],
+            description="A sufficiently long description for the test",
+            reasoning="A sufficiently long reasoning for the test",
+            confidence=0.9,
+        )
+        # The wrap replaced 0.9 with 1.5 before validation ran ("before" got
+        # run), and ConfidenceFloat then clamped the injected 1.5 to 0.0.
+        assert req.confidence == 0.0
+
+    def test_injected_blank_string_still_hits_fallback(self):
+        class InjectBlankReasoning(_FakeDomain):
+            @model_validator(mode="wrap")
+            @classmethod
+            def inject(cls, data, handler):
+                return handler(data)
+
+        req = InjectBlankReasoning(
+            id="task_1",
+            target_goal=["goal_a1b2c3d4"],
+            description="A sufficiently long description for the test",
+            reasoning="  ",
+            confidence=0.9,
+        )
+        assert req.reasoning == REASONING_FALLBACK
+
+    def test_capture_target_goal_truncates_before_field_max_length(self):
+        # Field(max_length=10) would reject 12 goals; construction only
+        # succeeds because the wrap's write-back runs before that constraint.
+        goals = [f"goal_{i:08d}" for i in range(MAX_LIST_LENGTH + 2)]
+        req = _make_domain(target_goal=goals)
+        assert req.target_goal == goals[:MAX_LIST_LENGTH]
+        assert req._overflow_target_goal == goals[MAX_LIST_LENGTH:]
