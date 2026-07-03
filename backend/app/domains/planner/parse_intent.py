@@ -117,7 +117,8 @@ class InitialParseRequest(BaseModel):
         if value is None:
             return None
         if not isinstance(value, str):
-            return str(value)
+            value = str(value)
+            
         if len(value) > MAX_STRING_LENGTH:
             return value[: MAX_STRING_LENGTH - 4] + "..."
         return value
@@ -128,7 +129,7 @@ class InitialParseRequest(BaseModel):
         if value is None:
             return None
         if not isinstance(value, str):
-            return str(value)
+            value = str(value)
         if len(value) > MAX_STRING_LENGTH:
             return value[: MAX_STRING_LENGTH - 4] + "..."
         return value

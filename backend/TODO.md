@@ -1,5 +1,17 @@
 Continue:
 
+Keep what you have. the validators logic
+* the structure is there so you can just change the logic later
+* maybe use create() instead of parse? 
+    * but it's not a big deal for v1
+    * and forget about tools=[req1, req2, ...] for now
+    * we can easily implement that in the future
+* do think about strategy request
+    * what is the LLM suppose to do if it can't fill?
+    * bc it's required and stuff
+    * so maybe a field for refusal or create a node for unfillable?
+
+
 4. before testing your BaseRequest
    * make a re-use able validator (should be good for list, str, etc...)
    * make sure you keep track of what comes back from LLM

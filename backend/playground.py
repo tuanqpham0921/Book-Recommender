@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from openai import OpenAI, pydantic_function_tool
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
 from config.settings import settings
 from common.utils import print_json
 
@@ -31,6 +31,14 @@ class Response(BaseModel):
     def check_confidence(cls, value):
         print("HERER 2")
         return 1.5
+    
+    @model_validator(mode="wrap")
+    @classmethod
+    def capture_and_filter(cls, data, handler):
+        print("here3")
+        print(cls.model_fields)
+        instance = handler(data)
+        return instance
     
 print_json(pydantic_function_tool(Response))
 print("-----------------------")
@@ -63,3 +71,8 @@ tool_call = completion.choices[0].message.tool_calls[0]
 print(type(tool_call.function.parsed_arguments))
 print(isinstance(tool_call.function.parsed_arguments, Response))
 print(tool_call.function.parsed_arguments)
+
+print("-------------------")
+print(tool_call.function.arguments)
+print(type(tool_call.function.arguments))
+print("-------------------")

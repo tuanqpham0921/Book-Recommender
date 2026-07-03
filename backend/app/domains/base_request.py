@@ -149,6 +149,9 @@ class AnalyzeBaseRequest(DomainRequest):
     
     _llm_depends_on: list[str] = PrivateAttr(default_factory=list)
     
+    # TODO: use wrap, and put refuse if 
+    # there's only place holder
+    # do the same for target goals
     @field_validator("depends_on", mode="before")
     @classmethod
     def check_depends_on(cls, value):
