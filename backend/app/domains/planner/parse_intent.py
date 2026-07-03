@@ -103,29 +103,6 @@ class InitialParseRequest(BaseModel):
         description="Reasoning for classification",
     )
 
-    @field_validator("small_talk", mode="before")
-    @classmethod
-    def check_small_talk(cls, value):
-        if value is None:
-            return None
-        if not isinstance(value, str):
-            value = str(value)
-            
-        if len(value) > MAX_STRING_LENGTH:
-            return value[: MAX_STRING_LENGTH - 4] + "..."
-        return value
-
-    @field_validator("out_of_scope", mode="before")
-    @classmethod
-    def check_out_of_scope(cls, value):
-        if value is None:
-            return None
-        if not isinstance(value, str):
-            value = str(value)
-        if len(value) > MAX_STRING_LENGTH:
-            return value[: MAX_STRING_LENGTH - 4] + "..."
-        return value
-
     @field_validator("system_goals", mode="before")
     @classmethod
     def check_system_goals(cls, value):
