@@ -87,12 +87,14 @@ def bounded_required_string(
     """Coerce to a string within [min_length, max_length]"""
 
     def validate(value):
-        if not isinstance(value, str):
+        if not isinstance(value, str) or not value.strip():
             return f"value is not a string; padded to meet reasoning requirements"
+        
+        value = value.strip()
         if len(value) < min_length:
             value += f" padded to meet the minimum {min_length} character reasoning requirement"
         if len(value) > max_length:
-            return value[:max_length-4] + "..."
+            return value[:max_length-3] + "..."
         return value
 
     return BeforeValidator(validate)
@@ -107,6 +109,22 @@ DescriptionStr = Annotated[str, bounded_required_string(
     max_length=MAX_STRING_LENGTH, 
     min_length=MIN_STRING_LENGTH)]
 
-# OptionalStr = Annotated[str, bounded_string(
-#     max_length=MAX_STRING_LENGTH,
-#     allow_none=True)]
+# ---------------------------------------------------------------
+
+
+def bounded_optional_string(
+    max_length: int,
+) -> BeforeValidator:
+    """Truncate to max_length; anything that isn't a non-blank string becomes None."""
+
+    def validate(value):
+        if not isinstance(value, str) or not value.strip():
+            return None
+        if len(value) > max_length:
+            return value[:max_length-3] + "..."
+        return value
+
+    return BeforeValidator(validate)
+
+OptionalStr = Annotated[str | None, bounded_optional_string(
+    max_length=MAX_STRING_LENGTH)]

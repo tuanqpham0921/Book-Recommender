@@ -10,7 +10,7 @@ client = OpenAI(api_key=settings.openai.API_KEY)
 from typing import Annotated
 
 from pydantic import BeforeValidator
-from common.pydantic_validators import bounded_confidence
+from common.pydantic_validators import bounded_confidence, OptionalStr
 
 
 ConfidenceFloat = Annotated[float, bounded_confidence(0.0, 1.0)]
@@ -19,7 +19,7 @@ ConfidenceFloat = Annotated[float, bounded_confidence(0.0, 1.0)]
 class Response(BaseModel):
     model_config = ConfigDict(extra="forbid")
     
-    value: str
+    value: OptionalStr
     confidence: ConfidenceFloat = Field(
         ge=-0.5,
         le=1.0,
@@ -55,7 +55,7 @@ completion = client.beta.chat.completions.parse(
         },
         {
             "role": "user",
-            "content": "Say hello.",
+            "content": "Don't say anything",
         },
     ],
     tools=[pydantic_function_tool(Response)],
