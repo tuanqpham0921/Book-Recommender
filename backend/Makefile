@@ -109,6 +109,14 @@ tests:
 
 # poetry run pytest -s tests/unit/app/domains/planner/test_strategy_classification.py
 
+.PHONY: tests-all
+tests-all:
+	poetry run pytest -s tests/unit/
+
+.PHONY: playground
+playground:
+	poetry run python playground.py
+
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
