@@ -98,8 +98,6 @@ class StrategyRequest(BaseModel):
         valid, invalid = [], []
         for item in raw:
             if isinstance(item, BaseRequest):
-                # NOTE: This might be important when you serializable
-                # and load back for continuation
                 valid.append(item)
             elif isinstance(item, dict):
                 request_cls = NODE_TYPE_TO_CLS.get(item.get("node_type"))
@@ -114,7 +112,7 @@ class StrategyRequest(BaseModel):
                     invalid.append(item)
             else:
                 invalid.append(item)
-
+                
         if isinstance(data, dict):
             data["strategies"] = valid[:MAX_STRATEGIES]
 
@@ -128,8 +126,6 @@ class StrategyClassificationOutput(UserFacingOutput):
     accepted: list[AnyStrategyRequest] = Field(default_factory=list)
     execution_order: list[str] = Field(default_factory=list)
 
-    # NOTE: this can be private or not?
-    # for retries, continuation, or summaries
     buffer: list[AnyStrategyRequest] = Field(default_factory=list)
     refused: list[AnyStrategyRequest] = Field(default_factory=list)
 
@@ -248,7 +244,6 @@ class StrategyClassificationWorkflow(
         strategy_request = self._build_strategy_request(system_goals)
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            # TODO: I think there's a warning here
             messages=[self.user_message, self._format_system_goals(system_goals)],
             tool_models=[strategy_request],
         )
