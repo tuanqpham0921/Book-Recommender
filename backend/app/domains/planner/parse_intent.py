@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Optional, Literal
 from openai.types.chat import ParsedFunctionToolCall
-from pydantic import BaseModel, Field, PrivateAttr, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator, ValidationError
 
 from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
@@ -102,15 +102,37 @@ class InitialParseRequest(BaseModel):
         max_length=MAX_STRING_LENGTH,
         description="Reasoning for classification",
     )
+    
+    _overflow_system_goals: list[SystemGoal] = PrivateAttr(default_factory=list)
+    _invalid_system_goals: list = PrivateAttr(default_factory=list)
 
-    @field_validator("system_goals", mode="before")
+    @model_validator(mode="wrap")
     @classmethod
-    def check_system_goals(cls, value):
-        if not isinstance(value, list):
-            value = [value]
-        if len(value) > MAX_SYSTEM_GOALS:
-            value = value[:MAX_SYSTEM_GOALS]
-        return value
+    def capture_system_goals(cls, data, handler):
+        raw = data.get("system_goals", []) if isinstance(data, dict) else []
+        if not isinstance(raw, list):
+            raw = [raw]
+
+        valid, invalid = [], []
+        for item in raw:
+            if isinstance(item, SystemGoal):
+                valid.append(item)
+                continue
+
+            try:
+                goal_instance = SystemGoal.model_validate(item)
+                valid.append(goal_instance)
+            except ValidationError as e:
+                logger.exception(e)
+                invalid.append(item)
+
+        if isinstance(data, dict):
+            data["system_goals"] = valid[:MAX_SYSTEM_GOALS]
+
+        instance = handler(data)  # Pydantic builds the instance
+        instance._overflow_system_goals = valid[MAX_SYSTEM_GOALS:]
+        instance._invalid_system_goals = invalid
+        return instance
 
 
 class InitialParseOutput(UserFacingOutput):
@@ -246,7 +268,11 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         self.output.out_of_scope = parse_result.out_of_scope
         self.output.reasoning = parse_result.reasoning
 
-        for goal in parse_result.system_goals:
+        # overflow goals are valid, just over the model's limit — run them
+        # through the same checks so they can fill capacity freed by refusals,
+        # or wait in buffer_goals
+        all_goals = parse_result.system_goals + parse_result._overflow_system_goals
+        for goal in all_goals:
             reasons = []
             if goal.confidence < confident_tuning:
                 reasons.append(f"Rejected: confidence too low ({goal.confidence})")

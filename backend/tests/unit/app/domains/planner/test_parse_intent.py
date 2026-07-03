@@ -132,6 +132,55 @@ class TestInitialParseRequestValidators:
         assert len(req.system_goals) == MAX_SYSTEM_GOALS
 
 
+class TestSystemGoalsOverflow:
+    def test_goals_beyond_max_land_in_overflow(self):
+        goals = [
+            _make_goal(description=f"Goal number {i}")
+            for i in range(MAX_SYSTEM_GOALS + 3)
+        ]
+        req = _make_parse_result(goals=goals)
+        assert req.system_goals == goals[:MAX_SYSTEM_GOALS]
+        assert req._overflow_system_goals == goals[MAX_SYSTEM_GOALS:]
+
+    def test_no_overflow_when_within_limit(self):
+        req = _make_parse_result(goals=[_make_goal()])
+        assert req._overflow_system_goals == []
+
+    def test_overflow_from_raw_dicts_holds_validated_instances(self):
+        # the LLM delivers dicts; overflow must still be usable SystemGoal
+        # instances, not raw dicts
+        goal_dicts = [
+            _make_goal(description=f"Goal number {i}").model_dump()
+            for i in range(MAX_SYSTEM_GOALS + 2)
+        ]
+        req = _make_parse_result(goals=goal_dicts)
+        assert len(req._overflow_system_goals) == 2
+        assert all(
+            isinstance(g, SystemGoal) for g in req._overflow_system_goals
+        )
+
+    def test_invalid_goals_do_not_consume_capacity(self):
+        # invalid items are filtered before the cut, so they never displace
+        # valid goals into overflow
+        garbage = [{"bad": "dict"}, 3, None]
+        goals = [
+            _make_goal(description=f"Goal number {i}")
+            for i in range(MAX_SYSTEM_GOALS)
+        ]
+        req = _make_parse_result(goals=garbage + goals)
+        assert req.system_goals == goals
+        assert req._overflow_system_goals == []
+        assert req._invalid_system_goals == garbage
+
+    def test_one_invalid_goal_does_not_discard_the_batch(self):
+        # regression for the missing write-back failure mode: one bad item
+        # must not raise and take every valid goal down with it
+        good = _make_goal()
+        req = _make_parse_result(goals=[{"bad": "dict"}, good])
+        assert req.system_goals == [good]
+        assert req._invalid_system_goals == [{"bad": "dict"}]
+
+
 class TestProcessParseResult:
     def test_empty_result_sets_result_not_ok(self, parse_wf):
         parse_wf.process_parse_result(_make_parse_result())
@@ -222,6 +271,28 @@ class TestProcessParseResult:
         for _ in range(MAX_SYSTEM_GOALS):
             parse_wf.output.accepted_goals.append(_make_goal())
         parse_wf.process_parse_result(_make_parse_result(goals=[_make_goal()]))
+        assert len(parse_wf.output.buffer_goals) == 1
+
+    def test_overflow_goals_flow_into_buffer(self, parse_wf):
+        goals = [
+            _make_goal(description=f"Goal number {i}")
+            for i in range(MAX_SYSTEM_GOALS + 3)
+        ]
+        parse_wf.process_parse_result(_make_parse_result(goals=goals))
+        assert len(parse_wf.output.accepted_goals) == MAX_SYSTEM_GOALS
+        assert len(parse_wf.output.buffer_goals) == 3
+
+    def test_refused_goals_free_capacity_for_overflow(self, parse_wf):
+        # 2 low-confidence goals inside the limit get refused; goals from
+        # overflow are promoted into the freed accepted capacity
+        low = [_make_goal(confidence=0.1), _make_goal(confidence=0.1)]
+        good = [
+            _make_goal(description=f"Goal number {i}")
+            for i in range(MAX_SYSTEM_GOALS + 1)
+        ]
+        parse_wf.process_parse_result(_make_parse_result(goals=low + good))
+        assert len(parse_wf.output.refused_goals) == 2
+        assert len(parse_wf.output.accepted_goals) == MAX_SYSTEM_GOALS
         assert len(parse_wf.output.buffer_goals) == 1
 
     def test_refused_goal_does_not_go_to_buffer_when_accepted_is_full(self, parse_wf):
