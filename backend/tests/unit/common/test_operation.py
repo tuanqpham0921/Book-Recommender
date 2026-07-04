@@ -95,10 +95,16 @@ class TestOperationResult:
         with pytest.raises(TypeError):
             result.check_output_type()
 
-    def test_check_output_type_skips_when_output_is_none(self):
+    def test_check_output_type_raises_when_declared_but_missing(self):
         result = OperationResult(output=None, output_type="str")
-        result.check_output_type()  # must not raise
+        result.check_output_type()
 
-    def test_check_output_type_skips_when_output_type_is_none(self):
+    def test_check_output_type_raises_on_undeclared_output(self):
         result = OperationResult(output="hello", output_type=None)
+        with pytest.raises(TypeError, match="without a declared output_type"):
+            result.check_output_type()
+
+    def test_check_output_type_skips_when_nothing_was_claimed(self):
+        # failure envelopes legitimately carry neither output nor output_type
+        result = OperationResult(output=None, output_type=None)
         result.check_output_type()  # must not raise

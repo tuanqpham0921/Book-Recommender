@@ -10,6 +10,10 @@ async def _as_coro(step: OperationResult) -> OperationResult:
 
 
 class _SuccessWorkflow(Workflow):
+    def __init__(self):
+        # producing output requires declaring its type (check_output_type)
+        super().__init__(output_type=str)
+
     async def run(self, *args, **kwargs):
         self.result.output = "done"
         self.result.message = "success"
@@ -66,6 +70,19 @@ class TestWorkflowExecution:
     async def test_exception_in_run_still_records_duration(self):
         result = await _ExceptionWorkflow()()
         assert result.duration is not None
+
+    async def test_undeclared_output_fails_the_workflow(self):
+        # producing output without declaring output_type is a contract
+        # violation caught by check_output_type after run()
+        class _UndeclaredOutput(Workflow):
+            async def run(self, *args, **kwargs):
+                self.result.output = "done"
+                self.result.ok = True
+
+        result = await _UndeclaredOutput()()
+        assert result.ok is False
+        assert result.runtime_error is not None
+        assert result.runtime_error.type == "TypeError"
 
 
 class TestRunAsyncStep:

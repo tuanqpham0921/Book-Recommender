@@ -61,10 +61,22 @@ class OperationResult(BaseModel, Generic[OutputT]):
     runtime_error: RuntimeErrorInfo | None = None
 
     def check_output_type(self) -> None:
-        if self.output is None or self.output_type is None:
+        # default there's no output
+        if self.output is None:
+            return
+        
+        # no output and no declared type: this envelope never claimed to
+        # produce anything (e.g. a failure envelope) — nothing to check
+        if self.output is None and self.output_type is None:
             return
 
-        if self.output_type and type(self.output).__name__ != self.output_type:
+        if self.output_type is None:
+            raise TypeError(
+                f"Output of type {type(self.output).__name__} was produced "
+                "without a declared output_type"
+            )
+
+        if type(self.output).__name__ != self.output_type:
             raise TypeError(
                 f"Output {self.output} is of type {type(self.output).__name__} not of type {self.output_type}"
             )
