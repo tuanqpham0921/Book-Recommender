@@ -1,12 +1,4 @@
 Continue:
-* check your unit tests
-* figure out the genric and type check stuff
-    * you might not need the output check?
-    * since it initialized internally for you to use anyways?
-* check your Pywright or playground it
-    * see if it actually work for your nested types
-
-* fix and stablize your workflow, op result, and @task
 * don't try to save your traces to postgres
     * just save it to logs and have it append to continue writting
 * then you can set up an eval script
@@ -14,6 +6,11 @@ Continue:
     * and send metadata like how long it took and stuff (all are in your operation result)
     * then you can optimize later
 
+Note:
+* currently your workflow and operation is fine
+    * it could be better but we can deal it more stuff later
+    * right now it supports run_async_step (need a @task for non failure)
+    * steps also has to be OperationalResult in add step to help detect that
 
 Reminder:
 1. need to create one executor for @task and workflow
