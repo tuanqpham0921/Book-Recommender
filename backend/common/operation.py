@@ -39,7 +39,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
     output: OutputT | None = None
     output_type: str | None = None
 
-    run_time_error: dict[str, Any] | Exception | None = None
+    run_time_error: Exception | None = None
     duration: float | None = None
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
 

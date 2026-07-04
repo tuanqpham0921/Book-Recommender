@@ -50,8 +50,8 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
     def add_step(
         self, step: OperationResult[Any], *, raise_on_failure: bool = True
     ) -> OperationResult[Any]:
-        step = super().add_step(step, raise_on_failure=raise_on_failure)
         self.result.token_usage += step.token_usage
+        step = super().add_step(step, raise_on_failure=raise_on_failure)
         return step
 
     async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:

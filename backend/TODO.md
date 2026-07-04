@@ -7,15 +7,24 @@ Continue:
     * and send metadata like how long it took and stuff (all are in your operation result)
     * then you can optimize later
 
-* remove the private attributes (keep it in the output)
-    * might need to use create instead of parse
-    * this  an be for later, when you actually need to load in buffer
 
-Current:
-1. create a way to run all your test queries (prod mode)
-2. show rejected quries and resuls
-2. then a script to send all those to the frontend for you to review
-3. deploy your app without DB
+So there are 2 types of workflow
+    1. that's need stop on raise (smaller step)
+        * parse intent, and planner stuff is one
+        * if one fails then it should raise and get send back to the orchestator
+        * but what about internal validation? (still need to try-execpt)
+        * what about where does the strategy fixing or retries happen
+        * within the parse_intent or classification?
+    2. and the other don't (main orchestrator)
+        * the orchestrator or parent workflow can't raise on failure
+        * because you don't want everything to crash and you might
+        * use that to send to an LLM to fix or generate a response
+A @task decorator should always raise
+    * it should be 1 atomic step without lower steps
+    * maybe find away to pass in a wrapper or something
+    * to write to db if needed
+
+
 
 Reminder:
 1. need to create one executor for @task and workflow
@@ -23,6 +32,14 @@ Reminder:
 3. execution sql can just hold things like time, token usage, edit needed, run-time errors
     * don't store the full result in there
     * make it a background task on a seperate thread
+4. remove the private attributes (keep it in the output)
+    * might need to use create instead of parse
+    * this  an be for later, when you actually need to load in buffer
+Eval and deployment testing:
+1. create a way to run all your test queries (prod mode)
+2. show rejected quries and resuls
+2. then a script to send all those to the frontend for you to review
+3. deploy your app without DB
 =======================================================================
 
 Unit Test:

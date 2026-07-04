@@ -35,7 +35,7 @@ class Workflow(ABC, Generic[OutputT]):
             await self.run(*args, **kwargs)
             self.check_output_type()
 
-            # runtime failure, app still runs
+            # not runtime failure, app still runs
             if not self.result.ok:
                 self.logger.warning(f"Workflow failed: {self.result.message}")
 
