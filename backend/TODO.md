@@ -1,6 +1,4 @@
 Continue:
-* rename your OperationalResult to ResultEnvolope
-* rename OperationalResult.output to content
 * check your unit tests
 * figure out the genric and type check stuff
     * you might not need the output check?
