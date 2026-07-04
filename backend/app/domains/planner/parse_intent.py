@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
-from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
+from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.node_types import NodeTypeEnum
 from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
@@ -135,7 +135,7 @@ class InitialParseRequest(BaseModel):
         return instance
 
 
-class InitialParseOutput(UserFacingOutput):
+class InitialParseOutput(AppWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
     refused_goals: list[SystemGoal] = Field(default_factory=list)
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
@@ -173,7 +173,7 @@ class InitialParseOutput(UserFacingOutput):
         return payload
 
 
-class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
+class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."

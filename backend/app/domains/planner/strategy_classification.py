@@ -16,7 +16,7 @@ from openai.types.chat import ParsedFunctionToolCall
 from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
-from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
+from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.base_request import BaseRequest
 from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
@@ -122,7 +122,7 @@ class StrategyRequest(BaseModel):
         return instance
 
 
-class StrategyClassificationOutput(UserFacingOutput):
+class StrategyClassificationOutput(AppWorkflowOutput):
     accepted: list[AnyStrategyRequest] = Field(default_factory=list)
     execution_order: list[str] = Field(default_factory=list)
 
@@ -146,7 +146,7 @@ class StrategyClassificationOutput(UserFacingOutput):
 
 
 class StrategyClassificationWorkflow(
-    UserFacingBaseWorkflow[StrategyClassificationOutput]
+    AppBaseWorkflow[StrategyClassificationOutput]
 ):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"

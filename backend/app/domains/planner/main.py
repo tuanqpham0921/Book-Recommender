@@ -14,7 +14,7 @@ from app.domains.planner.strategy_classification import (
     StrategyClassificationOutput,
 )
 
-from app.common.workflow import UserFacingBaseWorkflow, UserFacingOutput
+from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from common.operation import OperationResult
 from app.common.prompt_loader import format_prompt
 import logging
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 CONVERSATION_SUMMARY_PROMPT_PATH = "domains/planner/prompts/3_conversation_orchestration_summary.txt"
 
 
-class OrchestrationOutput(UserFacingOutput):
+class OrchestrationOutput(AppWorkflowOutput):
     session_id: str | None = None
     parse_result: InitialParseOutput | None = None
     strategy_result: StrategyClassificationOutput | None = None
@@ -34,7 +34,7 @@ class OrchestrationOutput(UserFacingOutput):
     def to_summary(self) -> dict[str, Any]:
         pass
     
-class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
+class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )

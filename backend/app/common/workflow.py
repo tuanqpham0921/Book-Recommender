@@ -14,18 +14,17 @@ from app.common.sse_stream import SSEStream
 from clients.base import BaseLLMClient, BaseLLMRequest
 from openai.types.chat import ParsedFunctionToolCall
 
-OutputT = TypeVar("OutputT", bound="UserFacingOutput")
+OutputT = TypeVar("OutputT", bound="AppWorkflowOutput")
 
 
-class UserFacingOutput(BaseModel, ABC):
+class AppWorkflowOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.output."""
 
     @abstractmethod
     def to_summary(self) -> dict[str, Any]:
         ...
 
-# TODO: change this to AppBaseWorkflow
-class UserFacingBaseWorkflow(Workflow[OutputT]):
+class AppBaseWorkflow(Workflow[OutputT]):
     success_message = "Workflow completed successfully"
     failure_message = "Workflow failed"
 
