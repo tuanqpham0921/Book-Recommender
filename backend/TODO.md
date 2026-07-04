@@ -1,4 +1,13 @@
 Continue:
+* rename your OperationalResult to ResultEnvolope
+* rename OperationalResult.output to content
+* check your unit tests
+* figure out the genric and type check stuff
+    * you might not need the output check?
+    * since it initialized internally for you to use anyways?
+* check your Pywright or playground it
+    * see if it actually work for your nested types
+
 * fix and stablize your workflow, op result, and @task
 * don't try to save your traces to postgres
     * just save it to logs and have it append to continue writting
@@ -6,24 +15,6 @@ Continue:
     * load in the user message, send the mermaids in json file to review
     * and send metadata like how long it took and stuff (all are in your operation result)
     * then you can optimize later
-
-
-So there are 2 types of workflow
-    1. that's need stop on raise (smaller step)
-        * parse intent, and planner stuff is one
-        * if one fails then it should raise and get send back to the orchestator
-        * but what about internal validation? (still need to try-execpt)
-        * what about where does the strategy fixing or retries happen
-        * within the parse_intent or classification?
-    2. and the other don't (main orchestrator)
-        * the orchestrator or parent workflow can't raise on failure
-        * because you don't want everything to crash and you might
-        * use that to send to an LLM to fix or generate a response
-A @task decorator should always raise
-    * it should be 1 atomic step without lower steps
-    * maybe find away to pass in a wrapper or something
-    * to write to db if needed
-
 
 
 Reminder:
