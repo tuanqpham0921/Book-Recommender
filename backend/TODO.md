@@ -1,7 +1,4 @@
 Continue:
-* remove the private attributes (keep it in the output)
-    * might need to use create instead of parse
-
 * fix and stablize your workflow, op result, and @task
 * don't try to save your traces to postgres
     * just save it to logs and have it append to continue writting
@@ -9,6 +6,10 @@ Continue:
     * load in the user message, send the mermaids in json file to review
     * and send metadata like how long it took and stuff (all are in your operation result)
     * then you can optimize later
+
+* remove the private attributes (keep it in the output)
+    * might need to use create instead of parse
+    * this  an be for later, when you actually need to load in buffer
 
 Current:
 1. create a way to run all your test queries (prod mode)
@@ -19,6 +20,9 @@ Current:
 Reminder:
 1. need to create one executor for @task and workflow
 2. add timeout to @task and @workflow (should be able to handle them)
+3. execution sql can just hold things like time, token usage, edit needed, run-time errors
+    * don't store the full result in there
+    * make it a background task on a seperate thread
 =======================================================================
 
 Unit Test:
