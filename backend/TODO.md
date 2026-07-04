@@ -1,5 +1,14 @@
 Continue:
+* remove the private attributes (keep it in the output)
+    * might need to use create instead of parse
 
+* fix and stablize your workflow, op result, and @task
+* don't try to save your traces to postgres
+    * just save it to logs and have it append to continue writting
+* then you can set up an eval script
+    * load in the user message, send the mermaids in json file to review
+    * and send metadata like how long it took and stuff (all are in your operation result)
+    * then you can optimize later
 
 Current:
 1. create a way to run all your test queries (prod mode)

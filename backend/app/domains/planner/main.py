@@ -107,9 +107,13 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         self.output.diagram = await self.send_mermaid(
             self.output.strategy_result
         )
+        seen_description = set()
         await self.sse_stream.send_chars("\n\n# System Goals:\n")
         for system_goal in self.output.parse_result.accepted_goals:
+            if system_goal.description in seen_description:
+                continue
             await self.sse_stream.send_chars(f"- {system_goal.description}\n")
+            seen_description.add(system_goal.description)
             
         await self.sse_stream.send_divider()
         #------------------------------------------------------------------------------------------------
