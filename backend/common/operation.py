@@ -1,5 +1,5 @@
 import logging
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 from typing import Any, Generic, TypeVar
 import time
 from typing import Callable
@@ -23,9 +23,26 @@ class TokenUsage(BaseModel):
         return self
 
 
+class RuntimeErrorInfo(BaseModel):
+    """Serializable record of an unexpected exception — the error's type and
+    message as first-class data for routing/aggregation, plus the formatted
+    traceback for humans."""
+
+    type: str
+    message: str
+    traceback: str
+
+    @classmethod
+    def from_exception(cls, e: BaseException) -> "RuntimeErrorInfo":
+        return cls(
+            type=type(e).__name__,
+            message=str(e),
+            traceback="".join(traceback.format_exception(e)),
+        )
+
+
 class OperationResult(BaseModel, Generic[OutputT]):
     """Outcome of a single named check or step."""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
     start_time: str = Field(default_factory=now_iso)
@@ -34,14 +51,14 @@ class OperationResult(BaseModel, Generic[OutputT]):
     ok: bool = True
     message: str | None = None
     steps: list[Any] = Field(default_factory=list)
-    details: dict[str, Any] | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
 
     output: OutputT | None = None
     output_type: str | None = None
 
-    run_time_error: Exception | None = None
     duration: float | None = None
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
+    run_time_error: RuntimeErrorInfo | None = None
 
     def check_output_type(self) -> None:
         if self.output is None or self.output_type is None:
@@ -72,11 +89,14 @@ def task(
                 # custom operation result retuned from the task
                 # the task must validate ok and message
                 if isinstance(output, OperationResult):
+                    if log_info and not output.ok:
+                        logger.warning(f"Task failed: {output.message}")
+                    
                     output.name = func_ref
                     output.duration = round(time.perf_counter() - time_start, 2)
                     return output
 
-                # task is not returning an operation result, create a default one
+                # task did not return an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
                 result = OperationResult(name=func_ref, output=output, output_type=type(output).__name__)
                 result.duration = round(time.perf_counter() - time_start, 2)
@@ -88,10 +108,12 @@ def task(
                 return result
             except Exception as e:
                 # run time error is recorded, so the task is considered failed
+                logger.exception(e)
+                
                 result = OperationResult(name=func_ref)
                 result.ok = False
-                result.message = f"Task {func_ref} failed: {e}"
-                result.run_time_error = traceback.format_exception(e)
+                result.message = f"Task failed"
+                result.run_time_error = RuntimeErrorInfo.from_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 return result
 

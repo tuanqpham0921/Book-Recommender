@@ -180,15 +180,11 @@ class StrategyClassificationWorkflow(
 
         tool_call = await self._run_llm_args_parse(system_goals)
         parse_result = tool_call.function.parsed_arguments
-
+        
         dag_step = await self.run_async_step(
             self._create_dag(parse_result, system_goals), raise_on_failure=False
         )
-        if not dag_step.ok:
-            self.result.ok = False
-            self.result.message = self.failure_message
-            return
-
+        
         self._record_tool_call(tool_call)
         self.finalize_result()
 
@@ -196,7 +192,7 @@ class StrategyClassificationWorkflow(
     async def _create_dag(self, parse_result, system_goals) -> None:
         if parse_result is None:
             raise ValueError("No parse_result provided")
-
+        
         if parse_result._invalid_strategies:
             logger.warning(
                 f"LLM created {len(parse_result._invalid_strategies)} invalid strategies"

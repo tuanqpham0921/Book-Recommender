@@ -33,21 +33,6 @@ class _MultiStepWorkflow(Workflow):
         for step in self._steps:
             self.add_step(step, raise_on_failure=False)
 
-
-class _RunStepWorkflow(Workflow):
-    """run_step is the synchronous counterpart to run_async_step - it takes an
-    already-produced OperationResult (from a sync method call) instead of
-    awaiting a coroutine."""
-
-    def __init__(self, step: OperationResult, raise_on_failure: bool = True):
-        super().__init__()
-        self._step = step
-        self._raise = raise_on_failure
-
-    async def run(self, *args, **kwargs):
-        self.run_step(self._step, raise_on_failure=self._raise)
-
-
 class TestWorkflowExecution:
     async def test_successful_run_sets_ok_true(self):
         result = await _SuccessWorkflow()()

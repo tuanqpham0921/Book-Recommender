@@ -52,19 +52,6 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
         self.user_message = user_message
 
-    def add_step(
-        self, step: OperationResult[Any], *, raise_on_failure: bool = True
-    ) -> OperationResult[Any]:
-        step = super().add_step(step, raise_on_failure=raise_on_failure)
-        output = step.output
-
-        if isinstance(output, InitialParseOutput):
-            self.output.parse_result = output
-        elif isinstance(output, StrategyClassificationOutput):
-            self.output.strategy_result = output
-
-        return step
-
     async def run(self, request_context: RequestContext) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -77,11 +64,15 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         parse_result = await self.run_async_step(
             parse_workflow(), raise_on_failure=False
         )
+        self.output.parse_result = parse_result.output
+        
         if not parse_result.ok:
             if parse_result.run_time_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
+                return
             self.result.ok = False
             self.result.message = self.initial_parse_failure_message
+            await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
         # return
@@ -95,13 +86,16 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         strategy_result = await self.run_async_step(
             strategy_workflow(self.user_message, system_goals), raise_on_failure=False
         )
+        self.output.strategy_result = strategy_result.output
         if not strategy_result.ok:
             if strategy_result.run_time_error:
                 await self.sse_stream.send_error(
                     self.strategy_classification_failure_message
                 )
+                return
             self.result.ok = False
             self.result.message = self.strategy_classification_failure_message
+            await self.sse_stream.send_chars(self.strategy_classification_failure_message)
             return
         
         self.output.diagram = await self.send_mermaid(

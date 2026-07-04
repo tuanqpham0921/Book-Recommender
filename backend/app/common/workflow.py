@@ -24,7 +24,7 @@ class UserFacingOutput(BaseModel, ABC):
     def to_summary(self) -> dict[str, Any]:
         ...
 
-
+# TODO: change this to AppBaseWorkflow
 class UserFacingBaseWorkflow(Workflow[OutputT]):
     success_message = "Workflow completed successfully"
     failure_message = "Workflow failed"
@@ -46,13 +46,6 @@ class UserFacingBaseWorkflow(Workflow[OutputT]):
         self.result.message = message or (
             self.success_message if ok else self.failure_message
         )
-
-    def add_step(
-        self, step: OperationResult[Any], *, raise_on_failure: bool = True
-    ) -> OperationResult[Any]:
-        self.result.token_usage += step.token_usage
-        step = super().add_step(step, raise_on_failure=raise_on_failure)
-        return step
 
     async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         result = await self.run_async_step(

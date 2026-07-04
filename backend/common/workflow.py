@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
-from common.operation import OperationResult
+from common.operation import OperationResult, RuntimeErrorInfo
 import logging
 import time
 from typing import Any, Generic, TypeVar
-import traceback
 
 
 from typing import Coroutine
@@ -14,11 +13,12 @@ class Workflow(ABC, Generic[OutputT]):
     def __init__(self, output_type: type[OutputT] | None = None):
         self.name = self.workflow_ref
         self.output_type = output_type
+        
+        # intialize an envolope in memory to modify
         self.result: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
             output_type=output_type.__name__ if output_type is not None else None,
         )
-        self.stop_on_failure = True
         if output_type is not None:
             self.result.output = output_type()
         
@@ -38,13 +38,15 @@ class Workflow(ABC, Generic[OutputT]):
             # not runtime failure, app still runs
             if not self.result.ok:
                 self.logger.warning(f"Workflow failed: {self.result.message}")
-
+            else:
+                self.logger.info(f"Finished workflow: {self.workflow_name}")
         except Exception as e:
-            # run-time failure, TODO: handle if needed
+            # run-time failure
             self.logger.exception(f"Workflow failed: {e}")
+            
             self.result.ok = False
-            self.result.message = f"Workflow failed: {e}"
-            self.result.run_time_error = traceback.format_exception(e)
+            self.result.message = f"Workflow failed"
+            self.result.run_time_error = RuntimeErrorInfo.from_exception(e)
         finally:
             # final formatting of the result
             self.result.name = self.workflow_ref
@@ -62,36 +64,29 @@ class Workflow(ABC, Generic[OutputT]):
         *,
         raise_on_failure: bool = True,
     ) -> OperationResult[Any]:
-        result = await function
-        return self.add_step(result, raise_on_failure=raise_on_failure)
-
-    def run_step(
-        self,
-        result: OperationResult[Any],
-        *,
-        raise_on_failure: bool = True,
-    ) -> OperationResult[Any]:
-        return self.add_step(result, raise_on_failure=raise_on_failure)
-
-    def add_step(
-        self, step: OperationResult[Any], *, raise_on_failure: bool = True
-    ) -> OperationResult[Any]:
-        # if isinstance(step, OperationResult[Any]):
-        #     raise ValueError(f"Step is of type {type(step)} not OperationResult")
+        # NOTE: enable raise_on_failure = False if you want to retry
+        # so the caller can capture the envolope and deal with it
+        # default is True more most cases
         
-        self.result.steps.append(step)
-
-        if step.ok:
-            return step
+        step_result = await function
+        self.add_step(step_result)
+        
+        if step_result.ok:
+            return step_result
 
         self.result.ok = False
-        self.result.message = f"Step failed: {step.name}"
-        self.logger.warning(f"🛑 {step.name} FAILED: {step.message}")
-
+        self.result.details[f"{step_result.name}"] = f"Step failed"
         if raise_on_failure:
-            raise RuntimeError(f"🛑 {step.name} FAILED: {step.message}")
+            raise RuntimeError(f"{step_result.name} FAILED: {step_result.message}")
+        return step_result
+        
 
-        return step
+    def add_step(self, step: OperationResult[Any]) -> None:
+        if not isinstance(step, OperationResult):
+            raise ValueError(f"Step is of type {type(step)} not OperationResult")
+        
+        self.result.token_usage += step.token_usage
+        self.result.steps.append(step)
 
     @property
     def workflow_ref(self) -> str:

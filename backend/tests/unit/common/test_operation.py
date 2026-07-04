@@ -1,5 +1,5 @@
 import pytest
-from common.operation import task, OperationResult
+from common.operation import task, OperationResult, RuntimeErrorInfo
 
 
 @task
@@ -46,6 +46,22 @@ class TestTask:
         assert "something went wrong" in result.message
         assert result.run_time_error is not None
         assert result.duration is not None
+
+    async def test_run_time_error_is_structured(self):
+        result = await _raises_value_error()
+        error = result.run_time_error
+        assert isinstance(error, RuntimeErrorInfo)
+        assert error.type == "ValueError"
+        assert error.message == "something went wrong"
+        assert "_raises_value_error" in error.traceback
+
+    async def test_run_time_error_serializes_to_plain_dict(self):
+        # the whole point of the structured record: it must survive
+        # model_dump for DB persistence without arbitrary types
+        result = await _raises_value_error()
+        dumped = result.model_dump()
+        assert dumped["run_time_error"]["type"] == "ValueError"
+        assert dumped["run_time_error"]["message"] == "something went wrong"
 
     async def test_sets_function_name_on_result(self):
         result = await _returns_plain_value()
