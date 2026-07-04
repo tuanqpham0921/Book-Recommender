@@ -61,15 +61,8 @@ def _make_orchestration_output() -> OrchestrationOutput:
 
 
 class TestConversationOrchestratorAddStep:
-    def test_stores_initial_parse_output(self, orchestrator):
-        parse_output = InitialParseOutput()
-        orchestrator.add_step(OperationResult(ok=True, output=parse_output))
-        assert orchestrator.output.parse_result is parse_output
-
-    def test_stores_strategy_classification_output(self, orchestrator):
-        strategy_output = StrategyClassificationOutput()
-        orchestrator.add_step(OperationResult(ok=True, output=strategy_output))
-        assert orchestrator.output.strategy_result is strategy_output
+    # storing parse/strategy outputs moved from an add_step override into
+    # run() itself — see ConversationOrchestrator.run
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(

@@ -1,12 +1,20 @@
+import asyncio
+
 import pytest
-from common.workflow import Workflow
+from common.workflow import Workflow, StepFailure
 from common.operation import OperationResult
+
+
+async def _as_coro(step: OperationResult) -> OperationResult:
+    return step
 
 
 class _SuccessWorkflow(Workflow):
     async def run(self, *args, **kwargs):
         self.result.output = "done"
         self.result.message = "success"
+        # fail-closed contract: workflows must declare success explicitly
+        self.result.ok = True
 
 
 class _ExceptionWorkflow(Workflow):
@@ -21,7 +29,12 @@ class _StepWorkflow(Workflow):
         self._raise = raise_on_failure
 
     async def run(self, *args, **kwargs):
-        self.add_step(self._step, raise_on_failure=self._raise)
+        step = await self.run_async_step(
+            _as_coro(self._step), raise_on_failure=self._raise
+        )
+        # fail-closed contract: declare success only if the work succeeded
+        if step.ok:
+            self.result.ok = True
 
 
 class _MultiStepWorkflow(Workflow):
@@ -31,7 +44,7 @@ class _MultiStepWorkflow(Workflow):
 
     async def run(self, *args, **kwargs):
         for step in self._steps:
-            self.add_step(step, raise_on_failure=False)
+            await self.run_async_step(_as_coro(step), raise_on_failure=False)
 
 class TestWorkflowExecution:
     async def test_successful_run_sets_ok_true(self):
@@ -54,7 +67,7 @@ class TestWorkflowExecution:
         assert result.duration is not None
 
 
-class TestAddStep:
+class TestRunAsyncStep:
     async def test_success_step_appended_to_steps(self):
         step = OperationResult(ok=True, name="my_step")
         result = await _StepWorkflow(step)()
@@ -67,11 +80,20 @@ class TestAddStep:
         result = await _StepWorkflow(step, raise_on_failure=False)()
         assert result.ok is False
 
-    async def test_failed_step_with_raise_records_run_time_error(self):
+    async def test_failed_step_sets_informative_message(self):
+        step = OperationResult(ok=False, name="bad_step", message="bad")
+        result = await _StepWorkflow(step, raise_on_failure=False)()
+        assert "bad_step" in result.message
+        assert "bad" in result.message
+
+    async def test_failed_step_with_raise_is_a_controlled_abort(self):
+        # StepFailure is control flow, not a crash: the parent envelope must
+        # NOT carry run_time_error — the step's own envelope has the details
         step = OperationResult(ok=False, name="bad_step", message="bad")
         result = await _StepWorkflow(step, raise_on_failure=True)()
         assert result.ok is False
-        assert result.run_time_error is not None
+        assert result.run_time_error is None
+        assert "bad_step" in result.message
 
     async def test_failed_step_without_raise_still_appended(self):
         step = OperationResult(ok=False, name="bad_step", message="bad")
@@ -88,24 +110,26 @@ class TestAddStep:
         assert len(result.steps) == 3
 
 
-class TestRunStep:
-    async def test_success_step_appended_to_steps(self):
-        step = OperationResult(ok=True, name="my_sync_step")
-        result = await _RunStepWorkflow(step)()
-        assert result.ok is True
-        assert len(result.steps) == 1
-        assert result.steps[0].name == "my_sync_step"
+class TestAddStep:
+    def test_rejects_non_operation_result(self):
+        wf = _SuccessWorkflow()
+        with pytest.raises(ValueError):
+            wf.add_step("not a result")
 
-    async def test_failed_step_sets_result_ok_false(self):
-        step = OperationResult(ok=False, name="bad_step", message="bad")
-        result = await _RunStepWorkflow(step, raise_on_failure=False)()
-        assert result.ok is False
 
-    async def test_failed_step_with_raise_records_run_time_error(self):
-        step = OperationResult(ok=False, name="bad_step", message="bad")
-        result = await _RunStepWorkflow(step, raise_on_failure=True)()
-        assert result.ok is False
-        assert result.run_time_error is not None
+class TestCancellation:
+    async def test_cancellation_propagates_out_of_workflow(self):
+        # a `return` inside __call__'s finally would swallow CancelledError
+        # and let a dead request keep running — pin that it propagates
+        class _SlowWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                await asyncio.sleep(30)
+
+        task = asyncio.create_task(_SlowWorkflow()())
+        await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
 
 
 class TestWorkflowProperties:

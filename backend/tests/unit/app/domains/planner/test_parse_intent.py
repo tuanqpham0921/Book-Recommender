@@ -193,11 +193,15 @@ class TestProcessParseResult:
 
     def test_small_talk_only_does_not_trigger_empty_branch(self, parse_wf):
         parse_wf.process_parse_result(_make_parse_result(small_talk="Hello there!"))
-        assert parse_wf.result.ok is True
+        # the empty branch overwrites reasoning with its warning; small talk
+        # alone must keep the parsed reasoning instead
+        assert parse_wf.output.reasoning == "Parsed the user request"
+        assert parse_wf.output.small_talk == "Hello there!"
 
     def test_out_of_scope_only_does_not_trigger_empty_branch(self, parse_wf):
         parse_wf.process_parse_result(_make_parse_result(out_of_scope="Cooking recipe"))
-        assert parse_wf.result.ok is True
+        assert parse_wf.output.reasoning == "Parsed the user request"
+        assert parse_wf.output.out_of_scope == "Cooking recipe"
 
     def test_small_talk_stored_on_output(self, parse_wf):
         parse_wf.process_parse_result(_make_parse_result(small_talk="Hello there!"))
@@ -333,11 +337,18 @@ class TestProcessParseResult:
 class TestFinalizeResult:
     async def test_ok_true_when_accepted_goals_present(self, parse_wf):
         parse_wf.output.accepted_goals.append(_make_goal())
-        await parse_wf.finalize_result()
+        await parse_wf.finalize_result(payload={})
         assert parse_wf.result.ok is True
 
-    async def test_ok_false_when_no_accepted_goals(self, parse_wf):
-        await parse_wf.finalize_result()
+    async def test_ok_true_when_only_a_reply_payload(self, parse_wf):
+        # small talk / out-of-scope / refusals streamed a reply — that is a
+        # handled conversation, not a failure
+        await parse_wf.finalize_result(payload={"small_talk": "Hello!"})
+        assert parse_wf.result.ok is True
+        assert isinstance(parse_wf.result.ok, bool)
+
+    async def test_ok_false_when_no_goals_and_no_payload(self, parse_wf):
+        await parse_wf.finalize_result(payload={})
         assert parse_wf.result.ok is False
 
 
@@ -431,7 +442,7 @@ class TestGenerateUserResponse:
     async def test_returns_early_when_payload_is_empty(self, parse_wf):
         parse_wf.run_llm_call = AsyncMock()
 
-        await parse_wf.generate_user_response()
+        await parse_wf.generate_user_response(payload={})
 
         parse_wf.run_llm_call.assert_not_called()
 
@@ -441,7 +452,7 @@ class TestGenerateUserResponse:
         parse_wf.run_llm_call = AsyncMock(return_value=MagicMock())
         parse_wf.sse_stream.send_divider = AsyncMock()
 
-        await parse_wf.generate_user_response()
+        await parse_wf.generate_user_response(parse_wf.output.to_llm_messages())
 
         parse_wf.run_llm_call.assert_called_once()
 
@@ -451,7 +462,7 @@ class TestGenerateUserResponse:
         parse_wf.run_llm_call = AsyncMock(return_value=MagicMock())
         parse_wf.sse_stream.send_divider = AsyncMock()
 
-        await parse_wf.generate_user_response()
+        await parse_wf.generate_user_response(parse_wf.output.to_llm_messages())
 
         parse_wf.sse_stream.send_divider.assert_called_once()
 

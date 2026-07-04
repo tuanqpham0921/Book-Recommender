@@ -201,8 +201,9 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
         parse_result = tool_call.function.parsed_arguments
         self.process_parse_result(parse_result)
         self._record_tool_call(tool_call)
-        await self.finalize_result()
-        await self.generate_user_response()
+        payload = self.output.to_llm_messages()
+        await self.finalize_result(payload)
+        await self.generate_user_response(payload)
         
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
@@ -227,11 +228,14 @@ class InitialParseWorkflow(UserFacingBaseWorkflow[InitialParseOutput]):
             )
         )
 
-    async def finalize_result(self) -> None:
-        super().finalize_result(ok=bool(self.output.accepted_goals))
+    async def finalize_result(self, payload) -> None:
+        # ok = the conversation was handled: either there are goals to plan,
+        # or a substantive reply (small talk / out-of-scope / refusals) was
+        # streamed to the user. The orchestrator decides continuation from
+        # accepted_goals, not from ok.
+        super().finalize_result(ok=bool(self.output.accepted_goals or payload))
 
-    async def generate_user_response(self) -> None:
-        payload = self.output.to_llm_messages()
+    async def generate_user_response(self, payload) -> None:
         if not payload:
             return
 

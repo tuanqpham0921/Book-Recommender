@@ -61,11 +61,13 @@ class Workflow(ABC, Generic[OutputT]):
             self.result.message = f"Workflow failed: {e}"
             self.result.run_time_error = RuntimeErrorInfo.from_exception(e)
         finally:
-            # final formatting of the result
+            # final formatting of the result — no `return` here: a return
+            # inside finally would swallow BaseExceptions (e.g. asyncio
+            # cancellation) that the except clauses deliberately let through
             self.result.name = self.workflow_ref
             self.result.duration = round(time.perf_counter() - time_start, 2)
 
-            return self.result
+        return self.result
 
     @abstractmethod
     async def run(self, *args: Any, **kwargs: Any) -> None:

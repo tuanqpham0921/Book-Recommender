@@ -79,6 +79,14 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         #------------------------------------------------------------------------------------------------
 
         system_goals = self.output.parse_result.accepted_goals
+        if not system_goals:
+            # parse ok but nothing to plan — the parse workflow already
+            # streamed the reply (small talk / out-of-scope / refusals)
+            self.result.ok = True
+            self.result.message = "Conversation handled without planning"
+            self.save_chat_messages()
+            self.save_conversation_result()
+            return
 
         strategy_workflow = StrategyClassificationWorkflow(
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages

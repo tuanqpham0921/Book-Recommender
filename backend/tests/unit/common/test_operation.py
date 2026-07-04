@@ -76,8 +76,9 @@ class TestTask:
 
 class TestOperationResult:
     def test_defaults(self):
+        # fail-closed: an envelope is failed until someone declares success
         result = OperationResult()
-        assert result.ok is True
+        assert result.ok is False
         assert result.message is None
         assert result.steps == []
         assert result.output is None
