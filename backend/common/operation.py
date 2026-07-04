@@ -51,7 +51,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
     ok: bool = False
     message: str | None = None
     steps: list[Any] = Field(default_factory=list)
-    details: dict[str, Any] = Field(default_factory=dict)
+    details: list[str] = Field(default_factory=list)
 
     output: OutputT | None = None
     output_type: str | None = None
@@ -67,6 +67,8 @@ class OperationResult(BaseModel, Generic[OutputT]):
         if self.output_type and type(self.output).__name__ != self.output_type:
             raise TypeError(f"Output {self.output} is of type {type(self.output).__name__} not of type {self.output_type}")
 
+    def add_details(self, *message):
+        self.details.extend(message)
 
 def task(
     func: Callable[..., Any] | None = None,
@@ -102,7 +104,7 @@ def task(
                 result.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
                 result.message = f"Task {func_ref} completed successfully"
-                result.details = {"output_note": "output is not an operation result, creating a default one"}
+                result.add_details("output is not an operation result, creating a default one")
                 if hasattr(output, "token_usage") and isinstance(output.token_usage, TokenUsage):
                     result.token_usage = output.token_usage
                 return result

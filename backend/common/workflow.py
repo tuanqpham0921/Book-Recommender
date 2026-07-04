@@ -91,7 +91,7 @@ class Workflow(ABC, Generic[OutputT]):
 
         self.result.ok = False
         self.result.message = f"Step failed: {step_result.name}: {step_result.message}"
-        self.result.details[f"{step_result.name}"] = f"Step failed"
+        self.result.add_details(f"FAILED STEP:{step_result.name}")
         if raise_on_failure:
             raise StepFailure(self.result.message)
         return step_result
