@@ -67,11 +67,11 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         self.output.parse_result = parse_result.output
         
         if not parse_result.ok:
+            self.result.ok = False
+            self.result.message = self.initial_parse_failure_message
             if parse_result.run_time_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
-            self.result.ok = False
-            self.result.message = self.initial_parse_failure_message
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
@@ -88,13 +88,13 @@ class ConversationOrchestrator(UserFacingBaseWorkflow[OrchestrationOutput]):
         )
         self.output.strategy_result = strategy_result.output
         if not strategy_result.ok:
+            self.result.ok = False
+            self.result.message = self.strategy_classification_failure_message
             if strategy_result.run_time_error:
                 await self.sse_stream.send_error(
                     self.strategy_classification_failure_message
                 )
                 return
-            self.result.ok = False
-            self.result.message = self.strategy_classification_failure_message
             await self.sse_stream.send_chars(self.strategy_classification_failure_message)
             return
         

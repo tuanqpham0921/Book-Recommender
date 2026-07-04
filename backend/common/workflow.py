@@ -9,6 +9,14 @@ from typing import Coroutine
 
 OutputT = TypeVar("OutputT")
 
+
+class StepFailure(RuntimeError):
+    """Control-flow only: raised by run_async_step to abort a workflow's
+    remaining steps after a step failed. The failing step's own envelope
+    already records the details (including run_time_error if it crashed), so
+    __call__ logs a single summary line and does not stamp run_time_error."""
+
+
 class Workflow(ABC, Generic[OutputT]):
     def __init__(self, output_type: type[OutputT] | None = None):
         self.name = self.workflow_ref
@@ -40,12 +48,17 @@ class Workflow(ABC, Generic[OutputT]):
                 self.logger.warning(f"Workflow failed: {self.result.message}")
             else:
                 self.logger.info(f"Finished workflow: {self.workflow_name}")
-        except Exception as e:
-            # run-time failure
-            self.logger.exception(f"Workflow failed: {e}")
-            
+        except StepFailure as e:
+            # controlled abort — the failing step's envelope already
+            # carries the details; no run_time_error on the parent   
             self.result.ok = False
-            self.result.message = f"Workflow failed"
+            self.logger.warning(f"Workflow stopped: {e}")
+            self.result.message = str(e)
+        except Exception as e:
+            self.result.ok = False
+            # run-time failure: a genuine crash in run() itself
+            self.logger.exception(f"Workflow failed: {e}")
+            self.result.message = f"Workflow failed: {e}"
             self.result.run_time_error = RuntimeErrorInfo.from_exception(e)
         finally:
             # final formatting of the result
@@ -70,14 +83,15 @@ class Workflow(ABC, Generic[OutputT]):
         
         step_result = await function
         self.add_step(step_result)
-        
+
         if step_result.ok:
             return step_result
 
         self.result.ok = False
+        self.result.message = f"Step failed: {step_result.name}: {step_result.message}"
         self.result.details[f"{step_result.name}"] = f"Step failed"
         if raise_on_failure:
-            raise RuntimeError(f"{step_result.name} FAILED: {step_result.message}")
+            raise StepFailure(self.result.message)
         return step_result
         
 

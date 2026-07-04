@@ -48,7 +48,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
     start_time: str = Field(default_factory=now_iso)
     name: str | None = None
 
-    ok: bool = True
+    ok: bool = False
     message: str | None = None
     steps: list[Any] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
@@ -112,7 +112,7 @@ def task(
                 
                 result = OperationResult(name=func_ref)
                 result.ok = False
-                result.message = f"Task failed"
+                result.message = f"Task failed: {e}"
                 result.run_time_error = RuntimeErrorInfo.from_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 return result

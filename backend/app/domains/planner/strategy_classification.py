@@ -190,7 +190,7 @@ class StrategyClassificationWorkflow(
 
     @task
     async def _create_dag(self, parse_result, system_goals) -> None:
-        if parse_result is None:
+        if parse_result is None or not system_goals:
             raise ValueError("No parse_result provided")
         
         if parse_result._invalid_strategies:
