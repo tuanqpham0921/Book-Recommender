@@ -46,6 +46,7 @@ class _MultiStepWorkflow(Workflow):
         for step in self._steps:
             await self.run_async_step(_as_coro(step), raise_on_failure=False)
 
+
 class TestWorkflowExecution:
     async def test_successful_run_sets_ok_true(self):
         result = await _SuccessWorkflow()()
@@ -60,7 +61,7 @@ class TestWorkflowExecution:
         result = await _ExceptionWorkflow()()
         assert result.ok is False
         assert "workflow exploded" in result.message
-        assert result.run_time_error is not None
+        assert result.runtime_error is not None
 
     async def test_exception_in_run_still_records_duration(self):
         result = await _ExceptionWorkflow()()
@@ -88,11 +89,11 @@ class TestRunAsyncStep:
 
     async def test_failed_step_with_raise_is_a_controlled_abort(self):
         # StepFailure is control flow, not a crash: the parent envelope must
-        # NOT carry run_time_error — the step's own envelope has the details
+        # NOT carry runtime_error — the step's own envelope has the details
         step = OperationResult(ok=False, name="bad_step", message="bad")
         result = await _StepWorkflow(step, raise_on_failure=True)()
         assert result.ok is False
-        assert result.run_time_error is None
+        assert result.runtime_error is None
         assert "bad_step" in result.message
 
     async def test_failed_step_without_raise_still_appended(self):

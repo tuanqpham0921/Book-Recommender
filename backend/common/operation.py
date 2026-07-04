@@ -58,17 +58,20 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
     duration: float | None = None
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
-    run_time_error: RuntimeErrorInfo | None = None
+    runtime_error: RuntimeErrorInfo | None = None
 
     def check_output_type(self) -> None:
         if self.output is None or self.output_type is None:
             return
 
         if self.output_type and type(self.output).__name__ != self.output_type:
-            raise TypeError(f"Output {self.output} is of type {type(self.output).__name__} not of type {self.output_type}")
+            raise TypeError(
+                f"Output {self.output} is of type {type(self.output).__name__} not of type {self.output_type}"
+            )
 
     def add_details(self, *message):
         self.details.extend(message)
+
 
 def task(
     func: Callable[..., Any] | None = None,
@@ -76,6 +79,7 @@ def task(
     log_info: bool = True,
 ) -> Callable[..., Any]:
     """For single-step operations (for multiple steps, use Workflow)."""
+
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> OperationResult[Any]:
@@ -93,29 +97,35 @@ def task(
                 if isinstance(output, OperationResult):
                     if log_info and not output.ok:
                         logger.warning(f"Task failed: {output.message}")
-                    
+
                     output.name = func_ref
                     output.duration = round(time.perf_counter() - time_start, 2)
                     return output
 
                 # task did not return an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
-                result = OperationResult(name=func_ref, output=output, output_type=type(output).__name__)
+                result = OperationResult(
+                    name=func_ref, output=output, output_type=type(output).__name__
+                )
                 result.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
                 result.message = f"Task {func_ref} completed successfully"
-                result.add_details("output is not an operation result, creating a default one")
-                if hasattr(output, "token_usage") and isinstance(output.token_usage, TokenUsage):
+                result.add_details(
+                    "output is not an operation result, creating a default one"
+                )
+                if hasattr(output, "token_usage") and isinstance(
+                    output.token_usage, TokenUsage
+                ):
                     result.token_usage = output.token_usage
                 return result
             except Exception as e:
                 # run time error is recorded, so the task is considered failed
                 logger.exception(e)
-                
+
                 result = OperationResult(name=func_ref)
                 result.ok = False
                 result.message = f"Task failed: {e}"
-                result.run_time_error = RuntimeErrorInfo.from_exception(e)
+                result.runtime_error = RuntimeErrorInfo.from_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 return result
 

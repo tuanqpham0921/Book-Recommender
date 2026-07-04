@@ -21,7 +21,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-CONVERSATION_SUMMARY_PROMPT_PATH = "domains/planner/prompts/3_conversation_orchestration_summary.txt"
+CONVERSATION_SUMMARY_PROMPT_PATH = (
+    "domains/planner/prompts/3_conversation_orchestration_summary.txt"
+)
 
 
 class OrchestrationOutput(AppWorkflowOutput):
@@ -29,11 +31,12 @@ class OrchestrationOutput(AppWorkflowOutput):
     parse_result: InitialParseOutput | None = None
     strategy_result: StrategyClassificationOutput | None = None
     diagram: str | None = None
-    
+
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
         pass
-    
+
+
 class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
@@ -65,18 +68,18 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             parse_workflow(), raise_on_failure=False
         )
         self.output.parse_result = parse_result.output
-        
+
         if not parse_result.ok:
             self.result.ok = False
             self.result.message = self.initial_parse_failure_message
-            if parse_result.run_time_error:
+            if parse_result.runtime_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
         # return
-        #------------------------------------------------------------------------------------------------
+        # ------------------------------------------------------------------------------------------------
 
         system_goals = self.output.parse_result.accepted_goals
         if not system_goals:
@@ -98,17 +101,17 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         if not strategy_result.ok:
             self.result.ok = False
             self.result.message = self.strategy_classification_failure_message
-            if strategy_result.run_time_error:
+            if strategy_result.runtime_error:
                 await self.sse_stream.send_error(
                     self.strategy_classification_failure_message
                 )
                 return
-            await self.sse_stream.send_chars(self.strategy_classification_failure_message)
+            await self.sse_stream.send_chars(
+                self.strategy_classification_failure_message
+            )
             return
-        
-        self.output.diagram = await self.send_mermaid(
-            self.output.strategy_result
-        )
+
+        self.output.diagram = await self.send_mermaid(self.output.strategy_result)
         seen_description = set()
         await self.sse_stream.send_chars("\n\n# System Goals:\n")
         for system_goal in self.output.parse_result.accepted_goals:
@@ -116,17 +119,17 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
                 continue
             await self.sse_stream.send_chars(f"- {system_goal.description}\n")
             seen_description.add(system_goal.description)
-            
+
         await self.sse_stream.send_divider()
-        #------------------------------------------------------------------------------------------------
+        # ------------------------------------------------------------------------------------------------
         # Final response
-        
+
         # await self.generate_summary()
-        #------------------------------------------------------------------------------------------------
+        # ------------------------------------------------------------------------------------------------
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
-        
+
         self.save_chat_messages()
         self.save_conversation_result()
 
@@ -137,8 +140,8 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
 
         try:
             diagram = get_mermaid_diagram(
-                strategy_result.execution_order, 
-                strategy_result.get_accepted_id_to_node()
+                strategy_result.execution_order,
+                strategy_result.get_accepted_id_to_node(),
             )
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")
@@ -147,7 +150,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         await self.sse_stream.send_chars("# My Plan for Your Request")
         await self.sse_stream.send_mermaid(diagram)
         return diagram
-    
+
     def save_conversation_result(self, name: str = "dev") -> None:
         from common.utils import save_file
 
@@ -158,6 +161,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     def save_chat_messages(self, name: str = "dev") -> None:
         from common.utils import save_file
         from common.utils import to_serializable
+
         if not self.messages:
             return
         logger.info(f"Saving chat messages to {name}.json")
