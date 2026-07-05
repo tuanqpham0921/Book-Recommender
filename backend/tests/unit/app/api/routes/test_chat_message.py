@@ -1,11 +1,12 @@
 import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
 
 from app.api.routes.chat_message import generate_chat_response
 
-
+# TODO: review this
 class _FakeSSEStream:
     def __init__(self, error=None):
         self.error = error
@@ -16,6 +17,9 @@ class _FakeSSEStream:
         return self
 
     async def __anext__(self):
+        # the real SSEStream always suspends on queue.get() — model that,
+        # otherwise the orchestrator task never gets a tick to start
+        await asyncio.sleep(0)
         if self.iterated:
             raise StopAsyncIteration
         self.iterated = True
@@ -52,7 +56,13 @@ async def test_generate_chat_response_emits_error_and_cancels_on_stream_failure(
         event async for event in generate_chat_response(orchestrator, request_context)
     ]
 
-    assert events == []
+    # the error must be YIELDED to the client, not send_error()'d into the
+    # queue — this generator is the queue's only consumer and has stopped
+    assert len(events) == 1
+    payload = json.loads(events[0].data)
+    assert payload["type"] == "error"
+    assert payload["data"] == "Orchestration error"
+    assert request_context.sse_stream.sent_error is None
+
     assert orchestrator.started is True
     assert orchestrator.cancelled is True
-    assert request_context.sse_stream.sent_error == "Orchestration error"

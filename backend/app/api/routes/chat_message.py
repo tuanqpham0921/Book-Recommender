@@ -1,9 +1,10 @@
 import asyncio
+import json
 import logging
 from typing import Any, AsyncGenerator, Callable
 
 from fastapi import APIRouter, Depends, HTTPException
-from sse_starlette.sse import EventSourceResponse
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 from app.api.schemas import ChatIn
 from app.common.messages import UserMessage
@@ -23,33 +24,37 @@ async def generate_chat_response(
     orchestrator: Orchestrator,
     request_context: RequestContext,
 ) -> AsyncGenerator[Any, None]:
-    try:
-        orchestrator_task = asyncio.create_task(
-            orchestrator.run(request_context=request_context)
-        )
-        await asyncio.sleep(0)
-    except Exception as e:
-        await request_context.sse_stream.send_error("Unable to register stream")
-        logger.exception("Unable to register stream")
-        return
+    # create_task cannot meaningfully fail here (calling an async def only
+    # creates the coroutine; nothing in run() executes yet)
+    orchestrator_task = asyncio.create_task(
+        orchestrator.run(request_context=request_context)
+    )
 
     try:
         async for event in request_context.sse_stream:
             yield event
 
+        # the stream loop ends when the orchestrator closes the stream (or
+        # SSEStream's own per-event timeout fires); this only guards the
+        # normally-instant gap until the task itself finishes
         await asyncio.wait_for(orchestrator_task, timeout=300.0)
-    except asyncio.CancelledError:
-        if not orchestrator_task.done():
-            orchestrator_task.cancel()
-        await asyncio.gather(orchestrator_task, return_exceptions=True)
-        raise
     except Exception as e:
+        # TODO: review this
+        # realistically only the wait_for timeout: SSEStream.__anext__ and
+        # Orchestrator.run both swallow their own exceptions.
+        # yield the error directly — send_error() would enqueue an event
+        # that this generator (the queue's only consumer) no longer reads
+        logger.exception("Orchestration stream failed", exc_info=e)
+        yield ServerSentEvent(
+            data=json.dumps({"type": "error", "data": "Orchestration error"})
+        )
+    finally:
+        # covers every exit: normal end (no-op), CancelledError (client
+        # disconnect), GeneratorExit (aclose) — the task never outlives
+        # the stream
         if not orchestrator_task.done():
             orchestrator_task.cancel()
-        await asyncio.gather(orchestrator_task, return_exceptions=True)
-        await request_context.sse_stream.send_error("Orchestration error")
-        logger.exception("Orchestration stream failed", exc_info=e)
-        return
+            await asyncio.gather(orchestrator_task, return_exceptions=True)
 
 
 @router.post("/session/{session_id}/message")
