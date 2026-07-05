@@ -30,13 +30,9 @@ from clients.openai_client import OpenAIClient
 from common.utils import uuid_8, to_serializable, remove_empty_values
 from config import BookConstraints, BookGuides
 from common.operation import task
-
-logger = logging.getLogger(__name__)
-
-# ------------------------------------
 from .node_types import PlannerNodeTypeEnum
 
-# ------------------------------------
+logger = logging.getLogger(__name__)
 
 STRATEGY_CLASSIFICATION_PROMPT_PATH = (
     "domains/planner/prompts/2_strategy_classification.txt"

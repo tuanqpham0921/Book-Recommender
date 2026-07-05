@@ -91,7 +91,6 @@ ANNOTATION LIES (pyright basic would catch all of these — consider adding it a
     so arg mistakes on tasks become static errors
 
 SMALL CLEANUPS:
-12. Field(example=...) deprecation (4 warnings) — json_schema_extra before pydantic v3
 14. Document the one-shot Workflow contract: output lists append-accumulate, so a retry
     means a fresh instance — worth a docstring before eval scripts loop over workflows
 

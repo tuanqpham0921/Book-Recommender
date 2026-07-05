@@ -14,11 +14,6 @@ from clients import OpenAIParserRequest
 from clients.openai_client import OpenAIClient
 from clients.openai_requests import OpenAIChatRequest
 from common.utils import uuid_8
-
-logger = logging.getLogger(__name__)
-
-
-# ------------------------------------
 from .node_types import PlannerNodeTypeEnum
 from app.domains.field_types import (
     MIN_CONFIDENCE,
@@ -29,7 +24,8 @@ from app.domains.field_types import (
     ReasoningStr,
     OptionalStr
 )
-# ------------------------------------
+
+logger = logging.getLogger(__name__)
 
 INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
 INITIAL_PARSE_RESPONSE_PROMPT_PATH = (

@@ -1,12 +1,6 @@
 from common.utils import uuid_8
 from pydantic import BaseModel, Field, model_validator, PrivateAttr, field_validator
 from app.domains.node_types import NodeTypeEnum
-import re
-import logging
-
-logger = logging.getLogger(__name__)
-
-# ------------------------------------
 from app.domains.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
@@ -15,8 +9,10 @@ from app.domains.field_types import (
     DescriptionStr,
     ReasoningStr
 )
+import re
+import logging
 
-# ------------------------------------
+logger = logging.getLogger(__name__)
 
 MIN_LIST_LENGTH = 1
 MAX_LIST_LENGTH = 10
@@ -31,7 +27,7 @@ class BaseRequest(BaseModel):
     node_type: NodeTypeEnum
     id: str = Field(...,
                     description="assign a task id to the node request",
-                    example=["task_1", "task_2"]
+                    json_schema_extra={"example": ["task_1", "task_2"]}
                     )
     description: DescriptionStr = Field(
         ...,
@@ -42,7 +38,7 @@ class BaseRequest(BaseModel):
         ...,
         max_length=MAX_STRING_LENGTH,
         description="Thought process that led to the node request",
-        example="The user is asking for a book about the history of the universe"
+        json_schema_extra={"example": "The user is asking for a book about the history of the universe"}
     )
     confidence: ConfidenceFloat = Field(
         ..., 
@@ -92,7 +88,7 @@ class DomainRequest(BaseRequest):
         min_length=MIN_LIST_LENGTH,
         max_length=MAX_LIST_LENGTH,
         description="Goal ids from the previous steps that this strategy fulfills",
-        example=["goal_1", "goal_2"]
+        json_schema_extra={"example": ["goal_1", "goal_2"]}
     )
     
     _overflow_target_goal: list[str] = PrivateAttr(default_factory=list)
@@ -140,7 +136,7 @@ class AnalyzeBaseRequest(DomainRequest):
         min_length=MIN_LIST_LENGTH,
         max_length=MAX_LIST_LENGTH,
         description="Task ids from the previous steps must complete first",
-        example=[["task_1", "task_2"]]
+        json_schema_extra={"example": ["task_1", "task_2"]}
     )
     
     _llm_depends_on: list[str] = PrivateAttr(default_factory=list)
