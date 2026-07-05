@@ -165,9 +165,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         )
         self.user_message = user_message
 
-    async def run(
-        self, user_message: UserMessage, system_goals: list[SystemGoal]
-    ) -> None:
+    async def run(self, system_goals: list[SystemGoal]) -> None:
         """Classify the user query into book-related strategies."""
         if not system_goals:
             raise ValueError("System goals are required")

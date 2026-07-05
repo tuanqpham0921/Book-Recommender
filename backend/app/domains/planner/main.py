@@ -95,7 +95,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages
         )
         strategy_result = await self.run_async_step(
-            strategy_workflow(self.user_message, system_goals), raise_on_failure=False
+            strategy_workflow(system_goals), raise_on_failure=False
         )
         self.output.strategy_result = strategy_result.output
         if not strategy_result.ok:

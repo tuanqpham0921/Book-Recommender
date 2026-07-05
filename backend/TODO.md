@@ -90,12 +90,10 @@ ANNOTATION LIES (pyright basic would catch all of these — consider adding it a
 10. @task is typed `Callable[..., Any]` — erases every decorated signature; use ParamSpec
     so arg mistakes on tasks become static errors
 
-SMALL CLEANUPS:
-14. Document the one-shot Workflow contract: output lists append-accumulate, so a retry
-    means a fresh instance — worth a docstring before eval scripts loop over workflows
-
 =======================================================================
 
 Once everything is good, organize and review all your unit tests
 but after you have db saved, and eval tests set up
     * need to format and review name, comments carefully
+    * you should have a way to navigate all your tests (probably at the top)
+    * with all pages marker or seperators

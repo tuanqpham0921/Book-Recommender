@@ -6,7 +6,7 @@ from collections import defaultdict
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.common.messages import ToolMessage, UserMessage
+from app.common.messages import ToolMessage
 from app.domains.base_request import AnalyzeBaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import (
@@ -902,7 +902,7 @@ class TestRun:
     async def test_raises_on_empty_goals(self, strategy_wf):
         strategy_wf.sse_stream.send_ui_loading = AsyncMock()
         with pytest.raises(ValueError):
-            await strategy_wf.run(UserMessage(content="test"), [])
+            await strategy_wf.run([])
 
     async def test_happy_path_accepts_strategy(self, strategy_wf):
         goal = _make_goal()
@@ -922,6 +922,6 @@ class TestRun:
         strategy_wf.sse_stream.send_ui_loading = AsyncMock()
         strategy_wf.run_llm_call = AsyncMock(return_value=assistant_msg)
 
-        await strategy_wf.run(UserMessage(content="Find me a book"), [goal])
+        await strategy_wf.run([goal])
         assert strategy_wf.result.ok is True
         assert len(strategy_wf.output.accepted) == 1

@@ -360,6 +360,41 @@ class TestCancellation:
             await task
 
 
+class TestSingleUseGuard:
+    """One instance = one execution: self.result accumulates for the life
+    of the instance, so a second __call__ would stack the new run's output
+    onto the first's instead of replacing it. Guard against that mistake."""
+
+    async def test_second_call_on_same_instance_raises(self):
+        wf = _SuccessWorkflow()
+        await wf()
+        with pytest.raises(RuntimeError, match="single-use"):
+            await wf()
+
+    async def test_first_call_result_is_unaffected_by_the_rejected_second_call(self):
+        wf = _SuccessWorkflow()
+        first_result = await wf()
+        with pytest.raises(RuntimeError):
+            await wf()
+        assert first_result.ok is True
+        assert first_result.output == "done"
+
+    async def test_guard_fires_even_after_a_failed_first_call(self):
+        # a workflow that failed is still "used" — retries must construct a
+        # new instance, not call the same one again
+        wf = _ExceptionWorkflow()
+        await wf()
+        with pytest.raises(RuntimeError, match="single-use"):
+            await wf()
+
+    async def test_fresh_instance_is_unaffected(self):
+        wf1 = _SuccessWorkflow()
+        await wf1()
+        wf2 = _SuccessWorkflow()
+        result2 = await wf2()  # must not raise
+        assert result2.ok is True
+
+
 class TestWorkflowProperties:
     def test_workflow_ref_includes_class_name(self):
         wf = _SuccessWorkflow()

@@ -18,9 +18,17 @@ class StepFailure(RuntimeError):
 
 
 class Workflow(ABC, Generic[OutputT]):
+    """One instance = one execution. self.result (and subclass output fields
+    like accepted_goals) accumulate for the life of the instance and are
+    never reset, so calling __call__ more than once on the same instance
+    stacks the second run's output onto the first's instead of replacing it.
+    Construct a new instance for every execution, including retries — the
+    constructor sets up no expensive resources, so this is cheap."""
+
     def __init__(self, output_type: type[OutputT] | None = None):
         self.name = self.workflow_ref
         self.output_type = output_type
+        self._called = False
 
         # intialize an envolope in memory to modify
         self.result: OperationResult[OutputT] = OperationResult(
@@ -37,6 +45,13 @@ class Workflow(ABC, Generic[OutputT]):
         return self.result.output
 
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
+        if self._called:
+            raise RuntimeError(
+                f"{self.workflow_ref} instances are single-use — "
+                "construct a new instance for each execution"
+            )
+        self._called = True
+
         time_start = time.perf_counter()
         try:
             self.logger.info(f"Running workflow: {self.workflow_name}")
