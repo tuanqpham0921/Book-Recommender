@@ -96,7 +96,6 @@ BEFORE EVAL (the eval script depends on these):
    nothing consumes them. Fine to defer the retry loop — but the eval should count them.
 
 ANNOTATION LIES (pyright basic would catch all of these — consider adding it as a dev dep):
-8. to_llm_messages() declared `-> list[AssistantMessage]`, returns a dict (parse_intent.py:160)
 9. OrchestrationOutput.to_summary() declared `-> dict`, returns None (main.py:35 TODO)
 10. @task is typed `Callable[..., Any]` — erases every decorated signature; use ParamSpec
     so arg mistakes on tasks become static errors

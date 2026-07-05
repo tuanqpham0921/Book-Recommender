@@ -157,7 +157,7 @@ class InitialParseOutput(AppWorkflowOutput):
     def accepted_goals_ids(self) -> list[str]:
         return [goal.id for goal in self.accepted_goals]
 
-    def to_llm_messages(self) -> list[AssistantMessage]:
+    def to_llm_messages(self) -> dict[str, any]:
         payload = {}
         if self.small_talk:
             payload["small_talk"] = self.small_talk
