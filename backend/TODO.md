@@ -21,6 +21,12 @@ Reminder:
 4. remove the private attributes (keep it in the output)
     * might need to use create instead of parse
     * this  an be for later, when you actually need to load in buffer
+5. make sure that feedback and liked stuff can just go to json
+    feedback
+        {"session": "id", "comments": "....", maybe chat_id}
+    liked/dislike
+        * could go in a sql db instead
+
 Eval and deployment testing:
 1. create a way to run all your test queries (prod mode)
 2. show rejected quries and resuls
