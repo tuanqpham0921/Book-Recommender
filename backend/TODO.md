@@ -56,15 +56,6 @@ Front End:
 
 =======================================================================
 
-Claude Suggestions (code review findings):
-2. [BUG] Token usage double-counted in app/common/workflow.py:64
-   * run_llm_call adds token_usage twice (once via add_step, once manually) — remove line 64
-3. [LEAK] Cancel `orchestrator_task` on exception in chat_message.py:39
-   * task keeps running into a dead SSE stream on client disconnect
-4. [SILENT ERROR] Replace HTTPException in SSE generator with a yield error event (chat_message.py:40)
-
-=======================================================================
-
 Features (not in code):
 * do openAI always make new lines at the end?
 3. goal is to test and see the ochestration router
@@ -96,19 +87,16 @@ BEFORE EVAL (the eval script depends on these):
    nothing consumes them. Fine to defer the retry loop — but the eval should count them.
 
 ANNOTATION LIES (pyright basic would catch all of these — consider adding it as a dev dep):
-9. OrchestrationOutput.to_summary() declared `-> dict`, returns None (main.py:35 TODO)
 10. @task is typed `Callable[..., Any]` — erases every decorated signature; use ParamSpec
     so arg mistakes on tasks become static errors
 
 SMALL CLEANUPS:
-11. _invalid_target_goal is captured but never surfaced (no refuse/details/output) —
-    either report like output.invalid does for strategies, or delete the capture
 12. Field(example=...) deprecation (4 warnings) — json_schema_extra before pydantic v3
-13. test_already_constructed_instance_is_rejected asserts the OPPOSITE of its name
-    (instances are accepted as valid now) — rename it + the stale class docstring above it
 14. Document the one-shot Workflow contract: output lists append-accumulate, so a retry
     means a fresh instance — worth a docstring before eval scripts loop over workflows
-15. (resolved since last review: token double-count in run_llm_call is gone —
-    item 2 under "Claude Suggestions" above can be checked off)
 
 =======================================================================
+
+Once everything is good, organize and review all your unit tests
+but after you have db saved, and eval tests set up
+    * need to format and review name, comments carefully

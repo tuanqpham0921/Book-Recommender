@@ -650,10 +650,10 @@ class TestStrategyRequestExtraFields:
 
 
 class TestCaptureAndFilter:
-    """capture_and_filter only accepts raw dicts (as the LLM response
-    delivers them) — it looks up the concrete class via NODE_TYPE_TO_CLS
-    using each dict's `node_type` key, so items must be dicts, not
-    already-constructed BaseRequest instances."""
+    """capture_and_filter accepts raw dicts (as the LLM response delivers
+    them — validated via NODE_TYPE_TO_CLS using each dict's `node_type`)
+    and already-constructed BaseRequest instances (passed through as-is);
+    everything else is captured in _invalid_strategies."""
 
     def test_non_list_is_wrapped_in_list(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
@@ -705,9 +705,9 @@ class TestCaptureAndFilter:
             f"task_{i}" for i in range(MAX_STRATEGIES, MAX_STRATEGIES + 3)
         ]
 
-    def test_already_constructed_instance_is_rejected(self):
-        # only raw dicts are accepted; a pre-built BaseRequest instance
-        # falls into the `else` branch and is treated as invalid
+    def test_already_constructed_instance_is_accepted(self):
+        # a pre-built BaseRequest instance hits the isinstance branch and
+        # passes through as valid — no dict round-trip required
         model = StrategyRequest.build_model([FindByTitleRetrieval])
         r = _make_retrieval("task_1")
         instance = model(strategies=[r])
