@@ -22,7 +22,7 @@ from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
-    AnyStrategyRequest 
+    AnyStrategyRequest,
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -51,8 +51,10 @@ class StrategyRequest(BaseModel):
     Each strategy should represent a discrete unit of work.
     The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
     """
-    node_type: Literal[PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION] = PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION
 
+    node_type: Literal[PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION] = (
+        PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION
+    )
 
     strategies: list[AnyStrategyRequest] = Field(
         default_factory=list,
@@ -105,14 +107,14 @@ class StrategyRequest(BaseModel):
                     invalid.append(item)
                     continue
                 try:
-                    request_cls.model_validate(item)
-                    valid.append(item)
+                    request_instance = request_cls.model_validate(item)
+                    valid.append(request_instance)
                 except ValidationError as e:
                     logger.exception(e)
                     invalid.append(item)
             else:
                 invalid.append(item)
-                
+
         if isinstance(data, dict):
             data["strategies"] = valid[:MAX_STRATEGIES]
 
@@ -145,9 +147,7 @@ class StrategyClassificationOutput(AppWorkflowOutput):
         return {node.id: node for node in self.refused}
 
 
-class StrategyClassificationWorkflow(
-    AppBaseWorkflow[StrategyClassificationOutput]
-):
+class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutput]):
     success_message = "Strategy classification completed successfully"
     failure_message = "Strategy classification failed"
     ui_loading_message = "Strategizing..."
@@ -180,11 +180,11 @@ class StrategyClassificationWorkflow(
 
         tool_call = await self._run_llm_args_parse(system_goals)
         parse_result = tool_call.function.parsed_arguments
-        
+
         dag_step = await self.run_async_step(
             self._create_dag(parse_result, system_goals), raise_on_failure=False
         )
-        
+
         self._record_tool_call(tool_call)
         self.finalize_result()
 
@@ -192,7 +192,7 @@ class StrategyClassificationWorkflow(
     async def _create_dag(self, parse_result, system_goals) -> None:
         if parse_result is None or not system_goals:
             raise ValueError("No parse_result provided")
-        
+
         if parse_result._invalid_strategies:
             logger.warning(
                 f"LLM created {len(parse_result._invalid_strategies)} invalid strategies"

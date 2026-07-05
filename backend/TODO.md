@@ -72,3 +72,47 @@ Features (not in code):
 
 
 =======================================================================
+
+Claude codebase sweep (2026-07-05) — critical or worth mentioning only:
+
+BUGS (fix before eval — these crash or mislabel real runs):
+2. [MISLABEL] Orchestrator misses crashes buried under StepFailure aborts
+   * after a child workflow aborts via StepFailure, its top-level envelope has
+     runtime_error=None — the real crash (e.g. OpenAI exception) lives in steps[i]
+   * main.py `if parse_result.run_time_error:` therefore sends the "system declined"
+     message for genuine crashes
+   * fix: add recursive `has_runtime_error()` on OperationResult, branch on that
+3. [LEAK] chat_message.py: orchestrator_task never cancelled when the stream dies
+   * existing TODO at line 40 — also, raising HTTPException inside an SSE generator
+     after streaming started can't produce a real 500; yield an error event + cancel instead
+
+BEFORE EVAL (the eval script depends on these):
+4. Saved results drop the step trail: save_conversation_result pops "steps" —
+   the timings/token/failure metadata the eval wants is exactly in there.
+   Add a derived compact trail (name, ok, duration, tokens per step) instead of the full tree.
+5. Failure paths never save: save_chat_messages/save_conversation_result only run on
+   success and handled-without-planning. Rejected/failed queries (the interesting eval
+   cases!) leave no artifact. Save in one place that all exits pass through.
+6. Fixed filenames (conversation_result_dev.json) overwrite every run — eval over a
+   query set needs per-session names or append mode (matches the "Continue" note up top).
+7. Buffered/refused are terminal: buffer_goals and strategy buffer are captured but
+   nothing consumes them. Fine to defer the retry loop — but the eval should count them.
+
+ANNOTATION LIES (pyright basic would catch all of these — consider adding it as a dev dep):
+8. to_llm_messages() declared `-> list[AssistantMessage]`, returns a dict (parse_intent.py:160)
+9. OrchestrationOutput.to_summary() declared `-> dict`, returns None (main.py:35 TODO)
+10. @task is typed `Callable[..., Any]` — erases every decorated signature; use ParamSpec
+    so arg mistakes on tasks become static errors
+
+SMALL CLEANUPS:
+11. _invalid_target_goal is captured but never surfaced (no refuse/details/output) —
+    either report like output.invalid does for strategies, or delete the capture
+12. Field(example=...) deprecation (4 warnings) — json_schema_extra before pydantic v3
+13. test_already_constructed_instance_is_rejected asserts the OPPOSITE of its name
+    (instances are accepted as valid now) — rename it + the stale class docstring above it
+14. Document the one-shot Workflow contract: output lists append-accumulate, so a retry
+    means a fresh instance — worth a docstring before eval scripts loop over workflows
+15. (resolved since last review: token double-count in run_llm_call is gone —
+    item 2 under "Claude Suggestions" above can be checked off)
+
+=======================================================================

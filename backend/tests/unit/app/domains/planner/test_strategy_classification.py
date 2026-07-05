@@ -625,7 +625,7 @@ class TestStrategyRequestExtraFields:
 
     def test_model_only_declares_provided_fields(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
-        assert set(model.model_fields.keys()) == {"node_type","strategies"}
+        assert set(model.model_fields.keys()) == {"node_type", "strategies"}
 
     def test_extra_field_does_not_become_an_attribute(self):
         model = StrategyRequest.build_model([FindByTitleRetrieval])
@@ -686,6 +686,24 @@ class TestCaptureAndFilter:
         instance = model(strategies=items)
         assert len(instance.strategies) == MAX_STRATEGIES
         assert len(instance._overflow_strategies) == 3
+
+    def test_overflow_strategies_are_validated_model_instances(self):
+        model = StrategyRequest.build_model([FindByTitleRetrieval])
+        items = [
+            _make_retrieval(f"task_{i}", title=f"Book {i}").model_dump()
+            for i in range(MAX_STRATEGIES + 3)
+        ]
+
+        instance = model(strategies=items)
+
+        assert len(instance._overflow_strategies) == 3
+        assert all(
+            isinstance(item, FindByTitleRetrieval)
+            for item in instance._overflow_strategies
+        )
+        assert [item.id for item in instance._overflow_strategies] == [
+            f"task_{i}" for i in range(MAX_STRATEGIES, MAX_STRATEGIES + 3)
+        ]
 
     def test_already_constructed_instance_is_rejected(self):
         # only raw dicts are accepted; a pre-built BaseRequest instance
