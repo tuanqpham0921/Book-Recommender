@@ -1,9 +1,9 @@
-import logging
 import asyncio
-from typing import AsyncGenerator, Any, Callable
+import logging
+from typing import Any, AsyncGenerator, Callable
 
+from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
-from fastapi import APIRouter, HTTPException, Depends
 
 from app.api.schemas import ChatIn
 from app.common.messages import UserMessage
@@ -27,18 +27,29 @@ async def generate_chat_response(
         orchestrator_task = asyncio.create_task(
             orchestrator.run(request_context=request_context)
         )
+        await asyncio.sleep(0)
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Unable to register stream") from e
+        await request_context.sse_stream.send_error("Unable to register stream")
+        logger.exception("Unable to register stream")
+        return
 
     try:
         async for event in request_context.sse_stream:
             yield event
-        
+
         await asyncio.wait_for(orchestrator_task, timeout=300.0)
-        
+    except asyncio.CancelledError:
+        if not orchestrator_task.done():
+            orchestrator_task.cancel()
+        await asyncio.gather(orchestrator_task, return_exceptions=True)
+        raise
     except Exception as e:
-        # TODO: cancel the task if things failed
-        raise HTTPException(status_code=500, detail="Orchestration error") from e
+        if not orchestrator_task.done():
+            orchestrator_task.cancel()
+        await asyncio.gather(orchestrator_task, return_exceptions=True)
+        await request_context.sse_stream.send_error("Orchestration error")
+        logger.exception("Orchestration stream failed", exc_info=e)
+        return
 
 
 @router.post("/session/{session_id}/message")
@@ -58,7 +69,6 @@ async def chat(
             detail=f"Message is too long. Maximum {2000} characters allowed.",
         )
 
-    
     request_context = request_context_factory(
         session_id, UserMessage(content=chat_in.message)
     )

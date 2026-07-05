@@ -82,9 +82,6 @@ BUGS (fix before eval — these crash or mislabel real runs):
    * main.py `if parse_result.run_time_error:` therefore sends the "system declined"
      message for genuine crashes
    * fix: add recursive `has_runtime_error()` on OperationResult, branch on that
-3. [LEAK] chat_message.py: orchestrator_task never cancelled when the stream dies
-   * existing TODO at line 40 — also, raising HTTPException inside an SSE generator
-     after streaming started can't produce a real 500; yield an error event + cancel instead
 
 BEFORE EVAL (the eval script depends on these):
 4. Saved results drop the step trail: save_conversation_result pops "steps" —
