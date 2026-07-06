@@ -24,6 +24,13 @@ QUERIES = [
 ]
 
 STREAM_TIMEOUT_SECONDS = 300.0
+EVENT_PRINT_LIMIT = 200
+
+
+def truncate(text: str, limit: int = EVENT_PRINT_LIMIT) -> str:
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}… (truncated, {len(text)} chars total)"
 
 
 def create_session(client: httpx.Client) -> str:
@@ -57,11 +64,11 @@ def send_query(client: httpx.Client, session_id: str, message: str) -> None:
                 event = None
 
             if not isinstance(event, dict):
-                print(f"  [raw] {payload[:200]}")
+                print(f"  [raw] {payload}")
             elif event.get("type") == "content.delta":
                 content_parts.append(str(event.get("data", "")))
             else:
-                print(f"  [{event.get('type', '?')}] {str(event)[:200]}")
+                print(f"  [{event.get('type', '?')}] {str(event)}")
 
     if content_parts:
         print("  --- response ---")
