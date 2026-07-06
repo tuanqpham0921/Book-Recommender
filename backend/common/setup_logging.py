@@ -23,7 +23,13 @@ def setup_logging(environment: str, log_file: Path | str = LOG_FILE, overwrite: 
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 
     handlers: list[logging.Handler] = []
-    use_plain_logs = os.getenv("CI") or os.getenv("PYTEST_CURRENT_TEST")
+    # plain stdout lines outside local dev: Cloud Logging (and CI) parse them
+    # cleanly, while Rich's ANSI markup turns into noise
+    use_plain_logs = (
+        os.getenv("CI")
+        or os.getenv("PYTEST_CURRENT_TEST")
+        or environment.lower() != "development"
+    )
     if use_plain_logs:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(logging.Formatter(PLAIN_LOG_FORMAT, datefmt=DATE_FORMAT))

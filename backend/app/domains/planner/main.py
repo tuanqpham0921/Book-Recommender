@@ -54,8 +54,10 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             output_type=OrchestrationOutput,
         )
         self.user_message = user_message
+        self.app_env: str | None = None
 
     async def run(self, request_context: RequestContext) -> None:
+        self.app_env = request_context.app_env
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
@@ -158,6 +160,11 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     def save_conversation_result(self, name: str = "dev") -> None:
         from common.utils import save_file
 
+        # debug file dumps are dev-only; prod persistence is the chat_runs
+        # table (run_recorder) — Cloud Run's filesystem is ephemeral
+        if self.app_env != "development":
+            return
+
         data = self.result.model_dump()
         data.pop("steps", None)
         save_file(data, file_name=f"conversation_result_{name}.json")
@@ -165,6 +172,9 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     def save_chat_messages(self, name: str = "dev") -> None:
         from common.utils import save_file
         from common.utils import to_serializable
+
+        if self.app_env != "development":
+            return
 
         if not self.messages:
             return

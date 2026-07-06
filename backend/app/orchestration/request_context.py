@@ -1,5 +1,6 @@
 import logging
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from common.utils import now_iso
 from app.common.messages import UserMessage
@@ -22,3 +23,6 @@ class RequestContext(BaseModel):
     llm_client: OpenAIClient
     book_store: BookStore
     sse_stream: SSEStream
+
+    # for writes that outlive the request-scoped session (e.g. chat run records)
+    session_factory: async_sessionmaker[AsyncSession]

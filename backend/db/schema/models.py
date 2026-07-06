@@ -1,6 +1,7 @@
 # SQLAlchemy models (shared by stores / DB layers)
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Float, Text, Boolean
+from sqlalchemy import Column, DateTime, Integer, String, Float, Text, Boolean, func
+from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
 from config import settings
@@ -58,3 +59,31 @@ class BookModel(Base):
         if not include_embedding:
             columns = [c for c in columns if c.name != "embedding"]
         return {column.name: getattr(self, column.name) for column in columns}
+
+
+class ChatRunModel(Base):
+    """One row per orchestrated chat turn: full envelopes as JSONB plus
+    promoted stats (ok, duration, tokens) for cheap querying in eval."""
+
+    __tablename__ = "chat_runs"
+
+    chat_id = Column(String, primary_key=True)
+    session_id = Column(String, nullable=False, index=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    user_message = Column(Text, nullable=True)
+
+    # promoted stats: cheap to query, index, aggregate
+    ok = Column(Boolean, nullable=True)
+    duration_s = Column(Float, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+
+    # full-fidelity envelopes
+    parse_result = Column(JSONB, nullable=True)
+    strategy_result = Column(JSONB, nullable=True)
+    orchestration = Column(JSONB, nullable=True)
+    mermaid = Column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"

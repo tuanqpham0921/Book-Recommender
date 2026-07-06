@@ -74,11 +74,12 @@ async def get_request_context_factory(
     book_store=Depends(get_book_store),
     sse_stream=Depends(get_sse_stream),
     app_env: str = Depends(get_app_env),
+    session_factory=Depends(get_sqlalchemy_session_factory),
 ):
     """Factory to create request contexts with runtime arguments."""
     from app.common.messages import UserMessage
     from app.orchestration.request_context import RequestContext
-    
+
     def create_context(session_id: str, user_message: UserMessage):
 
         return RequestContext(
@@ -88,6 +89,7 @@ async def get_request_context_factory(
             llm_client=llm_client,
             book_store=book_store,
             sse_stream=sse_stream,
+            session_factory=session_factory,
         )
 
     return create_context
