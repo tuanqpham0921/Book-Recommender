@@ -4,7 +4,8 @@ import logging
 from typing import Any, AsyncGenerator, Callable
 
 from fastapi import APIRouter, Depends, HTTPException
-from sse_starlette.sse import EventSourceResponse, ServerSentEvent
+from sse_starlette.event import ServerSentEvent
+from sse_starlette.sse import EventSourceResponse
 
 from app.api.schemas import ChatIn
 from app.common.messages import UserMessage

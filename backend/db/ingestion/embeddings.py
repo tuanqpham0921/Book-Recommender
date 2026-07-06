@@ -54,7 +54,7 @@ async def _store_batch_embeddings(
 async def _get_bucketed_embeddings(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
-) -> dict[int, dict[str, list[str]]]:
+) -> AsyncIterator[dict[str, Any]]:
     # TODO: blocking operation might be a long operation (not IO bound)
     
     text_bucket: list[str] = []

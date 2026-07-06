@@ -1,4 +1,4 @@
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.schema import BooksFilter
 
@@ -26,7 +26,7 @@ class BookStore(BaseStore[BookModel]):
         stmt = build_isbn_search(self.model, isbn)
         result = await self._execute_statement(stmt)
         row = result.scalars().first()
-        return [self.row_to_dict(row)] if row else None
+        return [self.row_to_dict(row)] if row else []
 
     async def search_by_title(
         self, title: str, authors: list[str], limit: int = 10, similarity_threshold: float = 0.7
@@ -136,26 +136,33 @@ class BookStore(BaseStore[BookModel]):
         """Get the number of books that are missing embeddings."""
         stmt = select(func.count()).select_from(BookModel).where(BookModel.embedding.is_(None))
         result = await self.session.execute(stmt)
-        return result.scalar()
+        # COUNT(*) always yields one row, so scalar() is never None here
+        return cast(int, result.scalar())
 
     def row_to_dict(self, row: BookModel) -> Dict[str, Any]:
         """Convert BookModel to standardized dictionary."""
         if not row:
-            return None
+            return {}
+
+        # cast: BookModel uses legacy Column declarations, so pyright sees
+        # instance attributes as Column objects instead of their values
+        isbn13 = cast(Optional[str], row.isbn13)
+        average_rating = cast(Optional[float], row.average_rating)
+        thumbnail = cast(Optional[str], row.thumbnail)
 
         return {
-            "isbn13": row.isbn13,
+            "isbn13": isbn13,
             "title": row.title,
             "authors": row.authors,
             "categories": row.categories,
             "published_year": row.published_year,
             "num_pages": row.num_pages,
-            "average_rating": float(row.average_rating) if row.average_rating else None,
+            "average_rating": float(average_rating) if average_rating else None,
             "description": row.description,
             "thumbnail": (
-                row.thumbnail
-                or f"https://covers.openlibrary.org/b/isbn/{row.isbn13}-L.jpg"
-                if row.isbn13
+                thumbnail
+                or f"https://covers.openlibrary.org/b/isbn/{isbn13}-L.jpg"
+                if isbn13
                 else "data/cover-not-found.jpg"
             ),
             "ratings_count": row.ratings_count,

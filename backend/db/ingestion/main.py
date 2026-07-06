@@ -4,7 +4,8 @@ import asyncio
 import logging
 from pathlib import Path
 
-from common import AppContext, setup_logging, task, OperationResult
+from common import setup_logging, task, OperationResult
+from common.context import AppContext
 from common.utils import save_file
 
 from config import (

@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal, Union, cast
 
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
@@ -56,7 +56,7 @@ class AssistantMessage(BaseMessage):
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
 
     def to_openai_dict(self) -> dict:
-        base = {"role": self.role}
+        base: dict[str, Any] = {"role": self.role}
         if self.content:
             base["content"] = self.content
         if self.tool_calls:
@@ -79,7 +79,9 @@ class ToolMessage(BaseMessage):
         cls, tool_call: ParsedFunctionToolCall, **kwargs
     ) -> "ToolMessage":
         tool_name = tool_call.function.name
-        tool_instance = tool_call.function.parsed_arguments
+        # parsed_arguments is typed `object | None` by the openai lib; the
+        # parser validated it into a callable node instance
+        tool_instance = cast(Any, tool_call.function.parsed_arguments)
         output = await tool_instance(**kwargs)
 
         # NOTE: make sure the tool calls return just the output

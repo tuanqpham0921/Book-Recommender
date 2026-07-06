@@ -5,6 +5,7 @@ import asyncio
 from pydantic import BaseModel, ConfigDict
 from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
+from common.operation import OperationResult
 
 import logging
 logger = logging.getLogger(__name__)
@@ -31,8 +32,12 @@ class BaseLLMClient(ABC):
     semaphore: asyncio.Semaphore
 
     @abstractmethod
-    async def execute(self, req: BaseLLMRequest, save_payload: bool = False):
-        """Execute a request (stream or not) and return an AssistantMessage."""
+    async def execute(
+        self, req: BaseLLMRequest, save_payload: bool = False
+    ) -> OperationResult[Any]:
+        """Execute a request (stream or not). Implementations are @task
+        decorated, so callers receive an OperationResult envelope whose
+        output is the AssistantMessage."""
         ...
 
     @abstractmethod

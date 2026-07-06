@@ -1,4 +1,5 @@
 import re
+from collections.abc import Mapping
 
 from app.domains.base_request import BaseRequest
 from common.utils import to_serializable, remove_empty_values
@@ -52,7 +53,7 @@ def format_node_label(task_id: str, data: dict) -> str:
 
 
 def get_mermaid_diagram(
-    execution_order: list[str], id_to_node: dict[str, BaseRequest]
+    execution_order: list[str], id_to_node: Mapping[str, BaseRequest]
 ) -> str:
     lines = ["flowchart LR"]
 
@@ -64,9 +65,8 @@ def get_mermaid_diagram(
 
     for task in execution_order:
         node = id_to_node[task]
-        if not hasattr(node, "depends_on"):
-            continue
-        for dep in node.depends_on:
+        # get_depends_on returns [] for nodes without dependencies
+        for dep in node.get_depends_on():
             lines.append(f"\t{mermaid_id(dep)} --> {mermaid_id(task)}")
 
     return "\n".join(lines) + "\n"

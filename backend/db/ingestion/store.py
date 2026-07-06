@@ -21,7 +21,7 @@ async def insert_batch(
 ) -> OperationResult:
     """Upsert a batch of books (metadata only; embedding column excluded on conflict)."""
     if not batch:
-        return OperationResult(ok=False, message="No books to insert.", details={"batch_length": len(batch)})
+        return OperationResult(ok=False, message="No books to insert.", details=[f"batch_length: {len(batch)}"])
 
     table = BookModel.__table__
     stmt = insert(table).values(batch)
@@ -40,10 +40,10 @@ async def insert_batch(
         await session.commit()
     rowcount = result.rowcount or 0
     return OperationResult(
-        ok=rowcount, 
-        message=f"Stored {rowcount} books out.", 
+        ok=rowcount > 0,
+        message=f"Stored {rowcount} books out.",
         output=rowcount,
-        details={"batch_length": len(batch)}
+        details=[f"batch_length: {len(batch)}"]
     )
 
 @task

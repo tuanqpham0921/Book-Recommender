@@ -24,7 +24,7 @@ def compile_sql(stmt):
 def build_title_search(
     model,
     book_title: str,
-    authors: list[str] = None,
+    authors: Optional[list[str]] = None,
     limit: int = 1,
     similarity_threshold: float = 0.7,
 ):
@@ -227,21 +227,15 @@ def build_embedding_search(
     
     # Apply additional filters if provided
     if filters:
-        # Temporarily remove limit from filters to apply it after sorting by similarity
-        original_limit = filters.limit
-        filters.limit = None
-
-        # Apply all book filters
+        # Copy with the limit zeroed out so the caller's filter limit doesn't
+        # apply here — the similarity limit below takes precedence instead
         stmt = apply_book_filters(
             stmt,
             model,
-            filters,
+            filters.model_copy(update={"limit": 0}),
             similarity_threshold=similarity_threshold,
             fuzzy_limit=10,
         )
-
-        # Restore original limit
-        filters.limit = original_limit
 
     # Order by similarity score (highest first) - this takes precedence
     stmt = stmt.order_by(text("similarity_score DESC"))

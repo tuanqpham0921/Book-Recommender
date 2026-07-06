@@ -79,7 +79,8 @@ def prepare_chunk(chunk: pd.DataFrame) -> list[dict]:
     cleaned_chunk: list[dict] = []
 
     for _, row in chunk.iterrows():
-        if not pd.notna(row.get("title")) or not pd.notna(row.get("tagged_description")):
+        # bool(): pd.notna is typed for array inputs too, but these are scalars
+        if not bool(pd.notna(row.get("title"))) or not bool(pd.notna(row.get("tagged_description"))):
             continue
         try:
             book = row_to_book(row)

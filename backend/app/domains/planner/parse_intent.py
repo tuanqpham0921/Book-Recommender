@@ -1,17 +1,17 @@
 import json
 import logging
-from typing import Optional, Literal
+from typing import Any, Optional, Literal, cast
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator, ValidationError
 
-from app.common.messages import AssistantMessage, ToolMessage, UserMessage
+from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.node_types import NodeTypeEnum
 from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
-from clients.openai_client import OpenAIClient
+from clients.base import BaseLLMClient
 from clients.openai_requests import OpenAIChatRequest
 from common.utils import uuid_8
 from .node_types import PlannerNodeTypeEnum
@@ -140,7 +140,7 @@ class InitialParseOutput(AppWorkflowOutput):
     out_of_scope: Optional[str] = None
     reasoning: Optional[str] = None
 
-    def to_summary(self) -> dict[str, str | bool | None]:
+    def to_summary(self) -> dict[str, Any]:
         return {
             "total_system_goals": len(self.accepted_goals) + len(self.refused_goals),
             "num_rejected_system": len(self.refused_goals),
@@ -153,8 +153,8 @@ class InitialParseOutput(AppWorkflowOutput):
     def accepted_goals_ids(self) -> list[str]:
         return [goal.id for goal in self.accepted_goals]
 
-    def to_llm_messages(self) -> dict[str, any]:
-        payload = {}
+    def to_llm_messages(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
         if self.small_talk:
             payload["small_talk"] = self.small_talk
         if self.out_of_scope:
@@ -174,13 +174,13 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."
 
-    tool_models = [InitialParseRequest]
+    tool_models: list[type] = [InitialParseRequest]
 
     def __init__(
         self,
         sse_stream: SSEStream,
         user_message: UserMessage,
-        llm_client: OpenAIClient,
+        llm_client: BaseLLMClient,
         messages=None,
     ):
         super().__init__(
@@ -194,7 +194,9 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
         tool_call = await self._run_llm_args_parse()
-        parse_result = tool_call.function.parsed_arguments
+        # parsed_arguments is typed `object | None` by the openai lib; the
+        # parser validated it against InitialParseRequest, so the cast holds
+        parse_result = cast(InitialParseRequest, tool_call.function.parsed_arguments)
         self.process_parse_result(parse_result)
         self._record_tool_call(tool_call)
         payload = self.output.to_llm_messages()
@@ -212,8 +214,12 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_llm_call(req)
-        tool_call = assistant_msg.tool_calls[0]
-        return tool_call
+        tool_calls = assistant_msg.tool_calls
+        if not tool_calls:
+            # previously an unguarded [0] on None — same failure semantics
+            # (runtime error caught by the workflow), clearer message
+            raise ValueError("LLM response contained no tool calls")
+        return tool_calls[0]
 
     def _record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
         self.messages.append(
@@ -235,7 +241,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         if not payload:
             return
 
-        messages = [AssistantMessage(content=json.dumps(payload))]
+        messages: list[APIMessage] = [AssistantMessage(content=json.dumps(payload))]
         response_prompt = format_prompt(
             prompt_path=INITIAL_PARSE_RESPONSE_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),

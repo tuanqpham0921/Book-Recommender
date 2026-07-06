@@ -1,4 +1,5 @@
 import inspect
+from enum import Enum
 from typing import Annotated, Union
 
 from pydantic import Field
@@ -89,7 +90,8 @@ NODE_TYPE_TO_CLS: dict[str, type] = {
 
 
 def get_request_class(node_type: NodeTypeEnum | str) -> type:
-    key = node_type.value if hasattr(node_type, "value") else node_type
+    # isinstance instead of hasattr: same runtime behavior, narrows the type
+    key = node_type.value if isinstance(node_type, Enum) else node_type
     return NODE_TYPE_TO_CLS[key]
 
 

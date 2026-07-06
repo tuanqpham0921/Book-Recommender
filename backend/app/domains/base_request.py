@@ -78,7 +78,10 @@ class BaseRequest(BaseModel):
         # use the node types to rebuild
         raise NotImplementedError("Rebuild Json is not implmented yet")
     
-    def get_depends_on(self):
+    # NOTE: do NOT add a `depends_on` property here — a property on the base
+    # class shadows AnalyzeBaseRequest's real pydantic field (and recurses).
+    # Use this helper, or isinstance(x, AnalyzeBaseRequest) narrowing.
+    def get_depends_on(self) -> list[str]:
         return getattr(self, "depends_on", [])
         
 

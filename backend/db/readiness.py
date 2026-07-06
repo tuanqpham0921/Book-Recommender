@@ -38,7 +38,7 @@ async def _check_table(
         name="table",
         ok=exists,
         message=f"Table {fqtn} exists." if exists else f"Table {fqtn} not found.",
-        details={"schema": schema, "table": table},
+        details=[f"schema: {schema}", f"table: {table}"],
     )
 
 @task
@@ -66,7 +66,7 @@ async def _check_table_rows(
         name="rows",
         ok=ok,
         message=(f"Table {fqtn} has {row_count} rows (need at least {min_rows})."),
-        details={"row_count": row_count, "min_rows": min_rows},
+        details=[f"row_count: {row_count}", f"min_rows: {min_rows}"],
         output=row_count,
     )
     

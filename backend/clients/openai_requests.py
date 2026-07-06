@@ -6,6 +6,7 @@ from .base import BaseLLMRequest
 from config import settings
 from app.common.messages import AssistantMessage, SystemMessage, ToolMessage
 from openai import pydantic_function_tool
+from openai.types.chat import ChatCompletionFunctionToolParam
 from pydantic import model_validator, Field
 from typing import Annotated
 
@@ -86,7 +87,7 @@ class OpenAIParserRequest(OpenAIBaseRequest):
         }
         return payload
 
-    def to_function_tools(self) -> dict:
+    def to_function_tools(self) -> ChatCompletionFunctionToolParam:
         tool_name = self.tool_models[0].__name__
         tool = pydantic_function_tool(
             self.tool_models[0],

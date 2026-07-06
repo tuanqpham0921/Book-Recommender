@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from common.operation import OperationResult, TokenUsage
 from common.workflow import Workflow
@@ -50,7 +50,8 @@ class AppBaseWorkflow(Workflow[OutputT]):
         result = await self.run_async_step(
             self.llm_client.execute(req, save_payload=save_payload)
         )
-        msg: AssistantMessage = result.output
+        # run_async_step raised on failure, so output carries the message
+        msg = cast(AssistantMessage, result.output)
         self.messages.append(msg)
         return msg
 
@@ -60,5 +61,6 @@ class AppBaseWorkflow(Workflow[OutputT]):
         result = await self.run_async_step(
             ToolMessage.execute(tool_call, **kwargs)
         )
-        self.messages.append(result.output)
-        return result.output
+        tool_msg = cast(ToolMessage, result.output)
+        self.messages.append(tool_msg)
+        return tool_msg

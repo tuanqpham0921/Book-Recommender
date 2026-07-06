@@ -1,6 +1,7 @@
 import json
 import logging
-from typing import Any, Literal
+from collections.abc import Sequence
+from typing import Any, Literal, cast
 from functools import reduce
 from operator import or_
 from collections import defaultdict, deque
@@ -17,7 +18,7 @@ from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
-from app.domains.base_request import BaseRequest
+from app.domains.base_request import AnalyzeBaseRequest, BaseRequest
 from app.domains.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
@@ -26,7 +27,7 @@ from app.domains.registry import (
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
-from clients.openai_client import OpenAIClient
+from clients.base import BaseLLMClient
 from common.utils import uuid_8, to_serializable, remove_empty_values
 from config import BookConstraints, BookGuides
 from common.operation import task
@@ -66,8 +67,8 @@ class StrategyRequest(BaseModel):
     @classmethod
     def build_model(
         cls,
-        strategy_types: list[type[BaseModel]],
-    ) -> type[BaseModel]:
+        strategy_types: Sequence[type[BaseModel]],
+    ) -> type["StrategyRequest"]:
         if not strategy_types:
             raise TypeError("No strategy types provided")
 
@@ -98,7 +99,8 @@ class StrategyRequest(BaseModel):
             if isinstance(item, BaseRequest):
                 valid.append(item)
             elif isinstance(item, dict):
-                request_cls = NODE_TYPE_TO_CLS.get(item.get("node_type"))
+                # node_type may be a str-enum member; equal/hashable as str
+                request_cls = NODE_TYPE_TO_CLS.get(cast(str, item.get("node_type")))
                 if request_cls is None:
                     invalid.append(item)
                     continue
@@ -154,7 +156,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         self,
         sse_stream: SSEStream,
         user_message: UserMessage,
-        llm_client: OpenAIClient,
+        llm_client: BaseLLMClient,
         messages=None,
     ):
         super().__init__(
@@ -212,7 +214,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
 
         self._build_execution_order(candidates)
 
-    def _build_execution_order(self, candidates: list[BaseRequest]) -> list[str]:
+    def _build_execution_order(self, candidates: list[AnyStrategyRequest]) -> list[str]:
         """Topologically sort candidates, drop cycle-involved nodes, and
         populate self.output.accepted/execution_order."""
         id_to_node = {c.id: c for c in candidates}
@@ -238,12 +240,16 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
             tool_models=[strategy_request],
         )
         assistant_msg = await self.run_llm_call(req)
-        tool_call = assistant_msg.tool_calls[0]
-        return tool_call
+        tool_calls = assistant_msg.tool_calls
+        if not tool_calls:
+            # previously an unguarded [0] on None — same failure semantics
+            # (runtime error caught by the workflow), clearer message
+            raise ValueError("LLM response contained no tool calls")
+        return tool_calls[0]
 
     def _build_strategy_request(
         self, system_goals: list[SystemGoal]
-    ) -> StrategyRequest:
+    ) -> type[StrategyRequest]:
         request_classes = set()
         for goal in system_goals:
             if goal.target_node_type.value in NODE_TYPE_TO_CLS:
@@ -290,7 +296,9 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         "target_goal",
     }
 
-    def _remove_duplicates(self, strategies: list[BaseRequest]) -> list[BaseRequest]:
+    def _remove_duplicates(
+        self, strategies: list[AnyStrategyRequest]
+    ) -> list[AnyStrategyRequest]:
         id_to_node = {strat.id: strat for strat in strategies}
         content_to_id = {}
         map_to_existing = {}
@@ -310,7 +318,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         return self._reassign_dependencies(strategies, map_to_existing)
 
     def _merge_target_goal(
-        self, canonical: BaseRequest, duplicate: BaseRequest
+        self, canonical: AnyStrategyRequest, duplicate: AnyStrategyRequest
     ) -> None:
         """Keep the goal(s) a dropped duplicate served attached to the surviving node."""
         if not hasattr(canonical, "target_goal") or not hasattr(
@@ -322,8 +330,8 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         )
 
     def _reassign_dependencies(
-        self, strategies: list[BaseRequest], map_to_existing: dict[str, str]
-    ) -> list[BaseRequest]:
+        self, strategies: list[AnyStrategyRequest], map_to_existing: dict[str, str]
+    ) -> list[AnyStrategyRequest]:
         if not map_to_existing:
             return strategies
         logger.warning(f"There are {len(map_to_existing)} of duplicate tasks")
@@ -337,7 +345,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
 
         return [strat for strat in strategies if strat.id not in map_to_existing]
 
-    def _set_llm_id(self, strategies: list[BaseRequest]) -> dict[str, str]:
+    def _set_llm_id(self, strategies: list[AnyStrategyRequest]) -> dict[str, str]:
         llm_to_internal_id = {}
         for strategy in strategies:
             llm_id = strategy.id
@@ -353,10 +361,12 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         return llm_to_internal_id
 
     def _map_dependencies_to_internal_ids(
-        self, strategies: list[BaseRequest], llm_to_internal_id: dict[str, str]
+        self, strategies: list[AnyStrategyRequest], llm_to_internal_id: dict[str, str]
     ) -> None:
         for strategy in strategies:
-            if not hasattr(strategy, "depends_on"):
+            # only analyze-type requests carry depends_on (same runtime
+            # behavior as the old hasattr check, but narrows the type)
+            if not isinstance(strategy, AnalyzeBaseRequest):
                 continue
             if strategy.depends_on is None or not len(strategy.depends_on):
                 strategy.refuse("No dependencies provided")
@@ -373,13 +383,13 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
 
     def _get_candidates(
         self,
-        strategies: list[BaseRequest],
+        strategies: list[AnyStrategyRequest],
         system_goals: list[SystemGoal],
         accepted_tuning: float = 0.7,
-    ) -> list[BaseRequest]:
+    ) -> list[AnyStrategyRequest]:
         """Validate confidence and goals ids"""
         accepted_goals_ids = {goal.id for goal in system_goals}
-        candidates = []
+        candidates: list[AnyStrategyRequest] = []
         for strategy in strategies:
             missing_goals = [
                 g for g in strategy.target_goal if g not in accepted_goals_ids
@@ -402,8 +412,10 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         return candidates
 
     def _filter_candidates(
-        self, candidates: list[BaseRequest], id_to_node: dict[str, BaseRequest]
-    ) -> list[BaseRequest]:
+        self,
+        candidates: list[AnyStrategyRequest],
+        id_to_node: dict[str, AnyStrategyRequest],
+    ) -> list[AnyStrategyRequest]:
         if not len(self.output.refused):
             return candidates
         rejected = self.output.get_refused_id_to_node()
@@ -416,14 +428,16 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         return [strat for strat in candidates if strat.id not in remove_ids]
 
     def _get_graph_indegree(
-        self, candidates: list[BaseRequest]
+        self, candidates: list[AnyStrategyRequest]
     ) -> tuple[defaultdict[str, list[str]], defaultdict[str, int]]:
         """create the graph and indegree"""
-        graph = defaultdict(list)
-        indegree = defaultdict(int)
+        graph: defaultdict[str, list[str]] = defaultdict(list)
+        indegree: defaultdict[str, int] = defaultdict(int)
         for strat in candidates:
             task_id = strat.id
-            if not hasattr(strat, "depends_on"):
+            # only analyze-type requests carry depends_on (same runtime
+            # behavior as the old hasattr check, but narrows the type)
+            if not isinstance(strat, AnalyzeBaseRequest):
                 indegree[task_id] = 0
                 continue
 
@@ -437,7 +451,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         self,
         graph: defaultdict[str, list[str]],
         indegree: defaultdict[str, int],
-        id_to_node: dict[str, BaseRequest],
+        id_to_node: dict[str, AnyStrategyRequest],
     ) -> list[str]:
         # Build adjacency list and indegree map
         order = self._sort_graph(graph, indegree)
@@ -485,7 +499,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         graph: defaultdict[str, list[str]],
         cur: str,
         remove_ids: set[str],
-        id_to_node: dict[str, BaseRequest],
+        id_to_node: dict[str, AnyStrategyRequest],
         message: str = "Node depends on a rejected node",
     ) -> None:
         """Remove rejected nodes from the dependency graph"""
@@ -503,7 +517,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
             self._reject_dependent_on(graph, nei, remove_ids, id_to_node)
 
     def _add_to_accepted(
-        self, order: list[str], id_to_node: dict[str, BaseRequest]
+        self, order: list[str], id_to_node: dict[str, AnyStrategyRequest]
     ) -> None:
         """Add as mainly low level as possible for parrallelism"""
         for id in order:

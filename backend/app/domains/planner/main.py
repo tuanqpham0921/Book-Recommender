@@ -34,7 +34,7 @@ class OrchestrationOutput(AppWorkflowOutput):
 
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
-        pass
+        return {}
 
 
 class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
@@ -67,7 +67,10 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         parse_result = await self.run_async_step(
             parse_workflow(), raise_on_failure=False
         )
-        self.output.parse_result = parse_result.output
+        # narrow through a local: the workflow pre-initializes its output,
+        # so it is never None; parse_workflow.output raises if it ever were
+        parse_output = parse_workflow.output
+        self.output.parse_result = parse_output
 
         if not parse_result.ok:
             self.result.ok = False
@@ -81,7 +84,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         # return
         # ------------------------------------------------------------------------------------------------
 
-        system_goals = self.output.parse_result.accepted_goals
+        system_goals = parse_output.accepted_goals
         if not system_goals:
             # parse ok but nothing to plan — the parse workflow already
             # streamed the reply (small talk / out-of-scope / refusals)
@@ -97,7 +100,8 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         strategy_result = await self.run_async_step(
             strategy_workflow(system_goals), raise_on_failure=False
         )
-        self.output.strategy_result = strategy_result.output
+        strategy_output = strategy_workflow.output
+        self.output.strategy_result = strategy_output
         if not strategy_result.ok:
             self.result.ok = False
             self.result.message = self.strategy_classification_failure_message
@@ -111,10 +115,10 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             )
             return
 
-        self.output.diagram = await self.send_mermaid(self.output.strategy_result)
+        self.output.diagram = await self.send_mermaid(strategy_output)
         seen_description = set()
         await self.sse_stream.send_chars("\n\n# System Goals:\n")
-        for system_goal in self.output.parse_result.accepted_goals:
+        for system_goal in parse_output.accepted_goals:
             if system_goal.description in seen_description:
                 continue
             await self.sse_stream.send_chars(f"- {system_goal.description}\n")
