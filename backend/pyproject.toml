@@ -12,7 +12,8 @@ packages = [
 
 [tool.pyright]
 include = ["app", "common", "clients", "config", "db"]
-exclude = ["**/__pycache__"]
+# db/ingestion + db/readiness are legacy (old Workflow/@task patterns), reworked later
+exclude = ["**/__pycache__", "db/ingestion", "db/readiness.py"]
 typeCheckingMode = "basic"
 pythonVersion = "3.11"
 

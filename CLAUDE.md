@@ -82,7 +82,7 @@ Infrastructure abstractions in `common/` that centralize logging, error catching
 - Schema SQL in `db/schema/` (extensions → tables → indexes)
 - SQLAlchemy models in `db/schema/models.py`
 - Repository pattern in `db/stores/` — `book_store.py` is the primary store
-- `db/ingestion/` populates books from `data/books.csv`
+- `db/ingestion/` populates books from `data/books.csv` — **legacy, ignore**: still uses old `Workflow`/`@task` patterns and will be reworked later; don't refactor it or model new code on it
 
 ### Config
 
