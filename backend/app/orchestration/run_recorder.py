@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 
 def build_chat_run_row(
     session_id: str,
+    user_chat_id: str,
     user_message: str,
     result: OperationResult,
     output: OrchestrationOutput,
 ) -> dict[str, Any]:
     """Map a finished conversation workflow onto ChatRunModel columns."""
     return {
-        "chat_id": result.id,
+        "chat_id": user_chat_id,
         "session_id": session_id,
         "user_message": user_message,
         "ok": result.ok,
@@ -50,6 +51,7 @@ async def record_chat_run(
     try:
         row = build_chat_run_row(
             session_id=request_context.session_id,
+            user_chat_id=request_context.user_message.id,
             user_message=request_context.user_message.content,
             result=workflow.result,
             output=workflow.output,
