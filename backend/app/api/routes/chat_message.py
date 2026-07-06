@@ -61,7 +61,7 @@ async def generate_chat_response(
 @router.post("/session/{session_id}/message")
 async def chat(
     session_id: str,
-    chat_in: ChatIn,
+    chat_in: ChatIn, # NOTE: this can probably use UserMessage
     orchestrator: Orchestrator = Depends(get_orchestrator),
     request_context_factory: Callable = Depends(get_request_context_factory),
 ) -> EventSourceResponse:
