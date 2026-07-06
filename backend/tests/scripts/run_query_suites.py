@@ -1,11 +1,13 @@
 """Send a suite of queries to the backend one after another.
 
+Queries are loaded from tests/query_suite.json (override with --suite).
 Each query is POSTed to /session/{id}/message and its SSE stream is
 consumed to completion before the next query is sent.
 
 Usage (from backend/):
     poetry run python tests/scripts/run_query_suites.py
-    poetry run python tests/scripts/run_query_suites.py --base-url http://localhost:8000
+    poetry run python tests/scripts/run_query_suites.py --difficulty easy
+    poetry run python tests/scripts/run_query_suites.py --ids 1 16 50
     poetry run python tests/scripts/run_query_suites.py --new-session-per-query
 """
 
@@ -13,15 +15,11 @@ import argparse
 import json
 import sys
 import time
+from pathlib import Path
 
 import httpx
 
-QUERIES = [
-    "Recommend me a book similar to Dune.",
-    "Compare The Hobbit and The Lord of the Rings.",
-    "Find the book with ISBN 9780439023481.",
-    "I like slow-burn literary fiction with unreliable narrators, any suggestions?",
-]
+DEFAULT_SUITE_PATH = Path(__file__).parent.parent / "query_suite.json"
 
 STREAM_TIMEOUT_SECONDS = 300.0
 EVENT_PRINT_LIMIT = 200
@@ -31,6 +29,21 @@ def truncate(text: str, limit: int = EVENT_PRINT_LIMIT) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit]}… (truncated, {len(text)} chars total)"
+
+
+def load_suite(
+    suite_path: Path,
+    difficulties: list[str] | None,
+    ids: list[int] | None,
+) -> list[dict]:
+    with suite_path.open() as f:
+        entries = json.load(f)
+
+    if difficulties:
+        entries = [e for e in entries if e["difficulty"] in difficulties]
+    if ids:
+        entries = [e for e in entries if e["id"] in ids]
+    return entries
 
 
 def create_session(client: httpx.Client) -> str:
@@ -82,24 +95,51 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument(
+        "--suite",
+        type=Path,
+        default=DEFAULT_SUITE_PATH,
+        help="Path to the query suite JSON file.",
+    )
+    parser.add_argument(
+        "--difficulty",
+        action="append",
+        choices=["easy", "medium", "hard"],
+        help="Only run queries of this difficulty (repeatable).",
+    )
+    parser.add_argument(
+        "--ids",
+        type=int,
+        nargs="+",
+        help="Only run queries with these ids, e.g. --ids 1 16 50.",
+    )
+    parser.add_argument(
         "--new-session-per-query",
         action="store_true",
         help="Create a fresh session for every query instead of reusing one.",
     )
     args = parser.parse_args()
 
+    entries = load_suite(args.suite, args.difficulty, args.ids)
+    if not entries:
+        print("No queries matched the given filters.", file=sys.stderr)
+        return 1
+    print(f"loaded {len(entries)} queries from {args.suite}")
+
     with httpx.Client(base_url=args.base_url) as client:
         session_id = None
-        for i, query in enumerate(QUERIES, start=1):
+        for i, entry in enumerate(entries, start=1):
             if session_id is None or args.new_session_per_query:
                 session_id = create_session(client)
 
-            print(f"\n--- query {i}/{len(QUERIES)}: {query}")
+            print(
+                f"\n--- query {i}/{len(entries)} "
+                f"(id={entry['id']}, {entry['difficulty']}): {entry['query']}"
+            )
             try:
-                send_query(client, session_id, query)
+                send_query(client, session_id, entry["query"])
             except httpx.HTTPError as e:
                 print(f"  FAILED: {e}", file=sys.stderr)
-                return 1
+                # return 1
 
     return 0
 
