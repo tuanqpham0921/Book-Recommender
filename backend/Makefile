@@ -113,6 +113,10 @@ tests:
 tests-all:
 	poetry run pytest -s tests/unit/
 
+.PHONY: typecheck
+typecheck:
+	poetry run pyright
+
 .PHONY: playground
 playground:
 	poetry run python playground.py

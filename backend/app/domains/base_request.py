@@ -47,7 +47,7 @@ class BaseRequest(BaseModel):
         description="Confidence score for the parsed results (1.0 is highest confidence)",
     )
     _refusal: bool = PrivateAttr(default=False)
-    _llm_id: str = PrivateAttr(default=None)
+    _llm_id: str | None = PrivateAttr(default=None)
     _details: list[str] = PrivateAttr(default_factory=list)
     
     @property

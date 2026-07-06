@@ -10,6 +10,12 @@ packages = [
     { include = "config" }
 ]
 
+[tool.pyright]
+include = ["app", "common", "clients", "config", "db"]
+exclude = ["**/__pycache__"]
+typeCheckingMode = "basic"
+pythonVersion = "3.11"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 log_cli_level = "INFO"
@@ -44,6 +50,7 @@ jupyter = "^1.1.1"
 notebook = "^7.4.7"
 ruff = "^0.15.20"
 black = "^26.5.1"
+pyright = "^1.1.411"
 
 [build-system]
 requires = ["poetry-core"]
