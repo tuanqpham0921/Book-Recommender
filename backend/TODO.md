@@ -14,6 +14,7 @@ Note:
 
 Reminder:
 1. need to create one executor for @task and workflow
+    * do this later once you have time out and flush out more stuff
 2. add timeout to @task and @workflow (should be able to handle them)
 3. execution sql can just hold things like time, token usage, edit needed, run-time errors
     * don't store the full result in there
@@ -33,11 +34,6 @@ Eval and deployment testing:
 2. then a script to send all those to the frontend for you to review
 3. deploy your app without DB
 =======================================================================
-
-Unit Test:
-5. test your WorkFlow and decorator last
-    * focus on raising and throwing errors (logic first)
-    * check your logger
 
 lower priority:
 * test your sse stream (might change later, and working right now)
@@ -72,13 +68,6 @@ Features (not in code):
 
 Claude codebase sweep (2026-07-05) — critical or worth mentioning only:
 
-BUGS (fix before eval — these crash or mislabel real runs):
-2. [MISLABEL] Orchestrator misses crashes buried under StepFailure aborts
-   * after a child workflow aborts via StepFailure, its top-level envelope has
-     runtime_error=None — the real crash (e.g. OpenAI exception) lives in steps[i]
-   * main.py `if parse_result.run_time_error:` therefore sends the "system declined"
-     message for genuine crashes
-   * fix: add recursive `has_runtime_error()` on OperationResult, branch on that
 
 BEFORE EVAL (the eval script depends on these):
 4. Saved results drop the step trail: save_conversation_result pops "steps" —
@@ -91,10 +80,6 @@ BEFORE EVAL (the eval script depends on these):
    query set needs per-session names or append mode (matches the "Continue" note up top).
 7. Buffered/refused are terminal: buffer_goals and strategy buffer are captured but
    nothing consumes them. Fine to defer the retry loop — but the eval should count them.
-
-ANNOTATION LIES (pyright basic would catch all of these — consider adding it as a dev dep):
-10. @task is typed `Callable[..., Any]` — erases every decorated signature; use ParamSpec
-    so arg mistakes on tasks become static errors
 
 =======================================================================
 

@@ -65,10 +65,11 @@ class Workflow(ABC, Generic[OutputT]):
                 self.logger.info(f"Finished workflow: {self.workflow_name}")
         except StepFailure as e:
             # controlled abort — the failing step's envelope already
-            # carries the details; no runtime_error on the parent
             self.result.ok = False
             self.logger.warning(f"Workflow stopped: {e}")
             self.result.message = str(e)
+            # NOTE just make the StepFailure a runtime error
+            self.result.runtime_error = RuntimeErrorInfo.from_exception(e)
         except Exception as e:
             self.result.ok = False
             # run-time failure: a genuine crash in run() itself

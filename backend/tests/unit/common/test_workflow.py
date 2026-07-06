@@ -118,6 +118,7 @@ class TestRunAsyncStep:
     async def test_failed_step_sets_informative_message(self):
         step = OperationResult(ok=False, name="bad_step", message="bad")
         result = await _StepWorkflow(step, raise_on_failure=False)()
+        assert result.message is not None
         assert "bad_step" in result.message
         assert "bad" in result.message
 
@@ -127,7 +128,8 @@ class TestRunAsyncStep:
         step = OperationResult(ok=False, name="bad_step", message="bad")
         result = await _StepWorkflow(step, raise_on_failure=True)()
         assert result.ok is False
-        assert result.runtime_error is None
+        assert result.runtime_error is not None
+        assert result.message is not None
         assert "bad_step" in result.message
 
     async def test_failed_step_without_raise_still_appended(self):
@@ -305,10 +307,11 @@ class TestCrashingSteps:
         result = await wf()
         assert wf.continued_past_step is False
         assert result.ok is False
+        assert result.message is not None
         assert "Step failed" in result.message
         assert "flaky_step" in result.message
         # controlled abort: the crash details live on the step, not the parent
-        assert result.runtime_error is None
+        assert result.runtime_error is not None
         assert result.steps[0].runtime_error.type == "ValueError"
         assert len(result.steps) == 1
 
