@@ -92,8 +92,8 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             # streamed the reply (small talk / out-of-scope / refusals)
             self.result.ok = True
             self.result.message = "Conversation handled without planning"
-            self.save_chat_messages()
-            self.save_conversation_result()
+            # self.save_chat_messages()
+            # self.save_conversation_result()
             return
 
         strategy_workflow = StrategyClassificationWorkflow(
@@ -136,8 +136,8 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
 
-        self.save_chat_messages()
-        self.save_conversation_result()
+        # self.save_chat_messages()
+        # self.save_conversation_result()
 
     async def send_mermaid(
         self, strategy_result: StrategyClassificationOutput
