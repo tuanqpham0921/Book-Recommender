@@ -1,6 +1,6 @@
 import logging
 from pydantic import BaseModel, Field
-from typing import Any, Generic, TypeVar
+from typing import Any, Coroutine, Generic, ParamSpec, TypeVar, overload
 import time
 from typing import Callable
 from functools import wraps
@@ -9,6 +9,7 @@ import traceback
 from common.utils import now_iso, uuid_8
 
 OutputT = TypeVar("OutputT")
+P = ParamSpec("P")
 
 
 class TokenUsage(BaseModel):
@@ -85,16 +86,35 @@ class OperationResult(BaseModel, Generic[OutputT]):
         self.details.extend(message)
 
 
+@overload
 def task(
-    func: Callable[..., Any] | None = None,
+    func: Callable[P, Coroutine[Any, Any, Any]],
+) -> Callable[P, Coroutine[Any, Any, OperationResult[Any]]]: ...
+
+
+@overload
+def task(
+    func: None = None,
     *,
     log_info: bool = True,
-) -> Callable[..., Any]:
+) -> Callable[
+    [Callable[P, Coroutine[Any, Any, Any]]],
+    Callable[P, Coroutine[Any, Any, OperationResult[Any]]],
+]: ...
+
+
+def task(
+    func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
+    *,
+    log_info: bool = True,
+) -> Any:
     """For single-step operations (for multiple steps, use Workflow)."""
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(
+        func: Callable[P, Coroutine[Any, Any, Any]],
+    ) -> Callable[P, Coroutine[Any, Any, OperationResult[Any]]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> OperationResult[Any]:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> OperationResult[Any]:
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
             time_start = time.perf_counter()
