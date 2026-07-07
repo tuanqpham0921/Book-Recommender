@@ -1,10 +1,18 @@
 Continue:
+* review code changes from 7ad4a4feb0ccfba0e64e88793aaa99791e18b0c9
+    * where you started adding chat_runs and mermaid reformatting
+
 * figure out a way to add liked/disliked to your chat_id
 * and a feedback column (maybe as a button)
 * a way to load in all your test suites results
     * think sequential for click left and right
 * think about your columns and how to handle it better
     * maybe try adding more schemas
+
+* there's something wrong with how you overwrite the self.result messages
+    * figure out where the put in details vs message
+    * maybe push it to details with "prev message: ..."
+    * change your app/workflow to not overwrite and make sure tests passes 
 
 Note:
 * currently your workflow and operation is fine
