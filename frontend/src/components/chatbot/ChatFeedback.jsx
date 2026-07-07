@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import api from '@/api'
+import {ThumbsUp, ThumbsDown, MessageCircle } from 'lucide-react';
+
 
 // Like / dislike / comment controls shown at the end of a finished bot
 // response. Updates the chat_runs row identified by chatId.
@@ -44,8 +46,8 @@ function ChatFeedback({ chatId }) {
     }
 
     return (
-        <div className="mt-2 ml-1">
-            <div className="flex items-center gap-2">
+        <div className="ml-5">
+            <div className="flex items-center">
                 <button
                     type="button"
                     onClick={() => handleReaction(true)}
@@ -53,11 +55,11 @@ function ChatFeedback({ chatId }) {
                     title="Good response"
                     className={`px-2 py-1 rounded-md text-sm transition-colors ${
                         liked === true
-                            ? 'bg-green-100 text-green-700'
-                            : 'text-gray-400 hover:text-green-600 hover:bg-gray-100'
+                            ? 'text-gray-700'
+                            : 'text-gray-400 hover:text-gray-700'
                     }`}
                 >
-                    👍
+                    <ThumbsUp size={16}/>
                 </button>
                 <button
                     type="button"
@@ -66,23 +68,27 @@ function ChatFeedback({ chatId }) {
                     title="Bad response"
                     className={`px-2 py-1 rounded-md text-sm transition-colors ${
                         liked === false
-                            ? 'bg-red-100 text-red-700'
-                            : 'text-gray-400 hover:text-red-600 hover:bg-gray-100'
+                            ? 'text-gray-700'
+                            : 'text-gray-400 hover:text-gray-700'
                     }`}
                 >
-                    👎
+                    <ThumbsDown size={16}/>
                 </button>
                 <button
                     type="button"
                     onClick={() => setShowComment(prev => !prev)}
                     disabled={isSaving}
                     title="Leave a comment"
-                    className="px-2 py-1 rounded-md text-sm text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                    className={`px-2 py-1 rounded-md text-sm transition-colors ${
+                        commentSaved === true
+                           ? 'text-gray-700'
+                           : 'text-gray-400 hover:text-gray-700'
+                    }`}
                 >
-                    💬
+                    <MessageCircle size={16}/>
                 </button>
                 {commentSaved && !showComment && (
-                    <span className="text-xs text-gray-400 italic">Comment saved</span>
+                    <span className="text-xs text-gray-700 italic">Comment saved</span>
                 )}
                 {error && (
                     <span className="text-xs text-red-500 italic">{error}</span>
@@ -96,7 +102,7 @@ function ChatFeedback({ chatId }) {
                         onChange={(e) => setComment(e.target.value)}
                         placeholder="What was good or bad about this response?"
                         rows={2}
-                        className="flex-1 max-w-md text-sm border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none"
+                        className="flex-1 max-w-md text-sm border border-gray-300 rounded-md p-2 focus:outline-1 focus:outline-gray-300 resize-none"
                     />
                     <button
                         type="button"
