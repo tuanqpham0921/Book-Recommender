@@ -12,6 +12,11 @@ class SSEStream:
     def __init__(self) -> None:
         self._queue = asyncio.Queue()
         self._stream_end = object()
+        # _closed: producer is done sending (guards re-entrant close()/put()).
+        # _finished: consumer has actually drained the end sentinel — only
+        # this should stop __anext__, otherwise items still sitting in the
+        # queue when close() fires get silently dropped.
+        self._closed = False
         self._finished = False
         self._timeout = 300.0  # 5 minutes
 
@@ -25,12 +30,15 @@ class SSEStream:
         try:
             data = await asyncio.wait_for(self._queue.get(), timeout=self._timeout)
             if data is self._stream_end:
+                self._finished = True
                 raise StopAsyncIteration
             return ServerSentEvent(data=data)
         except asyncio.TimeoutError:
             logger.error("⏰ SSE stream timeout")
             self._finished = True
             raise StopAsyncIteration
+        except StopAsyncIteration:
+            raise
         except Exception as e:
             logger.exception(f"❌ SSE stream error: {e}")
             self._finished = True
@@ -38,7 +46,7 @@ class SSEStream:
 
     async def put(self, data: str | dict):
         """Put data into the queue."""
-        if self._finished:
+        if self._closed:
             return
         
         if isinstance(data, dict):
@@ -82,9 +90,9 @@ class SSEStream:
     
     async def close(self):
         """Close the stream."""
-        if self._finished:
+        if self._closed:
             return
-        
-        self._finished = True
+
+        self._closed = True
         await self._queue.put(self._stream_end)
         logger.info("🔚 Endpoint cleanup: closing SSE stream")
