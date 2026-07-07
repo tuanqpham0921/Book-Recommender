@@ -55,7 +55,15 @@ postgres-stop:
 postgres-cli:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -it -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB 
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB
+
+# run an ad hoc query file against the dev postgres container (default: data/sql_dev_commands.sql)
+# usage: make postgres-query [FILE=data/some_other_file.sql]
+.PHONY: postgres-query
+postgres-query:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)$(or $(FILE),data/sql_dev_commands.sql)
 
 # restore plain-SQL backup (data/backup.sql) into the compose postgres container
 .PHONY: postgres-restore
