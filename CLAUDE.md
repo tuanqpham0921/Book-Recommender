@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Files to Avoid Reading
+
+To save tokens, do not read these unless the task specifically requires it:
+
+- **Log files** (`backend/logs/` — `*.log` and chat-run JSON dumps): skip unless the task is formatting or restructuring the logs themselves.
+- **SQL backups/dumps** (`backend/data/*.sql`, e.g. `backup.sql`): never read these. The schema init SQL in `backend/db/schema/` (extensions/tables/indexes) is fine to read.
+
+If a file is in gitignore, you probably don't need to read it.
+Ask for confirmation before reading large files
+
 ## Commands
 
 ### Backend (run from `backend/`)
