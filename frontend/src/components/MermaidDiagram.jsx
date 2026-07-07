@@ -73,7 +73,9 @@ function MermaidDiagram({ chart }) {
                         const panzoom = Panzoom(svgElement, {
                             maxScale: 10,
                             minScale: 1,  // don't let it shrink past half size
-                            step: 0.15,     // gentler wheel zoom (default 0.3)
+                            step: 0.20,     // gentler wheel zoom (default 0.3)
+                            canvas: true,   // bind drag to the container (svg's parent),
+                                            // not just the svg's own bounding box
                         });
 
                         // on the container so the whole framed area zooms the
@@ -126,17 +128,26 @@ function MermaidDiagram({ chart }) {
     }, [chart])
 
     return (
-        <div className="mermaid-container">
-            
+        <div className="mermaid-container relative">
+
+            <button
+                type="button"
+                onClick={() => panzoomRef.current?.instance.reset()}
+                title="Reset view"
+                className="absolute bottom-2 right-2 z-10 px-2 py-1 rounded-md text-sm bg-white/80 text-gray-500 hover:text-gray-800 hover:bg-white transition-colors"
+            >
+                ↺ Reset
+            </button>
+
             {isLoading && (
                 <div className="loading-wrapper">
                     {/* <div className="loading-spinner" /> */}
                     <span className="loading-text">Rendering Mermaid Diagram...</span>
                 </div>
             )}
-        
+
             <div ref={containerRef} className="mermaid-svg" />
-            
+
         </div>
     )
 }
