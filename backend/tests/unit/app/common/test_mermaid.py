@@ -63,7 +63,7 @@ class TestMermaidId:
 class TestGetMermaidDiagram:
     def test_starts_with_flowchart_header(self):
         r = _make_retrieval("task_1")
-        assert get_mermaid_diagram([r.id], {r.id: r}).startswith("flowchart LR")
+        assert get_mermaid_diagram([r.id], {r.id: r}).startswith("flowchart TD")
 
     def test_includes_node_for_each_task(self):
         r1 = _make_retrieval("task_1", title="Book A")
