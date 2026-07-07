@@ -81,6 +81,15 @@ postgres-restore-data:
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup.sql
 	@echo "PostgreSQL data restored from $(MAKEFILE_DIR)data/backup.sql"
 
+# dump chat_runs data to a timestamped .sql file (data only, restorable via psql <)
+.PHONY: postgres-dump-chat-runs
+postgres-dump-chat-runs:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB --table=chat_runs --data-only --column-inserts \
+		> $(MAKEFILE_DIR)data/chat_runs_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "chat_runs dumped to $(MAKEFILE_DIR)data/"
+
 # wipe all recorded chat runs (dev convenience — irreversible)
 # NOTE: for dev
 .PHONY: postgres-clear-chat-runs
