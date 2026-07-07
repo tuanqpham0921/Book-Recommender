@@ -1,10 +1,10 @@
 Continue:
-* don't try to save your traces to postgres
-    * just save it to logs and have it append to continue writting
-* then you can set up an eval script
-    * load in the user message, send the mermaids in json file to review
-    * and send metadata like how long it took and stuff (all are in your operation result)
-    * then you can optimize later
+* figure out a way to add liked/disliked to your chat_id
+* and a feedback column (maybe as a button)
+* a way to load in all your test suites results
+    * think sequential for click left and right
+* think about your columns and how to handle it better
+    * maybe try adding more schemas
 
 Note:
 * currently your workflow and operation is fine
