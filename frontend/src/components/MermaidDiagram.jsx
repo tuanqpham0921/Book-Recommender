@@ -5,6 +5,7 @@ import Panzoom from "@panzoom/panzoom";
 function MermaidDiagram({ chart }) {
     const containerRef = useRef(null)
     const lastChartRef = useRef('')
+    const panzoomRef = useRef(null) // { instance, handler } of the active panzoom
     const [isLoading, setIsLoading] = useState(false)
 
     useEffect(() => {
@@ -13,7 +14,9 @@ function MermaidDiagram({ chart }) {
             theme: 'base',
             securityLevel: 'loose',
             themeVariables: {
-                fontSize: '0.875rem',
+                // px, not rem: mermaid does numeric math on this for label
+                // sizing and misreads rem values
+                fontSize: '14px',
                 fontFamily: 'var(--font-sans)',
                 primaryColor: '#f5f5f5',
                 primaryTextColor: '#111',
@@ -44,8 +47,6 @@ function MermaidDiagram({ chart }) {
             lastChartRef.current = chart
             let svgId = null
 
-            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
             setIsLoading(true)
 
             try {
@@ -60,19 +61,29 @@ function MermaidDiagram({ chart }) {
 
                     const svgElement = containerRef.current.querySelector('svg')
                     if (svgElement) {
+                        // tear down the previous instance and its listener
+                        // before wiring a new one
+                        if (panzoomRef.current) {
+                            containerRef.current.removeEventListener(
+                                "wheel", panzoomRef.current.handler
+                            )
+                            panzoomRef.current.instance.destroy()
+                        }
+
                         const panzoom = Panzoom(svgElement, {
                             maxScale: 10,
-                            minScale: 0.2,
-                    
-                            // Prevent dragging too far
-                            contain: "outside",
+                            minScale: 0.5,  // don't let it shrink past half size
+                            step: 0.15,     // gentler wheel zoom (default 0.3)
                         });
-                    
+
+                        // on the container so the whole framed area zooms the
+                        // diagram; zoomWithWheel preventDefaults, which also
+                        // keeps ctrl+wheel from zooming the browser here
+                        const handler = panzoom.zoomWithWheel
                         containerRef.current.addEventListener(
-                            "wheel",
-                            panzoom.zoomWithWheel,
-                            { passive: false }
+                            "wheel", handler, { passive: false }
                         );
+                        panzoomRef.current = { instance: panzoom, handler }
                     }
                 }
 
@@ -101,6 +112,17 @@ function MermaidDiagram({ chart }) {
         }
 
         renderChart()
+
+        const container = containerRef.current
+        return () => {
+            if (panzoomRef.current) {
+                container?.removeEventListener(
+                    "wheel", panzoomRef.current.handler
+                )
+                panzoomRef.current.instance.destroy()
+                panzoomRef.current = null
+            }
+        }
     }, [chart])
 
     return (

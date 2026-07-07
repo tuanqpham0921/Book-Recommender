@@ -733,9 +733,11 @@ select {
   margin: 0;
 }
 
-/* Frame */
+/* Frame — capped at a fraction of the viewport; panzoom explores the rest */
 .mermaid-container {
   width: 90%;
+  max-height: 45vh;
+  overflow: hidden;        /* clip panned/zoomed content to the frame */
   border: 0.5px solid var(--text-active);
   border-radius: 0.5rem;
   background: var(--bg-primary);
@@ -748,20 +750,20 @@ select {
 
 /* Injected SVG wrapper */
 .mermaid-svg {
-  display: inline-block;
-  max-width: 100%;
-  max-height: 100%;
+  display: block;
   width: 100%;
-  height: 100%;
 }
 
-/* Make sure the actual SVG expands naturally */
+/* Natural size, scale DOWN only — width/height auto keep the SVG at its
+   rendered size (no more stretched text on small diagrams), max-* shrink
+   large diagrams proportionally to fit the frame */
 .mermaid-svg > svg {
   display: block;
+  width: auto;
+  height: auto;
   max-width: 100%;
-  max-height: 100%;
-  width: 100%;
-  height: 100%;
+  max-height: calc(45vh - 20px); /* container cap minus its padding */
+  margin: 0 auto;                /* center small diagrams in the frame */
 }
 
 /* Error / loading area keeps consistent spacing */
