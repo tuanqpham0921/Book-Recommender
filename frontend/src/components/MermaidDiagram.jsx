@@ -72,7 +72,7 @@ function MermaidDiagram({ chart }) {
 
                         const panzoom = Panzoom(svgElement, {
                             maxScale: 10,
-                            minScale: 1,  // don't let it shrink past half size
+                            minScale: 0.75,  // don't let it shrink past 3/4
                             step: 0.20,     // gentler wheel zoom (default 0.3)
                             canvas: true,   // bind drag to the container (svg's parent),
                                             // not just the svg's own bounding box
