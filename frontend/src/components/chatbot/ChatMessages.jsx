@@ -1,5 +1,6 @@
 import Markdown from 'react-markdown';
-import { useRef, useEffect, lazy, Suspense } from 'react'
+import { useRef, useEffect, useState, lazy, Suspense } from 'react'
+import { Copy, Check } from 'lucide-react';
 import { BookGridStack } from '@/components/book/BooksGrid';
 import ChatFeedback from '@/components/chatbot/ChatFeedback';
 
@@ -21,6 +22,13 @@ function ChatMessages({ messages, isStreaming }) {
     const userMessageRefs = useRef({})
     const turnRefs = useRef({})
     const lastUserMessageId = useRef(null)
+    const [copiedId, setCopiedId] = useState(null)
+
+    const handleCopy = async (text, id) => {
+        await navigator.clipboard.writeText(text)
+        setCopiedId(id)
+        setTimeout(() => setCopiedId(current => current === id ? null : current), 1500)
+    }
 
     const scrollToNewestTurn = () => {
         if (messages.length > 0) {
@@ -53,12 +61,20 @@ function ChatMessages({ messages, isStreaming }) {
                 >
                     {/* User message */}
                     <div data-user-id={user.id}
-                        className="message-wrapper user"
+                        className="message-wrapper user relative"
                         ref={user.isUser ? (el) => userMessageRefs.current[user.id] = el : null}
                     >
                         <div className="message-bubble user">
                             {user.text}
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => handleCopy(user.text, user.id)}
+                            title="Copy message"
+                            className="ml-2 self-end rounded-md text-gray-400 hover:text-gray-700 transition-colors"
+                        >
+                            {copiedId === user.id ? <Check size={16} /> : <Copy size={16} />}
+                        </button>
                     </div>
 
                     <div data-response-id={response.id} className="flex flex-col message-wrapper response">
