@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowUp, Plus } from 'lucide-react';
+import { ArrowUp, Plus, Square } from 'lucide-react';
 import { userInputSuggestions } from '@/data/chatSuggestions';
 
-function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage }) {
+function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onStop }) {
     const [showSuggestions, setShowSuggestions] = useState(true)
     const suggestionsRef = useRef(null) // Ref for the suggestions container
     const hintsButtonRef = useRef(null) // Ref for the hints button
@@ -100,18 +100,19 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage }) {
                     <Plus size={20} />
                 </button>
 
-                {/* Send Button */}
+                {/* Send / Stop Button */}
                 <button
-                    type="submit"
+                    type={isStreaming ? 'button' : 'submit'}
                     className={`absolute right-3 bottom-3 p-2 rounded-full transition-all duration-200 ${
-                        !isStreaming && newMessage.trim() 
+                        isStreaming || newMessage.trim()
                             ? 'bg-gray-800 text-white'
-                            : 'text-gray-700 hover:bg-gray-200 ' 
+                            : 'text-gray-700 hover:bg-gray-200 '
                     }`}
-                    onClick={onSendMessage}
-                    disabled={isStreaming || !newMessage.trim()}
+                    onClick={isStreaming ? onStop : onSendMessage}
+                    disabled={!isStreaming && !newMessage.trim()}
+                    title={isStreaming ? 'Stop generating' : 'Send message'}
                 >
-                    <ArrowUp size={20} />
+                    {isStreaming ? <Square size={16} fill="currentColor" /> : <ArrowUp size={20} />}
                 </button>
             </div>
 

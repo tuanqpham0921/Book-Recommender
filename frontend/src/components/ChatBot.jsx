@@ -7,6 +7,7 @@ import { parseSSEStream } from '@/utils';
 
 function ChatBot() {
     const messagesEndRef = useRef(null)
+    const activeAbortControllerRef = useRef(null)
 
     const [turn, setTurn] = useImmer([])
 
@@ -59,6 +60,7 @@ function ChatBot() {
         let sessionIdOrNew = sessionId;
         let stream = null;
         const abortController = new AbortController();
+        activeAbortControllerRef.current = abortController;
         let safetyTimer = null;
 
         try {
@@ -211,12 +213,17 @@ function ChatBot() {
 
             // Handle abort error specifically
             if (err.name === 'AbortError' || abortController.signal.aborted) {
+                const userStopped = abortController.signal.reason === 'user_stop';
                 setTurn(draft => {
                     if (!draft.length) return;
                     const last = draft[draft.length - 1];
                     last.response.isLoading = false;
                     last.response.loadingText = null;
                     last.response.isStreaming = false;
+
+                    // User-initiated stop isn't an error — leave whatever
+                    // was already streamed as the final response, ChatGPT-style
+                    if (userStopped) return;
 
                     const sectionId = `${last.response.id}-section-${last.response.sections.length + 1}`;
                     last.response.sections.push({
@@ -253,6 +260,9 @@ function ChatBot() {
             if (abortController && !abortController.signal.aborted) {
                 abortController.abort('Cleanup');
             }
+            if (activeAbortControllerRef.current === abortController) {
+                activeAbortControllerRef.current = null;
+            }
 
             // Safety net to ensure that we set streaming is done
             setTurn(draft => {
@@ -263,6 +273,10 @@ function ChatBot() {
                 last.response.isStreaming = false;
             });
         }
+    }
+
+    function handleStop() {
+        activeAbortControllerRef.current?.abort('user_stop');
     }
 
     return (
@@ -285,6 +299,7 @@ function ChatBot() {
                         isStreaming={isStreaming}
                         setNewMessage={setNewMessage}
                         onSendMessage={handleSendMessage}
+                        onStop={handleStop}
                     />
                 </div>
         </div>
