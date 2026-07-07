@@ -100,6 +100,25 @@ async function getRecommendedBooks(sessionId) {
   return await res.json();
 }
 
+// Attach like/dislike and/or a comment to a recorded chat run
+async function updateChatFeedback(chatId, { liked = null, comment = null } = {}) {
+  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/feedback`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ liked, comment })
+  });
+  return await res.json();
+}
+
+// Fetch recorded chat runs (newest first) for the review page
+async function getChatRuns(limit = 200, offset = 0) {
+  const res = await fetch_api(BASE_URL + `/chat_runs?limit=${limit}&offset=${offset}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  return await res.json();
+}
+
 // TODO: implment this, using sse stream for now
 async function getTaskPlanDiagram(sessionId) {
   const res = await fetch_api(BASE_URL + `/diagram/${sessionId}/task_plan`, {
@@ -110,5 +129,6 @@ async function getTaskPlanDiagram(sessionId) {
 }
 
 export default {
-  createSession, sendChatMessage, getRecommendedBooks, backEndPing
+  createSession, sendChatMessage, getRecommendedBooks, backEndPing,
+  updateChatFeedback, getChatRuns
 };

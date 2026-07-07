@@ -80,38 +80,41 @@ class TestBuildChatRunRow:
 
         row = build_chat_run_row(
             session_id="sess_1",
+            user_chat_id="chat_1",
             user_message="Find me a book",
             result=result,
             output=output,
         )
 
-        assert row["chat_id"] == result.id
+        assert row["chat_id"] == "chat_1"
         assert row["session_id"] == "sess_1"
         assert row["user_message"] == "Find me a book"
         assert row["ok"] is True
         assert row["duration_s"] == 1.23
         assert row["total_tokens"] == 42
         assert row["mermaid"] == "graph TD;"
-        assert row["parse_result"] is None
-        assert row["strategy_result"]["execution_order"] == ["task_abcd1234"]
         assert row["orchestration"]["ok"] is True
+        assert (
+            row["orchestration"]["output"]["strategy_result"]["execution_order"]
+            == ["task_abcd1234"]
+        )
 
     def test_serialization_preserves_private_attrs(self):
         result, output = _make_result_and_output()
 
         row = build_chat_run_row(
             session_id="sess_1",
+            user_chat_id="chat_1",
             user_message="Find me a book",
             result=result,
             output=output,
         )
 
-        for envelope in (row["strategy_result"], row["orchestration"]["output"]["strategy_result"]):
-            accepted = envelope["accepted"][0]
-            assert accepted["_llm_id"] == "task_1"
-            assert accepted["_details"] == ["duplicate llm_id, created a new one"]
-            assert accepted["_refusal"] is False
-            assert accepted["id"] == "task_abcd1234"
+        accepted = row["orchestration"]["output"]["strategy_result"]["accepted"][0]
+        assert accepted["_llm_id"] == "task_1"
+        assert accepted["_details"] == ["duplicate llm_id, created a new one"]
+        assert accepted["_refusal"] is False
+        assert accepted["id"] == "task_abcd1234"
 
 
 class TestRecordChatRun:

@@ -5,6 +5,7 @@ from fastapi import Request, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.book_store import BookStore
+from db.stores.chat_run_store import ChatRunStore
 from clients import OpenAIClient
 from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
@@ -56,6 +57,13 @@ async def get_book_store(
 ) -> BookStore:
     """Get BookStore instance with injected session."""
     return BookStore(session)
+
+
+async def get_chat_run_store(
+    session: AsyncSession = Depends(get_sqlalchemy_session),
+) -> ChatRunStore:
+    """Get ChatRunStore instance with injected session."""
+    return ChatRunStore(session)
 
 
 def get_app_env(request: Request) -> str:

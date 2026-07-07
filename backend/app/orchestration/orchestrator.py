@@ -31,8 +31,12 @@ class Orchestrator:
             conversation_orchestrator = await self._run_conversation_step(request_context, sse_stream)
             if conversation_orchestrator.result is not None:
                 await record_chat_run(request_context, conversation_orchestrator)
-            # Normal completion
-            await sse_stream.send("complete", {"status": "completed"})
+            # Normal completion — chat_id lets the client attach feedback
+            # to the chat_runs row recorded above
+            await sse_stream.send(
+                "complete",
+                {"status": "completed", "chat_id": request_context.user_message.id},
+            )
             logger.info("✅ Orchestration completed successfully")
 
         except Exception as e:

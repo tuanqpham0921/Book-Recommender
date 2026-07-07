@@ -79,11 +79,20 @@ class ChatRunModel(Base):
     duration_s = Column(Float, nullable=True)
     total_tokens = Column(Integer, nullable=True)
 
-    # full-fidelity envelopes
-    parse_result = Column(JSONB, nullable=True)
-    strategy_result = Column(JSONB, nullable=True)
+    # full-fidelity envelope (parse/strategy results live inside orchestration)
     orchestration = Column(JSONB, nullable=True)
     mermaid = Column(Text, nullable=True)
 
+    # user feedback: liked is None until the user reacts (True = like, False = dislike)
+    liked = Column(Boolean, nullable=True)
+    comment = Column(Text, nullable=True)
+
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"
+
+    def to_dict(self) -> dict:
+        """Convert model to dictionary (table columns only)."""
+        row = {c.name: getattr(self, c.name) for c in ChatRunModel.__table__.columns}
+        if row.get("created_at") is not None:
+            row["created_at"] = row["created_at"].isoformat()
+        return row

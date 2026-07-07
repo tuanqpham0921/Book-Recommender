@@ -86,6 +86,19 @@ function ChatBot() {
 
                 console.log("🔗 event: ", event.type);
 
+                // ✅ Backend finished — carries the chat_id of the recorded
+                // chat_runs row so feedback buttons can target it
+                if (event.type === 'complete') {
+                    setTurn(draft => {
+                        const last = draft[draft.length - 1];
+                        last.response.chatId = event.data?.chat_id || null;
+                        last.response.isLoading = false;
+                        last.response.loadingText = null;
+                        last.response.isStreaming = false;
+                    });
+                    break;
+                }
+
                 if (event.type === 'step.complete') {
                     setTurn(draft => {
                         const last = draft[draft.length - 1];

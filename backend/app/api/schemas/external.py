@@ -7,6 +7,12 @@ class SessionOut(BaseModel):
 class ChatIn(BaseModel):
     message: str
 
+class ChatRunFeedbackIn(BaseModel):
+    """User feedback on one chat run; omitted fields are left untouched."""
+
+    liked: bool | None = None
+    comment: str | None = None
+
 class HealthStatus(BaseModel):
     """Health check response model."""
 

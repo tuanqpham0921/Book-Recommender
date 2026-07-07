@@ -32,8 +32,6 @@ def build_chat_run_row(
         "ok": result.ok,
         "duration_s": result.duration,
         "total_tokens": result.token_usage.total,
-        "parse_result": to_serializable(output.parse_result),
-        "strategy_result": to_serializable(output.strategy_result),
         "orchestration": to_serializable(result),
         "mermaid": output.diagram,
     }

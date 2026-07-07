@@ -1,6 +1,7 @@
 import Markdown from 'react-markdown';
 import { useRef, useEffect, lazy, Suspense } from 'react'
 import { BookGridStack } from '@/components/book/BooksGrid';
+import ChatFeedback from '@/components/chatbot/ChatFeedback';
 
 // Dynamic import for MermaidDiagram (large library)
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'));
@@ -120,6 +121,11 @@ function ChatMessages({ messages, isStreaming }) {
                                 <div className="loading-spinner" />
                                 <span className="loading-text">{response.loadingText}</span>
                             </div>
+                        )}
+
+                        {/* Feedback controls - once the run is recorded and streaming is done */}
+                        {response.chatId && !response.isStreaming && !response.error && (
+                            <ChatFeedback key={response.chatId} chatId={response.chatId} />
                         )}
 
                         {/* AI disclaimer - show on last message */}
