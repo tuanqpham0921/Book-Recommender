@@ -55,7 +55,7 @@ def format_node_label(task_id: str, data: dict) -> str:
 def get_mermaid_diagram(
     execution_order: list[str], id_to_node: Mapping[str, BaseRequest]
 ) -> str:
-    lines = ["flowchart LR"]
+    lines = ["flowchart TD"]
 
     for task in execution_order:
         node = id_to_node[task]
