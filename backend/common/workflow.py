@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from common.operation import OperationResult, RuntimeErrorInfo
+import asyncio
 import logging
 import time
 from typing import Any, Generic, TypeVar
@@ -63,6 +64,16 @@ class Workflow(ABC, Generic[OutputT]):
                 self.logger.warning(f"Workflow failed: {self.result.message}")
             else:
                 self.logger.info(f"Finished workflow: {self.workflow_name}")
+        except asyncio.CancelledError as e:
+            # client disconnected (e.g. page refresh) mid-workflow. Stamp
+            # what we have so a caller can still record a partial run, then
+            # re-raise — swallowing this would stop the task from actually
+            # being cancelled (see the no-`return`-in-finally note below).
+            self.result.ok = False
+            self.result.message = "asyncio Cancelled"
+            self.logger.warning(f"Workflow cancelled: {self.workflow_name}")
+            self.result.runtime_error = RuntimeErrorInfo.from_exception(e)
+            raise
         except StepFailure as e:
             # controlled abort — the failing step's envelope already
             self.result.ok = False
