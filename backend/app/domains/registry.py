@@ -11,18 +11,35 @@ from app.domains.books.schemas.request_schemas import (
     FindByTraitsRetrieval,
     RecommendationStrategy,
 )
-from app.domains.books.node_types import BookNodeTypeEnum
+from app.domains.books.schemas.extended_request_schemas import (
+    AuthorInfoRetrieval,
+    FindByAuthorRetrieval,
+    FindSeriesRetrieval,
+    MarkBookAsReadAction,
+    NewReleasesRetrieval,
+    PopularBooksRetrieval,
+    RandomBookRetrieval,
+    RateBookAction,
+    ReadingLevelStrategy,
+    ReadingOrderStrategy,
+    ReadingPlanStrategy,
+    ReadingStatsRetrieval,
+    ReadingTimeStrategy,
+    RemoveFromReadingListAction,
+    SaveToReadingListAction,
+    SummarizeStrategy,
+    ThemesStrategy,
+    ViewReadingListRetrieval,
+)
 from app.domains.project.schemas.request_schemas import (
     FeedbackRequest,
     ProjectInfoRequest,
 )
-from app.domains.project.node_types import ProjectNodeTypeEnum
 from app.domains.node_types import NodeTypeEnum
 from app.domains.users.schemas.request_schemas import (
     DeveloperInfoRequest,
     UserInfoRequest,
 )
-from app.domains.users.node_types import UserNodeTypeEnum
 
 # -------------------------------------------------------------------
 # BOOK DOMAIN
@@ -30,20 +47,44 @@ BOOK_RETRIEVAL_CLASSES = (
     FindByTitleRetrieval,
     FindByISBN13Retrieval,
     FindByTraitsRetrieval,
+    FindByAuthorRetrieval,
+    FindSeriesRetrieval,
+    AuthorInfoRetrieval,
+    NewReleasesRetrieval,
+    PopularBooksRetrieval,
+    RandomBookRetrieval,
 )
 BOOK_ANALYZE_CLASSES = (
     CompareStrategy,
     RecommendationStrategy,
+    SummarizeStrategy,
+    ThemesStrategy,
+    ReadingOrderStrategy,
+    ReadingLevelStrategy,
+    ReadingTimeStrategy,
+    ReadingPlanStrategy,
 )
-BOOK_REQUEST_CLASSES = BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES
+BOOK_LIBRARY_CLASSES = (
+    SaveToReadingListAction,
+    ViewReadingListRetrieval,
+    RemoveFromReadingListAction,
+    MarkBookAsReadAction,
+    RateBookAction,
+    ReadingStatsRetrieval,
+)
+BOOK_REQUEST_CLASSES = (
+    BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES + BOOK_LIBRARY_CLASSES
+)
 
 # -------------------------------------------------------------------
 # PROJECT DOMAIN
 PROJECT_RETRIEVAL_CLASSES = (
     ProjectInfoRequest,
 )
-
-PROJECT_REQUEST_CLASSES = PROJECT_RETRIEVAL_CLASSES
+PROJECT_ACTION_CLASSES = (
+    FeedbackRequest,
+)
+PROJECT_REQUEST_CLASSES = PROJECT_RETRIEVAL_CLASSES + PROJECT_ACTION_CLASSES
 
 # -------------------------------------------------------------------
 # USER DOMAIN
@@ -54,39 +95,35 @@ USER_RETRIEVAL_CLASSES = (
 
 USER_REQUEST_CLASSES = USER_RETRIEVAL_CLASSES
 # -------------------------------------------------------------------
-# All request schema classes — add new ones here
+# All request schema classes — a new class only needs to be added to its
+# domain tier tuple above; the union, node_type lookup, and catalog below
+# are all derived from these.
 
 RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES + USER_RETRIEVAL_CLASSES + PROJECT_RETRIEVAL_CLASSES
 ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
+LIBRARY_CLASSES = BOOK_LIBRARY_CLASSES
+ACTION_CLASSES = PROJECT_ACTION_CLASSES
 
-REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
+REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES + LIBRARY_CLASSES + ACTION_CLASSES
+
 AnyStrategyRequest = Annotated[
-    Union[
-        CompareStrategy,
-        RecommendationStrategy,
-        FindByTitleRetrieval,
-        FindByISBN13Retrieval,
-        FindByTraitsRetrieval,
-        UserInfoRequest,
-        DeveloperInfoRequest,
-        FeedbackRequest,
-        ProjectInfoRequest,
-    ],
+    Union[*REQUEST_CLASSES],
     Field(discriminator="node_type"),
 ]
 
 
-# Manual node_type → class lookup — add new mappings here
+def _node_type_value(cls: type) -> str:
+    """The node_type Literal default every request class declares."""
+    return cls.model_fields["node_type"].default.value
+
+
 NODE_TYPE_TO_CLS: dict[str, type] = {
-    BookNodeTypeEnum.COMPARE.value: CompareStrategy,
-    BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
-    BookNodeTypeEnum.FIND_TITLE.value: FindByTitleRetrieval,
-    BookNodeTypeEnum.FIND_ISBN13.value: FindByISBN13Retrieval,
-    BookNodeTypeEnum.FIND_TRAITS.value: FindByTraitsRetrieval,
-    UserNodeTypeEnum.USER_INFO.value: UserInfoRequest,
-    UserNodeTypeEnum.DEVELOPER_INFO.value: DeveloperInfoRequest,
-    ProjectNodeTypeEnum.PROJECT_INFO.value: ProjectInfoRequest,
+    _node_type_value(cls): cls for cls in REQUEST_CLASSES
 }
+assert len(NODE_TYPE_TO_CLS) == len(REQUEST_CLASSES), (
+    "Duplicate node_type across request classes — every class needs a unique "
+    "node_type Literal default"
+)
 
 
 def get_request_class(node_type: NodeTypeEnum | str) -> type:
@@ -108,10 +145,7 @@ def format_node_type_catalog() -> str:
     def lines_for(label: str, classes: tuple[type, ...]) -> list[str]:
         section = [f"{label}:"]
         for cls in classes:
-            for node_type, mapped_cls in NODE_TYPE_TO_CLS.items():
-                if mapped_cls is cls:
-                    section.append(f"  - {node_type}: {class_docstring(cls)}")
-                    break
+            section.append(f"  - {_node_type_value(cls)}: {class_docstring(cls)}")
         return section
 
     catalog = [
@@ -119,10 +153,12 @@ def format_node_type_catalog() -> str:
         *lines_for("Retrieval — lookup or fetch data", RETRIEVAL_CLASSES),
         "",
         *lines_for("Analyze — interpret, compare, or recommend using retrieved data", ANALYZE_CLASSES),
+        "",
+        *lines_for("Library — read or update the user's personal shelf", LIBRARY_CLASSES),
     ]
 
-    listed =  set(ANALYZE_CLASSES)
-    extra = [cls for cls in NODE_TYPE_TO_CLS.values() if cls not in listed]
+    listed = set(RETRIEVAL_CLASSES) | set(ANALYZE_CLASSES) | set(LIBRARY_CLASSES)
+    extra = [cls for cls in REQUEST_CLASSES if cls not in listed]
     if extra:
         catalog.extend(["", *lines_for("Other supported actions", tuple(dict.fromkeys(extra)))])
 

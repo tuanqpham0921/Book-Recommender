@@ -13,6 +13,7 @@ Supported capabilities (name + short description):
 Capability tiers:
   - Retrieval — lookup or fetch
   - Analyze — interpret results
+  - Library — read or update the user's personal shelf (reading list, ratings, stats)
 
 Your job:
   1. Map each in-domain part of the message to one supported capability above
@@ -37,9 +38,19 @@ When NOT to create a system_goal:
 Guidelines:
   - Multi-part requests → separate goals per capability (Retrieval goals before Analyze when both are needed)
   - "Recommend books like Dune" → Retrieval (find reference) + Analyze (recommend) as separate goals when both are implied
+  - Analyze goals (summarize, themes, reading order, reading level, reading time) need a Retrieval goal for the book(s) they analyze
   - Do not put small talk or unsupported text in system_goals
   - Use external knowledge only to recognize titles/authors — do not answer them here
   - continue_pipeline is computed by the system from goal confidence
+
+Choosing between near-neighbor capabilities:
+  - A named book title → Retrieve_by_Title, even when an author is mentioned as a hint ("Dune by Frank Herbert")
+  - The author is the subject ("books by X", "what else did X write") → Retrieve_by_Author
+  - Facts about the author as a person → Retrieve_Author_Info; facts about this app's builder → Retrieve_Developer_Info
+  - A series as a whole ("the Dune saga") → Retrieve_Series; one entry of it → Retrieve_by_Title
+  - Taste or mood ("something spooky") → Analyze_Recommend; explicit "surprise me / anything" → Retrieve_Random
+  - Popularity/consensus framing → Retrieve_Popular; recency framing → Retrieve_New_Releases; plain attribute search → Retrieve_by_Traits
+  - "I finished X" (with or without a rating) → Mark_Book_As_Read; a standalone rating → Rate_Book
 
 Fields per system_goal:
   - description — task in the user's words (10–100 chars)
@@ -75,3 +86,34 @@ Input: "Can you help me with calculus homework?"
 
 Input: "that one"
 → system_goals: [], reasoning: "Ambiguous — no mappable capability"
+
+Input: "What else has Ursula K. Le Guin written?"
+→ system_goals: [{{description: "Find books by Ursula K. Le Guin", confidence: 1.0, target_node_types: "Retrieve_by_Author"}}]
+
+Input: "In what order should I read the Narnia books?"
+→ system_goals: [
+    {{description: "Find the Chronicles of Narnia series", confidence: 1.0, target_node_types: "Retrieve_Series"}},
+    {{description: "Determine reading order for the Narnia books", confidence: 1.0, target_node_types: "Analyze_Reading_Order"}}
+  ]
+
+Input: "What is The Great Gatsby about? No spoilers."
+→ system_goals: [
+    {{description: "Find The Great Gatsby by title", confidence: 1.0, target_node_types: "Retrieve_by_Title"}},
+    {{description: "Summarize The Great Gatsby spoiler-free", confidence: 1.0, target_node_types: "Analyze_Summarize"}}
+  ]
+
+Input: "Add Project Hail Mary to my reading list"
+→ system_goals: [{{description: "Add Project Hail Mary to reading list", confidence: 1.0, target_node_types: "Save_To_Reading_List"}}]
+
+Input: "I just finished Circe — 5 stars. What should I read next?"
+→ system_goals: [
+    {{description: "Mark Circe as read with a 5-star rating", confidence: 1.0, target_node_types: "Mark_Book_As_Read"}},
+    {{description: "Find Circe by title", confidence: 1.0, target_node_types: "Retrieve_by_Title"}},
+    {{description: "Recommend books similar to Circe", confidence: 1.0, target_node_types: "Analyze_Recommend"}}
+  ]
+
+Input: "How many books have I read this year?"
+→ system_goals: [{{description: "Retrieve the user's reading statistics", confidence: 1.0, target_node_types: "Retrieve_Reading_Stats"}}]
+
+Input: "Surprise me with something short"
+→ system_goals: [{{description: "Random book pick under a length bound", confidence: 1.0, target_node_types: "Retrieve_Random"}}]

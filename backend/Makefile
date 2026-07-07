@@ -144,6 +144,16 @@ playground:
 local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
 
+# run the base query suite against a running backend (make dev first)
+.PHONY: query-suite
+query-suite:
+	poetry run python tests/scripts/run_query_suites.py
+
+# run the extended-catalog scaling suite (new tool schemas, ids 101+)
+.PHONY: query-suite-extended
+query-suite-extended:
+	poetry run python tests/scripts/run_query_suites.py --suite tests/query_suite_extended.json
+
 # .Phony: lint
 # lint:
 # 	poetry run ruff check --fix clients/ tests/unit/clients/
