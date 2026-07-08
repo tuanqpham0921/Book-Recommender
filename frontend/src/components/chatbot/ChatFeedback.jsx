@@ -195,7 +195,7 @@ function IssueReportModal({ chatId, onClose }) {
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-xs text-gray-700">{entry.message}</div>
+                                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words">{entry.message}</div>
                                 </div>
                             ))}
                         </div>
