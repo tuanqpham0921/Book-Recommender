@@ -1,9 +1,9 @@
 Continue:
 * review code changes from 7ad4a4feb0ccfba0e64e88793aaa99791e18b0c9
     * where you started adding chat_runs and mermaid reformatting
+    * where are my chatmessages?
+    * why is there a orchestration column now?
 
-* figure out a way to add liked/disliked to your chat_id
-* and a feedback column (maybe as a button)
 * a way to load in all your test suites results
     * think sequential for click left and right
 * think about your columns and how to handle it better
@@ -14,27 +14,34 @@ Continue:
     * maybe push it to details with "prev message: ..."
     * change your app/workflow to not overwrite and make sure tests passes 
 
+=======================================================================
+
 Note:
 * currently your workflow and operation is fine
     * it could be better but we can deal it more stuff later
     * right now it supports run_async_step (need a @task for non failure)
     * steps also has to be OperationalResult in add step to help detect that
 
+=======================================================================
+
 Reminder:
 1. need to create one executor for @task and workflow
     * do this later once you have time out and flush out more stuff
 2. add timeout to @task and @workflow (should be able to handle them)
-3. execution sql can just hold things like time, token usage, edit needed, run-time errors
-    * don't store the full result in there
-    * make it a background task on a seperate thread
-4. remove the private attributes (keep it in the output)
+3. remove the private attributes (keep it in the output)
     * might need to use create instead of parse
     * this  an be for later, when you actually need to load in buffer
-5. make sure that feedback and liked stuff can just go to json
-    feedback
-        {"session": "id", "comments": "....", maybe chat_id}
-    liked/dislike
-        * could go in a sql db instead
+4. your current interupt works. But it will lose progress in the child workflow
+    * this is because you are not self.add_step before the run (incremental changes)
+    * you only add the operationalresult after it has finish
+        run_async_step, await func, add_steps
+        so you'll lose all the await func execution
+    * this is fine for now, still save some repeated work
+    * but if you want better checkpoint, you need to add_steps(child_workflow.result) the operational result (reference to that obj)
+        * you also need to make the workflow make incremental edits to it
+        * this can come later, since it will require some re-thinking of your workflow (like returning op_result and appending or overwritting etc...)
+    * or you could just do a run_workflow instead
+        * which you can just add reference in the steps before run_async_step
 
 Eval and deployment testing:
 1. create a way to run all your test queries (prod mode)
@@ -57,37 +64,11 @@ Eval:
 
 =======================================================================
 
-Front End:
-1. test your markdown and how it handle spacings (formatting)
-    * nested bullet points was one
-    * two dividers back to back? only one should show (or if there is no text before)
-2. test error messages
-3. test if your backend is not running or stalling
-
-=======================================================================
-
 Features (not in code):
 * do openAI always make new lines at the end?
 3. goal is to test and see the ochestration router
     actual task nodes implmentation is for later
 
-
-=======================================================================
-
-Claude codebase sweep (2026-07-05) — critical or worth mentioning only:
-
-
-BEFORE EVAL (the eval script depends on these):
-4. Saved results drop the step trail: save_conversation_result pops "steps" —
-   the timings/token/failure metadata the eval wants is exactly in there.
-   Add a derived compact trail (name, ok, duration, tokens per step) instead of the full tree.
-5. Failure paths never save: save_chat_messages/save_conversation_result only run on
-   success and handled-without-planning. Rejected/failed queries (the interesting eval
-   cases!) leave no artifact. Save in one place that all exits pass through.
-6. Fixed filenames (conversation_result_dev.json) overwrite every run — eval over a
-   query set needs per-session names or append mode (matches the "Continue" note up top).
-7. Buffered/refused are terminal: buffer_goals and strategy buffer are captured but
-   nothing consumes them. Fine to defer the retry loop — but the eval should count them.
 
 =======================================================================
 
