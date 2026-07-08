@@ -28,10 +28,8 @@ async def update_chat_run_feedback(
     feedback: ChatRunFeedbackIn,
     store: ChatRunStore = Depends(get_chat_run_store),
 ):
-    """Attach like/dislike and/or a comment to a recorded chat run."""
-    found = await store.update_feedback(
-        chat_id, liked=feedback.liked, comment=feedback.comment
-    )
+    """Attach a like/dislike reaction to a recorded chat run."""
+    found = await store.update_feedback(chat_id, liked=feedback.liked)
     if not found:
         raise HTTPException(status_code=404, detail=f"Chat run {chat_id} not found")
 
@@ -48,7 +46,7 @@ async def get_chat_run_issues(
     run = await store.get_by_chat_id(chat_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Chat run {chat_id} not found")
-    return {"issues": run.issues or []}
+    return {"issues": run.comment or []}
 
 
 @router.post("/chat_runs/{chat_id}/issues")

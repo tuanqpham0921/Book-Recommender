@@ -58,8 +58,8 @@ class ChatRunStore(BaseStore[ChatRunModel]):
         stmt = (
             update(ChatRunModel)
             .where(ChatRunModel.chat_id == chat_id)
-            .values(issues=ChatRunModel.issues.op("||")(new_entry))
-            .returning(ChatRunModel.issues)
+            .values(comment=ChatRunModel.comment.op("||")(new_entry))
+            .returning(ChatRunModel.comment)
         )
         result = await self.session.execute(stmt)
         await self.session.commit()
@@ -81,16 +81,13 @@ class ChatRunStore(BaseStore[ChatRunModel]):
         self,
         chat_id: str,
         liked: Optional[bool] = None,
-        comment: Optional[str] = None,
     ) -> bool:
-        """Set user feedback on a run. Only overwrites the fields provided.
+        """Set the like/dislike reaction on a run.
 
         Returns False when no row matches chat_id."""
         values: Dict[str, Any] = {}
         if liked is not None:
             values["liked"] = liked
-        if comment is not None:
-            values["comment"] = comment
         if not values:
             return True
 

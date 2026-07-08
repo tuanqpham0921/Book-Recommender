@@ -43,7 +43,9 @@ function ChatRunRow({ run }) {
                     {run.user_message || <em className="text-gray-400">no message</em>}
                 </span>
                 <span className="text-sm"><FeedbackBadge liked={run.liked} /></span>
-                {run.comment && <span title={run.comment}>💬</span>}
+                {run.comment?.length > 0 && (
+                    <span title={`${run.comment.length} report${run.comment.length > 1 ? 's' : ''}`}>💬</span>
+                )}
                 <span className="text-xs text-gray-400 whitespace-nowrap">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
@@ -58,9 +60,29 @@ function ChatRunRow({ run }) {
                         <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
                     </div>
 
-                    {run.comment && (
-                        <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-gray-700">
-                            <span className="font-semibold">Comment:</span> {run.comment}
+                    {run.comment?.length > 0 && (
+                        <div className="mb-3 flex flex-col gap-2">
+                            {run.comment.map((entry, i) => (
+                                <div key={i} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span
+                                            className={`px-2 py-0.5 rounded-full text-xs ${
+                                                entry.positive
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-red-100 text-red-700'
+                                            }`}
+                                        >
+                                            {entry.title}
+                                        </span>
+                                        {entry.created_at && (
+                                            <span className="text-[11px] text-gray-400">
+                                                {new Date(entry.created_at).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-gray-700">{entry.message}</div>
+                                </div>
+                            ))}
                         </div>
                     )}
 

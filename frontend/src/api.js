@@ -100,12 +100,12 @@ async function getRecommendedBooks(sessionId) {
   return await res.json();
 }
 
-// Attach like/dislike and/or a comment to a recorded chat run
-async function updateChatFeedback(chatId, { liked = null, comment = null } = {}) {
+// Attach a like/dislike reaction to a recorded chat run
+async function updateChatFeedback(chatId, { liked = null } = {}) {
   const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/feedback`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ liked, comment })
+    body: JSON.stringify({ liked })
   });
   return await res.json();
 }
