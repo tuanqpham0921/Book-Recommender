@@ -56,9 +56,18 @@ class Orchestrator:
                 "Hmm... something went wrong while processing your query."
             )
         finally:
-            # record whatever we've got — success, error, or cancellation —
-            # as long as the workflow actually started and has a result
-            if conversation_orchestrator is not None and conversation_orchestrator.result is not None:
-                await record_chat_run(request_context, conversation_orchestrator)
+            if (conversation_orchestrator is not None 
+                and conversation_orchestrator.result is not None):
+                # shield the recording from cancellation and timeout, but still log if it fails
+                try:
+                    await asyncio.shield(
+                        asyncio.wait_for(
+                            record_chat_run(
+                                request_context, conversation_orchestrator), 
+                            timeout=60
+                        )
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("record_chat_run timed out")
 
         await sse_stream.close()
