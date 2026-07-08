@@ -1,9 +1,5 @@
 Continue:
-* review code changes from 7ad4a4feb0ccfba0e64e88793aaa99791e18b0c9
-    * where you started adding chat_runs and mermaid reformatting
-    * where are my chatmessages?
-    * why is there a orchestration column now?
-=============
+
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
