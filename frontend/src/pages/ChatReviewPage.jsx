@@ -19,6 +19,8 @@ function StatusBadge({ ok }) {
 // orchestration envelope).
 function ChatRunRow({ run }) {
     const [expanded, setExpanded] = useState(false)
+    const diagram = run.orchestration?.output?.diagram
+    const errorDetail = run.orchestration?.runtime_error
 
     return (
         <div className="border border-gray-200 rounded-lg bg-white">
@@ -29,6 +31,14 @@ function ChatRunRow({ run }) {
             >
                 <span className="text-gray-400 text-xs w-4">{expanded ? '▼' : '▶'}</span>
                 <StatusBadge ok={run.ok} />
+                {run.runtime_error && (
+                    <span
+                        title={errorDetail?.message}
+                        className="px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
+                    >
+                        {run.runtime_error}
+                    </span>
+                )}
                 <span className="flex-1 truncate text-sm text-gray-800">
                     {run.user_message || <em className="text-gray-400">no message</em>}
                 </span>
@@ -54,12 +64,23 @@ function ChatRunRow({ run }) {
                         </div>
                     )}
 
-                    {run.mermaid && (
+                    {errorDetail && (
+                        <details className="mb-3">
+                            <summary className="cursor-pointer text-red-600 font-semibold">
+                                {run.runtime_error}: {errorDetail.message}
+                            </summary>
+                            <pre className="mt-1 p-2 bg-red-50 border border-red-100 rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
+                                {errorDetail.traceback}
+                            </pre>
+                        </details>
+                    )}
+
+                    {diagram && (
                         <details className="mb-3">
                             <summary className="cursor-pointer text-gray-600 font-semibold">Task plan diagram</summary>
                             <Suspense fallback={<div className="text-gray-400 p-2">Loading diagram...</div>}>
                                 <div className="border border-gray-100 rounded p-2 mt-1">
-                                    <MermaidDiagram chart={run.mermaid} className="w-full" />
+                                    <MermaidDiagram chart={diagram} className="w-full" />
                                 </div>
                             </Suspense>
                         </details>

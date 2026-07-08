@@ -26,10 +26,10 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     user_message TEXT,
     ok BOOLEAN,
+    runtime_error TEXT,
     duration_s DOUBLE PRECISION,
     total_tokens INTEGER,
     orchestration JSONB,
-    mermaid TEXT,
     liked BOOLEAN,
     comment TEXT
 );

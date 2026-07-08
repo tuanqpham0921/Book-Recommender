@@ -76,12 +76,12 @@ class ChatRunModel(Base):
 
     # promoted stats: cheap to query, index, aggregate
     ok = Column(Boolean, nullable=True)
+    runtime_error = Column(Text, nullable=True)
     duration_s = Column(Float, nullable=True)
     total_tokens = Column(Integer, nullable=True)
 
     # full-fidelity envelope (parse/strategy results live inside orchestration)
     orchestration = Column(JSONB, nullable=True)
-    mermaid = Column(Text, nullable=True)
 
     # user feedback: liked is None until the user reacts (True = like, False = dislike)
     liked = Column(Boolean, nullable=True)

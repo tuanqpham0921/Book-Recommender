@@ -12,7 +12,7 @@ from common.operation import OperationResult
 from common.utils import save_file, to_serializable
 from db.stores.chat_run_store import ChatRunStore
 from app.orchestration.request_context import RequestContext
-from app.domains.planner.main import ConversationOrchestrator, OrchestrationOutput
+from app.domains.planner.main import ConversationOrchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,6 @@ def build_chat_run_row(
     user_chat_id: str,
     user_message: str,
     result: OperationResult,
-    output: OrchestrationOutput,
 ) -> dict[str, Any]:
     """Map a finished conversation workflow onto ChatRunModel columns."""
     return {
@@ -30,10 +29,10 @@ def build_chat_run_row(
         "session_id": session_id,
         "user_message": user_message,
         "ok": result.ok,
+        "runtime_error": result.runtime_error.type if result.runtime_error else None,
         "duration_s": result.duration,
         "total_tokens": result.token_usage.total,
         "orchestration": to_serializable(result),
-        "mermaid": output.diagram,
     }
 
 
@@ -52,7 +51,6 @@ async def record_chat_run(
             user_chat_id=request_context.user_message.id,
             user_message=request_context.user_message.content,
             result=workflow.result,
-            output=workflow.output,
         )
 
         if app_env == "development":
