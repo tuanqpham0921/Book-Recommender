@@ -1,5 +1,4 @@
 Continue:
-
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
@@ -7,15 +6,14 @@ Continue:
 * format your feedback better
     * definitely need a type (hallucination, too long, inaccurate, recommendations, ...)
 * need an overal bug reporter not just chat
-=============
-* a way to load in all your test suites results
-    * think sequential for click left and right
-* think about your columns and how to handle it better
-    * maybe try adding more schemas
 
 =======================================================================
 
 Reminder:
+* changing review path still finish the query
+    * expected? since it's not refreshing the page for a new session
+    * for dev review is fine to get all the current chat_runs
+        * for prod, we need to make it limit to just test suites?
 * currently your workflow and operation is fine
     * it could be better but we can deal it more stuff later
     * right now it supports run_async_step (need a @task for non failure)
@@ -61,7 +59,6 @@ Eval and deployment testing:
 1. create a way to run all your test queries (prod mode)
 2. show rejected quries and resuls
 2. then a script to send all those to the frontend for you to review
-3. deploy your app without DB
 =======================================================================
 
 lower priority:
