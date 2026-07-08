@@ -59,6 +59,8 @@ class Orchestrator:
             if (conversation_orchestrator is not None 
                 and conversation_orchestrator.result is not None):
                 # shield the recording from cancellation and timeout, but still log if it fails
+                # NOTE: this can be a task, with retries to increase the change of success
+                # we can make the timeout a task configuration parameter
                 try:
                     await asyncio.shield(
                         asyncio.wait_for(
