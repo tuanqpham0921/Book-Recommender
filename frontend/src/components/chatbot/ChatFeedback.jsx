@@ -102,7 +102,7 @@ function ChatFeedback({ chatId }) {
                         onChange={(e) => setComment(e.target.value)}
                         placeholder="What was good or bad about this response?"
                         rows={2}
-                        className="flex-1 max-w-md text-sm border border-gray-300 rounded-md p-2 focus:outline-1 focus:outline-gray-300 resize-none"
+                        className="flex-1 max-w-md text-sm border bg-white rounded-xl p-2 focus:outline-1 focus:outline-gray-300 resize-none"
                     />
                     <button
                         type="button"
