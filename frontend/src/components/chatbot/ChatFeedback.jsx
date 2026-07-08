@@ -9,7 +9,7 @@ const ISSUE_CATEGORIES = [
 // Centered popup for filing a categorized issue report against a chat run.
 // Appends to (and displays) the run's issue log rather than overwriting a
 // single comment field.
-function IssueReportModal({ chatId, isOpen, onClose }) {
+function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
     const [category, setCategory] = useState('')
     const [isCategoryOpen, setIsCategoryOpen] = useState(false)
     const categoryRef = useRef(null)
@@ -36,7 +36,7 @@ function IssueReportModal({ chatId, isOpen, onClose }) {
         setError(null)
         setIsSubmitting(true)
         try {
-            await api.addChatIssue(chatId, { title: category || null, message: trimmed, positive })
+            await api.addFeedback({ chatId, sessionId, title: category || null, message: trimmed, positive })
             setIssues(prev => [...prev, { title: category || null, message: trimmed, positive, created_at: new Date().toISOString() }])
             setMessage('')
         } catch (err) {
@@ -195,7 +195,7 @@ function IssueReportModal({ chatId, isOpen, onClose }) {
 
 // Like / dislike / issue-report controls shown at the end of a finished bot
 // response. Updates the chat_runs row identified by chatId.
-function ChatFeedback({ chatId }) {
+function ChatFeedback({ chatId, sessionId }) {
     const [liked, setLiked] = useState(null)          // null | true | false
     const [showModal, setShowModal] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -259,7 +259,7 @@ function ChatFeedback({ chatId }) {
                 )}
             </div>
 
-            <IssueReportModal chatId={chatId} isOpen={showModal} onClose={() => setShowModal(false)} />
+            <IssueReportModal chatId={chatId} sessionId={sessionId} isOpen={showModal} onClose={() => setShowModal(false)} />
         </div>
     )
 }

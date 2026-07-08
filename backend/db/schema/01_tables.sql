@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS books (
 -- Chat run records: one row per orchestrated chat turn.
 -- Envelopes stored as JSONB (queryable via -> / ->>), hot stats promoted to columns.
 -- liked: NULL = no feedback yet, TRUE = liked, FALSE = disliked.
--- comment: append-only log of user-filed reports, each {title, message, positive, created_at}.
 CREATE TABLE IF NOT EXISTS chat_runs (
     chat_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -31,6 +30,20 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     duration_s DOUBLE PRECISION,
     total_tokens INTEGER,
     orchestration JSONB,
-    liked BOOLEAN,
-    comment JSONB NOT NULL DEFAULT '[]'::jsonb
+    liked BOOLEAN
+);
+
+-- Standalone feedback / bug reports. chat_id and session_id are both
+-- optional and unenforced (no FK) — a report can reference an in-flight
+-- chat_id before its chat_runs row exists, an in-progress session with no
+-- chat_id yet, or neither (a general bug report). id gets its own
+-- independently generated key since chat_id/session_id may be NULL.
+CREATE TABLE IF NOT EXISTS feedback (
+    id TEXT PRIMARY KEY,
+    session_id TEXT,
+    chat_id TEXT,
+    title TEXT,
+    message TEXT NOT NULL,
+    positive BOOLEAN,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

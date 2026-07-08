@@ -290,6 +290,7 @@ function ChatBot() {
                         <ChatMessages
                             messages={turn}
                             isStreaming={isStreaming}
+                            sessionId={sessionId}
                         />
                     )}
                 </div>

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.book_store import BookStore
 from db.stores.chat_run_store import ChatRunStore
+from db.stores.feedback_store import FeedbackStore
 from clients import OpenAIClient
 from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
@@ -64,6 +65,13 @@ async def get_chat_run_store(
 ) -> ChatRunStore:
     """Get ChatRunStore instance with injected session."""
     return ChatRunStore(session)
+
+
+async def get_feedback_store(
+    session: AsyncSession = Depends(get_sqlalchemy_session),
+) -> FeedbackStore:
+    """Get FeedbackStore instance with injected session."""
+    return FeedbackStore(session)
 
 
 def get_app_env(request: Request) -> str:

@@ -19,8 +19,19 @@ function StatusBadge({ ok }) {
 // orchestration envelope).
 function ChatRunRow({ run }) {
     const [expanded, setExpanded] = useState(false)
+    const [feedback, setFeedback] = useState(null)
     const diagram = run.orchestration?.output?.diagram
     const errorDetail = run.orchestration?.runtime_error
+
+    useEffect(() => {
+        if (!expanded || feedback !== null) return
+        api.getFeedback(run.chat_id)
+            .then(data => setFeedback(data.feedback || []))
+            .catch(err => {
+                console.error('Failed to load feedback:', err)
+                setFeedback([])
+            })
+    }, [expanded, feedback, run.chat_id])
 
     return (
         <div className="border border-gray-200 rounded-lg bg-white">
@@ -43,9 +54,6 @@ function ChatRunRow({ run }) {
                     {run.user_message || <em className="text-gray-400">no message</em>}
                 </span>
                 <span className="text-sm"><FeedbackBadge liked={run.liked} /></span>
-                {run.comment?.length > 0 && (
-                    <span title={`${run.comment.length} report${run.comment.length > 1 ? 's' : ''}`}>💬</span>
-                )}
                 <span className="text-xs text-gray-400 whitespace-nowrap">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
@@ -60,20 +68,22 @@ function ChatRunRow({ run }) {
                         <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
                     </div>
 
-                    {run.comment?.length > 0 && (
+                    {feedback?.length > 0 && (
                         <div className="mb-3 flex flex-col gap-2">
-                            {run.comment.map((entry, i) => (
+                            {feedback.map((entry, i) => (
                                 <div key={i} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span
-                                            className={`px-2 py-0.5 rounded-full text-xs ${
-                                                entry.positive
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-red-100 text-red-700'
-                                            }`}
-                                        >
-                                            {entry.title}
-                                        </span>
+                                        {entry.title && (
+                                            <span
+                                                className={`px-2 py-0.5 rounded-full text-xs ${
+                                                    entry.positive
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-red-100 text-red-700'
+                                                }`}
+                                            >
+                                                {entry.title}
+                                            </span>
+                                        )}
                                         {entry.created_at && (
                                             <span className="text-[11px] text-gray-400">
                                                 {new Date(entry.created_at).toLocaleString()}

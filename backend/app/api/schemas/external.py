@@ -14,12 +14,15 @@ class ChatRunFeedbackIn(BaseModel):
 
     liked: bool | None = None
 
-ChatRunIssueCategory = Literal["Inaccurate", "Hallucination", "UI", "Other"]
+FeedbackCategory = Literal["Content", "Recommendation", "Planner", "Time", "UI/UX", "Other"]
 
-class ChatRunIssueIn(BaseModel):
-    """One entry appended to a chat run's issue log. Category is optional."""
+class FeedbackIn(BaseModel):
+    """One feedback / bug report entry. chat_id is optional — omit it for
+    reports not tied to a specific query (general bug reports)."""
 
-    title: ChatRunIssueCategory | None = None
+    chat_id: str | None = None
+    session_id: str | None = None
+    title: FeedbackCategory | None = None
     message: str
     positive: bool
 

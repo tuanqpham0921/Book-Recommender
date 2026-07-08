@@ -86,15 +86,41 @@ class ChatRunModel(Base):
     # user feedback: liked is None until the user reacts (True = like, False = dislike)
     liked = Column(Boolean, nullable=True)
 
-    # append-only log of user-filed reports: [{title, message, positive, created_at}, ...]
-    comment = Column(JSONB, nullable=False, server_default="[]")
-
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"
 
     def to_dict(self) -> dict:
         """Convert model to dictionary (table columns only)."""
         row = {c.name: getattr(self, c.name) for c in ChatRunModel.__table__.columns}
+        if row.get("created_at") is not None:
+            row["created_at"] = row["created_at"].isoformat()
+        return row
+
+
+class FeedbackModel(Base):
+    """Standalone feedback / bug report. chat_id and session_id are both
+    optional and unenforced (no FK) so a report can be filed against an
+    in-flight chat_id before its chat_runs row exists, or with neither
+    (a general bug report not tied to any query)."""
+
+    __tablename__ = "feedback"
+
+    id = Column(String, primary_key=True)
+    session_id = Column(String, nullable=True, index=True)
+    chat_id = Column(String, nullable=True, index=True)
+    title = Column(Text, nullable=True)
+    message = Column(Text, nullable=False)
+    positive = Column(Boolean, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    def __repr__(self):
+        return f"<FeedbackModel(id='{self.id}', chat_id='{self.chat_id}')>"
+
+    def to_dict(self) -> dict:
+        """Convert model to dictionary (table columns only)."""
+        row = {c.name: getattr(self, c.name) for c in FeedbackModel.__table__.columns}
         if row.get("created_at") is not None:
             row["created_at"] = row["created_at"].isoformat()
         return row

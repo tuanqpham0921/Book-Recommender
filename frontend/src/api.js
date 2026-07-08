@@ -119,21 +119,22 @@ async function getChatRuns(limit = 200, offset = 0) {
   return await res.json();
 }
 
-// Fetch the issue log for one chat run (populates the report popup on open)
-async function getChatIssues(chatId) {
-  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/issues`, {
+// Fetch feedback/bug reports filed against one chat run
+async function getFeedback(chatId) {
+  const res = await fetch_api(BASE_URL + `/feedback?chat_id=${chatId}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' }
   });
   return await res.json();
 }
 
-// Append one entry ({title, message, positive}) to a chat run's issue log
-async function addChatIssue(chatId, { title, message, positive }) {
-  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/issues`, {
+// File one feedback/bug report entry. chatId is optional (omit for general
+// bug reports not tied to a specific query).
+async function addFeedback({ chatId = null, sessionId = null, title, message, positive }) {
+  const res = await fetch_api(BASE_URL + '/feedback', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, message, positive })
+    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, title, message, positive })
   });
   return await res.json();
 }
@@ -149,5 +150,5 @@ async function getTaskPlanDiagram(sessionId) {
 
 export default {
   createSession, sendChatMessage, getRecommendedBooks, backEndPing,
-  updateChatFeedback, getChatRuns, getChatIssues, addChatIssue
+  updateChatFeedback, getChatRuns, getFeedback, addFeedback
 };

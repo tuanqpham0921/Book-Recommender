@@ -98,6 +98,15 @@ postgres-dump-chat-runs:
 		> $(MAKEFILE_DIR)data/chat_runs_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "chat_runs dumped to $(MAKEFILE_DIR)data/"
 
+# dump feedback data to a timestamped .sql file (data only, restorable via psql <)
+.PHONY: postgres-dump-feedback
+postgres-dump-feedback:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB --table=feedback --data-only --column-inserts \
+		> $(MAKEFILE_DIR)data/feedback_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "feedback dumped to $(MAKEFILE_DIR)data/"
+
 # wipe all recorded chat runs (dev convenience — irreversible)
 # NOTE: for dev
 .PHONY: postgres-clear-chat-runs
@@ -106,6 +115,21 @@ postgres-clear-chat-runs:
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE chat_runs;"
 	@echo "chat_runs table cleared"
+
+# wipe all recorded feedback (dev convenience — irreversible)
+# NOTE: for dev
+.PHONY: postgres-clear-feedback
+postgres-clear-feedback:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE feedback;"
+	@echo "feedback table cleared"
+
+# wipe all recorded chat runs and feedback (dev convenience — irreversible)
+.PHONY: postgres-dev-reset-log
+postgres-dev-reset-log:
+	make postgres-clear-feedback
+	make postgres-clear-chat-runs
 
 # -------------------
 # Docker commands

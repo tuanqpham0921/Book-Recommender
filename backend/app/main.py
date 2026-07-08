@@ -63,11 +63,13 @@ from app.api.routes.health import router as health_router
 from app.api.routes.chat_message import router as chat_router  
 from app.api.routes.session import router as session_router
 from app.api.routes.chat_run import router as chat_run_router
+from app.api.routes.feedback import router as feedback_router
 
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(session_router)
 app.include_router(chat_run_router)
+app.include_router(feedback_router)
 
 # Cloud Run entry point
 if __name__ == "__main__":

@@ -17,7 +17,7 @@ const MermaidLoading = () => (
     </div>
 );
 
-function ChatMessages({ messages, isStreaming }) {
+function ChatMessages({ messages, isStreaming, sessionId }) {
     const containerRef = useRef(null)
     const userMessageRefs = useRef({})
     const turnRefs = useRef({})
@@ -141,7 +141,7 @@ function ChatMessages({ messages, isStreaming }) {
 
                         {/* Feedback controls - once the run is recorded and streaming is done */}
                         {response.chatId && !response.isStreaming && !response.error && (
-                            <ChatFeedback key={response.chatId} chatId={response.chatId} />
+                            <ChatFeedback key={response.chatId} chatId={response.chatId} sessionId={sessionId} />
                         )}
 
                         {/* AI disclaimer - show on last message */}
