@@ -7,7 +7,7 @@ const ISSUE_CATEGORIES = ['Inaccurate', 'Hallucination', 'UI', 'Other']
 // Centered popup for filing a categorized issue report against a chat run.
 // Appends to (and displays) the run's issue log rather than overwriting a
 // single comment field.
-function IssueReportModal({ chatId, onClose }) {
+function IssueReportModal({ chatId, isOpen, onClose }) {
     const [category, setCategory] = useState('')
     const [isCategoryOpen, setIsCategoryOpen] = useState(false)
     const categoryRef = useRef(null)
@@ -44,6 +44,8 @@ function IssueReportModal({ chatId, onClose }) {
             setIsSubmitting(false)
         }
     }
+
+    if (!isOpen) return null
 
     return (
         <div
@@ -255,9 +257,7 @@ function ChatFeedback({ chatId }) {
                 )}
             </div>
 
-            {showModal && (
-                <IssueReportModal chatId={chatId} onClose={() => setShowModal(false)} />
-            )}
+            <IssueReportModal chatId={chatId} isOpen={showModal} onClose={() => setShowModal(false)} />
         </div>
     )
 }
