@@ -1,11 +1,22 @@
 Continue:
+* add a feedback id list to your chatruns?
+* need to add a comment thing to your planner
+* add a bug or overal feedback button
+
+* fix the overflow issues
+* review new code from 7c8098a461765a8d7940613b7f625948640d55c0
+    * where you have a of bunch todo upward
+
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
+* rename all the issues to feedback
+* might need to make sure that you can link them together (foreign keys and surragate keys?)
 
-* format your feedback better
-    * definitely need a type (hallucination, too long, inaccurate, recommendations, ...)
-* need an overal bug reporter not just chat
+review page
+1. make it scrollable
+2. make have the system goals
+3. changing pages won't stop your chat
 
 =======================================================================
 
