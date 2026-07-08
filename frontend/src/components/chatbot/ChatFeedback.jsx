@@ -8,7 +8,7 @@ const ISSUE_CATEGORIES = ['Inaccurate', 'Hallucination', 'UI', 'Other']
 // Appends to (and displays) the run's issue log rather than overwriting a
 // single comment field.
 function IssueReportModal({ chatId, onClose }) {
-    const [category, setCategory] = useState(ISSUE_CATEGORIES[0])
+    const [category, setCategory] = useState('')
     const [positive, setPositive] = useState(false)
     const [message, setMessage] = useState('')
     const [issues, setIssues] = useState([])
@@ -35,7 +35,7 @@ function IssueReportModal({ chatId, onClose }) {
         setError(null)
         setIsSubmitting(true)
         try {
-            const data = await api.addChatIssue(chatId, { title: category, message: trimmed, positive })
+            const data = await api.addChatIssue(chatId, { title: category || null, message: trimmed, positive })
             setIssues(data.issues || [])
             setMessage('')
         } catch (err) {
@@ -93,6 +93,7 @@ function IssueReportModal({ chatId, onClose }) {
                         onChange={(e) => setCategory(e.target.value)}
                         className="w-full text-sm border border-gray-200 rounded-md p-2 mb-3 bg-white"
                     >
+                        <option value="" disabled hidden>Select...</option>
                         {ISSUE_CATEGORIES.map((c) => (
                             <option key={c} value={c}>{c}</option>
                         ))}
@@ -145,15 +146,17 @@ function IssueReportModal({ chatId, onClose }) {
                                     className="border border-gray-100 rounded-md p-2 bg-gray-50"
                                 >
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span
-                                            className={`px-2 py-0.5 rounded-full text-xs ${
-                                                entry.positive
-                                                    ? 'bg-green-100 text-green-700'
-                                                    : 'bg-red-100 text-red-700'
-                                            }`}
-                                        >
-                                            {entry.title}
-                                        </span>
+                                        {entry.title && (
+                                            <span
+                                                className={`px-2 py-0.5 rounded-full text-xs ${
+                                                    entry.positive
+                                                        ? 'bg-green-100 text-green-700'
+                                                        : 'bg-red-100 text-red-700'
+                                                }`}
+                                            >
+                                                {entry.title}
+                                            </span>
+                                        )}
                                         {entry.created_at && (
                                             <span className="text-[11px] text-gray-400">
                                                 {new Date(entry.created_at).toLocaleString()}

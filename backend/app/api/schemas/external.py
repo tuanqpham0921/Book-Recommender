@@ -17,9 +17,9 @@ class ChatRunFeedbackIn(BaseModel):
 ChatRunIssueCategory = Literal["Inaccurate", "Hallucination", "UI", "Other"]
 
 class ChatRunIssueIn(BaseModel):
-    """One entry appended to a chat run's issue log."""
+    """One entry appended to a chat run's issue log. Category is optional."""
 
-    title: ChatRunIssueCategory
+    title: ChatRunIssueCategory | None = None
     message: str
     positive: bool
 
