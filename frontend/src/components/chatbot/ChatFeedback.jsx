@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import api from '@/api'
 import { ThumbsUp, ThumbsDown, MessageCircle, X, Flag, Sparkles, ChevronDown } from 'lucide-react';
 
-const ISSUE_CATEGORIES = ['Inaccurate', 'Hallucination', 'UI', 'Other']
+const ISSUE_CATEGORIES = [
+    'Content', 'Recommendation', 'Planner', 'Time', 'UI/UX',   'Other'
+]
 
 // Centered popup for filing a categorized issue report against a chat run.
 // Appends to (and displays) the run's issue log rather than overwriting a
