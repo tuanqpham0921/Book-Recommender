@@ -14,7 +14,6 @@ function IssueReportModal({ chatId, onClose }) {
     const [positive, setPositive] = useState(false)
     const [message, setMessage] = useState('')
     const [issues, setIssues] = useState([])
-    const [isLoadingIssues, setIsLoadingIssues] = useState(true)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState(null)
 
@@ -29,27 +28,14 @@ function IssueReportModal({ chatId, onClose }) {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    useEffect(() => {
-        (async () => {
-            try {
-                const data = await api.getChatIssues(chatId)
-                setIssues(data.issues || [])
-            } catch (err) {
-                console.error('Failed to load issue log:', err)
-            } finally {
-                setIsLoadingIssues(false)
-            }
-        })()
-    }, [chatId])
-
     async function handleSubmit() {
         const trimmed = message.trim()
         if (!trimmed || isSubmitting) return
         setError(null)
         setIsSubmitting(true)
         try {
-            const data = await api.addChatIssue(chatId, { title: category || null, message: trimmed, positive })
-            setIssues(data.issues || [])
+            await api.addChatIssue(chatId, { title: category || null, message: trimmed, positive })
+            setIssues(prev => [...prev, { title: category || null, message: trimmed, positive, created_at: new Date().toISOString() }])
             setMessage('')
         } catch (err) {
             console.error('Failed to submit report:', err)
@@ -165,10 +151,7 @@ function IssueReportModal({ chatId, onClose }) {
                         <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">
                             Reports on this response
                         </h3>
-                        {isLoadingIssues && (
-                            <div className="text-xs text-gray-400 italic">Loading...</div>
-                        )}
-                        {!isLoadingIssues && issues.length === 0 && (
+                        {issues.length === 0 && (
                             <div className="text-xs text-gray-400 italic">No reports yet.</div>
                         )}
                         <div className="flex flex-col gap-2">
