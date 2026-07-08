@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import api from '@/api'
-import { ThumbsUp, ThumbsDown, MessageCircle, X, Flag, Sparkles } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, MessageCircle, X, Flag, Sparkles, ChevronDown } from 'lucide-react';
 
 const ISSUE_CATEGORIES = ['Inaccurate', 'Hallucination', 'UI', 'Other']
 
@@ -9,12 +9,25 @@ const ISSUE_CATEGORIES = ['Inaccurate', 'Hallucination', 'UI', 'Other']
 // single comment field.
 function IssueReportModal({ chatId, onClose }) {
     const [category, setCategory] = useState('')
+    const [isCategoryOpen, setIsCategoryOpen] = useState(false)
+    const categoryRef = useRef(null)
     const [positive, setPositive] = useState(false)
     const [message, setMessage] = useState('')
     const [issues, setIssues] = useState([])
     const [isLoadingIssues, setIsLoadingIssues] = useState(true)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState(null)
+
+    // Close category dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (categoryRef.current && !categoryRef.current.contains(event.target)) {
+                setIsCategoryOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     useEffect(() => {
         (async () => {
@@ -88,16 +101,35 @@ function IssueReportModal({ chatId, onClose }) {
                         </button>
                     </div>
 
-                    <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full text-sm border border-gray-200 rounded-md p-2 mb-3 bg-white"
-                    >
-                        <option value="" disabled hidden>Select...</option>
-                        {ISSUE_CATEGORIES.map((c) => (
-                            <option key={c} value={c}>{c}</option>
-                        ))}
-                    </select>
+                    <div className="relative mb-3" ref={categoryRef}>
+                        <button
+                            type="button"
+                            onClick={() => setIsCategoryOpen(prev => !prev)}
+                            className="w-full flex items-center justify-between text-sm border border-gray-200 rounded-md p-2 bg-white text-left"
+                        >
+                            <span className={category ? 'text-gray-800' : 'text-gray-400'}>
+                                {category || 'Select a category (optional)'}
+                            </span>
+                            <ChevronDown size={16} className="text-gray-400" />
+                        </button>
+
+                        {isCategoryOpen && (
+                            <div className="absolute top-full left-0 w-full mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                                {ISSUE_CATEGORIES.map((c) => (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => { setCategory(c); setIsCategoryOpen(false) }}
+                                        className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100 ${
+                                            c === category ? 'bg-gray-50 text-gray-900 font-medium' : 'text-gray-700'
+                                        }`}
+                                    >
+                                        {c}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
                     <textarea
                         value={message}
