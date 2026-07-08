@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS books (
 -- Chat run records: one row per orchestrated chat turn.
 -- Envelopes stored as JSONB (queryable via -> / ->>), hot stats promoted to columns.
 -- liked: NULL = no feedback yet, TRUE = liked, FALSE = disliked.
+-- issues: append-only log of user-filed reports, each {title, message, positive, created_at}.
 CREATE TABLE IF NOT EXISTS chat_runs (
     chat_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -31,5 +32,6 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     total_tokens INTEGER,
     orchestration JSONB,
     liked BOOLEAN,
-    comment TEXT
+    comment TEXT,
+    issues JSONB NOT NULL DEFAULT '[]'::jsonb
 );

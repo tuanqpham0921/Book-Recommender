@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 class SessionOut(BaseModel):
@@ -12,6 +14,15 @@ class ChatRunFeedbackIn(BaseModel):
 
     liked: bool | None = None
     comment: str | None = None
+
+ChatRunIssueCategory = Literal["Inaccurate", "Hallucination", "UI", "Other"]
+
+class ChatRunIssueIn(BaseModel):
+    """One entry appended to a chat run's issue log."""
+
+    title: ChatRunIssueCategory
+    message: str
+    positive: bool
 
 class HealthStatus(BaseModel):
     """Health check response model."""

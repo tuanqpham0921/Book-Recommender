@@ -87,6 +87,9 @@ class ChatRunModel(Base):
     liked = Column(Boolean, nullable=True)
     comment = Column(Text, nullable=True)
 
+    # append-only log of user-filed reports: [{title, message, positive, created_at}, ...]
+    issues = Column(JSONB, nullable=False, server_default="[]")
+
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"
 

@@ -31,3 +31,8 @@ WHERE step ->> 'name' IN (
 AND step -> 'runtime_error' IS NOT NULL
 GROUP BY step ->> 'name', step -> 'runtime_error' ->> 'type'
 ORDER BY workflow, n DESC;
+
+-- get the length of the issues array jsonb
+SELECT chat_id, jsonb_array_length(issues) AS issue_count
+FROM chat_runs
+ORDER BY issue_count DESC;

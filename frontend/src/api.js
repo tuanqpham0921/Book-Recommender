@@ -119,6 +119,25 @@ async function getChatRuns(limit = 200, offset = 0) {
   return await res.json();
 }
 
+// Fetch the issue log for one chat run (populates the report popup on open)
+async function getChatIssues(chatId) {
+  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/issues`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  return await res.json();
+}
+
+// Append one entry ({title, message, positive}) to a chat run's issue log
+async function addChatIssue(chatId, { title, message, positive }) {
+  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/issues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, message, positive })
+  });
+  return await res.json();
+}
+
 // TODO: implment this, using sse stream for now
 async function getTaskPlanDiagram(sessionId) {
   const res = await fetch_api(BASE_URL + `/diagram/${sessionId}/task_plan`, {
@@ -130,5 +149,5 @@ async function getTaskPlanDiagram(sessionId) {
 
 export default {
   createSession, sendChatMessage, getRecommendedBooks, backEndPing,
-  updateChatFeedback, getChatRuns
+  updateChatFeedback, getChatRuns, getChatIssues, addChatIssue
 };
