@@ -100,11 +100,21 @@ function IssueReportModal({ chatId, onClose }) {
 
                     <textarea
                         value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        onChange={(e) => {
+                            if (e.target.value.length <= 500) {
+                                setMessage(e.target.value)
+                            }
+                        }}
                         placeholder="What was good or bad about this response?"
                         rows={3}
-                        className="w-full text-sm border border-gray-200 rounded-md p-2 mb-2 resize-none focus:outline-1 focus:outline-gray-300"
+                        maxLength={500}
+                        className="w-full text-sm border border-gray-200 rounded-md p-2 resize-none focus:outline-1 focus:outline-gray-300"
                     />
+                    <div className="flex justify-end mb-2 px-2">
+                        <span className={`text-xs ${message.length >= 450 ? 'text-red-500' : 'text-gray-500'}`}>
+                            {message.length}/500
+                        </span>
+                    </div>
 
                     <div className="flex items-center justify-between mb-4">
                         {error && <span className="text-xs text-red-500 italic">{error}</span>}
