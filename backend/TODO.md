@@ -3,28 +3,29 @@ Continue:
     * where you started adding chat_runs and mermaid reformatting
     * where are my chatmessages?
     * why is there a orchestration column now?
+=============
+* rename your @task to @op_task or something (so no name conflicting)
+* rename OperationalResult to OperationResult
+* workflow self.result to self.op_result (so it's clearer)
 
+* format your feedback better
+    * definitely need a type (hallucination, too long, inaccurate, recommendations, ...)
+* need an overal bug reporter not just chat
+=============
 * a way to load in all your test suites results
     * think sequential for click left and right
 * think about your columns and how to handle it better
     * maybe try adding more schemas
 
-* there's something wrong with how you overwrite the self.result messages
-    * figure out where the put in details vs message
-    * maybe push it to details with "prev message: ..."
-    * change your app/workflow to not overwrite and make sure tests passes 
-
-=======================================================================
-
-Note:
-* currently your workflow and operation is fine
-    * it could be better but we can deal it more stuff later
-    * right now it supports run_async_step (need a @task for non failure)
-    * steps also has to be OperationalResult in add step to help detect that
-
 =======================================================================
 
 Reminder:
+* currently your workflow and operation is fine
+    * it could be better but we can deal it more stuff later
+    * right now it supports run_async_step (need a @task for non failure)
+    * steps also has to be OperationalResult in add step to help detect those
+* orchestrator is where you can load in cls and workflow for other things as well
+    * saving to db, feedback code etc
 1. need to create one executor for @task and workflow
     * do this later once you have time out and flush out more stuff
 2. add timeout to @task and @workflow (should be able to handle them)
@@ -42,6 +43,23 @@ Reminder:
         * this can come later, since it will require some re-thinking of your workflow (like returning op_result and appending or overwritting etc...)
     * or you could just do a run_workflow instead
         * which you can just add reference in the steps before run_async_step
+5. there's something wrong with how you overwrite the self.result messages
+    * figure out where the put in details vs message
+    * maybe push it to details with "prev message: ..."
+    * change your app/workflow to not overwrite and make sure tests passes 
+
+Ideas:
+* mermaid optimization (TD for high concurrent, LR for high depends_on)
+* once you have resume/checkpoint, you might need to move some stuff around
+    * you might need to have the model validate do the DAG processing
+    * that way you can pick up from orchestrator and continue
+    * but then you also needs steps as config, so you know what to run next etc...
+* add a tool catalog (as a UI or command query)
+* recommendation node and re-rank is ideal place for human in the loop
+    * if there are a lot of candidates, we can ask the user what they like
+* always need to clamp a recommendation node for books related
+    * feels more consumer like (do you have Dune? - yes, and I think you'll like these)
+    * maybe for later versions
 
 Eval and deployment testing:
 1. create a way to run all your test queries (prod mode)
