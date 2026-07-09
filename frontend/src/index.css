@@ -555,6 +555,8 @@
 
 @utility markdown-container {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  hyphens: auto;
   
   & p {
     margin-bottom: 0.5rem;
@@ -662,6 +664,8 @@
   font-size: 14px;
   word-break: break-words;
   margin-left: 12px;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 
   @media (min-width: 640px) {
     max-width: 320px;
