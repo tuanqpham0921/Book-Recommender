@@ -7,12 +7,6 @@ Continue:
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
 * rename all the issues to feedback
-* might need to make sure that you can link them together (foreign keys and surragate keys?)
-
-review page
-1. make it scrollable
-2. make have the system goals
-3. changing pages won't stop your chat
 
 =======================================================================
 

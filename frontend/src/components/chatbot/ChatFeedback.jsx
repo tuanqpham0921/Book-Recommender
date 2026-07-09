@@ -12,7 +12,7 @@ const MAX_ISSUES_PER_MODAL = 20
 // or (when chatId is omitted) general feedback for the whole session.
 // Appends to (and displays) the run's issue log rather than overwriting a
 // single comment field.
-export function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
+export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = false }) {
     const [category, setCategory] = useState('')
     const [isCategoryOpen, setIsCategoryOpen] = useState(false)
     const categoryRef = useRef(null)
@@ -39,7 +39,7 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
         setError(null)
         setIsSubmitting(true)
         try {
-            await api.addFeedback({ chatId, sessionId, title: category || null, message: trimmed, positive })
+            await api.addFeedback({ chatId, sessionId, title: category || null, message: trimmed, positive, review })
             setIssues(prev => [...prev, { title: category || null, message: trimmed, positive, created_at: new Date().toISOString() }])
             setMessage('')
         } catch (err) {
