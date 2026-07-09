@@ -6,6 +6,8 @@ const ISSUE_CATEGORIES = [
     'Content', 'Recommendation', 'Planner', 'Time', 'UI/UX',   'Other'
 ]
 
+const MAX_ISSUES_PER_MODAL = 20
+
 // Centered popup for filing a categorized issue report against a chat run,
 // or (when chatId is omitted) general feedback for the whole session.
 // Appends to (and displays) the run's issue log rather than overwriting a
@@ -33,7 +35,7 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
 
     async function handleSubmit() {
         const trimmed = message.trim()
-        if (!trimmed || isSubmitting) return
+        if (!trimmed || isSubmitting || issues.length >= MAX_ISSUES_PER_MODAL) return
         setError(null)
         setIsSubmitting(true)
         try {
@@ -145,7 +147,7 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
                         <button
                             type="button"
                             onClick={handleSubmit}
-                            disabled={isSubmitting || !message.trim()}
+                            disabled={isSubmitting || !message.trim() || issues.length >= MAX_ISSUES_PER_MODAL}
                             className="ml-auto px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-700 transition-colors"
                         >
                             {isSubmitting ? 'Submitting...' : 'Submit'}
