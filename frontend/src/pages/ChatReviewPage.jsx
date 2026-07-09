@@ -155,7 +155,7 @@ function ChatReviewPage() {
     }, [])
 
     return (
-        <div className="min-h-screen bg-[var(--bg-secondary)]">
+        <div className="min-h-full bg-[var(--bg-secondary)]">
             <div className="max-w-4xl mx-auto px-4 py-8">
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-2xl font-bold text-gray-800">Chat Run Review</h1>

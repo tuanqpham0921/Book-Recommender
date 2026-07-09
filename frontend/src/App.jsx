@@ -2,7 +2,6 @@ import '@/index.css'
 import { useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import BookRecommenderPage from '@/pages/BookRecommenderPage'
-import ChatReviewPage from '@/pages/ChatReviewPage'
 import api from '@/api'
 
 function App() {
@@ -21,7 +20,7 @@ function App() {
       <Routes>
         <Route path="/" element={<BookRecommenderPage />} />
         <Route path="/blog" element={<BookRecommenderPage />} />
-        <Route path="/review" element={<ChatReviewPage />} />
+        <Route path="/review" element={<BookRecommenderPage />} />
         {/* Catch all other routes and redirect to home */}
         <Route path="*" element={<BookRecommenderPage />} />
       </Routes>
