@@ -76,6 +76,12 @@ class SSEStream:
         """Send loading message to UI."""
         await self.send(event_type="ui.loading", data=text)
 
+    async def send_chat_id(self, chat_id: str):
+        """Send the chat_id as soon as it's known, so the client can attach
+        feedback to this run even if the turn later errors, times out, or
+        is stopped before the final 'complete' event is reached."""
+        await self.send(event_type="chat.id", data={"chat_id": chat_id})
+
     async def send_error(self, text: str):
         """Send error message."""
         await self.send(event_type="error", data=text)

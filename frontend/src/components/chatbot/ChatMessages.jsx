@@ -139,10 +139,17 @@ function ChatMessages({ messages, isStreaming, sessionId }) {
                             </div>
                         )}
 
-                        {/* Feedback controls - once the run is recorded and streaming is done */}
-                        {response.chatId && !response.isStreaming && !response.error && (
-                            <ChatFeedback key={response.chatId} chatId={response.chatId} sessionId={sessionId} />
-                        )}
+                        {/* Feedback controls - shown whenever the turn produced visible
+                            content and has finished, even if it later errored, timed
+                            out, or was stopped by the user */}
+                        {response.chatId && !response.isStreaming && !response.isLoading &&
+                            response.sections?.some(s =>
+                                (s.type === 'text' && s.content) ||
+                                (s.type === 'books' && s.books?.length > 0) ||
+                                (s.type === 'diagram' && s.mermaid)
+                            ) && (
+                                <ChatFeedback key={response.chatId} chatId={response.chatId} sessionId={sessionId} />
+                            )}
 
                         {/* AI disclaimer - show on last message */}
                         {index === messages.length - 1 && !response.isLoading && !response.isStreaming && (

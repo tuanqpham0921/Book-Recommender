@@ -36,3 +36,25 @@ ORDER BY workflow, n DESC;
 SELECT chat_id, jsonb_array_length(issues) AS issue_count
 FROM chat_runs
 ORDER BY issue_count DESC;
+
+-- linking feedback to chat_runs example
+-- get all feedback for chat_runs that were liked
+SELECT
+    cr.chat_id,
+    f.*
+FROM chat_runs AS cr
+JOIN feedback AS f
+    ON cr.chat_id = f.chat_id
+WHERE cr.liked = TRUE
+ORDER BY f.created_at;
+
+--- linking feedback to chat_runs example
+--- get all the chat_runs where feedback title is 'Recommendation'
+SELECT
+    cr.chat_id,
+    f.*
+FROM feedback AS f
+JOIN chat_runs AS cr
+    ON cr.chat_id = f.chat_id
+WHERE f.title = 'Recommendation'
+ORDER BY f.created_at;

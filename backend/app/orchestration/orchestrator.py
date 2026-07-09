@@ -26,6 +26,11 @@ class Orchestrator:
         # re-raises on cancellation rather than returning it
         conversation_orchestrator = None
         try:
+            # Sent first and unconditionally — this id is generated when the
+            # user message is parsed (before any work starts), so the client
+            # can attach feedback to this run even if the turn later errors,
+            # times out, or is stopped before the 'complete' event fires.
+            await sse_stream.send_chat_id(request_context.user_message.id)
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
@@ -70,6 +75,6 @@ class Orchestrator:
                         )
                     )
                 except asyncio.TimeoutError:
-                    logger.warning("record_chat_run timed out")
+                    logger.warning(f"record_chat_run id: {request_context.user_message.id} timed out")
 
         await sse_stream.close()

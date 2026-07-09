@@ -88,6 +88,17 @@ function ChatBot() {
 
                 console.log("🔗 event: ", event.type);
 
+                // 🆔 Chat id is known before any work starts on the backend —
+                // grab it immediately so feedback can attach to this run even
+                // if the turn later errors, times out, or is stopped early
+                if (event.type === 'chat.id') {
+                    setTurn(draft => {
+                        const last = draft[draft.length - 1];
+                        last.response.chatId = event.data?.chat_id || null;
+                    });
+                    continue;
+                }
+
                 // ✅ Backend finished — carries the chat_id of the recorded
                 // chat_runs row so feedback buttons can target it
                 if (event.type === 'complete') {
