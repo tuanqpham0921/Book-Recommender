@@ -1,4 +1,7 @@
 Continue:
+* set up a test script
+* run it in on your local host or something
+* deploy it and start reviewing
 
 * review new code from 7c8098a461765a8d7940613b7f625948640d55c0
     * where you have a of bunch todo upward
@@ -7,6 +10,8 @@ Continue:
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
 * rename all the issues to feedback
+* use TD for long concurrency, LR for long depends on
+    * can just make a indegree nodes level
 
 =======================================================================
 
@@ -56,23 +61,11 @@ Ideas:
     * feels more consumer like (do you have Dune? - yes, and I think you'll like these)
     * maybe for later versions
 
-Eval and deployment testing:
-1. create a way to run all your test queries (prod mode)
-2. show rejected quries and resuls
-2. then a script to send all those to the frontend for you to review
 =======================================================================
 
 lower priority:
 * test your sse stream (might change later, and working right now)
 * test your ingestion (need to re-write to use workflow)
-
-=======================================================================
-
-
-Eval:
-1. test repeated queries (find dune, and find dune)
-2. add more request schemas (see how the planner do)
-3. test the response of reject reasons
 
 =======================================================================
 
