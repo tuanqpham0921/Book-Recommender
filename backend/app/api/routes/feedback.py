@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.schemas import FeedbackIn
+from app.api.schemas import FeedbackIn, ReviewerReactionIn
 from app.api.dependencies import get_feedback_store
 from db.stores.feedback_store import FeedbackStore
 
@@ -28,6 +28,22 @@ async def create_feedback(
         review=feedback.review,
     )
     logger.info("🚩 Feedback logged (chat_id=%s): %s", feedback.chat_id, feedback.title)
+    return row.to_dict()
+
+
+@router.put("/feedback/reaction")
+async def set_reviewer_reaction(
+    reaction: ReviewerReactionIn,
+    store: FeedbackStore = Depends(get_feedback_store),
+):
+    """Set (or change) a reviewer's like/dislike reaction to one run. Scoped
+    to the reviewer's own session_id, independent of chat_runs.liked (the
+    original end-user's own reaction) and of any other reviewer session."""
+    row = await store.upsert_reaction(
+        chat_id=reaction.chat_id,
+        session_id=reaction.session_id,
+        liked=reaction.liked,
+    )
     return row.to_dict()
 
 

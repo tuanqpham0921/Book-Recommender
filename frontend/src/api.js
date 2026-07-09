@@ -140,6 +140,18 @@ async function addFeedback({ chatId = null, sessionId = null, title, message, po
   return await res.json();
 }
 
+// Set (or change) a reviewer's like/dislike reaction to one run, scoped to
+// the reviewer's own review-page session — independent of chat_runs.liked
+// (the original end-user's reaction) and of any other reviewer session.
+async function setReviewerReaction(chatId, sessionId, liked) {
+  const res = await fetch_api(BASE_URL + '/feedback/reaction', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, liked })
+  });
+  return await res.json();
+}
+
 // TODO: implment this, using sse stream for now
 async function getTaskPlanDiagram(sessionId) {
   const res = await fetch_api(BASE_URL + `/diagram/${sessionId}/task_plan`, {
@@ -151,5 +163,5 @@ async function getTaskPlanDiagram(sessionId) {
 
 export default {
   createSession, sendChatMessage, getRecommendedBooks, backEndPing,
-  updateChatFeedback, getChatRuns, getFeedback, addFeedback
+  updateChatFeedback, getChatRuns, getFeedback, addFeedback, setReviewerReaction
 };

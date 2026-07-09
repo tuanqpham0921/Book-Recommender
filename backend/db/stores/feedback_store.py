@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from common.utils import uuid_8
@@ -40,6 +41,37 @@ class FeedbackStore(BaseStore[FeedbackModel]):
         await self.session.commit()
         await self.session.refresh(row)
         return row
+
+    async def upsert_reaction(
+        self,
+        chat_id: str,
+        session_id: str,
+        liked: bool,
+        review: bool = True,
+    ) -> FeedbackModel:
+        """Set (or change) one reviewer's like/dislike reaction to a run.
+        One row per (chat_id, session_id) — a second call from the same
+        reviewer session updates the existing row instead of adding another,
+        unlike the append-only issue/praise log."""
+        stmt = (
+            insert(FeedbackModel)
+            .values(
+                id=f"fb_{uuid_8()}",
+                session_id=session_id,
+                chat_id=chat_id,
+                liked=liked,
+                review=review,
+            )
+            .on_conflict_do_update(
+                index_elements=[FeedbackModel.chat_id, FeedbackModel.session_id],
+                index_where=FeedbackModel.liked.isnot(None),
+                set_={"liked": liked},
+            )
+            .returning(FeedbackModel)
+        )
+        result = await self.session.execute(stmt)
+        await self.session.commit()
+        return result.scalar_one()
 
     async def get_by_chat_id(self, chat_id: str) -> List[FeedbackModel]:
         """Get all feedback entries filed against one chat run, oldest first."""

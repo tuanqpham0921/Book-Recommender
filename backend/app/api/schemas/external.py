@@ -27,6 +27,14 @@ class FeedbackIn(BaseModel):
     positive: bool
     review: bool = False
 
+class ReviewerReactionIn(BaseModel):
+    """A reviewer's like/dislike reaction to one run, from a review-page
+    session that may differ from the session that produced the run."""
+
+    chat_id: str
+    session_id: str
+    liked: bool
+
 class HealthStatus(BaseModel):
     """Health check response model."""
 

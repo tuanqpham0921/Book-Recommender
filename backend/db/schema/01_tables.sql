@@ -40,13 +40,21 @@ CREATE TABLE IF NOT EXISTS chat_runs (
 -- independently generated key since chat_id/session_id may be NULL.
 -- review: TRUE when filed from the internal /review page, FALSE when filed
 -- by an end user from the live chat's feedback widget.
+-- liked: a reviewer's like/dislike reaction to one run, independent of the
+-- run's own chat_runs.liked (the original end-user's reaction) — a reviewer
+-- may disagree with the user, or review a run from a different session than
+-- the one it was created in. NULL for ordinary issue/praise reports; one row
+-- per (chat_id, session_id) carries a non-null liked (see unique index
+-- below), upserted in place rather than appended like the report log.
 CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY,
     session_id TEXT,
     chat_id TEXT,
     title TEXT,
-    message TEXT NOT NULL,
+    message TEXT,
     positive BOOLEAN,
     review BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    liked BOOLEAN,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT feedback_message_or_liked CHECK (message IS NOT NULL OR liked IS NOT NULL)
 );

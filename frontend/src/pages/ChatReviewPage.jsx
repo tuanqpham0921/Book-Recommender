@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, ThumbsUp, ThumbsDown } from 'lucide-react'
 import api from '@/api'
 import { IssueReportModal } from '@/components/chatbot/ChatFeedback'
 
@@ -23,9 +23,22 @@ function ChatRunRow({ run, sessionId }) {
     const [expanded, setExpanded] = useState(false)
     const [feedback, setFeedback] = useState(null)
     const [showFeedbackModal, setShowFeedbackModal] = useState(false)
+    const [isSavingReaction, setIsSavingReaction] = useState(false)
     const diagram = run.orchestration?.output?.diagram
     const parseResult = run.orchestration?.output?.parse_result
     const errorDetail = run.orchestration?.runtime_error
+
+    // This reviewer session's own like/dislike on this run — independent of
+    // run.liked (the original end-user's reaction) and of any other
+    // reviewer session. One row per (chat_id, session_id), so at most one
+    // match here.
+    const reviewerReaction = feedback?.find(
+        (entry) => entry.session_id === sessionId && entry.liked !== null && entry.liked !== undefined
+    )?.liked ?? null
+
+    // Pure reaction rows (title/message/positive all null) are already
+    // reflected by the thumbs buttons above — only show written reports here.
+    const writtenFeedback = feedback?.filter((entry) => entry.message) ?? []
 
     async function loadFeedback() {
         try {
@@ -43,6 +56,19 @@ function ChatRunRow({ run, sessionId }) {
         if (!expanded || feedback !== null) return
         loadFeedback()
     }, [expanded, feedback, run.chat_id])
+
+    async function handleReviewerReaction(liked) {
+        if (isSavingReaction || reviewerReaction === liked || !sessionId) return
+        setIsSavingReaction(true)
+        try {
+            await api.setReviewerReaction(run.chat_id, sessionId, liked)
+            await loadFeedback()
+        } catch (err) {
+            console.error('Failed to save reviewer reaction:', err)
+        } finally {
+            setIsSavingReaction(false)
+        }
+    }
 
     return (
         <div className="border border-gray-200 rounded-lg bg-white">
@@ -70,14 +96,6 @@ function ChatRunRow({ run, sessionId }) {
                 <span className="text-xs text-gray-400 whitespace-nowrap">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
-                <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setShowFeedbackModal(true) }}
-                    title="Report on this run"
-                    className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                    <MessageCircle size={16} />
-                </button>
             </div>
 
             <IssueReportModal
@@ -97,32 +115,76 @@ function ChatRunRow({ run, sessionId }) {
                         <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
                     </div>
 
-                    {feedback?.length > 0 && (
-                        <div className="mb-3 flex flex-col gap-2">
-                            {feedback.map((entry, i) => (
-                                <div key={i} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        {entry.title && (
-                                            <span
-                                                className={`px-2 py-0.5 rounded-full text-xs ${
-                                                    entry.positive
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-red-100 text-red-700'
-                                                }`}
-                                            >
-                                                {entry.title}
-                                            </span>
-                                        )}
-                                        {entry.created_at && (
-                                            <span className="text-[11px] text-gray-400">
-                                                {new Date(entry.created_at).toLocaleString()}
-                                            </span>
-                                        )}
+                    <div className="flex items-center gap-1 mb-3">
+                        <span className="text-xs text-gray-500 mr-1">Your reaction (this reviewer session):</span>
+                        <button
+                            type="button"
+                            onClick={() => handleReviewerReaction(true)}
+                            disabled={isSavingReaction || !sessionId}
+                            title="I like this response"
+                            className={`p-1 rounded-md transition-colors ${
+                                reviewerReaction === true ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-gray-700'
+                            }`}
+                        >
+                            <ThumbsUp size={14} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleReviewerReaction(false)}
+                            disabled={isSavingReaction || !sessionId}
+                            title="I dislike this response"
+                            className={`p-1 rounded-md transition-colors ${
+                                reviewerReaction === false ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-gray-700'
+                            }`}
+                        >
+                            <ThumbsDown size={14} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowFeedbackModal(true)}
+                            title="Report on this run"
+                            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <MessageCircle size={16} />
+                        </button>
+                    </div>
+
+                    {writtenFeedback.length > 0 && (
+                        <details className="mb-3">
+                            <summary className="cursor-pointer text-gray-600 font-semibold">
+                                Reports ({writtenFeedback.length})
+                            </summary>
+                            <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-2 pr-1">
+                                {writtenFeedback.map((entry, i) => (
+                                    <div key={i} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            {entry.title && (
+                                                <span
+                                                    className={`px-2 py-0.5 rounded-full text-xs ${
+                                                        entry.positive
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : 'bg-red-100 text-red-700'
+                                                    }`}
+                                                >
+                                                    {entry.title}
+                                                </span>
+                                            )}
+                                            {entry.created_at && (
+                                                <span className="text-[11px] text-gray-400">
+                                                    {new Date(entry.created_at).toLocaleString()}
+                                                </span>
+                                            )}
+                                            {entry.review && (
+                                                <span className="text-[11px] text-gray-400">
+                                                    {'(reviewer)'}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-gray-700">{entry.message}</div>
                                     </div>
-                                    <div className="text-gray-700">{entry.message}</div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        </details>
                     )}
 
                     {errorDetail && (
