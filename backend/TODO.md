@@ -1,5 +1,4 @@
 Continue:
-* add a bug or overal feedback button
 
 * review new code from 7c8098a461765a8d7940613b7f625948640d55c0
     * where you have a of bunch todo upward

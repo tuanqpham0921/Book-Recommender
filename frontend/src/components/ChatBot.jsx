@@ -24,6 +24,22 @@ function ChatBot() {
         scrollToBottom()
     }, [turn, !isStreaming])
 
+    // Every page load gets its own session, created up front rather than
+    // lazily on the first message — keeps chat_runs/feedback grouped by
+    // actual browser sessions instead of by "whenever the user first sent
+    // something."
+    useEffect(() => {
+        async function initSession() {
+            try {
+                const { id } = await api.createSession();
+                setSessionId(id);
+            } catch (err) {
+                console.error('Failed to create session:', err);
+            }
+        }
+        initSession();
+    }, []);
+
     async function handleSendMessage() {
         const trimmedMessage = newMessage.trim();
         if (!trimmedMessage || isStreaming) return;
