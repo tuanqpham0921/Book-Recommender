@@ -111,6 +111,9 @@ class FeedbackModel(Base):
     title = Column(Text, nullable=True)
     message = Column(Text, nullable=False)
     positive = Column(Boolean, nullable=True)
+    # True when filed from the internal /review page, False when filed by an
+    # end user from the live chat's feedback widget.
+    review = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

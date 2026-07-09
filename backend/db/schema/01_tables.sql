@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS chat_runs (
 -- chat_id before its chat_runs row exists, an in-progress session with no
 -- chat_id yet, or neither (a general bug report). id gets its own
 -- independently generated key since chat_id/session_id may be NULL.
+-- review: TRUE when filed from the internal /review page, FALSE when filed
+-- by an end user from the live chat's feedback widget.
 CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY,
     session_id TEXT,
@@ -45,5 +47,6 @@ CREATE TABLE IF NOT EXISTS feedback (
     title TEXT,
     message TEXT NOT NULL,
     positive BOOLEAN,
+    review BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -25,6 +25,7 @@ class FeedbackIn(BaseModel):
     title: FeedbackCategory | None = None
     message: str
     positive: bool
+    review: bool = False
 
 class HealthStatus(BaseModel):
     """Health check response model."""

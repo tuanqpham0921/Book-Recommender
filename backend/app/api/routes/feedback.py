@@ -25,6 +25,7 @@ async def create_feedback(
         positive=feedback.positive,
         chat_id=feedback.chat_id,
         session_id=feedback.session_id,
+        review=feedback.review,
     )
     logger.info("🚩 Feedback logged (chat_id=%s): %s", feedback.chat_id, feedback.title)
     return row.to_dict()

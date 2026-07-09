@@ -129,12 +129,13 @@ async function getFeedback(chatId) {
 }
 
 // File one feedback/bug report entry. chatId is optional (omit for general
-// bug reports not tied to a specific query).
-async function addFeedback({ chatId = null, sessionId = null, title, message, positive }) {
+// bug reports not tied to a specific query). review marks entries filed
+// from the internal /review page rather than the live chat's feedback widget.
+async function addFeedback({ chatId = null, sessionId = null, title, message, positive, review = false }) {
   const res = await fetch_api(BASE_URL + '/feedback', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, title, message, positive })
+    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, title, message, positive, review })
   });
   return await res.json();
 }

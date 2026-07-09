@@ -21,9 +21,12 @@ class FeedbackStore(BaseStore[FeedbackModel]):
         positive: Optional[bool] = None,
         chat_id: Optional[str] = None,
         session_id: Optional[str] = None,
+        review: bool = False,
     ) -> FeedbackModel:
         """Insert one feedback entry. chat_id/session_id are both optional —
-        works fine for a general bug report tied to neither."""
+        works fine for a general bug report tied to neither. review marks
+        whether this was filed from the internal /review page rather than
+        the live chat's end-user feedback widget."""
         row = FeedbackModel(
             id=f"fb_{uuid_8()}",
             session_id=session_id,
@@ -31,6 +34,7 @@ class FeedbackStore(BaseStore[FeedbackModel]):
             title=title,
             message=message,
             positive=positive,
+            review=review,
         )
         self.session.add(row)
         await self.session.commit()
