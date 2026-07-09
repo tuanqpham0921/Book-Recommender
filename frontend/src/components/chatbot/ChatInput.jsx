@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowUp, Plus, Square } from 'lucide-react';
+import { ArrowUp, MessageCircle, Plus, Square } from 'lucide-react';
 import { userInputSuggestions } from '@/data/chatSuggestions';
+import { IssueReportModal } from '@/components/chatbot/ChatFeedback';
 
-function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onStop }) {
+function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onStop, sessionId }) {
     const [showSuggestions, setShowSuggestions] = useState(true)
+    const [showFeedbackModal, setShowFeedbackModal] = useState(false)
     const suggestionsRef = useRef(null) // Ref for the suggestions container
     const hintsButtonRef = useRef(null) // Ref for the hints button
 
@@ -89,6 +91,16 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                     }}
                 />
 
+                {/* Overall Feedback Button */}
+                <button
+                    type="button"
+                    className="absolute right-[5.25rem] bottom-3 p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700"
+                    onClick={() => setShowFeedbackModal(true)}
+                    title="Share overall feedback"
+                >
+                    <MessageCircle size={20} />
+                </button>
+
                 {/* Hints Button */}
                 <button
                     ref={hintsButtonRef} // Attach ref to hints button
@@ -122,6 +134,13 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                     {newMessage.length}/500
                 </span>
             </div>
+
+            <IssueReportModal
+                chatId={null}
+                sessionId={sessionId}
+                isOpen={showFeedbackModal}
+                onClose={() => setShowFeedbackModal(false)}
+            />
         </div>
     )
 }

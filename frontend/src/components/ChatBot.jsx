@@ -312,6 +312,7 @@ function ChatBot() {
                         setNewMessage={setNewMessage}
                         onSendMessage={handleSendMessage}
                         onStop={handleStop}
+                        sessionId={sessionId}
                     />
                 </div>
         </div>

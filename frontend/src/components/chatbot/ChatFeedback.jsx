@@ -6,10 +6,11 @@ const ISSUE_CATEGORIES = [
     'Content', 'Recommendation', 'Planner', 'Time', 'UI/UX',   'Other'
 ]
 
-// Centered popup for filing a categorized issue report against a chat run.
+// Centered popup for filing a categorized issue report against a chat run,
+// or (when chatId is omitted) general feedback for the whole session.
 // Appends to (and displays) the run's issue log rather than overwriting a
 // single comment field.
-function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
+export function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
     const [category, setCategory] = useState('')
     const [isCategoryOpen, setIsCategoryOpen] = useState(false)
     const categoryRef = useRef(null)
@@ -59,7 +60,7 @@ function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                    <h2 className="font-semibold text-gray-800">Report on this response</h2>
+                    <h2 className="font-semibold text-gray-800">{chatId ? 'Report on this response' : 'Overall feedback'}</h2>
                     <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
                         <X size={18} />
                     </button>
@@ -128,7 +129,7 @@ function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
                                 setMessage(e.target.value)
                             }
                         }}
-                        placeholder="What was good or bad about this response?"
+                        placeholder={chatId ? "What was good or bad about this response?" : "What was good or bad about your experience?"}
                         rows={3}
                         maxLength={500}
                         className="w-full text-sm border border-gray-200 rounded-md p-2 resize-none focus:outline-1 focus:outline-gray-300"
@@ -153,7 +154,7 @@ function IssueReportModal({ chatId, sessionId, isOpen, onClose }) {
 
                     <div className="border-t border-gray-100 pt-3">
                         <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">
-                            Reports on this response
+                            {chatId ? 'Reports on this response' : 'Your feedback'}
                         </h3>
                         {issues.length === 0 && (
                             <div className="text-xs text-gray-400 italic">No reports yet.</div>
