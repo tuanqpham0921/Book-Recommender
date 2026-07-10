@@ -67,11 +67,11 @@ class Orchestrator:
             try:
                 await asyncio.shield(
                     asyncio.wait_for(
-                            await sse_stream.close(), 
+                            sse_stream.close(), 
                                 timeout=CLOSE_SSE_STREAM_TIMEOUT
                             )
                     )   
-            except asyncio.TimeoutError:
+            except Exception as e:
                     logger.warning(f"sse_stream.close() id: {request_context.user_message.id} timed out")
 
             if (conversation_orchestrator is not None 
@@ -87,7 +87,7 @@ class Orchestrator:
                             timeout=SAVE_LOG_TIMEOUT
                         )
                     )
-                except asyncio.TimeoutError:
+                except Exception as e:
                     logger.warning(f"record_chat_run id: {request_context.user_message.id} timed out")
 
         
