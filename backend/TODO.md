@@ -7,6 +7,12 @@ Continue:
 * run it in on your local host or something
 * deploy it and start reviewing
 
+* add timeout and cancellation
+  * look more into it
+  * for now just add them to your executors
+
+* look at your self.app_env
+
 * review new code from 7c8098a461765a8d7940613b7f625948640d55c0
     * where you have a of bunch todo upward
 
