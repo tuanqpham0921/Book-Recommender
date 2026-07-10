@@ -18,7 +18,6 @@ class SSEStream:
         # queue when close() fires get silently dropped.
         self._closed = False
         self._finished = False
-        # self._timeout = 300.0  # 5 minutes
 
     def __aiter__(self):
         return self
@@ -26,9 +25,10 @@ class SSEStream:
     async def __anext__(self):
         if self._finished:
             raise StopAsyncIteration
+        if self._closed:
+            return
 
         try:
-            # data = await asyncio.wait_for(self._queue.get(), timeout=self._timeout)
             data = await self._queue.get()
             if data is self._stream_end:
                 self._finished = True
