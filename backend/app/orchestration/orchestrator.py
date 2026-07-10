@@ -10,6 +10,7 @@ from app.orchestration.run_recorder import record_chat_run
 logger = logging.getLogger(__name__)
 
 SAVE_LOG_TIMEOUT = 60  # seconds
+CLOSE_SSE_STREAM_TIMEOUT = 10  # seconds
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
@@ -62,6 +63,17 @@ class Orchestrator:
                 "Hmm... something went wrong while processing your query."
             )
         finally:
+            
+            try:
+                await asyncio.shield(
+                    asyncio.wait_for(
+                            await sse_stream.close(), 
+                                timeout=CLOSE_SSE_STREAM_TIMEOUT
+                            )
+                    )   
+            except asyncio.TimeoutError:
+                    logger.warning(f"sse_stream.close() id: {request_context.user_message.id} timed out")
+
             if (conversation_orchestrator is not None 
                 and conversation_orchestrator.result is not None):
                 # shield the recording from cancellation and timeout, but still log if it fails
@@ -78,4 +90,4 @@ class Orchestrator:
                 except asyncio.TimeoutError:
                     logger.warning(f"record_chat_run id: {request_context.user_message.id} timed out")
 
-        await sse_stream.close()
+        
