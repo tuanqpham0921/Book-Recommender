@@ -146,7 +146,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         self, strategy_result: StrategyClassificationOutput
     ) -> str | None:
         from app.common.mermaid import get_mermaid_diagram
-
+        diagram = None
         try:
             diagram = get_mermaid_diagram(
                 strategy_result.execution_order,
@@ -154,6 +154,10 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             )
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")
+            return None
+        
+        if not diagram:
+            logger.info("No Mermaid diagram generated (empty or invalid)")
             return None
 
         await self.sse_stream.send_chars("# My Plan for Your Request")

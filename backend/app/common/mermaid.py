@@ -54,7 +54,7 @@ def format_node_label(task_id: str, data: dict) -> str:
 
 def get_mermaid_diagram(
     execution_order: list[str], id_to_node: Mapping[str, BaseRequest]
-) -> str:
+) -> str | None:
     lines = ["flowchart TD"]
 
     for task in execution_order:
@@ -68,5 +68,8 @@ def get_mermaid_diagram(
         # get_depends_on returns [] for nodes without dependencies
         for dep in node.get_depends_on():
             lines.append(f"\t{mermaid_id(dep)} --> {mermaid_id(task)}")
+            
+    if len(lines) == 1:
+        return None
 
     return "\n".join(lines) + "\n"
