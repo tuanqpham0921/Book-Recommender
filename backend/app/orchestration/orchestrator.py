@@ -9,6 +9,7 @@ from app.orchestration.run_recorder import record_chat_run
 
 logger = logging.getLogger(__name__)
 
+SAVE_LOG_TIMEOUT = 60  # seconds
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
@@ -71,7 +72,7 @@ class Orchestrator:
                         asyncio.wait_for(
                             record_chat_run(
                                 request_context, conversation_orchestrator), 
-                            timeout=60
+                            timeout=SAVE_LOG_TIMEOUT
                         )
                     )
                 except asyncio.TimeoutError:

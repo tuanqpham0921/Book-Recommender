@@ -5,6 +5,8 @@ import ChatMessages from '@/components/chatbot/ChatMessages'
 import api from '@/api';
 import { parseSSEStream } from '@/utils';
 
+const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
+
 function ChatBot() {
     const messagesEndRef = useRef(null)
     const activeAbortControllerRef = useRef(null)
@@ -80,11 +82,11 @@ function ChatBot() {
         let safetyTimer = null;
 
         try {
-            // Safety timer - abort the request after 3 minutes
+            // Safety timer 
             safetyTimer = setTimeout(() => {
                 console.warn('Safety timer triggered - aborting request');
-                abortController.abort('Request timeout after 3 minutes');
-            }, 180_000); // 3 minutes
+                abortController.abort('Request timeout after 2 minutes');
+            }, DEFAULT_TIMEOUT_MS); 
 
             if (!sessionId) {
                 const { id } = await api.createSession();

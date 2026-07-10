@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Chat"])
 
+GENERATE_RESPONSE_TIMEOUT = 60 # 1 minute timeout for the entire orchestration process, including SSE streaming. Adjust as needed based on expected response times and system performance.
 
 async def generate_chat_response(
     orchestrator: Orchestrator,
@@ -38,7 +39,7 @@ async def generate_chat_response(
         # the stream loop ends when the orchestrator closes the stream (or
         # SSEStream's own per-event timeout fires); this only guards the
         # normally-instant gap until the task itself finishes
-        await asyncio.wait_for(orchestrator_task, timeout=300.0)
+        await asyncio.wait_for(orchestrator_task, timeout=GENERATE_RESPONSE_TIMEOUT)
     except Exception as e:
         # TODO: review this
         # realistically only the wait_for timeout: SSEStream.__anext__ and

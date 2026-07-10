@@ -1,8 +1,9 @@
 const BASE_URL = import.meta.env.VITE_API_URL
 // const BASE_URL = 'https://book-rec-api-286869228046.us-central1.run.app'
 
+const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
 
-async function fetch_api(url, options = {}, timeoutMs = 120000) {
+async function fetch_api(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -77,7 +78,7 @@ async function createSession() {
   return await res.json();
 }
 
-async function sendChatMessage(sessionId, message, abortSignal = null, timeoutMs = 120000) {
+async function sendChatMessage(sessionId, message, abortSignal = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const res = await fetch_api(
     BASE_URL + `/session/${sessionId}/message`,
     {
