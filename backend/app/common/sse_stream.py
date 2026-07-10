@@ -34,6 +34,10 @@ class SSEStream:
                 self._finished = True
                 raise StopAsyncIteration
             return ServerSentEvent(data=data)
+        except asyncio.CancelledError:
+            logger.error("⏰ SSE stream CancelledError: client disconnected")
+            self._finished = True
+            raise
         except asyncio.TimeoutError:
             logger.error("⏰ SSE stream timeout")
             self._finished = True
