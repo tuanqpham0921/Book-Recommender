@@ -1,4 +1,8 @@
 Continue:
+* change the timeout to lower (2 minutes)
+* maybe configure all the time outs
+
+
 * set up a test script
 * run it in on your local host or something
 * deploy it and start reviewing
@@ -12,6 +16,9 @@ Continue:
 * rename all the issues to feedback
 * use TD for long concurrency, LR for long depends on
     * can just make a indegree nodes level
+
+Bugs:
+* UI: chat input is scrollable when empty
 
 =======================================================================
 
@@ -82,3 +89,62 @@ but after you have db saved, and eval tests set up
     * need to format and review name, comments carefully
     * you should have a way to navigate all your tests (probably at the top)
     * with all pages marker or seperators
+
+=======================================================================
+
+Code review findings (2026-07-10):
+
+Fix first (security, cheap and exploitable):
+* db/stores/utils.py:36,44,62,66,111,126,162,168 - SQL injection: build_title_search/
+  build_author_search/apply_book_filters splice user strings into text(f"'{...}'")
+  instead of binding params. `' OR 1=1 --` breaks out of the literal.
+* app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is a raw str, not list[str].
+  CORSMiddleware does substring match on a plain string, not exact match, once you
+  configure more than one origin -> real CORS bypass. Split on comma before passing in.
+* db/stores/base_store.py:19-20 - _execute_statement print()s fully compiled SQL with
+  literal_binds=True (real param values) on every query, in every environment. Remove
+  or gate behind logger.debug.
+
+Correctness bugs:
+* common/utils/json_handler.py:52,66 - file_name.rstrip(".json") strips a char set, not
+  the literal suffix. Use removesuffix(".json").
+* db/stores/utils.py:58 - build_author_search references model.author (singular);
+  BookModel only has `authors`. Dead code, breaks as soon as something calls it.
+* config/constants.py:66-67 - BookGuides.__str__ returns "BookConstraints:\n" (copy-paste
+  from BookConstraints.__str__) - wrong section header shown to the LLM in prompts.
+* common/operation.py:65-73 - check_output_type has unreachable branch: early return on
+  `output is None` makes the later `output is None and output_type is None` dead.
+* common/context.py:42-48 - AppContext.__aenter__ has ping_services() entirely commented
+  out - app reports ready without checking OpenAI/DB connectivity at boot.
+* clients/openai_client.py:54 - chat completions have no semaphore (embeddings do) - no
+  concurrency limit, can blow past OpenAI rate limits.
+* clients/openai_client.py:116 - ping() hardcodes "gpt-5-nano" instead of
+  settings.openai.BASE_MODEL.
+* db/stores/base_store.py:17-24 - try/except Exception as e: raise e does nothing, either
+  delete or actually log context on failure.
+
+Consistency / tech debt:
+* db/schema/models.py:19-43 - Column(index=True) on several BookModel columns does
+  nothing since tables/indexes are created via raw SQL (01/02.sql), not
+  Base.metadata.create_all - misleading, and filters on published_year/average_rating/
+  genre run unindexed. Add real indexes or drop the flag.
+* db/stores/book_store.py:52-83 - search_by_book_filter loops one DB round-trip per
+  author instead of one query + grouping/ranking (apply_book_filters already ORs
+  across authors).
+* common/utils/identifiers.py:12-13 - uuid_8() is 32 bits of entropy, used as PK for
+  chat_runs.chat_id and feedback.id - collision = silent failed insert well before
+  "web scale." Consider a longer id.
+* app/api/schemas/external.py:26 - FeedbackIn.message has no max_length (ChatIn's length
+  check also lives ad hoc in the route, not the schema - move it in for consistency).
+* app/common/sse_stream.py:69-73 - send_chars streams one char at a time with
+  asyncio.sleep per char - hundreds of tiny SSE events + real added latency for
+  long responses. Consider chunking by word if this becomes a latency complaint.
+
+Test coverage gaps (new, not already in this file):
+* db/stores/ - zero tests for book_store.py, chat_run_store.py, feedback_store.py,
+  base_store.py, utils.py (the query-builder with the SQL injection above).
+* app/api/routes/ - only chat_message.py has a test; session.py, chat_run.py,
+  feedback.py, health.py have none.
+* app/domains/{books,project,users}/schemas/ - no tests for domain request-schema
+  validators.
+* common/context.py (AppContext), db/bootstrap.py, db/readiness.py - untested.
