@@ -100,6 +100,55 @@ async def main():
     await asyncio.gather(outer, return_exceptions=True)
 
 
+# --- catching timeouts -------------------------------------------------
+#
+# asyncio.TimeoutError IS asyncio.exceptions.TimeoutError, and since 3.11
+# that's the same class as the builtin TimeoutError (OSError -> Exception ->
+# BaseException). So unlike CancelledError, a plain `except Exception` (or
+# `except TimeoutError`) catches it fine — no BaseException needed.
+
+async def timeout_is_a_normal_exception():
+    try:
+        raise TimeoutError("boom")
+    except Exception as e:
+        tprint(f"except Exception DID catch it: {e!r}")
+
+
+async def slow_step():
+    try:
+        await asyncio.sleep(5)
+    except asyncio.CancelledError:
+        # wait_for()/asyncio.timeout() cancel us the instant the deadline
+        # hits — this is where WE see it, not where TimeoutError is raised
+        tprint("slow_step: cancelled by the timeout")
+        raise
+
+
+async def demo_wait_for_timeout():
+    try:
+        await asyncio.wait_for(slow_step(), timeout=0.5)
+    except TimeoutError:
+        # this is where the timeout itself surfaces — asyncio.wait_for
+        # converts the cancellation into TimeoutError at the call site
+        tprint("demo_wait_for_timeout: caught TimeoutError")
+
+
+async def demo_timeout_context_manager():
+    """asyncio.timeout() (3.11+) — same TimeoutError, no wait_for wrapper."""
+    try:
+        async with asyncio.timeout(0.5):
+            await slow_step()
+    except TimeoutError:
+        tprint("demo_timeout_context_manager: caught TimeoutError")
+
+
+async def demo_timeout_catching():
+    await timeout_is_a_normal_exception()
+    await demo_wait_for_timeout()
+    await demo_timeout_context_manager()
+
+
 if __name__ == "__main__":
-    asyncio.run(demo_sse_queue())
+    # asyncio.run(demo_sse_queue())
     # asyncio.run(main())
+    asyncio.run(demo_timeout_catching())
