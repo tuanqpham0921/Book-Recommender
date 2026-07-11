@@ -77,23 +77,23 @@ function ChatRunRow({ run, sessionId }) {
                 tabIndex={0}
                 onClick={() => setExpanded(prev => !prev)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(prev => !prev) } }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+                className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors cursor-pointer"
             >
-                <span className="text-gray-400 text-xs w-4">{expanded ? '▼' : '▶'}</span>
-                <StatusBadge ok={run.ok} />
+                <span className="text-gray-400 text-xs w-4 mt-0.5">{expanded ? '▼' : '▶'}</span>
+                <span className="mt-0.5"><StatusBadge ok={run.ok} /></span>
                 {run.runtime_error && (
                     <span
                         title={errorDetail?.message}
-                        className="px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
+                        className="mt-0.5 px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
                     >
                         {run.runtime_error}
                     </span>
                 )}
-                <span className="flex-1 truncate text-sm text-gray-800">
+                <span className="flex-1 whitespace-pre-wrap break-words text-sm text-gray-800">
                     {run.user_message || <em className="text-gray-400">no message</em>}
                 </span>
-                <span className="text-sm"><FeedbackBadge liked={run.liked} /></span>
-                <span className="text-xs text-gray-400 whitespace-nowrap">
+                <span className="text-sm mt-0.5"><FeedbackBadge liked={run.liked} /></span>
+                <span className="text-xs text-gray-400 whitespace-nowrap mt-0.5">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
             </div>
