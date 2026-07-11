@@ -7,6 +7,7 @@ from sse_starlette import ServerSentEvent
 
 logger = logging.getLogger(__name__)
 
+SSE_TIMEOUT = 120 # seconds
 
 class SSEStream:
     def __init__(self) -> None:
@@ -29,7 +30,7 @@ class SSEStream:
             return
 
         try:
-            data = await self._queue.get()
+            data = await asyncio.wait_for(self._queue.get(), timeout=SSE_TIMEOUT)
             if data is self._stream_end:
                 self._finished = True
                 raise StopAsyncIteration
