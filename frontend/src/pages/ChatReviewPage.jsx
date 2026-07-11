@@ -18,15 +18,15 @@ function StatusBadge({ ok }) {
 }
 
 // One chat run row: summary line + expandable detail (feedback, mermaid, full
-// orchestration envelope).
+// planner/tasks envelopes).
 function ChatRunRow({ run, sessionId }) {
     const [expanded, setExpanded] = useState(false)
     const [feedback, setFeedback] = useState(null)
     const [showFeedbackModal, setShowFeedbackModal] = useState(false)
     const [isSavingReaction, setIsSavingReaction] = useState(false)
-    const diagram = run.orchestration?.output?.diagram
-    const parseResult = run.orchestration?.output?.parse_result
-    const errorDetail = run.orchestration?.runtime_error
+    const diagram = run.planner?.output?.diagram
+    const parseResult = run.planner?.output?.parse_result
+    const errorDetail = run.planner?.runtime_error
 
     // This reviewer session's own like/dislike on this run — independent of
     // run.liked (the original end-user's reaction) and of any other
@@ -264,11 +264,20 @@ function ChatRunRow({ run, sessionId }) {
                     )}
 
                     <details>
-                        <summary className="cursor-pointer text-gray-600 font-semibold">Orchestration envelope</summary>
+                        <summary className="cursor-pointer text-gray-600 font-semibold">Planner envelope</summary>
                         <pre className="mt-1 p-2 bg-gray-50 border border-gray-100 rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
-                            {JSON.stringify(run.orchestration, null, 2)}
+                            {JSON.stringify(run.planner, null, 2)}
                         </pre>
                     </details>
+
+                    {run.tasks && (
+                        <details>
+                            <summary className="cursor-pointer text-gray-600 font-semibold">Tasks envelope</summary>
+                            <pre className="mt-1 p-2 bg-gray-50 border border-gray-100 rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
+                                {JSON.stringify(run.tasks, null, 2)}
+                            </pre>
+                        </details>
+                    )}
                 </div>
             )}
         </div>

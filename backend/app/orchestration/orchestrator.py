@@ -7,7 +7,6 @@ from app.orchestration.request_context import RequestContext
 from app.domains.planner import PlannerWorkflow
 from app.domains.task_runner import TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
-from common.utils import print_json
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +31,7 @@ class Orchestrator:
         # PlannerWorkflow mutates its own .result in place and
         # re-raises on cancellation rather than returning it
         conversation_orchestrator = None
+        task_runner = None
         try:
             # Sent first and unconditionally — this id is generated when the
             # user message is parsed (before any work starts), so the client
@@ -72,10 +72,6 @@ class Orchestrator:
                     timeout=CONVERSATION_TIMEOUT,
                 )
 
-                # NOTE: not saving it yet but printing it to the console for
-                # now, so we can see what the results look like
-                print_json(task_runner.result)
-
             # Normal completion — chat_id lets the client attach feedback
             # to the chat_runs row recorded in the finally block below
             await sse_stream.send(
@@ -111,7 +107,9 @@ class Orchestrator:
             try:
                 await asyncio.shield(
                     asyncio.wait_for(
-                        record_chat_run(request_context, conversation_orchestrator),
+                        record_chat_run(
+                            request_context, conversation_orchestrator, task_runner
+                        ),
                         timeout=SAVE_LOG_TIMEOUT,
                     )
                 )

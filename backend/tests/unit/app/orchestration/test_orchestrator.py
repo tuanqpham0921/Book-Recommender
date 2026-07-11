@@ -1,7 +1,7 @@
 """Tests for Orchestrator.run: verifies a finished conversation workflow is
 handed to record_chat_run, and that runs without a result are not recorded."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -42,7 +42,7 @@ class TestOrchestratorRun:
         ) as mock_record:
             await Orchestrator().run(request_context)
 
-        mock_record.assert_awaited_once_with(request_context, mock_workflow)
+        mock_record.assert_awaited_once_with(request_context, mock_workflow, ANY)
 
     async def test_does_not_record_when_result_is_none(self, request_context):
         mock_workflow = AsyncMock()

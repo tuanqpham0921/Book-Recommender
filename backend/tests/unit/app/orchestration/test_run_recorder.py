@@ -96,8 +96,9 @@ class TestBuildChatRunRow:
         assert row["duration_s"] == 1.23
         assert row["total_tokens"] == 42
         assert row["mermaid"] == "graph TD;"
-        assert row["orchestration"]["ok"] is True
-        assert row["orchestration"]["output"]["strategy_result"]["execution_order"] == [
+        assert row["tasks"] is None
+        assert row["planner"]["ok"] is True
+        assert row["planner"]["output"]["strategy_result"]["execution_order"] == [
             "task_abcd1234"
         ]
 
@@ -112,7 +113,7 @@ class TestBuildChatRunRow:
             output=output,
         )
 
-        accepted = row["orchestration"]["output"]["strategy_result"]["accepted"][0]
+        accepted = row["planner"]["output"]["strategy_result"]["accepted"][0]
         assert accepted["_llm_id"] == "task_1"
         assert accepted["_details"] == ["duplicate llm_id, created a new one"]
         assert accepted["_refusal"] is False

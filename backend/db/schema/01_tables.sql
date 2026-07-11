@@ -30,7 +30,9 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     runtime_error TEXT,
     duration_s DOUBLE PRECISION,
     total_tokens INTEGER,
-    orchestration JSONB,
+    mermaid TEXT,
+    planner JSONB,
+    tasks JSONB,
     sse_events JSONB,
     liked BOOLEAN
 );

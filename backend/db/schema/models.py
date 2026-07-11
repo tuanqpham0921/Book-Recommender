@@ -83,14 +83,19 @@ class ChatRunModel(Base):
     runtime_error = Column(Text, nullable=True)
     duration_s = Column(Float, nullable=True)
     total_tokens = Column(Integer, nullable=True)
+    # promoted out of planner.output.diagram so the review page (and any
+    # querying) doesn't need to unpack the JSONB envelope just to render it
+    mermaid = Column(Text, nullable=True)
 
-    # full-fidelity envelope (parse/strategy results live inside orchestration)
-    orchestration = Column(JSONB, nullable=True)
+    # full-fidelity envelopes: parse/strategy results live inside planner,
+    # per-task executor results (one turn can run several) live inside tasks
+    planner = Column(JSONB, nullable=True)
+    tasks = Column(JSONB, nullable=True)
 
     # SSE transcript: exactly what the user saw this turn, in order, with
     # t/t_end second-offsets for replay pacing. Consecutive content.delta
     # chars are coalesced into sections (see SSEStream.flush_chars), so this
-    # stays compact. Own column so replay reads skip the orchestration blob.
+    # stays compact. Own column so replay reads skip the planner/tasks blobs.
     sse_events = Column(JSONB, nullable=True)
 
     # user feedback: liked is None until the user reacts (True = like, False = dislike)
