@@ -1,5 +1,7 @@
 Continue:
-
+* current goal is to have fake responses 
+* the code is able to load them in
+* and we can load it back in the front end for testings
 
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult

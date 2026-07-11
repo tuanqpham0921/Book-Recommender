@@ -210,7 +210,9 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         )
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            messages=self.messages,
+            # NOTE: this should be a list of previous messages as well
+            # but for now we can just do clear and direct instructions 
+            messages=[self.user_message], 
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_llm_call(req)
