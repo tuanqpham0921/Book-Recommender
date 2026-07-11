@@ -87,6 +87,12 @@ class ChatRunModel(Base):
     # full-fidelity envelope (parse/strategy results live inside orchestration)
     orchestration = Column(JSONB, nullable=True)
 
+    # SSE transcript: exactly what the user saw this turn, in order, with
+    # t/t_end second-offsets for replay pacing. Consecutive content.delta
+    # chars are coalesced into sections (see SSEStream.flush_chars), so this
+    # stays compact. Own column so replay reads skip the orchestration blob.
+    sse_events = Column(JSONB, nullable=True)
+
     # user feedback: liked is None until the user reacts (True = like, False = dislike)
     liked = Column(Boolean, nullable=True)
 

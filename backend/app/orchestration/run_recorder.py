@@ -22,6 +22,7 @@ def build_chat_run_row(
     user_chat_id: str,
     user_message: str,
     result: OperationResult[OrchestrationOutput],
+    sse_events: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Map a finished conversation workflow onto ChatRunModel columns."""
     return {
@@ -34,6 +35,7 @@ def build_chat_run_row(
         "total_tokens": result.token_usage.total,
         "assistant_message": result.output.assistant_message if result.output else None,
         "orchestration": to_serializable(result),
+        "sse_events": sse_events,
     }
 
 
@@ -52,11 +54,18 @@ async def record_chat_run(
         return
 
     try:
+        # runs before sse_stream.close() (see Orchestrator.run's finally),
+        # so error/complete events are already in the transcript — flush any
+        # trailing chars, then snapshot what the user saw this turn
+        sse_stream = request_context.sse_stream
+        sse_stream.flush_chars()
+
         row = build_chat_run_row(
             session_id=request_context.session_id,
             user_chat_id=request_context.user_message.id,
             user_message=request_context.user_message.content,
             result=workflow.result,
+            sse_events=sse_stream.events,
         )
 
         if app_env == "development":

@@ -88,7 +88,10 @@ class OpenAIClient(BaseLLMClient):
             final_completion = await stream.get_final_completion()
             # print_json(final_completion.model_dump(), "Final Completion")
 
-        # one section is done
+        # one section is done — LLM chunk boundaries aren't deterministic,
+        # so mark the section end explicitly in the transcript
+        if sse_stream:
+            sse_stream.flush_chars()
         return final_completion
 
     async def close(self):

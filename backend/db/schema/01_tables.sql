@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     duration_s DOUBLE PRECISION,
     total_tokens INTEGER,
     orchestration JSONB,
+    sse_events JSONB,
     liked BOOLEAN
 );
 
