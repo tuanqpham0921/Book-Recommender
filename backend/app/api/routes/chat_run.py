@@ -20,7 +20,7 @@ async def list_chat_runs(
     """List recorded chat runs, newest first (review page)."""
     # TODO: this should not get the tests
     runs = await store.get_all(limit=limit, offset=offset)
-    return {"runs": [run.to_dict() for run in runs]}
+    return {"runs": runs}
 
 
 @router.get("/chat_runs/tests")
@@ -31,7 +31,7 @@ async def list_test_chat_runs(
 ):
     """List chat runs filed by test suites, newest first (review page)."""
     runs = await store.get_test_runs(limit=limit, offset=offset)
-    return {"runs": [run.to_dict() for run in runs]}
+    return {"runs": runs}
 
 
 @router.patch("/chat_runs/{chat_id}/feedback")

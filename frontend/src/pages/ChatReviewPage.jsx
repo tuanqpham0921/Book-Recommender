@@ -5,10 +5,24 @@ import { IssueReportModal } from '@/components/chatbot/ChatFeedback'
 
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'))
 
-function FeedbackBadge({ liked }) {
-    if (liked === true) return <span className="text-green-600">👍 liked</span>
-    if (liked === false) return <span className="text-red-600">👎 disliked</span>
-    return <span className="text-gray-400">—</span>
+// Combines the end user's own reaction (chat_runs.liked) with reviewer
+// signals from the feedback table (reviewer_liked/reviewer_disliked/
+// has_report, embedded per-run by the backend) into one glanceable badge —
+// dislikes take priority since those most need review attention.
+function FeedbackBadge({ run }) {
+    const disliked = run.liked === false || run.reviewer_disliked
+    const liked = run.liked === true || run.reviewer_liked
+    if (disliked) return <span className="text-red-600" title="Disliked">👎 disliked</span>
+    if (liked) return <span className="text-green-600" title="Liked">👍 liked</span>
+    if (run.has_report) return <span className="text-yellow-600" title="Has a written report">📝 report</span>
+    return <span className="text-gray-400">— unreviewed</span>
+}
+
+// Any liked/disliked/reported signal, from either chat_runs.liked or the
+// feedback table — used to sort already-reviewed runs out of the way.
+function isReviewed(run) {
+    return run.liked === true || run.liked === false
+        || run.reviewer_liked || run.reviewer_disliked || run.has_report
 }
 
 function StatusBadge({ ok }) {
@@ -92,7 +106,7 @@ function ChatRunRow({ run, sessionId }) {
                 <span className="flex-1 whitespace-pre-wrap break-words text-sm text-gray-800">
                     {run.user_message || <em className="text-gray-400">no message</em>}
                 </span>
-                <span className="text-sm mt-0.5"><FeedbackBadge liked={run.liked} /></span>
+                <span className="text-sm mt-0.5"><FeedbackBadge run={run} /></span>
                 <span className="text-xs text-gray-400 whitespace-nowrap mt-0.5">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
@@ -295,6 +309,10 @@ function ChatReviewPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
     const [sessionFilter, setSessionFilter] = useState('all')
+    // When on, unreviewed runs (no liked/disliked/report signal from either
+    // chat_runs or the feedback table) sort to the top — applies on top of
+    // whichever session filter is active. Off by default: plain newest-first.
+    const [prioritizeReview, setPrioritizeReview] = useState(false)
     // Own session, separate from any live chat session — feedback filed
     // from this page is tagged review=true and shouldn't be grouped under
     // whatever session a visitor's actual chat conversation is using.
@@ -325,14 +343,16 @@ function ChatReviewPage() {
         loadRuns(sessionFilter)
     }, [sessionFilter])
 
-    // Reviewed runs (end-user already left a like/dislike) sink to the
-    // bottom so unreviewed runs surface first — sort is stable, so the
-    // backend's newest-first order is preserved within each group.
+    // Always newest-first; when prioritizeReview is on, unreviewed runs
+    // additionally float above reviewed ones (within each group still
+    // newest-first).
     const sortedRuns = [...runs].sort((a, b) => {
-        const aDone = a.liked !== null && a.liked !== undefined
-        const bDone = b.liked !== null && b.liked !== undefined
-        if (aDone === bDone) return 0
-        return aDone ? 1 : -1
+        if (prioritizeReview) {
+            const aDone = isReviewed(a)
+            const bDone = isReviewed(b)
+            if (aDone !== bDone) return aDone ? 1 : -1
+        }
+        return new Date(b.created_at) - new Date(a.created_at)
     })
 
     return (
@@ -352,6 +372,18 @@ function ChatReviewPage() {
                                 <option key={value} value={value}>{label}</option>
                             ))}
                         </select>
+                        <button
+                            type="button"
+                            onClick={() => setPrioritizeReview(prev => !prev)}
+                            title="Sort unreviewed runs to the top (still newest-first within each group)"
+                            className={`text-sm border rounded-md px-2 py-1 transition-colors ${
+                                prioritizeReview
+                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                    : 'bg-white border-gray-200 text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            {prioritizeReview ? '✓ Needs review first' : 'Sort: needs review first'}
+                        </button>
                     </div>
                     <button
                         type="button"
