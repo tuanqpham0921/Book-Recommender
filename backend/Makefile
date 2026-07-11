@@ -190,3 +190,14 @@ query-suite-extended:
 # lint:
 # 	poetry run ruff check --fix clients/ tests/unit/clients/
 #   poetry run black common/utils/ tests/unit/common/utils/
+
+# -------------------
+# Evals commands
+# -------------------
+
+# run the chat_runs eval summary (total/avg tokens & duration, ok vs not-ok, runtime_error counts)
+.PHONY: chat-runs-eval
+chat-runs-eval:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/sql_eval_commands.sql
