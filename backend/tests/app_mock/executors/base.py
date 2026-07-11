@@ -108,13 +108,34 @@ class MockRetrievalExecutorWorkflow(AppBaseWorkflow[MockDataExecutorOutput]):
 
         await asyncio.sleep(random.uniform(1, 5))  # Simulate a DB call / work
 
+        books = self.select_books(task, dependent_results)
+        await self._stream_books(books)
+
         data = self.build_data(task, dependent_results)
 
         self.output.result = data
         self.messages.append(
             ToolMessage(name=type(task).__name__, tool_call_id=task.id, content=data)
         )
+        
+        # NOTE: this is here to help with formatting
+        ui_message = f"I have found {len(books)} books for you"
+        await self.sse_stream.send_chars(ui_message)
+        self.messages.append(ui_message)
+        await self.sse_stream.send_divider()
+        
         self.finalize_result(ok=True)
+
+    async def _stream_books(self, books: list[dict]) -> None:
+        """Stream book cards to the frontend, like a real retrieval would."""
+        for position, book in enumerate(books):
+            await self.sse_stream.send_book_card(position, book)
+            await asyncio.sleep(0.2)  # smooth streaming
+
+    def select_books(self, task: BaseRequest, dependent_results: dict) -> list[dict]:
+        """Books to stream as cards before the result is recorded. Override
+        in subclasses that represent a book lookup."""
+        return []
 
     def build_data(self, task: BaseRequest, dependent_results: dict) -> dict[str, Any]:
         return {"status": "found", "task_id": task.id}
