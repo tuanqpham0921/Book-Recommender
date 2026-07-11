@@ -22,6 +22,7 @@ class Orchestrator:
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
+        
         sse_stream = request_context.sse_stream
         # created (not just returned from a helper) so that a cancellation
         # mid-await below still leaves this bound for the finally block —
@@ -58,12 +59,17 @@ class Orchestrator:
             # block below still records what we've got, then this propagates
             # so the task is actually marked cancelled
             logger.warning(
-                f"⚠️ Orchestration cancelled (client disconnected): session={request_context.session_id}"
+                f"⚠️ Orchestration cancelled: chat_id={request_context.user_message.id}"
             )
             raise
         except TimeoutError:
+            if conversation_orchestrator and conversation_orchestrator.result:
+                conversation_orchestrator.result.add_details(
+                    "Orchestration Task timed out"
+                )
+            
             logger.warning(
-                f"⚠️ Orchestration timed out: session={request_context.session_id}"
+                f"⚠️ Orchestration timed out: chat_id={request_context.user_message.id}"
             )
             await sse_stream.send_error(
                 "The request took too long to process."
@@ -74,7 +80,17 @@ class Orchestrator:
                 "Hmm... something went wrong while processing your query."
             )
         finally:
-            
+            try:
+                await asyncio.shield(
+                    asyncio.wait_for(
+                        record_chat_run(
+                            request_context, conversation_orchestrator), 
+                        timeout=SAVE_LOG_TIMEOUT
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"record_chat_run id: {request_context.user_message.id} timed out")
+
             try:
                 await asyncio.shield(
                     asyncio.wait_for(
@@ -84,21 +100,3 @@ class Orchestrator:
                     )   
             except Exception as e:
                     logger.warning(f"sse_stream.close() id: {request_context.user_message.id} timed out")
-
-            if (conversation_orchestrator is not None 
-                and conversation_orchestrator.result is not None):
-                # shield the recording from cancellation and timeout, but still log if it fails
-                # NOTE: this can be a task, with retries to increase the change of success
-                # we can make the timeout a task configuration parameter
-                try:
-                    await asyncio.shield(
-                        asyncio.wait_for(
-                            record_chat_run(
-                                request_context, conversation_orchestrator), 
-                            timeout=SAVE_LOG_TIMEOUT
-                        )
-                    )
-                except Exception as e:
-                    logger.warning(f"record_chat_run id: {request_context.user_message.id} timed out")
-
-        

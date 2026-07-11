@@ -27,19 +27,20 @@ async def generate_chat_response(
     # create_task cannot meaningfully fail here (calling an async def only
     # creates the coroutine; nothing in run() executes yet)
     orchestrator_task = asyncio.create_task(
-        orchestrator.run(request_context=request_context)
-    )
+            orchestrator.run(request_context=request_context)
+        )
 
     try:
         async for event in request_context.sse_stream:
             yield event
             
+        await orchestrator_task
     except Exception as e:
         # TODO: review this
         # realistically only the wait_for timeout: SSEStream.__anext__ and
         # Orchestrator.run both swallow their own exceptions.
         # yield the error directly — send_error() would enqueue an event
-        # that this generator (the queue's only consumer) no longer reads
+        # that this generator (the queue's only consumer) no longer reads        
         logger.exception("Orchestration stream failed", exc_info=e)
         yield ServerSentEvent(
             data=json.dumps({"type": "error", "data": "Orchestration error"})

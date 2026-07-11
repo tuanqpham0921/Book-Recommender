@@ -41,6 +41,11 @@ async def record_chat_run(
     workflow: ConversationOrchestrator,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
+    if not request_context or workflow is None or workflow.result is None:
+        user_message_id = (request_context.user_message.id if request_context else "unknown")
+        logger.warning(f"record_chat_run: missing request_context or workflow.result for chat_id={user_message_id}")
+        return
+    
     app_env = request_context.app_env
     if app_env == "test":
         return
