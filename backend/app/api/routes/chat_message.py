@@ -71,7 +71,7 @@ async def chat(
             detail=f"Message is too long. Maximum {2000} characters allowed.",
         )
 
-    request_context = request_context_factory(
+    request_context = await request_context_factory(
         session_id, UserMessage(content=chat_in.message)
     )
     logger.info(f"🚀 Starting chat for session: {request_context.session_id}")

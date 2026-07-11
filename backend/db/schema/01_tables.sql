@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     session_id TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     user_message TEXT,
+    assistant_message TEXT,
     ok BOOLEAN,
     runtime_error TEXT,
     duration_s DOUBLE PRECISION,

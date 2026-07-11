@@ -1,8 +1,10 @@
 import json
 from typing import Any
 
+from pydantic import Field
+
 from app.common.sse_stream import SSEStream
-from app.common.messages import UserMessage
+from app.common.messages import APIMessage, AssistantMessage, UserMessage
 from clients.openai_client import OpenAIClient
 from app.orchestration.request_context import RequestContext
 from app.domains.planner.parse_intent import (
@@ -34,10 +36,24 @@ class OrchestrationOutput(AppWorkflowOutput):
     parse_result: InitialParseOutput | None = None
     strategy_result: StrategyClassificationOutput | None = None
     diagram: str | None = None
+    # full trace fed into this turn's LLM calls: chat_messages + everything
+    # the workflows generated — persisted so chat_messages can be rebuilt
+    pipeline_message: list[APIMessage] = Field(default_factory=list)
+    # cheap denormalized reply text (last plain-string AssistantMessage in
+    # pipeline_message) used to seed the next turn's chat_messages without
+    # having to reparse pipeline_message
+    assistant_message: str | None = None
 
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
         return {}
+
+
+def _last_assistant_text(messages: list[APIMessage]) -> str | None:
+    for m in reversed(messages):
+        if isinstance(m, AssistantMessage) and isinstance(m.content, str) and m.content:
+            return m.content
+    return None
 
 
 class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
@@ -64,7 +80,10 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
+        self.messages = request_context.pipeline_message
+        self.messages.extend(request_context.chat_messages)
         self.messages.append(self.user_message)
+        self.output.pipeline_message = self.messages
 
         parse_workflow = InitialParseWorkflow(
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages
@@ -83,6 +102,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             if parse_result.runtime_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
+            self.output.assistant_message = self.initial_parse_failure_message
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
@@ -95,6 +115,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             # streamed the reply (small talk / out-of-scope / refusals)
             self.result.ok = True
             self.result.message = "Conversation handled without planning"
+            self.output.assistant_message = _last_assistant_text(self.messages)
             # self.save_chat_messages()
             # self.save_conversation_result()
             return
@@ -115,6 +136,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
                     self.strategy_classification_failure_message
                 )
                 return
+            self.output.assistant_message = self.strategy_classification_failure_message
             await self.sse_stream.send_chars(
                 self.strategy_classification_failure_message
             )
@@ -138,6 +160,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
+        self.output.assistant_message = _last_assistant_text(self.messages)
 
         # self.save_chat_messages()
         # self.save_conversation_result()

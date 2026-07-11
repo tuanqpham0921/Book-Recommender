@@ -73,6 +73,10 @@ class ChatRunModel(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     user_message = Column(Text, nullable=True)
+    # denormalized reply text (last plain-string AssistantMessage this turn) —
+    # cheap to read back to seed the next turn's chat_messages, so we don't
+    # have to reparse the orchestration JSONB on every request
+    assistant_message = Column(Text, nullable=True)
 
     # promoted stats: cheap to query, index, aggregate
     ok = Column(Boolean, nullable=True)
