@@ -164,7 +164,6 @@ def format_node_type_catalog() -> str:
 
     return "\n".join(catalog)
 
-
 def main() -> None:
     print(format_node_type_catalog())
 

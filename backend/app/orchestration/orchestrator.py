@@ -5,7 +5,9 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 
 from app.domains.planner import PlannerWorkflow
+from app.domains.task_runner import TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
+from common.utils import print_json
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,29 @@ class Orchestrator:
                 conversation_orchestrator(request_context=request_context),
                 timeout=CONVERSATION_TIMEOUT,
             )
+
+            strategy_result = conversation_orchestrator.output.strategy_result
+            if (
+                conversation_orchestrator.result.ok
+                and strategy_result
+                and strategy_result.accepted
+            ):
+                task_runner = TaskRunnerWorkflow(
+                    sse_stream,
+                    request_context.llm_client,
+                    app_env=request_context.app_env,
+                )
+                await asyncio.wait_for(
+                    task_runner(
+                        request_context=request_context,
+                        strategy_result=strategy_result,
+                    ),
+                    timeout=CONVERSATION_TIMEOUT,
+                )
+
+                # NOTE: not saving it yet but printing it to the console for
+                # now, so we can see what the results look like
+                print_json(task_runner.result)
 
             # Normal completion — chat_id lets the client attach feedback
             # to the chat_runs row recorded in the finally block below

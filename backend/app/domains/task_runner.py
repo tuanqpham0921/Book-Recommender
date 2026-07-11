@@ -1,0 +1,88 @@
+import logging
+from typing import Any
+
+from pydantic import Field
+
+from app.common.sse_stream import SSEStream
+from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
+from app.domains.planner.strategy_classification import StrategyClassificationOutput
+from app.orchestration.request_context import RequestContext
+from app.registry import EXECUTORS_CLS_MAPPING
+from clients.openai_client import OpenAIClient
+
+logger = logging.getLogger(__name__)
+
+
+class TaskRunnerOutput(AppWorkflowOutput):
+    session_id: str | None = None
+    task_results: dict[str, Any] = Field(default_factory=dict)
+    failed_task_ids: list[str] = Field(default_factory=list)
+
+    def to_summary(self) -> dict[str, Any]:
+        return {
+            "task_ids": list(self.task_results.keys()),
+            "failed_task_ids": self.failed_task_ids,
+        }
+
+
+class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
+    success_message = "Task runner completed successfully"
+    failure_message = "Task runner failed"
+    ui_loading_message = "Running tasks..."
+
+    def __init__(
+        self,
+        sse_stream: SSEStream,
+        llm_client: OpenAIClient,
+        app_env: str | None = None,
+    ):
+        super().__init__(
+            llm_client=llm_client,
+            sse_stream=sse_stream,
+            output_type=TaskRunnerOutput,
+            app_env=app_env,
+        )
+
+    async def run(
+        self,
+        request_context: RequestContext,
+        strategy_result: StrategyClassificationOutput,
+    ) -> None:
+        """Execute accepted tasks in dependency order, feeding each task the
+        results of the tasks it depends on."""
+        await self.sse_stream.send_ui_loading(self.ui_loading_message)
+
+        self.output.session_id = request_context.session_id
+        id_to_task = strategy_result.get_accepted_id_to_node()
+        results: dict[str, Any] = {}
+
+        for task_id in strategy_result.execution_order:
+            task = id_to_task[task_id]
+            dependent_results = {
+                dep_id: results[dep_id]
+                for dep_id in task.get_depends_on()
+                if dep_id in results
+            }
+
+            executor_cls = EXECUTORS_CLS_MAPPING.get(type(task))
+            if executor_cls is None:
+                logger.warning(
+                    f"No executor registered for {type(task).__name__} (task {task_id})"
+                )
+                self.output.failed_task_ids.append(task_id)
+                continue
+
+            try:
+                results[task_id] = await executor_cls()(
+                    task=task,
+                    dependent_results=dependent_results,
+                    request_context=request_context,
+                )
+            except Exception:
+                logger.exception(
+                    f"Executor {executor_cls.__name__} failed for task {task_id}"
+                )
+                self.output.failed_task_ids.append(task_id)
+
+        self.output.task_results = results
+        self.finalize_result(ok=not self.output.failed_task_ids)
