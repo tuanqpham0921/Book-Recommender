@@ -2,6 +2,9 @@ Continue:
 * change the timeout to lower (2 minutes)
 * maybe configure all the time outs
 
+* with the sse_stream and await for fix
+  * it still doesn't explain why you code stalled for mermaid
+  * look into that chat_id: chat_09ce0a01, session: 84c43d26
 
 * set up a test script
 * run it in on your local host or something
@@ -10,7 +13,6 @@ Continue:
 * add timeout and cancellation
   * look more into it
   * for now just add them to your executors
-
 * look at your self.app_env
 
 * review new code from 7c8098a461765a8d7940613b7f625948640d55c0
