@@ -7,7 +7,7 @@ export const BooksGrid = ({ books }) => {
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-gray-500 space-y-2">
+          <div className="text-center text-[var(--text-inactive)] space-y-2">
             <h3 className="text-xl font-medium">No books to display</h3>
           </div>
         </div>

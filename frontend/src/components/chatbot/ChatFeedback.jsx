@@ -1,6 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import api from '@/api'
 import { ThumbsUp, ThumbsDown, MessageCircle, X, Flag, Sparkles, ChevronDown } from 'lucide-react';
+import Button from '@/design-system/Button'
+import IconButton from '@/design-system/IconButton'
+import Badge from '@/design-system/Badge'
+import Dropdown from '@/design-system/Dropdown'
+import DropdownItem from '@/design-system/DropdownItem'
 
 const ISSUE_CATEGORIES = [
     'Content', 'Recommendation', 'Planner', 'Time', 'UI/UX',   'Other'
@@ -14,24 +19,11 @@ const MAX_ISSUES_PER_MODAL = 20
 // single comment field.
 export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = false }) {
     const [category, setCategory] = useState('')
-    const [isCategoryOpen, setIsCategoryOpen] = useState(false)
-    const categoryRef = useRef(null)
     const [positive, setPositive] = useState(false)
     const [message, setMessage] = useState('')
     const [issues, setIssues] = useState([])
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState(null)
-
-    // Close category dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (categoryRef.current && !categoryRef.current.contains(event.target)) {
-                setIsCategoryOpen(false)
-            }
-        }
-        document.addEventListener('mousedown', handleClickOutside)
-        return () => document.removeEventListener('mousedown', handleClickOutside)
-    }, [])
 
     async function handleSubmit() {
         const trimmed = message.trim()
@@ -58,71 +50,60 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = 
             onClick={onClose}
         >
             <div
-                className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
+                className="bg-[var(--bg-primary)] rounded-xl shadow-xl w-full max-w-md max-h-[85vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                    <h2 className="font-semibold text-gray-800">{chatId ? 'Report on this response' : 'Overall feedback'}</h2>
-                    <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-light)]">
+                    <h2 className="font-semibold text-[var(--text-active)]">{chatId ? 'Report on this response' : 'Overall feedback'}</h2>
+                    <IconButton onClick={onClose}>
                         <X size={18} />
-                    </button>
+                    </IconButton>
                 </div>
 
                 <div className="px-5 py-4 overflow-y-auto flex-1">
                     <div className="flex gap-2 mb-3">
-                        <button
-                            type="button"
+                        <Button
+                            variant="ghost"
                             onClick={() => setPositive(false)}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                                !positive
-                                    ? 'bg-red-50 border-red-200 text-red-600'
-                                    : 'border-gray-200 text-gray-400 hover:text-gray-600'
-                            }`}
+                            className={`flex-1 ${!positive ? 'bg-[var(--accent-negative-bg)] border-[var(--accent-negative-border)] text-[var(--accent-negative)]' : 'border border-[var(--border-light)]'}`}
                         >
                             <Flag size={14} /> Issue
-                        </button>
-                        <button
-                            type="button"
+                        </Button>
+                        <Button
+                            variant="ghost"
                             onClick={() => setPositive(true)}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm border transition-colors ${
-                                positive
-                                    ? 'bg-green-50 border-green-200 text-green-600'
-                                    : 'border-gray-200 text-gray-400 hover:text-gray-600'
-                            }`}
+                            className={`flex-1 ${positive ? 'bg-[var(--accent-positive-bg)] border-[var(--accent-positive-border)] text-[var(--accent-positive)]' : 'border border-[var(--border-light)]'}`}
                         >
                             <Sparkles size={14} /> Praise
-                        </button>
+                        </Button>
                     </div>
 
-                    <div className="relative mb-3" ref={categoryRef}>
-                        <button
-                            type="button"
-                            onClick={() => setIsCategoryOpen(prev => !prev)}
-                            className="w-full flex items-center justify-between text-sm border border-gray-200 rounded-md p-2 bg-white text-left"
-                        >
-                            <span className={category ? 'text-gray-800' : 'text-gray-400'}>
-                                {category || 'Select a category (optional)'}
-                            </span>
-                            <ChevronDown size={16} className="text-gray-400" />
-                        </button>
-
-                        {isCategoryOpen && (
-                            <div className="absolute top-full left-0 w-full mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg z-10">
-                                {ISSUE_CATEGORIES.map((c) => (
-                                    <button
-                                        key={c}
-                                        type="button"
-                                        onClick={() => { setCategory(c); setIsCategoryOpen(false) }}
-                                        className={`block w-full px-3 py-2 text-left text-sm transition-colors hover:bg-gray-100 ${
-                                            c === category ? 'bg-gray-50 text-gray-900 font-medium' : 'text-gray-700'
-                                        }`}
-                                    >
-                                        {c}
-                                    </button>
-                                ))}
-                            </div>
+                    <Dropdown
+                        className="w-full mb-3"
+                        panelClassName="w-full max-h-48 overflow-y-auto rounded-md"
+                        trigger={({ toggle }) => (
+                            <button
+                                type="button"
+                                onClick={toggle}
+                                className="w-full flex items-center justify-between text-sm border border-[var(--border-light)] rounded-md p-2 bg-[var(--bg-primary)] text-left"
+                            >
+                                <span className={category ? 'text-[var(--text-active)]' : 'text-[var(--text-muted)]'}>
+                                    {category || 'Select a category (optional)'}
+                                </span>
+                                <ChevronDown size={16} className="text-[var(--text-muted)]" />
+                            </button>
                         )}
-                    </div>
+                    >
+                        {({ close }) => ISSUE_CATEGORIES.map((c) => (
+                            <DropdownItem
+                                key={c}
+                                selected={c === category}
+                                onClick={() => { setCategory(c); close() }}
+                            >
+                                {c}
+                            </DropdownItem>
+                        ))}
+                    </Dropdown>
 
                     <textarea
                         value={message}
@@ -134,58 +115,52 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = 
                         placeholder={chatId ? "What was good or bad about this response?" : "What was good or bad about your experience?"}
                         rows={3}
                         maxLength={500}
-                        className="w-full text-sm border border-gray-200 rounded-md p-2 resize-none focus:outline-1 focus:outline-gray-300"
+                        className="w-full text-sm border border-[var(--border-light)] rounded-md p-2 resize-none focus:outline-1 focus:outline-[var(--border-medium)]"
                     />
                     <div className="flex justify-end mb-2 px-2">
-                        <span className={`text-xs ${message.length >= 450 ? 'text-red-500' : 'text-gray-500'}`}>
+                        <span className={`text-xs ${message.length >= 450 ? 'text-[var(--accent-negative)]' : 'text-[var(--text-inactive)]'}`}>
                             {message.length}/500
                         </span>
                     </div>
 
                     <div className="flex items-center justify-between mb-4">
-                        {error && <span className="text-xs text-red-500 italic">{error}</span>}
-                        <button
-                            type="button"
+                        {error && <span className="text-xs text-[var(--accent-negative)] italic">{error}</span>}
+                        <Button
+                            variant="primary"
                             onClick={handleSubmit}
                             disabled={isSubmitting || !message.trim() || issues.length >= MAX_ISSUES_PER_MODAL}
-                            className="ml-auto px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-700 transition-colors"
+                            className="ml-auto"
                         >
                             {isSubmitting ? 'Submitting...' : 'Submit'}
-                        </button>
+                        </Button>
                     </div>
 
-                    <div className="border-t border-gray-100 pt-3">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                    <div className="border-t border-[var(--border-light)] pt-3">
+                        <h3 className="text-xs font-semibold text-[var(--text-inactive)] uppercase mb-2">
                             {chatId ? 'Reports on this response' : 'Your feedback'}
                         </h3>
                         {issues.length === 0 && (
-                            <div className="text-xs text-gray-400 italic">No reports yet.</div>
+                            <div className="text-xs text-[var(--text-muted)] italic">No reports yet.</div>
                         )}
                         <div className="flex flex-col gap-2">
                             {[...issues].reverse().map((entry, i) => (
                                 <div
                                     key={i}
-                                    className="border border-gray-100 rounded-md p-2 bg-gray-50"
+                                    className="border border-[var(--border-light)] rounded-md p-2 bg-[var(--bg-secondary)]"
                                 >
                                     <div className="flex items-center gap-2 mb-1">
                                         {entry.title && (
-                                            <span
-                                                className={`px-2 py-0.5 rounded-full text-xs ${
-                                                    entry.positive
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-red-100 text-red-700'
-                                                }`}
-                                            >
+                                            <Badge tone={entry.positive ? 'positive' : 'negative'}>
                                                 {entry.title}
-                                            </span>
+                                            </Badge>
                                         )}
                                         {entry.created_at && (
-                                            <span className="text-[11px] text-gray-400">
+                                            <span className="text-[11px] text-[var(--text-muted)]">
                                                 {new Date(entry.created_at).toLocaleString()}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="text-xs text-gray-700 whitespace-pre-wrap break-words">{entry.message}</div>
+                                    <div className="text-xs text-[var(--text-hover)] whitespace-pre-wrap break-words">{entry.message}</div>
                                 </div>
                             ))}
                         </div>
@@ -222,43 +197,33 @@ function ChatFeedback({ chatId, sessionId }) {
     return (
         <div className="ml-5">
             <div className="flex items-center">
-                <button
-                    type="button"
+                <IconButton
                     onClick={() => handleReaction(true)}
                     disabled={isSaving}
                     title="Good response"
-                    className={`px-2 py-1 rounded-md text-sm transition-colors ${
-                        liked === true
-                            ? 'text-gray-700'
-                            : 'text-gray-400 hover:text-gray-700'
-                    }`}
+                    tone="positive"
+                    active={liked === true}
                 >
                     <ThumbsUp size={16}/>
-                </button>
-                <button
-                    type="button"
+                </IconButton>
+                <IconButton
                     onClick={() => handleReaction(false)}
                     disabled={isSaving}
                     title="Bad response"
-                    className={`px-2 py-1 rounded-md text-sm transition-colors ${
-                        liked === false
-                            ? 'text-gray-700'
-                            : 'text-gray-400 hover:text-gray-700'
-                    }`}
+                    tone="negative"
+                    active={liked === false}
                 >
                     <ThumbsDown size={16}/>
-                </button>
-                <button
-                    type="button"
+                </IconButton>
+                <IconButton
                     onClick={() => setShowModal(true)}
                     disabled={isSaving || !chatId}
                     title="Report an issue"
-                    className="px-2 py-1 rounded-md text-sm text-gray-400 hover:text-gray-700 transition-colors"
                 >
                     <MessageCircle size={16}/>
-                </button>
+                </IconButton>
                 {error && (
-                    <span className="text-xs text-red-500 italic">{error}</span>
+                    <span className="text-xs text-[var(--accent-negative)] italic">{error}</span>
                 )}
             </div>
 

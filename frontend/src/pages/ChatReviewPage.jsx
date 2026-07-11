@@ -1,7 +1,12 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { MessageCircle, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { MessageCircle, ThumbsUp, ThumbsDown, ChevronDown } from 'lucide-react'
 import api from '@/api'
 import { IssueReportModal } from '@/components/chatbot/ChatFeedback'
+import Button from '@/design-system/Button'
+import IconButton from '@/design-system/IconButton'
+import Badge from '@/design-system/Badge'
+import Dropdown from '@/design-system/Dropdown'
+import DropdownItem from '@/design-system/DropdownItem'
 
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'))
 
@@ -12,10 +17,10 @@ const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'))
 function FeedbackBadge({ run }) {
     const disliked = run.liked === false || run.reviewer_disliked
     const liked = run.liked === true || run.reviewer_liked
-    if (disliked) return <span className="text-red-600" title="Disliked">👎 disliked</span>
-    if (liked) return <span className="text-green-600" title="Liked">👍 liked</span>
-    if (run.has_report) return <span className="text-yellow-600" title="Has a written report">📝 report</span>
-    return <span className="text-gray-400">— unreviewed</span>
+    if (disliked) return <Badge tone="negative" title="Disliked">👎 disliked</Badge>
+    if (liked) return <Badge tone="positive" title="Liked">👍 liked</Badge>
+    if (run.has_report) return <Badge tone="warning" title="Has a written report">📝 report</Badge>
+    return <Badge tone="neutral">— unreviewed</Badge>
 }
 
 // Any liked/disliked/reported signal, from either chat_runs.liked or the
@@ -26,9 +31,9 @@ function isReviewed(run) {
 }
 
 function StatusBadge({ ok }) {
-    if (ok === true) return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">ok</span>
-    if (ok === false) return <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700">failed</span>
-    return <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">unknown</span>
+    if (ok === true) return <Badge tone="positive">ok</Badge>
+    if (ok === false) return <Badge tone="negative">failed</Badge>
+    return <Badge tone="neutral">unknown</Badge>
 }
 
 // One chat run row: summary line + expandable detail (feedback, mermaid, full
@@ -85,29 +90,26 @@ function ChatRunRow({ run, sessionId }) {
     }
 
     return (
-        <div className="border border-gray-200 rounded-lg bg-white">
+        <div className="border border-[var(--border-light)] rounded-lg bg-[var(--bg-primary)]">
             <div
                 role="button"
                 tabIndex={0}
                 onClick={() => setExpanded(prev => !prev)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded(prev => !prev) } }}
-                className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors cursor-pointer"
+                className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
             >
-                <span className="text-gray-400 text-xs w-4 mt-0.5">{expanded ? '▼' : '▶'}</span>
+                <span className="text-[var(--text-muted)] text-xs w-4 mt-0.5">{expanded ? '▼' : '▶'}</span>
                 <span className="mt-0.5"><StatusBadge ok={run.ok} /></span>
                 {run.runtime_error && (
-                    <span
-                        title={errorDetail?.message}
-                        className="mt-0.5 px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-600 border border-red-200 whitespace-nowrap"
-                    >
+                    <Badge tone="negative" title={errorDetail?.message} className="mt-0.5 border border-[var(--accent-negative-border)] whitespace-nowrap">
                         {run.runtime_error}
-                    </span>
+                    </Badge>
                 )}
-                <span className="flex-1 whitespace-pre-wrap break-words text-sm text-gray-800">
-                    {run.user_message || <em className="text-gray-400">no message</em>}
+                <span className="flex-1 whitespace-pre-wrap break-words text-sm text-[var(--text-active)]">
+                    {run.user_message || <em className="text-[var(--text-muted)]">no message</em>}
                 </span>
                 <span className="text-sm mt-0.5"><FeedbackBadge run={run} /></span>
-                <span className="text-xs text-gray-400 whitespace-nowrap mt-0.5">
+                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap mt-0.5">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
             </div>
@@ -121,8 +123,8 @@ function ChatRunRow({ run, sessionId }) {
             />
 
             {expanded && (
-                <div className="px-4 pb-4 border-t border-gray-100 text-sm">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 my-3 text-xs text-gray-600">
+                <div className="px-4 pb-4 border-t border-[var(--border-light)] text-sm">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 my-3 text-xs text-[var(--text-hover)]">
                         <div><span className="font-semibold">chat_id:</span> {run.chat_id}</div>
                         <div><span className="font-semibold">session:</span> {run.session_id}</div>
                         <div><span className="font-semibold">duration:</span> {run.duration_s?.toFixed?.(2) ?? '—'}s</div>
@@ -130,71 +132,59 @@ function ChatRunRow({ run, sessionId }) {
                     </div>
 
                     <div className="flex items-center gap-1 mb-3">
-                        <span className="text-xs text-gray-500 mr-1">Your reaction (this reviewer session):</span>
-                        <button
-                            type="button"
+                        <span className="text-xs text-[var(--text-inactive)] mr-1">Your reaction (this reviewer session):</span>
+                        <IconButton
                             onClick={() => handleReviewerReaction(true)}
                             disabled={isSavingReaction || !sessionId}
                             title="I like this response"
-                            className={`p-1 rounded-md transition-colors ${
-                                reviewerReaction === true ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-gray-700'
-                            }`}
+                            tone="positive"
+                            active={reviewerReaction === true}
                         >
                             <ThumbsUp size={14} />
-                        </button>
-                        <button
-                            type="button"
+                        </IconButton>
+                        <IconButton
                             onClick={() => handleReviewerReaction(false)}
                             disabled={isSavingReaction || !sessionId}
                             title="I dislike this response"
-                            className={`p-1 rounded-md transition-colors ${
-                                reviewerReaction === false ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-gray-700'
-                            }`}
+                            tone="negative"
+                            active={reviewerReaction === false}
                         >
                             <ThumbsDown size={14} />
-                        </button>
-                        <button
-                            type="button"
+                        </IconButton>
+                        <IconButton
                             onClick={() => setShowFeedbackModal(true)}
                             title="Report on this run"
-                            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
                         >
                             <MessageCircle size={16} />
-                        </button>
+                        </IconButton>
                     </div>
 
                     {writtenFeedback.length > 0 && (
                         <details className="mb-3">
-                            <summary className="cursor-pointer text-gray-600 font-semibold">
+                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">
                                 Reports ({writtenFeedback.length})
                             </summary>
                             <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-2 pr-1">
                                 {writtenFeedback.map((entry, i) => (
-                                    <div key={i} className="p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                    <div key={i} className="p-2 bg-[var(--accent-warning-bg)] border border-[var(--accent-warning-border)] rounded">
                                         <div className="flex items-center gap-2 mb-1">
                                             {entry.title && (
-                                                <span
-                                                    className={`px-2 py-0.5 rounded-full text-xs ${
-                                                        entry.positive
-                                                            ? 'bg-green-100 text-green-700'
-                                                            : 'bg-red-100 text-red-700'
-                                                    }`}
-                                                >
+                                                <Badge tone={entry.positive ? 'positive' : 'negative'}>
                                                     {entry.title}
-                                                </span>
+                                                </Badge>
                                             )}
                                             {entry.created_at && (
-                                                <span className="text-[11px] text-gray-400">
+                                                <span className="text-[11px] text-[var(--text-muted)]">
                                                     {new Date(entry.created_at).toLocaleString()}
                                                 </span>
                                             )}
                                             {entry.review && (
-                                                <span className="text-[11px] text-gray-400">
+                                                <span className="text-[11px] text-[var(--text-muted)]">
                                                     {'(reviewer)'}
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="text-gray-700">{entry.message}</div>
+                                        <div className="text-[var(--text-hover)]">{entry.message}</div>
                                     </div>
                                 ))}
                             </div>
@@ -203,10 +193,10 @@ function ChatRunRow({ run, sessionId }) {
 
                     {errorDetail && (
                         <details className="mb-3">
-                            <summary className="cursor-pointer text-red-600 font-semibold">
+                            <summary className="cursor-pointer text-[var(--accent-negative)] font-semibold">
                                 {run.runtime_error}: {errorDetail.message}
                             </summary>
-                            <pre className="mt-1 p-2 bg-red-50 border border-red-100 rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
+                            <pre className="mt-1 p-2 bg-[var(--accent-negative-bg)] border border-[var(--accent-negative-border)] rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
                                 {errorDetail.traceback}
                             </pre>
                         </details>
@@ -214,9 +204,9 @@ function ChatRunRow({ run, sessionId }) {
 
                     {diagram && (
                         <details className="mb-3">
-                            <summary className="cursor-pointer text-gray-600 font-semibold">Task plan diagram</summary>
-                            <Suspense fallback={<div className="text-gray-400 p-2">Loading diagram...</div>}>
-                                <div className="border border-gray-100 rounded p-2 mt-1">
+                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Task plan diagram</summary>
+                            <Suspense fallback={<div className="text-[var(--text-muted)] p-2">Loading diagram...</div>}>
+                                <div className="border border-[var(--border-light)] rounded p-2 mt-1">
                                     <MermaidDiagram chart={diagram} className="w-full" />
                                 </div>
                             </Suspense>
@@ -225,23 +215,23 @@ function ChatRunRow({ run, sessionId }) {
 
                     {parseResult && (
                         <details className="mb-3">
-                            <summary className="cursor-pointer text-gray-600 font-semibold">System goals</summary>
+                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">System goals</summary>
                             <div className="mt-2 flex flex-col gap-3">
                                 {parseResult.reasoning && (
-                                    <p className="text-xs text-gray-500 italic">{parseResult.reasoning}</p>
+                                    <p className="text-xs text-[var(--text-inactive)] italic">{parseResult.reasoning}</p>
                                 )}
 
                                 {parseResult.accepted_goals?.length > 0 && (
                                     <div>
-                                        <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Accepted</div>
+                                        <div className="text-xs font-semibold text-[var(--text-inactive)] uppercase mb-1">Accepted</div>
                                         <div className="flex flex-col gap-1">
                                             {parseResult.accepted_goals.map(goal => (
-                                                <div key={goal._id} className="flex items-center gap-2 p-2 bg-green-50 border border-green-100 rounded text-xs">
-                                                    <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">
+                                                <div key={goal._id} className="flex items-center gap-2 p-2 bg-[var(--accent-positive-bg)] border border-[var(--accent-positive-border)] rounded text-xs">
+                                                    <Badge tone="positive" className="whitespace-nowrap">
                                                         {goal.target_node_type}
-                                                    </span>
-                                                    <span className="flex-1 text-gray-700">{goal.description}</span>
-                                                    <span className="text-gray-400 whitespace-nowrap">{Math.round(goal.confidence * 100)}%</span>
+                                                    </Badge>
+                                                    <span className="flex-1 text-[var(--text-hover)]">{goal.description}</span>
+                                                    <span className="text-[var(--text-muted)] whitespace-nowrap">{Math.round(goal.confidence * 100)}%</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -250,19 +240,19 @@ function ChatRunRow({ run, sessionId }) {
 
                                 {parseResult.refused_goals?.length > 0 && (
                                     <div>
-                                        <div className="text-xs font-semibold text-gray-500 uppercase mb-1">Refused</div>
+                                        <div className="text-xs font-semibold text-[var(--text-inactive)] uppercase mb-1">Refused</div>
                                         <div className="flex flex-col gap-1">
                                             {parseResult.refused_goals.map(goal => (
-                                                <div key={goal._id} className="p-2 bg-red-50 border border-red-100 rounded text-xs">
+                                                <div key={goal._id} className="p-2 bg-[var(--accent-negative-bg)] border border-[var(--accent-negative-border)] rounded text-xs">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 whitespace-nowrap">
+                                                        <Badge tone="negative" className="whitespace-nowrap">
                                                             {goal.target_node_type}
-                                                        </span>
-                                                        <span className="flex-1 text-gray-700">{goal.description}</span>
-                                                        <span className="text-gray-400 whitespace-nowrap">{Math.round(goal.confidence * 100)}%</span>
+                                                        </Badge>
+                                                        <span className="flex-1 text-[var(--text-hover)]">{goal.description}</span>
+                                                        <span className="text-[var(--text-muted)] whitespace-nowrap">{Math.round(goal.confidence * 100)}%</span>
                                                     </div>
                                                     {goal._refusal_reasons?.length > 0 && (
-                                                        <div className="mt-1 text-gray-500 italic">{goal._refusal_reasons.join('; ')}</div>
+                                                        <div className="mt-1 text-[var(--text-inactive)] italic">{goal._refusal_reasons.join('; ')}</div>
                                                     )}
                                                 </div>
                                             ))}
@@ -271,23 +261,23 @@ function ChatRunRow({ run, sessionId }) {
                                 )}
 
                                 {!parseResult.accepted_goals?.length && !parseResult.refused_goals?.length && (
-                                    <div className="text-xs text-gray-400 italic">No goals recorded.</div>
+                                    <div className="text-xs text-[var(--text-muted)] italic">No goals recorded.</div>
                                 )}
                             </div>
                         </details>
                     )}
 
                     <details>
-                        <summary className="cursor-pointer text-gray-600 font-semibold">Planner envelope</summary>
-                        <pre className="mt-1 p-2 bg-gray-50 border border-gray-100 rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
+                        <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Planner envelope</summary>
+                        <pre className="mt-1 p-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
                             {JSON.stringify(run.planner, null, 2)}
                         </pre>
                     </details>
 
                     {run.tasks && (
                         <details>
-                            <summary className="cursor-pointer text-gray-600 font-semibold">Tasks envelope</summary>
-                            <pre className="mt-1 p-2 bg-gray-50 border border-gray-100 rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
+                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Tasks envelope</summary>
+                            <pre className="mt-1 p-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
                                 {JSON.stringify(run.tasks, null, 2)}
                             </pre>
                         </details>
@@ -355,50 +345,58 @@ function ChatReviewPage() {
         return new Date(b.created_at) - new Date(a.created_at)
     })
 
+    const activeFilter = SESSION_FILTERS.find(f => f.value === sessionFilter) ?? SESSION_FILTERS[0]
+
     return (
         <div className="min-h-full bg-[var(--bg-secondary)]">
             <div className="max-w-4xl mx-auto px-4 py-4">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                        <span className="text-sm text-gray-500">
+                        <span className="text-sm text-[var(--text-inactive)]">
                             {isLoading ? 'Loading runs…' : `${sortedRuns.length} chat run${sortedRuns.length === 1 ? '' : 's'}`}
                         </span>
-                        <select
-                            value={sessionFilter}
-                            onChange={(e) => setSessionFilter(e.target.value)}
-                            className="text-sm border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700"
+
+                        <Dropdown
+                            panelClassName="w-40"
+                            trigger={({ toggle }) => (
+                                <Button variant="secondary" onClick={toggle} className="gap-1">
+                                    {activeFilter.label}
+                                    <ChevronDown size={14} />
+                                </Button>
+                            )}
                         >
-                            {SESSION_FILTERS.map(({ value, label }) => (
-                                <option key={value} value={value}>{label}</option>
+                            {({ close }) => SESSION_FILTERS.map(({ value, label }) => (
+                                <DropdownItem
+                                    key={value}
+                                    selected={value === sessionFilter}
+                                    onClick={() => { setSessionFilter(value); close() }}
+                                >
+                                    {label}
+                                </DropdownItem>
                             ))}
-                        </select>
-                        <button
-                            type="button"
+                        </Dropdown>
+
+                        <Button
                             onClick={() => setPrioritizeReview(prev => !prev)}
                             title="Sort unreviewed runs to the top (still newest-first within each group)"
-                            className={`text-sm border rounded-md px-2 py-1 transition-colors ${
-                                prioritizeReview
-                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                                    : 'bg-white border-gray-200 text-gray-500 hover:text-gray-700'
-                            }`}
+                            active={prioritizeReview}
                         >
                             {prioritizeReview ? '✓ Needs review first' : 'Sort: needs review first'}
-                        </button>
+                        </Button>
                     </div>
-                    <button
-                        type="button"
+                    <Button
+                        variant="primary"
                         onClick={() => loadRuns()}
                         disabled={isLoading}
-                        className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-700 transition-colors"
                     >
                         {isLoading ? 'Loading...' : 'Refresh'}
-                    </button>
+                    </Button>
                 </div>
 
-                {error && <div className="text-red-500 italic mb-4">{error}</div>}
+                {error && <div className="text-[var(--accent-negative)] italic mb-4">{error}</div>}
 
                 {!isLoading && !error && sortedRuns.length === 0 && (
-                    <div className="text-gray-400 italic">No chat runs recorded yet.</div>
+                    <div className="text-[var(--text-muted)] italic">No chat runs recorded yet.</div>
                 )}
 
                 <div className="flex flex-col gap-2">

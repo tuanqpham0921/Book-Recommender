@@ -9,7 +9,7 @@ const ChatReviewPage = lazy(() => import("@/pages/ChatReviewPage"));
 const LoadingSpinner = () => (
     <div className="absolute inset-0 flex items-center justify-center">
         <div className="loading-spinner"></div>
-        <span className="ml-2 text-gray-600">Loading...</span>
+        <span className="ml-2 text-[var(--text-hover)]">Loading...</span>
     </div>
 );
 

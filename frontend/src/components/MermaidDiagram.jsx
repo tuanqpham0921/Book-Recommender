@@ -92,7 +92,7 @@ function MermaidDiagram({ chart }) {
             } catch (err) {
                 console.error('Mermaid rendering error:', err)
                 if (containerRef.current) {
-                    containerRef.current.innerHTML = `<div class="text-red-500 text-sm">Failed to render diagram</div>`
+                    containerRef.current.innerHTML = `<div class="text-[var(--accent-negative)] text-sm">Failed to render diagram</div>`
                 }
             } finally {
                 setIsLoading(false)
@@ -134,7 +134,7 @@ function MermaidDiagram({ chart }) {
                 type="button"
                 onClick={() => panzoomRef.current?.instance.reset()}
                 title="Reset view"
-                className="absolute bottom-2 right-2 z-10 px-2 py-1 rounded-md text-sm bg-white/80 text-gray-500 hover:text-gray-800 hover:bg-white transition-colors"
+                className="absolute bottom-2 right-2 z-10 px-2 py-1 rounded-md text-sm bg-[var(--bg-primary)]/80 text-[var(--text-inactive)] hover:text-[var(--text-active)] hover:bg-[var(--bg-primary)] transition-colors"
             >
                 ↺ Reset
             </button>

@@ -51,7 +51,7 @@ const BlogPost = ({ postId = 1 }) => {
         return (
             <div className="blog-container">
                 <div className="flex justify-center items-center h-64">
-                    <p className="text-gray-500">Loading blog post...</p>
+                    <p className="text-[var(--text-inactive)]">Loading blog post...</p>
                 </div>
             </div>
         );
@@ -61,7 +61,7 @@ const BlogPost = ({ postId = 1 }) => {
         return (
             <div className="blog-container">
                 <div className="flex justify-center items-center h-64">
-                    <p className="text-red-500">Error: {error}</p>
+                    <p className="text-[var(--accent-negative)]">Error: {error}</p>
                 </div>
             </div>
         );

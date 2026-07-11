@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import Dropdown from '@/design-system/Dropdown';
+import DropdownItem from '@/design-system/DropdownItem';
 
 const VersionDropdown = () => {
-    const [isOpen, setIsOpen] = useState(false);
     const [selectedVersion, setSelectedVersion] = useState('3');
-    const dropdownRef = useRef(null);
 
     const versions = [
         { id: '1', name: 'V1.0.0', description: 'Pre-defined filters and limited', url: 'https://tuanqpham0921.com/book-recommender-v1' },
@@ -12,21 +12,9 @@ const VersionDropdown = () => {
         { id: '3', name: 'V3.0.0', description: 'Conversational recommender', url: null } // Current page
     ];
 
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const handleVersionSelect = (version) => {
+    const handleVersionSelect = (version, close) => {
         setSelectedVersion(version.id);
-        setIsOpen(false);
-        console.log('Selected version:', version.name);
+        close();
 
         // Navigate to different URLs for v1 and v2, stay on current page for v3
         if (version.url) {
@@ -35,37 +23,36 @@ const VersionDropdown = () => {
     };
 
     return (
-        <div className="relative inline-block" ref={dropdownRef}>
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="underline-animated underline-button flex items-center"
-            >
-                Versions 3
-                <ChevronDown size={16} className="text-gray-500 ml-1 mt-1" />
-            </button>
-
-            {isOpen && (
-                <div className="absolute top-full left-0 w-56 bg-[var(--bg-secondary)] border border-gray-200 rounded-b-2xl rounded-tr-2xl shadow-2xl z-50 overflow-hidden">
-                    {versions.map((version) => (
-                        <button
-                            key={version.id}
-                            onClick={() => handleVersionSelect(version)}
-                            className={`block w-full px-4 py-3 text-left text-base font-medium transition-all duration-150 hover:bg-gray-100 hover:text-gray-900 ${version.id === selectedVersion ? 'text-gray-800 bg-[var(--bg-secondary)]' : 'text-gray-700'}`}
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="flex flex-col text-left">
-                                    <span className="text-left text-small">{version.name}</span>
-                                    <span className="text-xs text-gray-10000 font-normal text-left">{version.description}</span>
-                                </div>
-                                {version.id === selectedVersion && (
-                                    <span className="text-gray-600 ml-3">✓</span>
-                                )}
-                            </div>
-                        </button>
-                    ))}
-                </div>
+        <Dropdown
+            panelClassName="w-56 rounded-b-2xl rounded-tr-2xl"
+            trigger={({ toggle }) => (
+                <button
+                    onClick={toggle}
+                    className="underline-animated underline-button flex items-center"
+                >
+                    Versions 3
+                    <ChevronDown size={16} className="text-[var(--text-inactive)] ml-1 mt-1" />
+                </button>
             )}
-        </div>
+        >
+            {({ close }) => versions.map((version) => (
+                <DropdownItem
+                    key={version.id}
+                    onClick={() => handleVersionSelect(version, close)}
+                    selected={version.id === selectedVersion}
+                >
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col text-left">
+                            <span className="text-left text-small">{version.name}</span>
+                            <span className="text-xs text-[var(--text-inactive)] font-normal text-left">{version.description}</span>
+                        </div>
+                        {version.id === selectedVersion && (
+                            <span className="text-[var(--text-hover)] ml-3">✓</span>
+                        )}
+                    </div>
+                </DropdownItem>
+            ))}
+        </Dropdown>
     );
 };
 

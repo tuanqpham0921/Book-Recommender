@@ -12,7 +12,7 @@ const MermaidLoading = () => (
     <div className="message-bubble response">
         <div className="flex items-center justify-center h-32">
             <div className="loading-spinner"></div>
-            <span className="ml-2 text-gray-600">Loading diagram...</span>
+            <span className="ml-2 text-[var(--text-hover)]">Loading diagram...</span>
         </div>
     </div>
 );
@@ -71,7 +71,7 @@ function ChatMessages({ messages, isStreaming, sessionId }) {
                             type="button"
                             onClick={() => handleCopy(user.text, user.id)}
                             title="Copy message"
-                            className="ml-2 self-end rounded-md text-gray-400 hover:text-gray-700 transition-colors"
+                            className="ml-2 self-end rounded-md text-[var(--text-muted)] hover:text-[var(--text-hover)] transition-colors"
                         >
                             {copiedId === user.id ? <Check size={16} /> : <Copy size={16} />}
                         </button>
@@ -121,7 +121,7 @@ function ChatMessages({ messages, isStreaming, sessionId }) {
                                 // Error section
                                 if (section.type === 'error' && section.content) {
                                     return (
-                                        <div key={key} className="message-bubble text-red-500 italic mt-2">
+                                        <div key={key} className="message-bubble text-[var(--accent-negative)] italic mt-2">
                                             <span>{section.content}</span>
                                         </div>
                                     );
@@ -155,7 +155,7 @@ function ChatMessages({ messages, isStreaming, sessionId }) {
                         {index === messages.length - 1 && !response.isLoading && !response.isStreaming && (
                             (response.sections?.length > 0 || response.text) && (
                                 <div className="flex justify-end mt-5 mr-2">
-                                    <span className="text-xs text-gray-400 italic">
+                                    <span className="text-xs text-[var(--text-muted)] italic">
                                         AI can make mistakes. Please double-check responses.
                                     </span>
                                 </div>

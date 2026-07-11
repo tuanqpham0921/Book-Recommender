@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { ArrowUp, MessageCircle, Plus, Square } from 'lucide-react';
 import { userInputSuggestions } from '@/data/chatSuggestions';
 import { IssueReportModal } from '@/components/chatbot/ChatFeedback';
+import { useOutsideClick } from '@/hooks/useOutsideClick';
+import IconButton from '@/design-system/IconButton';
+import DropdownItem from '@/design-system/DropdownItem';
 
 const TEXTAREA_MAX_HEIGHT_PX = 128 // keep in sync with max-h-32 below
 
@@ -22,30 +25,11 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
         el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`
     }, [newMessage])
 
-    // Handle clicks outside the suggestions dropdown
-    useEffect(() => {
-        function handleClickOutside(event) {
-            // Check if click is outside suggestions AND outside hints button
-            if (
-                suggestionsRef.current &&
-                !suggestionsRef.current.contains(event.target) &&
-                hintsButtonRef.current &&
-                !hintsButtonRef.current.contains(event.target)
-            ) {
-                setShowSuggestions(false)
-            }
-        }
-
-        // Add event listener when suggestions are shown
-        if (showSuggestions) {
-            document.addEventListener('mousedown', handleClickOutside)
-        }
-
-        // Cleanup event listener
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside)
-        }
-    }, [showSuggestions]) // Re-run when showSuggestions changes
+    // Suggestions panel spans the full width of the input box, not just the
+    // small hints button that opens it, so it can't be anchored the way the
+    // generic Dropdown component anchors its panel — but it still shares the
+    // same outside-click-to-close behavior via this hook.
+    useOutsideClick([suggestionsRef, hintsButtonRef], () => setShowSuggestions(false), showSuggestions)
 
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
@@ -61,25 +45,25 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
 
     return (
         <div className="bg-[var(--bg-secondary)] p-4 pt-2 pr-6">
-            <div className='outline rounded-xl bg-white relative shadow-lg'>
+            <div className='outline rounded-xl bg-[var(--bg-primary)] relative shadow-lg'>
                 {/* Hints Dropup Menu */}
                 {showSuggestions && (
                     <div
                         ref={suggestionsRef} // Attach ref to suggestions container
-                        className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--bg-secondary)] border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
+                        className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
                     >
-                        <div className="sticky top-0 bg-[var(--bg-secondary)] z-20 border-b border-gray-200">
-                            <div className="text-xs text-gray-500 p-2 px-5">Quick suggestions:</div>
+                        <div className="sticky top-0 bg-[var(--bg-secondary)] z-20 border-b border-[var(--border-light)]">
+                            <div className="text-xs text-[var(--text-inactive)] p-2 px-5">Quick suggestions:</div>
                         </div>
                         <div className="p-2 pt-0">
                             {userInputSuggestions.map((suggestion) => (
-                                <button
+                                <DropdownItem
                                     key={suggestion.id}
                                     onClick={() => handleSuggestionClick(suggestion)}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded transition-colors"
+                                    className="rounded"
                                 >
                                     {suggestion.text}
-                                </button>
+                                </DropdownItem>
                             ))}
                         </div>
                     </div>
@@ -106,33 +90,29 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                     wrapped/multi-line text never sits under the icons */}
                 <div className="flex items-center justify-end gap-1 px-2 pb-2">
                     {/* Overall Feedback Button */}
-                    <button
-                        type="button"
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700"
+                    <IconButton
                         onClick={() => setShowFeedbackModal(true)}
                         title="Share overall feedback"
                     >
                         <MessageCircle size={20} />
-                    </button>
+                    </IconButton>
 
                     {/* Hints Button */}
-                    <button
+                    <IconButton
                         ref={hintsButtonRef} // Attach ref to hints button
-                        type="button"
-                        className="p-2 hover:bg-gray-200 rounded-full transition-colors text-gray-700"
                         onClick={() => setShowSuggestions(!showSuggestions)}
                         title="Show quick suggestions"
                     >
                         <Plus size={20} />
-                    </button>
+                    </IconButton>
 
                     {/* Send / Stop Button */}
                     <button
                         type={isStreaming ? 'button' : 'submit'}
                         className={`p-2 rounded-full transition-all duration-200 ${
                             isStreaming || newMessage.trim()
-                                ? 'bg-gray-800 text-white'
-                                : 'text-gray-700 hover:bg-gray-200 '
+                                ? 'bg-[var(--btn-primary-bg)] text-[var(--bg-primary)]'
+                                : 'text-[var(--text-hover)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                         onClick={isStreaming ? onStop : onSendMessage}
                         disabled={!isStreaming && !newMessage.trim()}
@@ -145,7 +125,7 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
 
             {/* Character Counter */}
             <div className="flex justify-end mt-1 px-2">
-                <span className={`text-xs ${newMessage.length >= 450 ? 'text-red-500' : 'text-gray-500'}`}>
+                <span className={`text-xs ${newMessage.length >= 450 ? 'text-[var(--accent-negative)]' : 'text-[var(--text-inactive)]'}`}>
                     {newMessage.length}/500
                 </span>
             </div>
