@@ -61,6 +61,7 @@ class Orchestrator:
                 task_runner = TaskRunnerWorkflow(
                     sse_stream,
                     request_context.llm_client,
+                    messages=request_context.pipeline_message,
                     app_env=request_context.app_env,
                 )
                 await asyncio.wait_for(

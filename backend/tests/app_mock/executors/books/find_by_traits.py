@@ -1,20 +1,9 @@
-import logging
-
 from app.domains.books.schemas import FindByTraitsRetrieval
-from app.orchestration.request_context import RequestContext
-
-logger = logging.getLogger(__name__)
+from ..base import MockExecutorWorkflow
 
 
-class FindByTraitsExecutor:
-    async def __call__(
-        self,
-        task: FindByTraitsRetrieval,
-        dependent_results: dict,
-        request_context: RequestContext,
-    ) -> str:
-        await request_context.sse_stream.send_ui_loading("Getting Books By Traits...")
-        await request_context.sse_stream.send_chars(
-            "I found some books that match what you're looking for."
-        )
-        return "Mock result: found books matching traits search"
+class FindByTraitsExecutor(MockExecutorWorkflow):
+    ui_loading_message = "Getting Books By Traits..."
+
+    def build_reply(self, task: FindByTraitsRetrieval, dependent_results: dict) -> str:
+        return "I found some books that match what you're looking for."

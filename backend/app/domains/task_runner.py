@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import Field
 
+from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.planner.strategy_classification import StrategyClassificationOutput
@@ -34,12 +35,14 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         self,
         sse_stream: SSEStream,
         llm_client: OpenAIClient,
+        messages: list[APIMessage] | None = None,
         app_env: str | None = None,
     ):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
             output_type=TaskRunnerOutput,
+            messages=messages,
             app_env=app_env,
         )
 
@@ -49,7 +52,10 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         strategy_result: StrategyClassificationOutput,
     ) -> None:
         """Execute accepted tasks in dependency order, feeding each task the
-        results of the tasks it depends on."""
+        results of the tasks it depends on. Each task runs as its own
+        AppBaseWorkflow sharing self.messages, so its result lands on the
+        same trace as the planner's — same pattern PlannerWorkflow uses for
+        InitialParseWorkflow/StrategyClassificationWorkflow."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
@@ -72,17 +78,25 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 self.output.failed_task_ids.append(task_id)
                 continue
 
-            try:
-                results[task_id] = await executor_cls()(
+            executor = executor_cls(
+                sse_stream=self.sse_stream,
+                llm_client=self.llm_client,
+                messages=self.messages,
+                app_env=self.app_env,
+            )
+            step_result = await self.run_async_step(
+                executor(
                     task=task,
                     dependent_results=dependent_results,
                     request_context=request_context,
-                )
-            except Exception:
-                logger.exception(
-                    f"Executor {executor_cls.__name__} failed for task {task_id}"
-                )
+                ),
+                raise_on_failure=False,
+            )
+            if not step_result.ok:
                 self.output.failed_task_ids.append(task_id)
+                continue
+
+            results[task_id] = step_result.output.result
 
         self.output.task_results = results
         self.finalize_result(ok=not self.output.failed_task_ids)
