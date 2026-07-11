@@ -78,7 +78,8 @@ async def record_chat_run(
         )
 
         if app_env == "development":
-            save_file(row, file_name=f"chat_run_{row['chat_id']}")
+            # save_file(row, file_name=f"chat_run_{row['chat_id']}")
+            save_file(row, file_name=f"chat_run_dev")
 
         async with request_context.session_factory() as session:
             await ChatRunStore(session).insert_run(row)
