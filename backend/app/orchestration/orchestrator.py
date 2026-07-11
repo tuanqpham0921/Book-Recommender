@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 SAVE_LOG_TIMEOUT = 60  # seconds
 CLOSE_SSE_STREAM_TIMEOUT = 10  # seconds
+CONVERSATION_TIMEOUT = 120  # seconds
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
@@ -39,7 +40,10 @@ class Orchestrator:
             conversation_orchestrator = ConversationOrchestrator(
                 sse_stream, request_context.user_message, request_context.llm_client
             )
-            await conversation_orchestrator(request_context=request_context)
+            await asyncio.wait_for(
+                conversation_orchestrator(request_context=request_context),
+                timeout=CONVERSATION_TIMEOUT
+            )
 
             # Normal completion — chat_id lets the client attach feedback
             # to the chat_runs row recorded in the finally block below
@@ -57,6 +61,13 @@ class Orchestrator:
                 f"⚠️ Orchestration cancelled (client disconnected): session={request_context.session_id}"
             )
             raise
+        except TimeoutError:
+            logger.warning(
+                f"⚠️ Orchestration timed out: session={request_context.session_id}"
+            )
+            await sse_stream.send_error(
+                "The request took too long to process."
+            )
         except Exception as e:
             logger.exception(f"❌ Unhandled orchestrator error: {e}")
             await sse_stream.send_error(
