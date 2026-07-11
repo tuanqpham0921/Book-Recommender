@@ -7,6 +7,7 @@ Continue:
 * test asyncio cancel and time out and maybe concurrency issues?
 * might need to move it to generate_reponse instead
 * make orchestration into a workflow?
+* assistant message is not joined for the db (mock executors)
 
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult
