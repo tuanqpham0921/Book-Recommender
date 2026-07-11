@@ -32,7 +32,7 @@ CONVERSATION_SUMMARY_PROMPT_PATH = (
 # we don't need parse_result, and strategy_result or diagram
 # this should store conversation summary, failed tasks, internal summary message for llm
 # maybe also referenced books or things from processing the steps
-class OrchestrationOutput(AppWorkflowOutput):
+class PlannerOutput(AppWorkflowOutput):
     session_id: str | None = None
     parse_result: InitialParseOutput | None = None
     strategy_result: StrategyClassificationOutput | None = None
@@ -59,7 +59,7 @@ def _assistant_texts(messages: list[APIMessage]) -> list[str]:
     ]
 
 
-class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
+class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )
@@ -77,7 +77,7 @@ class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
-            output_type=OrchestrationOutput,
+            output_type=PlannerOutput,
             app_env=app_env,
         )
         self.user_message = user_message
@@ -137,7 +137,9 @@ class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
                     self.strategy_classification_failure_message
                 )
                 return
-            self.output.assistant_message = [self.strategy_classification_failure_message]
+            self.output.assistant_message = [
+                self.strategy_classification_failure_message
+            ]
             await self.sse_stream.send_chars(
                 self.strategy_classification_failure_message
             )

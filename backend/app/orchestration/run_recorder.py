@@ -13,7 +13,7 @@ from common.operation import OperationResult
 from common.utils import save_file, to_serializable
 from db.stores.chat_run_store import ChatRunStore
 from app.orchestration.request_context import RequestContext
-from app.domains.planner.main import PlannerWorkflow, OrchestrationOutput
+from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def build_chat_run_row(
     session_id: str,
     user_chat_id: str,
     user_message: str,
-    result: OperationResult[OrchestrationOutput],
+    result: OperationResult[PlannerOutput],
     sse_events: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Map a finished conversation workflow onto ChatRunModel columns."""

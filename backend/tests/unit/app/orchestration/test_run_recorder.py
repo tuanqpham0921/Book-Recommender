@@ -2,6 +2,7 @@
 build_chat_run_row (private attrs like _llm_id must survive), and the
 env-dependent sink selection in record_chat_run (test → nothing,
 development → file + DB, prod → DB only, DB failures swallowed)."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from app.common.messages import UserMessage
 from app.common.sse_stream import SSEStream
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
-from app.domains.planner.main import OrchestrationOutput
+from app.domains.planner.main import PlannerOutput
 from app.domains.planner.strategy_classification import StrategyClassificationOutput
 from app.orchestration.request_context import RequestContext
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
@@ -19,7 +20,9 @@ from common.operation import OperationResult, TokenUsage
 from db.stores.book_store import BookStore
 
 
-def _make_strategy(llm_id="task_1", internal_id="task_abcd1234", goal_id="goal_a1b2c3d4"):
+def _make_strategy(
+    llm_id="task_1", internal_id="task_abcd1234", goal_id="goal_a1b2c3d4"
+):
     """Build a BaseRequest subclass the way StrategyClassificationWorkflow would
     leave it after `_set_llm_id`: original LLM id stashed on `_llm_id`, a fresh
     internal id on `id`, and a note recorded via `_details`."""
@@ -37,12 +40,12 @@ def _make_strategy(llm_id="task_1", internal_id="task_abcd1234", goal_id="goal_a
     return strategy
 
 
-def _make_result_and_output() -> tuple[OperationResult, OrchestrationOutput]:
+def _make_result_and_output() -> tuple[OperationResult, PlannerOutput]:
     strategy = _make_strategy()
     strategy_result = StrategyClassificationOutput(
         accepted=[strategy], execution_order=[strategy.id]
     )
-    output = OrchestrationOutput(
+    output = PlannerOutput(
         session_id="sess_1", strategy_result=strategy_result, diagram="graph TD;"
     )
     result = OperationResult(
@@ -94,10 +97,9 @@ class TestBuildChatRunRow:
         assert row["total_tokens"] == 42
         assert row["mermaid"] == "graph TD;"
         assert row["orchestration"]["ok"] is True
-        assert (
-            row["orchestration"]["output"]["strategy_result"]["execution_order"]
-            == ["task_abcd1234"]
-        )
+        assert row["orchestration"]["output"]["strategy_result"]["execution_order"] == [
+            "task_abcd1234"
+        ]
 
     def test_serialization_preserves_private_attrs(self):
         result, output = _make_result_and_output()
