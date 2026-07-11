@@ -57,7 +57,7 @@ Instead of a fixed routing graph, this system uses **LLM-driven preplanning**: t
 
 1. **`parse_intent.py` (`InitialParseWorkflow`)** — sends the user message to the LLM with all available tool schemas (descriptions come from docstrings on the node classes). Returns a list of goals with IDs.
 2. **`strategy_classification.py` (`StrategyClassificationWorkflow`)** — takes those goals, loads the matching tools, and has the LLM select strategies via semantic understanding. The LLM can reject goals and resolves dependencies to produce an ordered execution plan.
-3. **`ConversationOrchestrator`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, streams it to the frontend, then instantiates the node classes and runs them with the parsed arguments.
+3. **`PlannerWorkflow`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, streams it to the frontend, then instantiates the node classes and runs them with the parsed arguments.
 
 Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/domains/registry.py` maps type strings to classes.
 
@@ -66,8 +66,8 @@ Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/domain
 ### Request Flow
 
 1. **Frontend** sends a chat message via SSE to `POST /session/{id}/message`
-2. **`Orchestrator`** (`app/orchestration/orchestrator.py`) builds a `RequestContext` and delegates to `ConversationOrchestrator`
-3. **`ConversationOrchestrator`** runs the planner pipeline (parse → classify → diagram → execute)
+2. **`Orchestrator`** (`app/orchestration/orchestrator.py`) builds a `RequestContext` and delegates to `PlannerWorkflow`
+3. **`PlannerWorkflow`** runs the planner pipeline (parse → classify → diagram → execute)
 4. Results stream back to the client via **SSEStream** (`app/common/sse_stream.py`)
 
 ### Workflow / Operation Pattern

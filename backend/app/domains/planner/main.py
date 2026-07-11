@@ -27,6 +27,7 @@ CONVERSATION_SUMMARY_PROMPT_PATH = (
     "domains/planner/prompts/3_conversation_orchestration_summary.txt"
 )
 
+
 # NOTE: this is okay for now
 # we don't need parse_result, and strategy_result or diagram
 # this should store conversation summary, failed tasks, internal summary message for llm
@@ -56,7 +57,7 @@ def _last_assistant_text(messages: list[APIMessage]) -> str | None:
     return None
 
 
-class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
+class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )
@@ -109,9 +110,6 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
-        # return
-        # ------------------------------------------------------------------------------------------------
-
         system_goals = parse_output.accepted_goals
         if not system_goals:
             # parse ok but nothing to plan — the parse workflow already
@@ -119,8 +117,6 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             self.result.ok = True
             self.result.message = "Conversation handled without planning"
             self.output.assistant_message = _last_assistant_text(self.messages)
-            # self.save_chat_messages()
-            # self.save_conversation_result()
             return
 
         strategy_workflow = StrategyClassificationWorkflow(
@@ -172,6 +168,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         self, strategy_result: StrategyClassificationOutput
     ) -> str | None:
         from app.common.mermaid import get_mermaid_diagram
+
         diagram = None
         try:
             diagram = get_mermaid_diagram(
@@ -181,7 +178,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")
             return None
-        
+
         if not diagram:
             logger.info("No Mermaid diagram generated (empty or invalid)")
             return None
@@ -189,31 +186,3 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         await self.sse_stream.send_chars("# My Plan for Your Request")
         await self.sse_stream.send_mermaid(diagram)
         return diagram
-
-    def save_conversation_result(self, name: str = "dev") -> None:
-        from common.utils import save_file
-
-        # debug file dumps are dev-only; prod persistence is the chat_runs
-        # table (run_recorder) — Cloud Run's filesystem is ephemeral
-        if self.app_env != "development":
-            return
-
-        data = self.result.model_dump()
-        data.pop("steps", None)
-        save_file(data, file_name=f"conversation_result_{name}.json")
-
-    def save_chat_messages(self, name: str = "dev") -> None:
-        from common.utils import save_file
-        from common.utils import to_serializable
-
-        if self.app_env != "development":
-            return
-
-        if not self.messages:
-            return
-        logger.info(f"Saving chat messages to {name}.json")
-        data = {
-            "chat_messages": to_serializable(self.messages),
-            "token_usage": to_serializable(self.result.token_usage),
-        }
-        save_file(data, file_name=f"chat_messages_{name}.json")

@@ -1,5 +1,6 @@
 """Tests for Orchestrator.run: verifies a finished conversation workflow is
 handed to record_chat_run, and that runs without a result are not recorded."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -33,7 +34,7 @@ class TestOrchestratorRun:
         mock_workflow.result = OperationResult(ok=True)
 
         with patch(
-            "app.orchestration.orchestrator.ConversationOrchestrator",
+            "app.orchestration.orchestrator.PlannerWorkflow",
             return_value=mock_workflow,
         ), patch(
             "app.orchestration.orchestrator.record_chat_run",
@@ -48,7 +49,7 @@ class TestOrchestratorRun:
         mock_workflow.result = None
 
         with patch(
-            "app.orchestration.orchestrator.ConversationOrchestrator",
+            "app.orchestration.orchestrator.PlannerWorkflow",
             return_value=mock_workflow,
         ), patch(
             "app.orchestration.orchestrator.record_chat_run",

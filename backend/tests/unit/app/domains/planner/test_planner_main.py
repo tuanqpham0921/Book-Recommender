@@ -1,4 +1,5 @@
-"""Tests for ConversationOrchestrator.add_step output routing."""
+"""Tests for PlannerWorkflow.add_step output routing."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,7 +8,7 @@ from app.common.messages import AssistantMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
-from app.domains.planner.main import ConversationOrchestrator, OrchestrationOutput
+from app.domains.planner.main import PlannerWorkflow, OrchestrationOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.domains.planner.strategy_classification import StrategyClassificationOutput
 from common.operation import OperationResult, TokenUsage
@@ -16,12 +17,13 @@ from common.utils import load_json, save_file
 
 @pytest.fixture
 def orchestrator():
-    return ConversationOrchestrator(
+    return PlannerWorkflow(
         sse_stream=SSEStream(),
         user_message=UserMessage(content="test"),
         llm_client=MagicMock(),
     )
-    
+
+
 def _make_goal():
     goal = SystemGoal(
         description="Find a book about machine learning topics",
@@ -60,9 +62,9 @@ def _make_orchestration_output() -> OrchestrationOutput:
     )
 
 
-class TestConversationOrchestratorAddStep:
+class TestPlannerWorkflowAddStep:
     # storing parse/strategy outputs moved from an add_step override into
-    # run() itself — see ConversationOrchestrator.run
+    # run() itself — see PlannerWorkflow.run
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(
@@ -85,6 +87,7 @@ class TestConversationOrchestratorAddStep:
         step = OperationResult(ok=True, name="some_step", output=InitialParseOutput())
         orchestrator.add_step(step)
         assert step in orchestrator.result.steps
+
 
 class TestOrchestrationOutputJsonRoundTrip:
     """model_dump_json / model_validate_json round-trip of OrchestrationOutput.
@@ -115,7 +118,10 @@ class TestOrchestrationOutputJsonRoundTrip:
         assert restored_strategy.title == original_strategy.title
         assert restored_strategy.target_goal == original_strategy.target_goal
         assert restored_strategy.confidence == original_strategy.confidence
-        assert restored.strategy_result.execution_order == output.strategy_result.execution_order
+        assert (
+            restored.strategy_result.execution_order
+            == output.strategy_result.execution_order
+        )
 
     def test_accepted_goal_public_fields_survive(self):
         output = _make_orchestration_output()

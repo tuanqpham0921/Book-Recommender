@@ -5,6 +5,7 @@ The single place that decides which sinks a run goes to:
 - development: JSON file (local eyeballing) + database
 - everything else (prod): database only — Cloud Run's filesystem is ephemeral
 """
+
 import logging
 from typing import Any
 
@@ -12,7 +13,7 @@ from common.operation import OperationResult
 from common.utils import save_file, to_serializable
 from db.stores.chat_run_store import ChatRunStore
 from app.orchestration.request_context import RequestContext
-from app.domains.planner.main import ConversationOrchestrator, OrchestrationOutput
+from app.domains.planner.main import PlannerWorkflow, OrchestrationOutput
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +42,18 @@ def build_chat_run_row(
 
 async def record_chat_run(
     request_context: RequestContext,
-    workflow: ConversationOrchestrator,
+    workflow: PlannerWorkflow,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
     if not request_context or workflow is None or workflow.result is None:
-        user_message_id = (request_context.user_message.id if request_context else "unknown")
-        logger.warning(f"record_chat_run: missing request_context or workflow.result for chat_id={user_message_id}")
+        user_message_id = (
+            request_context.user_message.id if request_context else "unknown"
+        )
+        logger.warning(
+            f"record_chat_run: missing request_context or workflow.result for chat_id={user_message_id}"
+        )
         return
-    
+
     app_env = request_context.app_env
     if app_env == "test":
         return

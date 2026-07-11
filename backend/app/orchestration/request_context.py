@@ -21,7 +21,7 @@ class RequestContext(BaseModel):
     user_message: UserMessage
 
     # prior turns for this session (read-only seed, loaded once by the
-    # request context factory) — see ConversationOrchestrator.run for how
+    # request context factory) — see PlannerWorkflow.run for how
     # this seeds pipeline_message
     chat_messages: list[APIMessage] = Field(default_factory=list)
     # this turn's full message trace: chat_messages + everything the

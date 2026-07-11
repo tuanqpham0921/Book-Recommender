@@ -4,7 +4,7 @@ from app.domains.registry import (
     AnyStrategyRequest,
     get_request_class,
 )
-from app.domains.planner import ConversationOrchestrator
+from app.domains.planner import PlannerWorkflow
 from app.domains.node_types import NodeTypeEnum
 
 __all__ = [
@@ -13,5 +13,5 @@ __all__ = [
     "REQUEST_CLASSES",
     "AnyStrategyRequest",
     "get_request_class",
-    "ConversationOrchestrator"
+    "PlannerWorkflow",
 ]

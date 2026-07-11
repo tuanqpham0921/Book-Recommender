@@ -4,7 +4,7 @@ import logging
 from app.common.sse_stream import SSEStream
 from app.orchestration.request_context import RequestContext
 
-from app.domains.planner import ConversationOrchestrator
+from app.domains.planner import PlannerWorkflow
 from app.orchestration.run_recorder import record_chat_run
 
 logger = logging.getLogger(__name__)
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 SAVE_LOG_TIMEOUT = 60  # seconds
 CLOSE_SSE_STREAM_TIMEOUT = 10  # seconds
 CONVERSATION_TIMEOUT = 120  # seconds
+
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
@@ -22,11 +23,11 @@ class Orchestrator:
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
-        
+
         sse_stream = request_context.sse_stream
         # created (not just returned from a helper) so that a cancellation
         # mid-await below still leaves this bound for the finally block —
-        # ConversationOrchestrator mutates its own .result in place and
+        # PlannerWorkflow mutates its own .result in place and
         # re-raises on cancellation rather than returning it
         conversation_orchestrator = None
         try:
@@ -38,7 +39,7 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            conversation_orchestrator = ConversationOrchestrator(
+            conversation_orchestrator = PlannerWorkflow(
                 sse_stream,
                 request_context.user_message,
                 request_context.llm_client,
@@ -46,7 +47,7 @@ class Orchestrator:
             )
             await asyncio.wait_for(
                 conversation_orchestrator(request_context=request_context),
-                timeout=CONVERSATION_TIMEOUT
+                timeout=CONVERSATION_TIMEOUT,
             )
 
             # Normal completion — chat_id lets the client attach feedback
@@ -70,13 +71,11 @@ class Orchestrator:
                 conversation_orchestrator.result.add_details(
                     "Orchestration Task timed out"
                 )
-            
+
             logger.warning(
                 f"⚠️ Orchestration timed out: chat_id={request_context.user_message.id}"
             )
-            await sse_stream.send_error(
-                "The request took too long to process."
-            )
+            await sse_stream.send_error("The request took too long to process.")
         except Exception as e:
             logger.exception(f"❌ Unhandled orchestrator error: {e}")
             await sse_stream.send_error(
@@ -86,20 +85,22 @@ class Orchestrator:
             try:
                 await asyncio.shield(
                     asyncio.wait_for(
-                        record_chat_run(
-                            request_context, conversation_orchestrator), 
-                        timeout=SAVE_LOG_TIMEOUT
+                        record_chat_run(request_context, conversation_orchestrator),
+                        timeout=SAVE_LOG_TIMEOUT,
                     )
                 )
             except Exception as e:
-                logger.warning(f"record_chat_run id: {request_context.user_message.id} timed out")
+                logger.warning(
+                    f"record_chat_run id: {request_context.user_message.id} timed out"
+                )
 
             try:
                 await asyncio.shield(
                     asyncio.wait_for(
-                            sse_stream.close(), 
-                                timeout=CLOSE_SSE_STREAM_TIMEOUT
-                            )
-                    )   
+                        sse_stream.close(), timeout=CLOSE_SSE_STREAM_TIMEOUT
+                    )
+                )
             except Exception as e:
-                    logger.warning(f"sse_stream.close() id: {request_context.user_message.id} timed out")
+                logger.warning(
+                    f"sse_stream.close() id: {request_context.user_message.id} timed out"
+                )
