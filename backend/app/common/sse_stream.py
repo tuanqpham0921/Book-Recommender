@@ -69,9 +69,13 @@ class SSEStream:
     async def __anext__(self):
         if self._finished:
             raise StopAsyncIteration
-        if self._closed:
-            return
 
+        # NOTE: no early return on self._closed here — close() enqueues the
+        # _stream_end sentinel rather than stopping iteration directly, so a
+        # closed-but-not-finished stream must still drain the queue (which
+        # may hold real events queued before close(), then the sentinel).
+        # Returning early on _closed orphans that sentinel: _finished never
+        # flips, and the caller's `async for` spins on None forever.
         try:
             data = await asyncio.wait_for(self._queue.get(), timeout=SSE_TIMEOUT)
             if data is self._stream_end:

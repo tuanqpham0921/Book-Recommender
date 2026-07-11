@@ -3,6 +3,11 @@ Continue:
 * the code is able to load them in
 * and we can load it back in the front end for testings
 
+* review SSE unit tests
+* test asyncio cancel and time out and maybe concurrency issues?
+* might need to move it to generate_reponse instead
+* make orchestration into a workflow?
+
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
@@ -64,7 +69,6 @@ Ideas:
 =======================================================================
 
 lower priority:
-* test your sse stream (might change later, and working right now)
 * test your ingestion (need to re-write to use workflow)
 
 =======================================================================
