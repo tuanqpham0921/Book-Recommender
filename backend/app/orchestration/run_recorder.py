@@ -34,7 +34,11 @@ def build_chat_run_row(
         "runtime_error": result.runtime_error.type if result.runtime_error else None,
         "duration_s": result.duration,
         "total_tokens": result.token_usage.total,
-        "assistant_message": result.output.assistant_message if result.output else None,
+        "assistant_message": (
+            "\n".join(result.output.assistant_message)
+            if result.output and result.output.assistant_message
+            else None
+        ),
         "orchestration": to_serializable(result),
         "sse_events": sse_events,
     }

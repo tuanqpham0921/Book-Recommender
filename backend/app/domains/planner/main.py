@@ -40,21 +40,23 @@ class OrchestrationOutput(AppWorkflowOutput):
     # full trace fed into this turn's LLM calls: chat_messages + everything
     # the workflows generated — persisted so chat_messages can be rebuilt
     pipeline_message: list[APIMessage] = Field(default_factory=list)
-    # cheap denormalized reply text (last plain-string AssistantMessage in
-    # pipeline_message) used to seed the next turn's chat_messages without
-    # having to reparse pipeline_message
-    assistant_message: str | None = None
+    # plain-string AssistantMessage contents produced this turn, in order —
+    # joined with newlines at persist time (run_recorder) into the single
+    # chat_runs.assistant_message TEXT column used to seed the next turn's
+    # chat_messages
+    assistant_message: list[str] = Field(default_factory=list)
 
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
         return {}
 
 
-def _last_assistant_text(messages: list[APIMessage]) -> str | None:
-    for m in reversed(messages):
-        if isinstance(m, AssistantMessage) and isinstance(m.content, str) and m.content:
-            return m.content
-    return None
+def _assistant_texts(messages: list[APIMessage]) -> list[str]:
+    return [
+        m.content
+        for m in messages
+        if isinstance(m, AssistantMessage) and isinstance(m.content, str) and m.content
+    ]
 
 
 class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
@@ -106,7 +108,7 @@ class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
             if parse_result.runtime_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
-            self.output.assistant_message = self.initial_parse_failure_message
+            self.output.assistant_message = [self.initial_parse_failure_message]
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
@@ -116,7 +118,7 @@ class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
             # streamed the reply (small talk / out-of-scope / refusals)
             self.result.ok = True
             self.result.message = "Conversation handled without planning"
-            self.output.assistant_message = _last_assistant_text(self.messages)
+            self.output.assistant_message = _assistant_texts(self.messages)
             return
 
         strategy_workflow = StrategyClassificationWorkflow(
@@ -135,7 +137,7 @@ class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
                     self.strategy_classification_failure_message
                 )
                 return
-            self.output.assistant_message = self.strategy_classification_failure_message
+            self.output.assistant_message = [self.strategy_classification_failure_message]
             await self.sse_stream.send_chars(
                 self.strategy_classification_failure_message
             )
@@ -159,7 +161,7 @@ class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
-        self.output.assistant_message = _last_assistant_text(self.messages)
+        self.output.assistant_message = _assistant_texts(self.messages)
 
         # self.save_chat_messages()
         # self.save_conversation_result()
