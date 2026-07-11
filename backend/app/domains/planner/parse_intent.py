@@ -210,7 +210,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         )
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            messages=[self.user_message],
+            messages=self.messages,
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_llm_call(req)

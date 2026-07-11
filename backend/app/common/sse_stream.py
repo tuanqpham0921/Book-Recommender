@@ -36,7 +36,6 @@ class SSEStream:
                 raise StopAsyncIteration
             return ServerSentEvent(data=data)
         except asyncio.CancelledError:
-            logger.error("⏰ SSE stream CancelledError: client disconnected")
             self._finished = True
             raise
         except asyncio.TimeoutError:
@@ -52,7 +51,7 @@ class SSEStream:
 
     async def put(self, data: str | dict):
         """Put data into the queue."""
-        if self._closed:
+        if self._closed or self._finished:
             return
         
         if isinstance(data, dict):
@@ -102,7 +101,7 @@ class SSEStream:
     
     async def close(self):
         """Close the stream."""
-        if self._closed:
+        if self._closed or self._finished:
             return
 
         self._closed = True
