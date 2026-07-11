@@ -10,7 +10,7 @@ export const BookCard = ({ book }) => {
           src={book.thumbnail}
           alt={book.title}
           className="w-full h-36 object-cover rounded-lg bg-[var(--bg-quaternary)] mb-2"
-          style={{ filter: 'var(--cover-filter)' }}
+          style={{ filter: 'var(--mono-filter)' }}
           onError={(e) => {
             // Prevent infinite loop if fallback image also fails
             if (e.target.src !== window.location.origin + '/cover-not-found.jpg') {
@@ -53,7 +53,7 @@ export const BookCardDetailed = ({ book }) => {
           src={book.thumbnail}
           alt={book.title}
           className="w-24 h-32 object-cover rounded bg-[var(--bg-quaternary)] flex-shrink-0"
-          style={{ filter: 'var(--cover-filter)' }}
+          style={{ filter: 'var(--mono-filter)' }}
           onError={(e) => {
             // Prevent infinite loop if fallback image also fails
             if (e.target.src !== window.location.origin + '/cover-not-found.jpg') {

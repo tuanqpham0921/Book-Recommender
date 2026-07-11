@@ -7,6 +7,7 @@ import IconButton from '@/design-system/IconButton'
 import Badge from '@/design-system/Badge'
 import Dropdown from '@/design-system/Dropdown'
 import DropdownItem from '@/design-system/DropdownItem'
+import Emoji from '@/design-system/Emoji'
 
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'))
 
@@ -17,9 +18,9 @@ const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'))
 function FeedbackBadge({ run }) {
     const disliked = run.liked === false || run.reviewer_disliked
     const liked = run.liked === true || run.reviewer_liked
-    if (disliked) return <Badge tone="negative" title="Disliked">👎 disliked</Badge>
-    if (liked) return <Badge tone="positive" title="Liked">👍 liked</Badge>
-    if (run.has_report) return <Badge tone="warning" title="Has a written report">📝 report</Badge>
+    if (disliked) return <Badge tone="negative" title="Disliked"><Emoji>👎</Emoji> disliked</Badge>
+    if (liked) return <Badge tone="positive" title="Liked"><Emoji>👍</Emoji> liked</Badge>
+    if (run.has_report) return <Badge tone="warning" title="Has a written report"><Emoji>📝</Emoji> report</Badge>
     return <Badge tone="neutral">— unreviewed</Badge>
 }
 

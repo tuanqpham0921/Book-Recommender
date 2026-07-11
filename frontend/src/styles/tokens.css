@@ -126,8 +126,10 @@
   --accent-warning-border: var(--border-medium);
   --accent-info-border: var(--border-medium);
 
-  /* Book cover art: desaturated by default to match the monochrome UI */
-  --cover-filter: grayscale(1);
+  /* For inherently full-color content that `color`/--accent-* can't touch —
+     book cover art and emoji glyphs — desaturated by default to match the
+     monochrome UI. */
+  --mono-filter: grayscale(1);
 }
 
 :root[data-color="on"] {
@@ -158,5 +160,5 @@
   --accent-info-border: rgb(199, 210, 254);
   /* indigo-200 */
 
-  --cover-filter: none;
+  --mono-filter: none;
 }
