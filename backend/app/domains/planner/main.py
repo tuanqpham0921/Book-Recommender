@@ -65,18 +65,21 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
     def __init__(
-        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
+        self,
+        sse_stream: SSEStream,
+        user_message: UserMessage,
+        llm_client: OpenAIClient,
+        app_env: str | None = None,
     ):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
             output_type=OrchestrationOutput,
+            app_env=app_env,
         )
         self.user_message = user_message
-        self.app_env: str | None = None
 
     async def run(self, request_context: RequestContext) -> None:
-        self.app_env = request_context.app_env
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id

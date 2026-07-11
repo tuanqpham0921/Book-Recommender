@@ -39,7 +39,10 @@ class Orchestrator:
 
             # Core work
             conversation_orchestrator = ConversationOrchestrator(
-                sse_stream, request_context.user_message, request_context.llm_client
+                sse_stream,
+                request_context.user_message,
+                request_context.llm_client,
+                app_env=request_context.app_env,
             )
             await asyncio.wait_for(
                 conversation_orchestrator(request_context=request_context),

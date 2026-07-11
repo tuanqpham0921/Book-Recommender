@@ -15,6 +15,7 @@ import argparse
 import json
 import sys
 import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -46,10 +47,11 @@ def load_suite(
     return entries
 
 
-def create_session(client: httpx.Client) -> str:
-    response = client.post("/session/new")
-    response.raise_for_status()
-    session_id = response.json()["id"]
+def create_session() -> str:
+    # minted locally instead of via /session/new: the server would prefix
+    # with its own env (dev_ on a local server), but suite runs must always
+    # be identifiable as test_ so they can be filtered out of eval queries
+    session_id = f"test_{str(uuid.uuid4())[:8]}"
     print(f"session: {session_id}")
     return session_id
 
@@ -129,7 +131,7 @@ def main() -> int:
         session_id = None
         for i, entry in enumerate(entries, start=1):
             if session_id is None or args.new_session_per_query:
-                session_id = create_session(client)
+                session_id = create_session()
 
             print(
                 f"\n--- query {i}/{len(entries)} "
