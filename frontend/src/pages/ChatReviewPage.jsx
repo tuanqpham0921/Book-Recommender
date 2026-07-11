@@ -284,21 +284,27 @@ function ChatRunRow({ run, sessionId }) {
     )
 }
 
+const SESSION_FILTERS = [
+    { value: 'all', label: 'All sessions' },
+    { value: 'tests', label: 'Tests' },
+]
+
 // Internal review page: lists every recorded chat run, newest first.
 function ChatReviewPage() {
     const [runs, setRuns] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [sessionFilter, setSessionFilter] = useState('all')
     // Own session, separate from any live chat session — feedback filed
     // from this page is tagged review=true and shouldn't be grouped under
     // whatever session a visitor's actual chat conversation is using.
     const [sessionId, setSessionId] = useState(null)
 
-    async function loadRuns() {
+    async function loadRuns(filter = sessionFilter) {
         setIsLoading(true)
         setError(null)
         try {
-            const data = await api.getChatRuns()
+            const data = await api.getChatRuns(200, 0, filter)
             setRuns(data.runs || [])
         } catch (err) {
             console.error('Failed to load chat runs:', err)
@@ -309,22 +315,47 @@ function ChatReviewPage() {
     }
 
     useEffect(() => {
-        loadRuns()
         api.createSession()
             .then(({ id }) => setSessionId(id))
             .catch(err => console.error('Failed to create session:', err))
     }, [])
 
+    // Query the backend on mount and whenever the filter changes.
+    useEffect(() => {
+        loadRuns(sessionFilter)
+    }, [sessionFilter])
+
+    // Reviewed runs (end-user already left a like/dislike) sink to the
+    // bottom so unreviewed runs surface first — sort is stable, so the
+    // backend's newest-first order is preserved within each group.
+    const sortedRuns = [...runs].sort((a, b) => {
+        const aDone = a.liked !== null && a.liked !== undefined
+        const bDone = b.liked !== null && b.liked !== undefined
+        if (aDone === bDone) return 0
+        return aDone ? 1 : -1
+    })
+
     return (
         <div className="min-h-full bg-[var(--bg-secondary)]">
             <div className="max-w-4xl mx-auto px-4 py-4">
                 <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm text-gray-500">
-                        {isLoading ? 'Loading runs…' : `${runs.length} chat run${runs.length === 1 ? '' : 's'}`}
-                    </span>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm text-gray-500">
+                            {isLoading ? 'Loading runs…' : `${sortedRuns.length} chat run${sortedRuns.length === 1 ? '' : 's'}`}
+                        </span>
+                        <select
+                            value={sessionFilter}
+                            onChange={(e) => setSessionFilter(e.target.value)}
+                            className="text-sm border border-gray-200 rounded-md px-2 py-1 bg-white text-gray-700"
+                        >
+                            {SESSION_FILTERS.map(({ value, label }) => (
+                                <option key={value} value={value}>{label}</option>
+                            ))}
+                        </select>
+                    </div>
                     <button
                         type="button"
-                        onClick={loadRuns}
+                        onClick={() => loadRuns()}
                         disabled={isLoading}
                         className="px-3 py-1.5 text-sm rounded-md bg-gray-800 text-white disabled:opacity-40 hover:bg-gray-700 transition-colors"
                     >
@@ -334,12 +365,12 @@ function ChatReviewPage() {
 
                 {error && <div className="text-red-500 italic mb-4">{error}</div>}
 
-                {!isLoading && !error && runs.length === 0 && (
+                {!isLoading && !error && sortedRuns.length === 0 && (
                     <div className="text-gray-400 italic">No chat runs recorded yet.</div>
                 )}
 
                 <div className="flex flex-col gap-2">
-                    {runs.map(run => <ChatRunRow key={run.chat_id} run={run} sessionId={sessionId} />)}
+                    {sortedRuns.map(run => <ChatRunRow key={run.chat_id} run={run} sessionId={sessionId} />)}
                 </div>
             </div>
         </div>

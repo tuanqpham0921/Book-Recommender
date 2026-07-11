@@ -42,6 +42,22 @@ class ChatRunStore(BaseStore[ChatRunModel]):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_test_runs(
+        self, limit: int = 200, offset: int = 0
+    ) -> List[ChatRunModel]:
+        """Get chat runs from test suites, newest first (session_id contains
+        "test_", matching the prefix test suites mint their session_ids
+        with)."""
+        stmt = (
+            select(ChatRunModel)
+            .where(ChatRunModel.session_id.ilike("%test_%"))
+            .order_by(ChatRunModel.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def update_feedback(
         self,
         chat_id: str,

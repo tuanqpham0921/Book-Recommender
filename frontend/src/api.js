@@ -111,9 +111,11 @@ async function updateChatFeedback(chatId, { liked = null } = {}) {
   return await res.json();
 }
 
-// Fetch recorded chat runs (newest first) for the review page
-async function getChatRuns(limit = 200, offset = 0) {
-  const res = await fetch_api(BASE_URL + `/chat_runs?limit=${limit}&offset=${offset}`, {
+// Fetch recorded chat runs (newest first) for the review page.
+// sessionFilter: 'all' | 'tests'
+async function getChatRuns(limit = 200, offset = 0, sessionFilter = 'all') {
+  const path = sessionFilter === 'tests' ? '/chat_runs/tests' : '/chat_runs';
+  const res = await fetch_api(BASE_URL + `${path}?limit=${limit}&offset=${offset}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' }
   });
