@@ -1,9 +1,17 @@
+from typing import Any
+
 from app.domains.books.schemas import FindByTitleRetrieval
-from ..base import MockExecutorWorkflow
+from ..base import MockRetrievalExecutorWorkflow
 
 
-class FindByTitleExecutor(MockExecutorWorkflow):
+class FindByTitleExecutor(MockRetrievalExecutorWorkflow):
     ui_loading_message = "Getting Book By Title..."
 
-    def build_reply(self, task: FindByTitleRetrieval, dependent_results: dict) -> str:
-        return f'I found a book matching the title "{task.title}".'
+    def build_data(
+        self, task: FindByTitleRetrieval, dependent_results: dict
+    ) -> dict[str, Any]:
+        return {
+            "title": task.title,
+            "authors": task.authors or ["Unknown Author"],
+            "isbn13": "9780000000000",
+        }
