@@ -63,16 +63,20 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = 
                 <div className="px-5 py-4 overflow-y-auto flex-1">
                     <div className="flex gap-2 mb-3">
                         <Button
-                            variant="ghost"
+                            variant="secondary"
+                            tone="negative"
+                            active={!positive}
                             onClick={() => setPositive(false)}
-                            className={`flex-1 ${!positive ? 'bg-[var(--accent-negative-bg)] border-[var(--accent-negative-border)] text-[var(--accent-negative)]' : 'border border-[var(--border-light)]'}`}
+                            className="flex-1"
                         >
                             <Flag size={14} /> Issue
                         </Button>
                         <Button
-                            variant="ghost"
+                            variant="secondary"
+                            tone="positive"
+                            active={positive}
                             onClick={() => setPositive(true)}
-                            className={`flex-1 ${positive ? 'bg-[var(--accent-positive-bg)] border-[var(--accent-positive-border)] text-[var(--accent-positive)]' : 'border border-[var(--border-light)]'}`}
+                            className="flex-1"
                         >
                             <Sparkles size={14} /> Praise
                         </Button>
@@ -85,7 +89,8 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = 
                             <button
                                 type="button"
                                 onClick={toggle}
-                                className="w-full flex items-center justify-between text-sm border border-[var(--border-light)] rounded-md p-2 bg-[var(--bg-primary)] text-left"
+                                style={{ fontSize: '0.875rem' }}
+                                className="w-full flex items-center justify-between border border-[var(--border-light)] rounded-md p-2 bg-[var(--bg-primary)] text-left"
                             >
                                 <span className={category ? 'text-[var(--text-active)]' : 'text-[var(--text-muted)]'}>
                                     {category || 'Select a category (optional)'}
@@ -115,6 +120,8 @@ export function IssueReportModal({ chatId, sessionId, isOpen, onClose, review = 
                         placeholder={chatId ? "What was good or bad about this response?" : "What was good or bad about your experience?"}
                         rows={3}
                         maxLength={500}
+                        // Inline size needed to beat base.css's unlayered textarea font-size reset (mobile zoom guard)
+                        style={{ fontSize: '0.875rem' }}
                         className="w-full text-sm border border-[var(--border-light)] rounded-md p-2 resize-none focus:outline-1 focus:outline-[var(--border-medium)]"
                     />
                     <div className="flex justify-end mb-2 px-2">

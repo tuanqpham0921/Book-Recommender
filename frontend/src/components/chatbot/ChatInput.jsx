@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowUp, MessageCircle, Plus, Square } from 'lucide-react';
+import { ArrowUp, MessageCircle, Lightbulb, Square } from 'lucide-react';
 import { userInputSuggestions } from '@/data/chatSuggestions';
 import { IssueReportModal } from '@/components/chatbot/ChatFeedback';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
@@ -50,9 +50,9 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                 {showSuggestions && (
                     <div
                         ref={suggestionsRef} // Attach ref to suggestions container
-                        className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded-lg shadow-lg max-h-48 overflow-y-auto z-10"
+                        className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--bg-primary)] border border-[var(--border-light)] rounded-lg shadow-lg max-h-48 overflow-y-auto z-50"
                     >
-                        <div className="sticky top-0 bg-[var(--bg-secondary)] z-20 border-b border-[var(--border-light)]">
+                        <div className="sticky top-0 bg-white z-20 border-b border-[var(--border-light)]">
                             <div className="text-xs text-[var(--text-inactive)] p-2 px-5">Quick suggestions:</div>
                         </div>
                         <div className="p-2 pt-0">
@@ -103,7 +103,7 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                         onClick={() => setShowSuggestions(!showSuggestions)}
                         title="Show quick suggestions"
                     >
-                        <Plus size={20} />
+                        <Lightbulb size={20} />
                     </IconButton>
 
                     {/* Send / Stop Button */}
