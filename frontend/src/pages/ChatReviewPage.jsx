@@ -105,11 +105,11 @@ function ChatRunRow({ run, sessionId }) {
                         {run.runtime_error}
                     </Badge>
                 )}
-                <span className="flex-1 whitespace-pre-wrap break-words text-sm text-[var(--text-active)]">
+                <span className="flex-1 whitespace-pre-wrap break-words text-sm text-[var(--text-active)] mt-1">
                     {run.user_message || <em className="text-[var(--text-muted)]">no message</em>}
                 </span>
                 <span className="text-sm mt-0.5"><FeedbackBadge run={run} /></span>
-                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap mt-0.5">
+                <span className="text-xs text-[var(--text-muted)] whitespace-nowrap mt-1">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
             </div>
