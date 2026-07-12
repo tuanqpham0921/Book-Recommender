@@ -34,7 +34,7 @@ export const BookGridStack = ({ books }) => {
     <div className="w-full flex flex-row p-4 bg-transparent rounded-lg min-w-0 h-full">
       <div className="flex gap-4 overflow-x-auto pb-2 min-w-0">
         {books.map((book, index) => (
-          <div key={index} className="flex-shrink-0 w-64">
+          <div key={index} className="flex-shrink-0 w-32 sm:w-40">
             <BookCard book={book} key={book.isbn13} />
           </div>
         ))}
