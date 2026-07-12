@@ -100,7 +100,7 @@ class SSEStream:
         """Put data into the queue."""
         if self._closed or self._finished:
             return
-        
+
         if isinstance(data, dict):
             data = json.dumps(data)
             
@@ -115,6 +115,9 @@ class SSEStream:
         # never enter the transcript — it should hold only what was delivered
         if self._closed or self._finished:
             return
+        if not event_type or not data:
+            return
+        
         payload = {"type": event_type, "data": data}
         self._record(payload)
         await self.put(json.dumps(payload))
@@ -122,7 +125,7 @@ class SSEStream:
     async def send_book_card(self, position: int, data: dict):
         """Send raw JSON data."""
         # TODO: fix this so data={position, data}
-        if self._closed or self._finished:
+        if self._closed or self._finished or not data:
             return
         payload = {"type": "book_card", "position": position, "data": data}
         self._record(payload)

@@ -52,6 +52,36 @@ class TestSend:
         assert stream.events[-1]["type"] == "mermaid.diagram"
         assert stream.events[-1]["data"] == "graph TD; A-->B"
 
+    async def test_send_noop_when_event_type_empty(self):
+        stream = SSEStream()
+        await stream.send("", "some data")
+        assert stream.events == []
+        assert stream._queue.empty()
+
+    async def test_send_noop_when_event_type_none(self):
+        stream = SSEStream()
+        await stream.send(None, "some data")
+        assert stream.events == []
+        assert stream._queue.empty()
+
+    async def test_send_noop_when_data_empty_string(self):
+        stream = SSEStream()
+        await stream.send("ui.loading", "")
+        assert stream.events == []
+        assert stream._queue.empty()
+
+    async def test_send_noop_when_data_none(self):
+        stream = SSEStream()
+        await stream.send("ui.loading", None)
+        assert stream.events == []
+        assert stream._queue.empty()
+
+    async def test_send_noop_when_data_empty_dict(self):
+        stream = SSEStream()
+        await stream.send("ui.loading", {})
+        assert stream.events == []
+        assert stream._queue.empty()
+
 
 class TestSendBookCard:
     async def test_send_book_card_records_position(self):
@@ -69,6 +99,18 @@ class TestSendBookCard:
         await stream.close()
         await stream.send_book_card(0, {"title": "Dune"})
         assert stream.events == []
+
+    async def test_send_book_card_noop_when_data_empty_dict(self):
+        stream = SSEStream()
+        await stream.send_book_card(0, {})
+        assert stream.events == []
+        assert stream._queue.empty()
+
+    async def test_send_book_card_noop_when_data_none(self):
+        stream = SSEStream()
+        await stream.send_book_card(0, None)
+        assert stream.events == []
+        assert stream._queue.empty()
 
 
 class TestPut:
