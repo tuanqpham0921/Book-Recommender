@@ -1,4 +1,5 @@
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useRef, useEffect, useState, lazy, Suspense } from 'react'
 import { Copy, Check } from 'lucide-react';
 import { BookGridStack } from '@/components/book/BooksGrid';
@@ -90,7 +91,7 @@ function ChatMessages({ messages, isStreaming, sessionId }) {
                                 if (section.type === 'text' && section.content) {
                                     return (
                                         <div key={key} className="message-bubble response markdown-container">
-                                            <Markdown>{section.content}</Markdown>
+                                            <Markdown remarkPlugins={[remarkGfm]}>{section.content}</Markdown>
                                         </div>
                                     );
                                 }

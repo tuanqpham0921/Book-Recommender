@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const BlogPost = ({ postId = 1 }) => {
     const [post, setPost] = useState(null);
@@ -82,7 +83,7 @@ const BlogPost = ({ postId = 1 }) => {
                 </header>
 
                 <div className="markdown-body">
-                    <Markdown>
+                    <Markdown remarkPlugins={[remarkGfm]}>
                         {content}
                     </Markdown>
                 </div>
