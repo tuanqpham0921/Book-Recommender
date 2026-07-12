@@ -16,9 +16,6 @@ Continue:
 * use TD for long concurrency, LR for long depends on
     * can just make a indegree nodes level
 
-Bugs:
-* UI: chat input is scrollable when empty
-
 =======================================================================
 
 Reminder:
@@ -137,6 +134,49 @@ Consistency / tech debt:
 * app/common/sse_stream.py:69-73 - send_chars streams one char at a time with
   asyncio.sleep per char - hundreds of tiny SSE events + real added latency for
   long responses. Consider chunking by word if this becomes a latency complaint.
+
+=======================================================================
+
+Code review findings (security review, 2026-07-12):
+
+Fix first (security, still open from 2026-07-10, not yet fixed):
+* app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is still a raw str, not
+  list[str]. Confirmed via starlette source: CORSMiddleware.is_allowed_origin() does
+  `origin in self.allow_origins`, which on a plain string is substring/prefix matching,
+  not exact membership. With allow_credentials=True, an attacker who registers a domain
+  that is an exact prefix of the configured origin (e.g. https://app.example.co vs
+  https://app.example.com) gets a credentialed CORS response. Split ALLOW_ORIGINS into
+  an actual list[str] before passing to CORSMiddleware.
+
+New (found this review):
+* app/api/routes/chat_run.py:14,26 - GET /chat_runs and GET /chat_runs/tests have no
+  auth dependency, and there's no auth middleware anywhere in app/main.py. Both return
+  ChatRunModel.to_dict() (db/schema/models.py) for every row unscoped - full
+  user_message/assistant_message/session_id plus the planner/tasks/sse_events JSONB
+  traces for every session, paginated via limit/offset. Anyone can page through the
+  entire chat history of every user with a plain GET. Needs an auth check before this
+  ships anywhere reachable from the internet - at minimum gate it as an internal/admin
+  route.
+* app/api/routes/feedback.py:34-47,50-57 - GET /feedback?chat_id= and PUT
+  /feedback/reaction take caller-supplied chat_id/session_id with no ownership check
+  (feedback_store.py's get_by_chat_id/upsert_reaction just query/upsert on whatever IDs
+  are passed in). Docstring claims the write is "scoped to the reviewer's own
+  session_id" but nothing verifies the caller actually owns it. Combined with the
+  chat_runs disclosure above, both IDs are trivially harvestable, so anyone can read
+  others' filed feedback or silently overwrite another reviewer's like/dislike. Lower
+  severity than chat_runs (bounded to an internal review dataset) but same root cause -
+  needs real session ownership verification, not just "the ID is hard to guess."
+
+Investigated, not flagged:
+* db/stores/base_store.py:19-21 - print()-logs compiled SQL with literal_binds=True on
+  every query, but traced actual callers: only book_store.py routes through
+  _execute_statement (book title/author/ISBN/filter search + embeddings). chat_run_store
+  and feedback_store call session.execute directly and never hit this path, so no
+  chat/feedback free-text or session_id actually gets printed this way. Still sloppy
+  debug output worth removing/gating behind logger.debug, but not a real data-exposure
+  issue as originally suspected - no PII or secrets flow through it.
+
+=======================================================================
 
 Test coverage gaps (new, not already in this file):
 * db/stores/ - zero tests for book_store.py, chat_run_store.py, feedback_store.py,
