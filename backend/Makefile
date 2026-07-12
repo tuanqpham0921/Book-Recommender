@@ -170,7 +170,7 @@ typecheck:
 
 .PHONY: playground
 playground:
-	poetry run python playground.py
+	poetry run python playground/scratch.py
 
 .PHONY: local-end-to-end-test
 local-end-to-end-test:
@@ -182,9 +182,10 @@ query-suite:
 	poetry run python tests/scripts/run_query_suites.py
 
 # run the extended-catalog scaling suite (new tool schemas, ids 101+)
+# parked: schemas live in playground/app_mock, not wired into the registry
 .PHONY: query-suite-extended
 query-suite-extended:
-	poetry run python tests/scripts/run_query_suites.py --suite tests/query_suite_extended.json
+	poetry run python tests/scripts/run_query_suites.py --suite playground/app_mock/query_suite_extended.json
 
 # .Phony: lint
 # lint:

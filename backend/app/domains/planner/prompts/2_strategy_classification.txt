@@ -15,8 +15,8 @@ Use both the goals and user message to generate a list schemas to send to the to
 Task and dependency rules:
   - Assign task_1, task_2, … yourself — every strategy gets a unique id
   - depends_on must only reference task ids defined in this same strategies list
-  - Retrieval and Library strategies (lookups, UserInfo, ProjectInfo, reading list, ratings, etc.) do not use depends_on
-  - Analyze strategies (Compare, Recommendation, Summarize, Themes, Reading_Order, Reading_Level, Reading_Time, Reading_Plan) list the task ids of prerequisite lookups in depends_on
+  - Retrieval strategies (lookups, UserInfo, ProjectInfo, etc.) do not use depends_on
+  - Analyze strategies (Compare, Recommendation) list the task ids of prerequisite lookups in depends_on
   - A strategy cannot depend on itself
   - No circular dependencies
   - Do not use description text in depends_on — only task ids (e.g. ["task_1"], not ["Find Dune by title"])
@@ -62,27 +62,3 @@ Input user message: "Please compare Filights and Satantango books"
   - id: task_1, FindByTitle (Flights), target_goal: ["goal_1", "goal_3"]
   - id: task_2, FindByTitle (Satantango), target_goal: ["goal_2", "goal_3"]
   - id: task_3, Compare, target_goal: ["goal_3"], depends_on: ["task_1", "task_2"]
-
-Input goals:
-[
-  {{"id": "goal_1", "description": "Find the Chronicles of Narnia series", "confidence": 1.0}},
-  {{"id": "goal_2", "description": "Determine reading order for the Narnia books", "confidence": 1.0}}
-]
-Input user message: "In what order should I read the Narnia books?"
-
-→ strategies:
-  - id: task_1, FindSeries (series_name: Chronicles of Narnia), target_goal: ["goal_1", "goal_2"]
-  - id: task_2, ReadingOrder, target_goal: ["goal_2"], depends_on: ["task_1"]
-
-Input goals:
-[
-  {{"id": "goal_1", "description": "Mark Circe as read with a 5-star rating", "confidence": 1.0}},
-  {{"id": "goal_2", "description": "Find Circe by title", "confidence": 1.0}},
-  {{"id": "goal_3", "description": "Recommend books similar to Circe", "confidence": 1.0}}
-]
-Input user message: "I just finished Circe — 5 stars. What should I read next?"
-
-→ strategies:
-  - id: task_1, MarkBookAsRead (title: Circe, rating: 5), target_goal: ["goal_1"]
-  - id: task_2, FindByTitle (Circe), target_goal: ["goal_2", "goal_3"]
-  - id: task_3, Recommendation (reference_books: ["Circe"]), target_goal: ["goal_3"], depends_on: ["task_2"]

@@ -16,7 +16,7 @@ from app.domains.books.schemas.request_schemas import (
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planner.parse_intent import SystemGoal
 from app.domains.planner.strategy_classification import MAX_STRATEGIES, StrategyRequest
-from app.domains.registry import BOOK_RETRIEVAL_CLASSES
+from app.registry import BOOK_RETRIEVAL_CLASSES
 
 
 class _FakeAnalyze(AnalyzeBaseRequest):

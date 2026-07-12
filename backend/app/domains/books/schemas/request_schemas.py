@@ -76,52 +76,29 @@ class RecommendationStrategy(AnalyzeBaseRequest):
 
 
 class FindByTitleRetrieval(DomainRequest):
-    """Retrieve one specific, named book by its title.
-
-    Use when the user names an exact book ("find Dune", "do you have The Hobbit?")
-    or an Analyze step needs a named anchor book resolved first.
-    Not for: an author's bibliography (Retrieve_by_Author), attribute-based
-    searches like "books about X" (Retrieve_by_Traits), or a whole series
-    (Retrieve_Series).
-    authors is only a disambiguation hint when the user says "X by Y" — it does
-    not turn this into an author search.
-    """
+    """Retrieve a book by title from the database."""
 
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
     authors: Optional[list[str]] = Field(
-        default=None, description="Author hint to disambiguate the title, when stated"
+        default=None, description="Author associated with this book"
     )
 
 
 class FindByISBN13Retrieval(DomainRequest):
-    """Retrieve one book by its exact ISBN13 — the most precise lookup.
-
-    Use whenever an explicit ISBN appears in the message; it beats every other
-    retrieval on precision.
-    Not for: titles, authors, or any fuzzy identification — those have their
-    own retrieval tools.
-    """
+    """Retrieve a book by ISBN13 from the database."""
 
     node_type: Literal[BookNodeTypeEnum.FIND_ISBN13] = BookNodeTypeEnum.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
 
 
 class FindByTraitsRetrieval(DomainRequest):
-    """Search the catalog by attributes when no specific title, author, or ISBN is named.
-
-    Use for filter-shaped asks: genre, subject keywords, page count, publication
-    year, rating, children's flag, sorting — "non-fiction about history",
-    "thrillers from the 90s over 300 pages", "highest rated books".
-    Not for: taste/mood-based suggestions ("something spooky" → Analyze_Recommend),
-    a named author's books (Retrieve_by_Author), or popularity/recency framing
-    (Retrieve_Popular / Retrieve_New_Releases).
+    """Retrieve a book by traits (not isbn13 or title) from the database.
+    (trait, genre, rating, page count, or filter-based search)
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_TRAITS] = BookNodeTypeEnum.FIND_TRAITS
     search_criteria: str = Field(
-        ..., description="The attribute-based ask, in the user's words"
+        ..., description="Non-specific search criteria for traits-based search"
     )
-    filters: BooksFilter = Field(
-        ..., description="Structured filters applied to the database query"
-    )
+    filters: BooksFilter = Field(..., description="Optional filters for database query")

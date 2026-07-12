@@ -19,7 +19,7 @@ from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.base_request import AnalyzeBaseRequest, BaseRequest
-from app.domains.registry import (
+from app.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,

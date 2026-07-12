@@ -1,5 +1,5 @@
-"""Tests for the node type registry (app/domains/registry.py)."""
-from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
+"""Tests for the node type registry (app/registry.py)."""
+from app.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 
 
 class TestNodeToolDocstrings:

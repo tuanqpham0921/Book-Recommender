@@ -6,14 +6,7 @@ from app.domains.project.node_types import ProjectNodeTypeEnum
 
 
 class FeedbackRequest(DomainRequest):
-    """Send the user's feedback about this app to the developer.
-
-    Use when the user addresses the app or its builder with praise, complaints,
-    or suggestions: "great app!", "tell the developer the compare feature is my
-    favourite", "this could be faster".
-    Not for: opinions about books (those are just conversation) or questions
-    about the developer (Retrieve_Developer_Info).
-    """
+    """User wants to send feedback about the project (feedback text, optional contact_info)."""
 
     node_type: Literal[ProjectNodeTypeEnum.FEEDBACK] = ProjectNodeTypeEnum.FEEDBACK
     # NOTE: good place to have a simple HITL (Human In The Loop) for feedback
@@ -26,12 +19,7 @@ class FeedbackRequest(DomainRequest):
 
 
 class ProjectInfoRequest(DomainRequest):
-    """Retrieve information about this app — what it is, its tech stack, and links.
-
-    Use for questions about the project itself: "tell me about this app",
-    "what's it built with", "where's the GitHub repo".
-    Not for: facts about its developer as a person (Retrieve_Developer_Info).
-    """
+    """request information about the app, tech stack, architecture, or project metadata (fields list)"""
 
     node_type: Literal[ProjectNodeTypeEnum.PROJECT_INFO] = ProjectNodeTypeEnum.PROJECT_INFO
     fields: list[ProjectInfoField] = Field(..., description="Fields to retrieve")

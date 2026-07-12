@@ -59,9 +59,9 @@ Instead of a fixed routing graph, this system uses **LLM-driven preplanning**: t
 2. **`strategy_classification.py` (`StrategyClassificationWorkflow`)** — takes those goals, loads the matching tools, and has the LLM select strategies via semantic understanding. The LLM can reject goals and resolves dependencies to produce an ordered execution plan.
 3. **`PlannerWorkflow`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, streams it to the frontend, then instantiates the node classes and runs them with the parsed arguments.
 
-Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/domains/registry.py` maps type strings to classes.
+Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/registry.py` maps type strings to classes.
 
-**Adding a new capability:** add a node class under the appropriate domain, register it in `registry.py`, and define its `BookNodeTypeEnum` entry — the planner picks it up automatically via the tool-loading step.
+**Adding a new capability:** add a node class under the appropriate domain, register it in `app/registry.py`, and define its `BookNodeTypeEnum` entry — the planner picks it up automatically via the tool-loading step.
 
 ### Request Flow
 
@@ -84,7 +84,7 @@ Infrastructure abstractions in `common/` that centralize logging, error catching
 
 - **`BookNodeTypeEnum`** — `Retrieve_by_ISBN13`, `Retrieve_by_Title`, `Retrieve_by_Traits`, `Analyze_Compare`, `Analyze_Recommend`
 - **`NodeTypeEnum`** — union of Book/User/Project/Unknown node types
-- `app/domains/registry.py` maps node type strings to their implementations
+- `app/registry.py` maps node type strings to their implementations
 
 ### Database
 
