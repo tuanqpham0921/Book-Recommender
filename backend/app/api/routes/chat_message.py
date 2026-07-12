@@ -6,6 +6,7 @@ from typing import Any, AsyncGenerator, Callable
 from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.event import ServerSentEvent
 from sse_starlette.sse import EventSourceResponse
+from starlette.background import BackgroundTask
 
 from app.api.schemas import ChatIn
 from app.common.messages import UserMessage
@@ -85,4 +86,12 @@ async def chat(
         headers={
             "Cache-Control": "no-cache",
         },
+        # Safety net, not the primary close path: EventSourceResponse runs
+        # this after its internal task group is fully done, which happens
+        # whether that's from normal completion OR the disconnect path
+        # (sse_starlette's task group swallows the cancellation it raises
+        # internally). sse_stream.close() is idempotent (guards on
+        # _closed/_finished), so this just guarantees the stream is never
+        # left dangling even if Orchestrator.run's own cleanup got cut off.
+        background=BackgroundTask(request_context.sse_stream.close),
     )

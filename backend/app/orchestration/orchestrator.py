@@ -104,27 +104,50 @@ class Orchestrator:
                 "Hmm... something went wrong while processing your query."
             )
         finally:
+            # One shielded unit, not two: a second cancellation landing on
+            # *this* task (see EventSourceResponse's disconnect handling —
+            # it keeps re-cancelling every checkpoint, and asyncio.gather()
+            # re-cancels orchestrator_task when its own await is cancelled)
+            # would otherwise raise CancelledError past `except Exception`
+            # (CancelledError is a BaseException, not an Exception, since
+            # 3.8) mid-way through cleanup, skipping sse_stream.close().
+            # Shielding the whole sequence as one background task means that
+            # even if this await is cancelled again, close() still runs —
+            # we just stop waiting for it here.
             try:
                 await asyncio.shield(
-                    asyncio.wait_for(
-                        record_chat_run(
-                            request_context, conversation_orchestrator, task_runner
-                        ),
-                        timeout=SAVE_LOG_TIMEOUT,
+                    self._finalize(
+                        request_context, conversation_orchestrator, task_runner, sse_stream
                     )
                 )
-            except Exception as e:
+            except asyncio.CancelledError:
                 logger.warning(
-                    f"record_chat_run id: {request_context.user_message.id} timed out"
+                    f"cleanup cancelled for chat_id={request_context.user_message.id}, "
+                    "continuing in the background"
                 )
 
-            try:
-                await asyncio.shield(
-                    asyncio.wait_for(
-                        sse_stream.close(), timeout=CLOSE_SSE_STREAM_TIMEOUT
-                    )
-                )
-            except Exception as e:
-                logger.warning(
-                    f"sse_stream.close() id: {request_context.user_message.id} timed out"
-                )
+    @staticmethod
+    async def _finalize(
+        request_context: RequestContext,
+        conversation_orchestrator: PlannerWorkflow | None,
+        task_runner: TaskRunnerWorkflow | None,
+        sse_stream: SSEStream,
+    ) -> None:
+        """Record the run, then close the stream. Best-effort — never lets a
+        slow/failing step here take down the other, or the caller."""
+        try:
+            await asyncio.wait_for(
+                record_chat_run(request_context, conversation_orchestrator, task_runner),
+                timeout=SAVE_LOG_TIMEOUT,
+            )
+        except Exception:
+            logger.warning(
+                f"record_chat_run id: {request_context.user_message.id} timed out"
+            )
+
+        try:
+            await asyncio.wait_for(sse_stream.close(), timeout=CLOSE_SSE_STREAM_TIMEOUT)
+        except Exception:
+            logger.warning(
+                f"sse_stream.close() id: {request_context.user_message.id} timed out"
+            )
