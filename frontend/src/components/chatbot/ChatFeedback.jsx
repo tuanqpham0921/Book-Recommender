@@ -8,7 +8,7 @@ import Dropdown from '@/design-system/Dropdown'
 import DropdownItem from '@/design-system/DropdownItem'
 
 const ISSUE_CATEGORIES = [
-    'Content', 'Recommendation', 'Planner', 'Time', 'UI/UX',   'Other'
+    'Content', 'Recommendation', 'Planner', 'Time', 'UI/UX', 'Others'
 ]
 
 const MAX_ISSUES_PER_MODAL = 20
