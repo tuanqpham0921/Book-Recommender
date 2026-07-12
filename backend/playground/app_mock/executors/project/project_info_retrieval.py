@@ -1,0 +1,52 @@
+from app.domains.project.schemas import ProjectInfoRequest
+from ..base import MockExecutorWorkflow
+
+
+class ProjectInfoExecutor(MockExecutorWorkflow):
+    ui_loading_message = "Getting project info..."
+
+    def build_reply(self, task: ProjectInfoRequest, dependent_results: dict) -> str:
+        return (
+            "## About this project\n\n"
+            "This is **Book Recommender** — a chat-driven app that turns a "
+            "message into a structured plan before it does any retrieval or "
+            "analysis, rather than routing through a fixed graph. Full source is "
+            "on [GitHub](https://github.com/) if you want to poke around.\n\n"
+            "### How a request flows\n\n"
+            "1. `parse_intent` turns your message into a list of goals\n"
+            "2. `strategy_classification` picks a strategy per goal and orders "
+            "them by dependency\n"
+            "3. `task_runner` executes each step and streams results back over "
+            "SSE\n\n"
+            "```python\n"
+            "class PlannerWorkflow(AppBaseWorkflow[OrchestrationOutput]):\n"
+            "    async def run(self, request_context: RequestContext) -> None:\n"
+            "        goals = await self.parse_intent(request_context)\n"
+            "        plan = await self.classify_strategy(goals)\n"
+            "        await self.stream_diagram(plan)\n"
+            "        return await self.execute(plan, request_context)\n"
+            "```\n\n"
+            "### Stack\n\n"
+            "| Layer | Tech |\n"
+            "| --- | --- |\n"
+            "| Backend | FastAPI, async SQLAlchemy |\n"
+            "| Database | PostgreSQL + `pgvector` |\n"
+            "| Frontend | React + Vite |\n"
+            "| Streaming | Server-Sent Events (SSE) |\n\n"
+            "- ✅ New capabilities only need a new node class + registry entry — "
+            "no graph rewiring\n"
+            "- ✅ The planning step produces a Mermaid diagram you see before "
+            "anything runs\n"
+            "- ⚠️ Two LLM calls happen before real work starts (parse + "
+            "classify), traded off for flexibility\n\n"
+            "> The tradeoff is worth it for a chatbot where latency expectations "
+            "are already relaxed.\n\n"
+            "> **📦 Design principle**\n"
+            ">\n"
+            "> *New capabilities* are additive, not architectural — you add a "
+            "node class, not a new branch of the graph. That's the whole point "
+            "of planning over routing.\n\n"
+            "The <u>planner pipeline</u> above is intentionally the only place "
+            "orchestration logic lives — everything else is just a node.\n\n"
+            "Let me know if you'd like more detail on any layer of the stack."
+        )
