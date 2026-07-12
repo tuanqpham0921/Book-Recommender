@@ -79,11 +79,26 @@ class TestAppSettings:
         s = AppSettings.model_construct(
             NAME="book-recommender",
             ENVIRONMENT="test",
-            ALLOW_ORIGINS="http://localhost:3000",
+            ALLOW_ORIGINS=["http://localhost:3000"],
         )
         assert s.NAME == "book-recommender"
         assert s.ENVIRONMENT == "test"
-        assert s.ALLOW_ORIGINS == "http://localhost:3000"
+        assert s.ALLOW_ORIGINS == ["http://localhost:3000"]
+
+    def test_allow_origins_splits_comma_separated_string(self):
+        # CORSMiddleware does exact-membership checks on this list; a plain
+        # str would substring-match instead, which is a CORS bypass once
+        # more than one origin is configured (see field_validator).
+        s = AppSettings(
+            NAME="book-recommender",
+            ENVIRONMENT="test",
+            ALLOW_ORIGINS="http://localhost:3000, http://localhost:3001",
+        )
+        assert s.ALLOW_ORIGINS == ["http://localhost:3000", "http://localhost:3001"]
+
+    def test_allow_origins_accepts_wildcard(self):
+        s = AppSettings(NAME="book-recommender", ENVIRONMENT="test", ALLOW_ORIGINS="*")
+        assert s.ALLOW_ORIGINS == ["*"]
 
 
 class TestSettings:

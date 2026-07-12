@@ -66,11 +66,6 @@ class OperationResult(BaseModel, Generic[OutputT]):
         # default there's no output
         if self.output is None:
             return
-        
-        # no output and no declared type: this envelope never claimed to
-        # produce anything (e.g. a failure envelope) — nothing to check
-        if self.output is None and self.output_type is None:
-            return
 
         if self.output_type is None:
             raise TypeError(

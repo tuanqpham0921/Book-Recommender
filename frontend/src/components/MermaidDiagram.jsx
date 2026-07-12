@@ -12,7 +12,10 @@ function MermaidDiagram({ chart }) {
         mermaid.initialize({
             startOnLoad: false,
             theme: 'base',
-            securityLevel: 'loose',
+            // diagram source comes from LLM/backend output and is rendered
+            // via innerHTML — 'loose' disables sanitization (incl. click
+            // bindings); 'strict' still allows the styled div/strong labels
+            securityLevel: 'strict',
             themeVariables: {
                 // px, not rem: mermaid does numeric math on this for label
                 // sizing and misreads rem values

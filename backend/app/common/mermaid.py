@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 from collections.abc import Mapping
 
 from app.domains.base_request import BaseRequest
@@ -52,10 +53,22 @@ def format_node_label(task_id: str, data: dict) -> str:
     return "".join(rows)
 
 
+def choose_orientation(levels: Mapping[str, int] | None) -> str:
+    """TD for wide/concurrent graphs, LR for deep/sequential dependency
+    chains — ties (including the no-levels/single-node default) favor TD."""
+    if not levels:
+        return "TD"
+    depth = max(levels.values()) + 1
+    width = max(Counter(levels.values()).values())
+    return "TD" if width >= depth else "LR"
+
+
 def get_mermaid_diagram(
-    execution_order: list[str], id_to_node: Mapping[str, BaseRequest]
+    execution_order: list[str],
+    id_to_node: Mapping[str, BaseRequest],
+    levels: Mapping[str, int] | None = None,
 ) -> str | None:
-    lines = ["flowchart TD"]
+    lines = [f"flowchart {choose_orientation(levels)}"]
 
     for task in execution_order:
         node = id_to_node[task]

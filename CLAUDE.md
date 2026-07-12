@@ -70,6 +70,8 @@ Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/regist
 3. **`PlannerWorkflow`** runs the planner pipeline (parse → classify → diagram → execute)
 4. Results stream back to the client via **SSEStream** (`app/common/sse_stream.py`)
 
+**Current state:** `TaskRunnerWorkflow` (`app/domains/task_runner.py`) — the step that would actually execute the classified strategies — is implemented but currently commented out in `Orchestrator.run`. Today's request flow only runs the planner pipeline through diagram generation; it does not yet execute tasks end-to-end.
+
 ### Workflow / Operation Pattern
 
 Infrastructure abstractions in `common/` that centralize logging, error catching, and structured output — so production code never crashes silently and every result carries consistent metadata.

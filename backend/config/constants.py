@@ -64,17 +64,17 @@ class BookGuides:
     
     def __str__(self):
         """Return string representation of all constraints."""
-        result = "BookConstraints:\n"
-        
+        result = "BookGuides:\n"
+
         # Get all class attributes that are constants (uppercase or constraint names)
         constraints = {
             name: value for name, value in self.__class__.__dict__.items()
             if not name.startswith('_') and not callable(value)
         }
-        
+
         for attr_name, attr_value in constraints.items():
             result += f"  {attr_name} = {attr_value}\n"
-            
+
         return result
 
 class BookConstraints:

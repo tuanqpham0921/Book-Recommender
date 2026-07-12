@@ -144,6 +144,26 @@ class StrategyClassificationOutput(AppWorkflowOutput):
         """Return dict of node_id -> serialized node data."""
         return {node.id: node for node in self.refused}
 
+    def get_execution_levels(self) -> dict[str, int]:
+        """BFS depth per accepted node: 0 for no dependencies, else
+        1 + max(level of its deps). Used to pick a wide/concurrent (TD) vs
+        deep/sequential (LR) mermaid layout."""
+        id_to_node = self.get_accepted_id_to_node()
+        levels: dict[str, int] = {}
+
+        def level_of(task_id: str) -> int:
+            if task_id in levels:
+                return levels[task_id]
+            deps = id_to_node[task_id].get_depends_on()
+            levels[task_id] = 1 + max(
+                (level_of(d) for d in deps if d in id_to_node), default=-1
+            )
+            return levels[task_id]
+
+        for task_id in id_to_node:
+            level_of(task_id)
+        return levels
+
 
 class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutput]):
     success_message = "Strategy classification completed successfully"

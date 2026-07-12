@@ -231,7 +231,7 @@ class TestPing:
         self.client.client.responses.create = AsyncMock(return_value=MagicMock())
         await self.client.ping()
         self.client.client.responses.create.assert_called_once_with(
-            model="gpt-5-nano", input="ping"
+            model="gpt-4o", input="ping"
         )
 
     # NOTE: open_ai client ping is now a task

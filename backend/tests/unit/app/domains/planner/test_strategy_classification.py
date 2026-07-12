@@ -736,6 +736,35 @@ class TestGetAcceptedIdToNode:
         assert result[r2.id] is r2
 
 
+class TestGetExecutionLevels:
+    def test_no_dependency_nodes_are_level_zero(self, strategy_wf):
+        r1 = _make_retrieval("task_1")
+        r2 = _make_retrieval("task_2", title="Book B")
+        strategy_wf.output.accepted = [r1, r2]
+        levels = strategy_wf.output.get_execution_levels()
+        assert levels == {"task_1": 0, "task_2": 0}
+
+    def test_linear_chain_increments_per_hop(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        a1 = _make_analyze("task_2", depends_on_ids=["task_1"])
+        a2 = _make_analyze("task_3", depends_on_ids=["task_2"])
+        strategy_wf.output.accepted = [r, a1, a2]
+        levels = strategy_wf.output.get_execution_levels()
+        assert levels == {"task_1": 0, "task_2": 1, "task_3": 2}
+
+    def test_diamond_takes_max_of_dependency_levels(self, strategy_wf):
+        r = _make_retrieval("task_1")
+        b = _make_analyze("task_2", depends_on_ids=["task_1"])
+        c = _make_analyze("task_3", depends_on_ids=["task_1"])
+        d = _make_analyze("task_4", depends_on_ids=["task_2", "task_3"])
+        strategy_wf.output.accepted = [r, b, c, d]
+        levels = strategy_wf.output.get_execution_levels()
+        assert levels["task_4"] == 2
+
+    def test_empty_accepted_returns_empty_dict(self, strategy_wf):
+        assert strategy_wf.output.get_execution_levels() == {}
+
+
 class TestToSummary:
     def test_returns_ids_of_accepted_strategies(self, strategy_wf):
         r = _make_retrieval("task_1")

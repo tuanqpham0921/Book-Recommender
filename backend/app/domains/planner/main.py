@@ -178,6 +178,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             diagram = get_mermaid_diagram(
                 strategy_result.execution_order,
                 strategy_result.get_accepted_id_to_node(),
+                strategy_result.get_execution_levels(),
             )
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")

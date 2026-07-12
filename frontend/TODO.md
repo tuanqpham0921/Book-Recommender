@@ -24,9 +24,11 @@ Correctness bugs (highest priority):
 * api.js:80 vs ChatBot.jsx:84-87 - sendChatMessage's own internal timeout (120000ms)
   fires before ChatBot's "safety timer" (180000ms) ever gets a chance to run - the
   3-minute timeout message is currently unreachable.
-* api.js:40,47 - fetch_api rejects with plain objects ({status, data}), not Error
+* [FIXED 2026-07-12] api.js:40,47 - fetch_api rejects with plain objects ({status, data}), not Error
   instances - ChatBot.jsx:242's `err.name === 'AbortError'` check can never match,
   so timeouts/HTTP failures fall through to the generic error message.
+  -> both reject paths now throw real Error instances (status/data attached via
+  Object.assign; the timeout path also sets .name = 'AbortError').
 * ChatReviewPage.jsx + ChatFeedback.jsx:26-34 - every ChatRunRow mounts its own
   IssueReportModal unconditionally (not just when open), each registering a
   permanent mousedown listener - up to 200 live global listeners for a feature
@@ -35,7 +37,7 @@ Correctness bugs (highest priority):
   fetch, backend task keeps running server-side after clicking Stop.
 
 Security:
-* MermaidDiagram.jsx:15 (securityLevel: 'loose') + :60 (innerHTML = svg) - diagram
+* [FIXED 2026-07-12] MermaidDiagram.jsx:15 (securityLevel: 'loose') + :60 (innerHTML = svg) - diagram
   source comes from LLM/backend output and renders with sanitization disabled;
   'loose' permits click bindings and other script-bearing constructs. Switch to
   'strict' unless click-bindings are actually needed.
@@ -54,6 +56,11 @@ Consistency / tech debt:
   or move to a backlog note.
 * utils/bookUtils.js:4-33 - formatAuthors/formatAuthorsMobile ~90% duplicated,
   collapse into one function with a `compact` flag.
+
+Code cleanup pass (2026-07-12): fixed the two items above (MermaidDiagram.jsx
+securityLevel, api.js fetch_api error rejection). Everything else below is still
+open — each implies a small refactor/new hook (useSession, useClickOutside) or a
+backend endpoint (stopChatStream), out of scope for a no-new-code cleanup pass.
 
 Accessibility:
 * ChatFeedback.jsx:55-196 (IssueReportModal) - no role="dialog"/aria-modal, no

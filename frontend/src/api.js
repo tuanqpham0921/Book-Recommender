@@ -38,14 +38,24 @@ async function fetch_api(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
       const errorData = res.headers.get('content-type')?.includes('application/json')
         ? await res.json()
         : { error: 'Request failed' };
-      return Promise.reject({ status: res.status, data: errorData });
+      // reject with a real Error (not a plain object) so callers can rely
+      // on instanceof/.name checks (e.g. ChatBot.jsx's AbortError handling)
+      return Promise.reject(
+        Object.assign(new Error('Request failed'), { status: res.status, data: errorData })
+      );
     }
 
     return res;
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      return Promise.reject({ status: 408, data: { error: 'Request timeout or cancelled' } });
+      return Promise.reject(
+        Object.assign(new Error('Request timeout or cancelled'), {
+          name: 'AbortError',
+          status: 408,
+          data: { error: 'Request timeout or cancelled' },
+        })
+      );
     }
     throw error;
   }

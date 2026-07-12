@@ -13,8 +13,10 @@ Continue:
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
 * rename all the issues to feedback
-* use TD for long concurrency, LR for long depends on
+* [DONE 2026-07-12] use TD for long concurrency, LR for long depends on
     * can just make a indegree nodes level
+    * -> StrategyClassificationOutput.get_execution_levels() + app/common/mermaid.py
+      choose_orientation(); wired into planner/main.py's send_mermaid
 
 =======================================================================
 
@@ -52,7 +54,7 @@ Reminder:
     * change your app/workflow to not overwrite and make sure tests passes 
 
 Ideas:
-* mermaid optimization (TD for high concurrent, LR for high depends_on)
+* [DONE 2026-07-12] mermaid optimization (TD for high concurrent, LR for high depends_on)
 * once you have resume/checkpoint, you might need to move some stuff around
     * you might need to have the model validate do the DAG processing
     * that way you can pick up from orchestrator and continue
@@ -90,32 +92,38 @@ but after you have db saved, and eval tests set up
 Code review findings (2026-07-10):
 
 Fix first (security, cheap and exploitable):
-* db/stores/utils.py:36,44,62,66,111,126,162,168 - SQL injection: build_title_search/
+* [FIXED 2026-07-12] db/stores/utils.py:36,44,62,66,111,126,162,168 - SQL injection: build_title_search/
   build_author_search/apply_book_filters splice user strings into text(f"'{...}'")
   instead of binding params. `' OR 1=1 --` breaks out of the literal.
-* app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is a raw str, not list[str].
+  -> passed the raw string straight to func.similarity() so SQLAlchemy binds it;
+  regression tests in tests/unit/db/stores/test_utils.py.
+* [FIXED 2026-07-12] app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is a raw str, not list[str].
   CORSMiddleware does substring match on a plain string, not exact match, once you
   configure more than one origin -> real CORS bypass. Split on comma before passing in.
-* db/stores/base_store.py:19-20 - _execute_statement print()s fully compiled SQL with
+  -> field_validator splits the comma-separated env var into list[str] (NoDecode to
+  avoid pydantic-settings' JSON auto-decode on list fields); .env stays comma-separated.
+* [FIXED 2026-07-12] db/stores/base_store.py:19-20 - _execute_statement print()s fully compiled SQL with
   literal_binds=True (real param values) on every query, in every environment. Remove
   or gate behind logger.debug.
 
 Correctness bugs:
-* common/utils/json_handler.py:52,66 - file_name.rstrip(".json") strips a char set, not
+* [FIXED 2026-07-12] common/utils/json_handler.py:52,66 - file_name.rstrip(".json") strips a char set, not
   the literal suffix. Use removesuffix(".json").
-* db/stores/utils.py:58 - build_author_search references model.author (singular);
+* [FIXED 2026-07-12] db/stores/utils.py:58 - build_author_search references model.author (singular);
   BookModel only has `authors`. Dead code, breaks as soon as something calls it.
-* config/constants.py:66-67 - BookGuides.__str__ returns "BookConstraints:\n" (copy-paste
+* [FIXED 2026-07-12] config/constants.py:66-67 - BookGuides.__str__ returns "BookConstraints:\n" (copy-paste
   from BookConstraints.__str__) - wrong section header shown to the LLM in prompts.
-* common/operation.py:65-73 - check_output_type has unreachable branch: early return on
+* [FIXED 2026-07-12] common/operation.py:65-73 - check_output_type has unreachable branch: early return on
   `output is None` makes the later `output is None and output_type is None` dead.
 * common/context.py:42-48 - AppContext.__aenter__ has ping_services() entirely commented
   out - app reports ready without checking OpenAI/DB connectivity at boot.
-* clients/openai_client.py:54 - chat completions have no semaphore (embeddings do) - no
+  NOT fixed (2026-07-12 pass): re-enabling changes startup behavior (fails boot if
+  DB/OpenAI unreachable) - deliberately left for the local-deploy follow-up.
+* [FIXED 2026-07-12] clients/openai_client.py:54 - chat completions have no semaphore (embeddings do) - no
   concurrency limit, can blow past OpenAI rate limits.
-* clients/openai_client.py:116 - ping() hardcodes "gpt-5-nano" instead of
+* [FIXED 2026-07-12] clients/openai_client.py:116 - ping() hardcodes "gpt-5-nano" instead of
   settings.openai.BASE_MODEL.
-* db/stores/base_store.py:17-24 - try/except Exception as e: raise e does nothing, either
+* [FIXED 2026-07-12] db/stores/base_store.py:17-24 - try/except Exception as e: raise e does nothing, either
   delete or actually log context on failure.
 
 Consistency / tech debt:
@@ -140,7 +148,7 @@ Consistency / tech debt:
 Code review findings (security review, 2026-07-12):
 
 Fix first (security, still open from 2026-07-10, not yet fixed):
-* app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is still a raw str, not
+* [FIXED 2026-07-12] app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is still a raw str, not
   list[str]. Confirmed via starlette source: CORSMiddleware.is_allowed_origin() does
   `origin in self.allow_origins`, which on a plain string is substring/prefix matching,
   not exact membership. With allow_credentials=True, an attacker who registers a domain
@@ -179,10 +187,30 @@ Investigated, not flagged:
 =======================================================================
 
 Test coverage gaps (new, not already in this file):
-* db/stores/ - zero tests for book_store.py, chat_run_store.py, feedback_store.py,
-  base_store.py, utils.py (the query-builder with the SQL injection above).
+* db/stores/ - [PARTIAL 2026-07-12] utils.py now has SQL-injection regression tests
+  (tests/unit/db/stores/test_utils.py). Still zero tests for book_store.py,
+  chat_run_store.py, feedback_store.py, base_store.py.
 * app/api/routes/ - only chat_message.py has a test; session.py, chat_run.py,
   feedback.py, health.py have none.
 * app/domains/{books,project,users}/schemas/ - no tests for domain request-schema
   validators.
 * common/context.py (AppContext), db/bootstrap.py, db/readiness.py - untested.
+
+=======================================================================
+
+Code cleanup pass (2026-07-12):
+
+Walked the planner/request path (backend + frontend), fixed the cheap/mechanical
+items already tracked above (marked [FIXED 2026-07-12]/[DONE 2026-07-12] inline),
+implemented the mermaid TD/LR orientation idea, and added regression tests. Left
+untouched (need real design decisions, not just cleanup): chat_run.py/feedback.py
+auth, context.py ping_services, book_store.py per-author N+1 query, uuid_8 collision
+risk, sse_stream.send_chars per-char streaming, FeedbackIn.message max_length. Did
+not touch task_runner.py (currently disabled/removed from Orchestrator.run) or
+db/ingestion/ (legacy, out of scope per CLAUDE.md). Dockerfile/local-deploy review
+deferred to a separate follow-up.
+
+Pre-existing, unrelated to this pass: tests/unit/app/orchestration/test_orchestrator.py
+::TestOrchestratorRun::test_does_not_record_when_result_is_none fails on main
+(AttributeError: 'NoneType' object has no attribute 'ok' in orchestrator.py) -
+confirmed via git stash that it reproduces on an unmodified checkout.

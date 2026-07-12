@@ -17,6 +17,14 @@ class TestSaveFile:
         save_file({"x": 1}, file_name="out.json", path=tmp_path)
         assert (tmp_path / "out.json").exists()
 
+    def test_filename_ending_in_stray_suffix_chars_is_not_mangled(self, tmp_path):
+        # regression: file_name.rstrip(".json") strips any trailing chars in
+        # {j,s,o,n,.} rather than the literal ".json" suffix, so "session"
+        # used to become "sessi.json" instead of "session.json"
+        save_file({"x": 1}, file_name="session", path=tmp_path)
+        assert (tmp_path / "session.json").exists()
+        assert not (tmp_path / "sessi.json").exists()
+
     def test_creates_directory_if_missing(self, tmp_path):
         nested = tmp_path / "a" / "b"
         save_file({"x": 1}, file_name="out", path=nested)
@@ -149,6 +157,12 @@ class TestLoadJson:
         f = tmp_path / "data.json"
         f.write_text(json.dumps({"key": "value"}))
         result = load_json("data.json", path=tmp_path)
+        assert result == {"key": "value"}
+
+    def test_filename_ending_in_stray_suffix_chars_is_not_mangled(self, tmp_path):
+        f = tmp_path / "session.json"
+        f.write_text(json.dumps({"key": "value"}))
+        result = load_json("session", path=tmp_path)
         assert result == {"key": "value"}
 
     def test_returns_list(self, tmp_path):

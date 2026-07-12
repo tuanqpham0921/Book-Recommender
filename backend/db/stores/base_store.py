@@ -1,9 +1,12 @@
+import logging
 from typing import TypeVar, Generic, List, Any, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from abc import ABC
 
 from db.stores.utils import compile_sql
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 
@@ -15,11 +18,6 @@ class BaseStore(Generic[T], ABC):
         self.model = model_class
 
     async def _execute_statement(self, stmt):
-        try:
-            print("------ STMT ------")
-            print(compile_sql(stmt))
-            print("------------------")
-            result = await self.session.execute(stmt)
-            return result
-        except Exception as e:
-            raise e
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("Executing statement: %s", compile_sql(stmt))
+        return await self.session.execute(stmt)
