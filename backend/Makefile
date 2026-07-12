@@ -126,8 +126,8 @@ postgres-clear-feedback:
 	@echo "feedback table cleared"
 
 # wipe all recorded chat runs and feedback (dev convenience — irreversible)
-.PHONY: postgres-dev-reset-log
-postgres-dev-reset-log:
+.PHONY: postgres-logs-clear
+postgres-logs-clear:
 	make postgres-clear-feedback
 	make postgres-clear-chat-runs
 
@@ -145,23 +145,8 @@ docker-clean-all:
 # Testing commands
 # -------------------
 
-# run the tests
 .PHONY: tests
 tests:
-	poetry run pytest -s tests/unit/common/utils --cov=common/utils --cov-report=term-missing
-	poetry run pytest -s tests/unit/clients --cov=clients/ --cov-report=term-missing
-	poetry run pytest -s tests/unit/app/common/test_messages.py --cov=app.common.messages --cov-report=term-missing
-	poetry run pytest -s tests/unit/app/common/test_mermaid.py --cov=app.common.mermaid --cov-report=term-missing
-	poetry run pytest -s tests/unit/app/common/test_prompt_loader.py --cov=app.common.prompt_loader --cov-report=term-missing
-	poetry run pytest -s tests/unit/db/test_async_engine.py --cov=db.async_engine --cov-report=term-missing
-	poetry run pytest -s tests/unit/config/test_settings.py --cov=config.settings --cov-report=term-missing 
-	poetry run pytest -s tests/unit/app/domains/planner --cov=app/domains/planner --cov-report=term-missing
-	poetry run pytest -s tests/unit/app/orchestration --cov=app/orchestration --cov-report=term-missing
-
-# poetry run pytest -s tests/unit/app/domains/planner/test_strategy_classification.py
-
-.PHONY: tests-all
-tests-all:
 	poetry run pytest -s tests/unit/
 
 .PHONY: typecheck
