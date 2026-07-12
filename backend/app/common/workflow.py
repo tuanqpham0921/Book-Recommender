@@ -50,7 +50,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
 
     async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         result = await self.run_async_step(
-            lambda: self.llm_client.execute(req, save_payload=save_payload)
+            self.llm_client.execute, req, save_payload=save_payload
         )
         # run_async_step raised on failure, so output carries the message
         msg = cast(AssistantMessage, result.output)
@@ -61,7 +61,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
         self, tool_call: ParsedFunctionToolCall, **kwargs
     ) -> ToolMessage:
         result = await self.run_async_step(
-            lambda: ToolMessage.execute(tool_call, **kwargs)
+            ToolMessage.execute, tool_call, **kwargs
         )
         tool_msg = cast(ToolMessage, result.output)
         self.messages.append(tool_msg)

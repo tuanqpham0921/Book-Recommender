@@ -118,22 +118,26 @@ class Workflow(ABC, Generic[OutputT]):
 
     async def run_async_step(
         self,
-        function: Callable[[], Coroutine[Any, Any, OperationResult[Any]]],
-        *,
+        function: Callable[..., Coroutine[Any, Any, OperationResult[Any]]],
+        *args: Any,
         raise_on_failure: bool = True,
         retries: int = 1,
         timeout: float | None = None,
+        **kwargs: Any,
     ) -> OperationResult[Any]:
-        """Run one step, calling `function()` fresh on each attempt.
+        """Run one step, calling `function(*args, **kwargs)` fresh on each
+        attempt — pass the callable itself (a function, bound method, or a
+        Workflow instance, which is callable via __call__) plus its
+        arguments, not an already-created coroutine, so a retry can call it
+        again.
 
         retries: total attempts before giving up on a *failed envelope*
-        (default 1 = no retry). A bare exception raised by `function()`
-        itself (no @task/envelope around it) is never retried and propagates
+        (default 1 = no retry). A bare exception raised by the call itself
+        (no @task/envelope around it) is never retried and propagates
         immediately — see TestCrashingSteps in test_workflow.py. If
-        `function` wraps a single-use Workflow instance
-        (`lambda: SomeWorkflow(...)()`), it must construct a new instance on
-        every call for retries to actually retry instead of hitting the
-        single-use guard.
+        `function` is a single-use Workflow instance, retries beyond the
+        first attempt will hit its single-use guard — pass a plain function
+        that constructs a fresh instance per call instead.
         timeout: per-attempt seconds passed to asyncio.wait_for (default
         None = no timeout).
         """
@@ -142,7 +146,9 @@ class Workflow(ABC, Generic[OutputT]):
 
         for attempt in range(1, attempts + 1):
             try:
-                step_result = await asyncio.wait_for(function(), timeout=timeout)
+                step_result = await asyncio.wait_for(
+                    function(*args, **kwargs), timeout=timeout
+                )
             except asyncio.TimeoutError as e:
                 message = f"Step timed out after {timeout}s"
                 step_result = OperationResult(ok=False, message=message)

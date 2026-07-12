@@ -85,11 +85,10 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 app_env=self.app_env,
             )
             step_result = await self.run_async_step(
-                lambda: executor(
-                    task=task,
-                    dependent_results=dependent_results,
-                    request_context=request_context,
-                ),
+                executor,
+                task=task,
+                dependent_results=dependent_results,
+                request_context=request_context,
                 raise_on_failure=False,
             )
             if not step_result.ok:

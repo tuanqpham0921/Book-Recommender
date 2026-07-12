@@ -217,7 +217,7 @@ class TestCrashingSteps:
                 for i in range(5):
                     if i == 3:
                         await self.run_async_step(_explodes)
-                    await self.run_async_step(lambda i=i: _okay_step(i))
+                    await self.run_async_step(_okay_step, i)
 
 
         result = await _BareCoroWorkflow()()
@@ -250,7 +250,7 @@ class TestCrashingSteps:
                             _explodes, raise_on_failure=self._raise
                         )
                     await self.run_async_step(
-                        lambda i=i: _okay_step(i), raise_on_failure=self._raise
+                        _okay_step, i, raise_on_failure=self._raise
                     )
 
         result = await _BareCoroWorkflow(raise_on_failure)()
@@ -278,7 +278,7 @@ class TestCrashingSteps:
                             _explodes_enveloped, raise_on_failure=False
                         )
                     await self.run_async_step(
-                        lambda i=i: _okay_step(i), raise_on_failure=False
+                        _okay_step, i, raise_on_failure=False
                     )
 
         result = await _EnvelopedCrashWorkflow()()
