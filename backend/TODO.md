@@ -210,7 +210,11 @@ not touch task_runner.py (currently disabled/removed from Orchestrator.run) or
 db/ingestion/ (legacy, out of scope per CLAUDE.md). Dockerfile/local-deploy review
 deferred to a separate follow-up.
 
-Pre-existing, unrelated to this pass: tests/unit/app/orchestration/test_orchestrator.py
-::TestOrchestratorRun::test_does_not_record_when_result_is_none fails on main
-(AttributeError: 'NoneType' object has no attribute 'ok' in orchestrator.py) -
-confirmed via git stash that it reproduces on an unmodified checkout.
+[FIXED 2026-07-12] tests/unit/app/orchestration/test_orchestrator.py::TestOrchestratorRun::
+test_does_not_record_when_result_is_none - was asserting the wrong layer: it mocked
+record_chat_run away entirely and expected Orchestrator._finalize to independently skip
+calling it when workflow.result is None, but _finalize has no such guard - it always
+calls record_chat_run unconditionally, and record_chat_run's own first guard clause is
+what decides not to persist. Renamed/fixed the orchestrator test to assert the
+unconditional hand-off, and added test_missing_workflow_result_records_nothing to
+test_run_recorder.py's TestRecordChatRun to cover the real guard behavior.

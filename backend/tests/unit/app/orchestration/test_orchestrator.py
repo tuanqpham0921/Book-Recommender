@@ -1,5 +1,7 @@
 """Tests for Orchestrator.run: verifies a finished conversation workflow is
-handed to record_chat_run, and that runs without a result are not recorded."""
+always handed to record_chat_run — the "don't record" decision for a missing
+result lives inside record_chat_run itself (see test_run_recorder.py), not in
+the orchestrator, so _finalize calls it unconditionally."""
 
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
@@ -44,7 +46,9 @@ class TestOrchestratorRun:
 
         mock_record.assert_awaited_once_with(request_context, mock_workflow, ANY)
 
-    async def test_does_not_record_when_result_is_none(self, request_context):
+    async def test_still_hands_off_to_record_chat_run_when_result_is_none(
+        self, request_context
+    ):
         mock_workflow = AsyncMock()
         mock_workflow.result = None
 
@@ -57,4 +61,6 @@ class TestOrchestratorRun:
         ) as mock_record:
             await Orchestrator().run(request_context)
 
-        mock_record.assert_not_awaited()
+        # _finalize has no result-is-None guard of its own; record_chat_run's
+        # own guard (tested in test_run_recorder.py) is what skips persisting
+        mock_record.assert_awaited_once_with(request_context, mock_workflow, ANY)

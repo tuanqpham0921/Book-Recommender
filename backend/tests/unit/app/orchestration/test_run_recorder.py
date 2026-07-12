@@ -121,6 +121,21 @@ class TestBuildChatRunRow:
 
 
 class TestRecordChatRun:
+    async def test_missing_workflow_result_records_nothing(self):
+        # app_env="development" (not "test") so this exercises the
+        # workflow.result-is-None guard specifically, not the env-based skip
+        ctx = _make_request_context("development")
+        workflow = MagicMock()
+        workflow.result = None
+
+        with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
+            "app.orchestration.run_recorder.ChatRunStore"
+        ) as mock_store_cls:
+            await record_chat_run(ctx, workflow)
+
+        mock_save.assert_not_called()
+        mock_store_cls.assert_not_called()
+
     async def test_test_env_records_nothing(self):
         ctx = _make_request_context("test")
 
