@@ -25,6 +25,13 @@ dev:
 ingestion:
 	LOG_LEVEL=INFO poetry run python -m db.ingestion.main
 
+# expose the local API (make dev) to the internet via ngrok.
+# copy the printed https://*.ngrok-free.dev URL into
+# `make -C ../frontend deploy-tunnel URL=<that url>`
+.PHONY: tunnel
+tunnel:
+	ngrok http 8000
+
 # clear the pycache
 .PHONY: clean
 clean:

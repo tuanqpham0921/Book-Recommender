@@ -29,6 +29,9 @@ async function fetch_api(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   try {
     const res = await fetch(url, {
       ...options,
+      // harmless no-op against non-ngrok backends; required so ngrok
+      // doesn't serve its browser-warning interstitial instead of the API response
+      headers: { ...options.headers, 'ngrok-skip-browser-warning': 'true' },
       signal: combinedSignal
     });
 
