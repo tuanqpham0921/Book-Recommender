@@ -49,7 +49,7 @@ def save_file(
 
     json_str = json.dumps(jsonable, indent=2, default=str)
 
-    file_name = file_name.rstrip(".json")
+    file_name = file_name.removesuffix(".json")
     filepath = path / f"{file_name}.json"
     with open(filepath, "w") as f:
         f.write(json_str)
@@ -63,7 +63,7 @@ def load_json(
 ) -> dict | list | None:
     """load json from file"""
     path = Path(path)
-    file_name = file_name.rstrip(".json")
+    file_name = file_name.removesuffix(".json")
     filepath = path / f"{file_name}.json"
 
     if not filepath.exists():

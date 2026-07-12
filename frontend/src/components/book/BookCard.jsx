@@ -1,111 +1,100 @@
 import { useState } from 'react';
-import { formatAuthors, formatAuthorsMobile, truncateText } from '@/utils/bookUtils';
+import { formatAuthors, formatAuthorsMobile } from '@/utils/bookUtils';
+import BookCover from './BookCover';
+import BookDetailModal from './BookDetailModal';
 
+// Compact tile for the horizontal chat stack — whole card is the tap
+// target, opens BookDetailModal for anything that doesn't fit here.
 export const BookCard = ({ book }) => {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm flex flex-col h-full p-3">
-      <div className="flex flex-col h-full">
-        {/* TODO make this into an component, and fix the error (use sizing container) */}
-        <img
-          src={book.thumbnail}
-          alt={book.title}
-          className="w-full h-36 object-cover rounded-lg bg-gray-600 grayscale mb-2"
-          onError={(e) => {
-            // Prevent infinite loop if fallback image also fails
-            if (e.target.src !== window.location.origin + '/cover-not-found.jpg') {
-              e.target.src = '/cover-not-found.jpg';
-            }
-          }}
-        />
+  const [showDetail, setShowDetail] = useState(false);
 
-        <h3 className="font-bold text-base sm:text-lg md:text-xl text-gray-900 mb-2 line-clamp-2">
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShowDetail(true)}
+        className="bg-[var(--bg-primary)] rounded-2xl shadow-sm flex flex-col h-full p-3 text-left w-full"
+      >
+        <BookCover book={book} className="mb-2" />
+
+        <h3 className="font-bold text-sm sm:text-base text-[var(--text-active)] mb-1 line-clamp-2">
           {book.title}
         </h3>
 
         <div className="mt-auto">
-          <p className="text-gray-600 text-sm md:text-md line-clamp-2">
+          <p className="text-[var(--text-hover)] text-xs sm:text-sm line-clamp-2">
             <span className="hidden sm:inline">{formatAuthors(book, 2)}</span>
             <span className="sm:hidden">{formatAuthorsMobile(book)}</span>
           </p>
-          <p className="text-gray-600 text-xs md:text-sm line-clamp-1">
-            {book.categories} • {book.published_year} • {book.num_pages} pages
+          <p className="text-[var(--text-muted)] text-xs line-clamp-1">
+            {book.categories} • {book.published_year}
           </p>
         </div>
-      </div>
-    </div>
+      </button>
+
+      <BookDetailModal book={book} isOpen={showDetail} onClose={() => setShowDetail(false)} />
+    </>
   );
 };
 
-// Detailed list card layout with descriptions
+// Row layout for a full list/grid page — cover + key facts side by side,
+// with a truncated description underneath. "Read more" opens the same
+// BookDetailModal instead of growing the card, so cards in the scrolling
+// list keep a predictable height.
 export const BookCardDetailed = ({ book }) => {
-  const DESCRIPTION_CHAR_LIMIT = 300;
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  const toggleDescription = () => {
-    setIsExpanded(prev => !prev);
-  };
+  const [showDetail, setShowDetail] = useState(false);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-2 flex-shrink-0">
-      <div className="flex gap-4">
-        <img
-          src={book.thumbnail}
-          alt={book.title}
-          className="w-24 h-32 object-cover rounded bg-gray-600 flex-shrink-0 grayscale"
-          onError={(e) => {
-            // Prevent infinite loop if fallback image also fails
-            if (e.target.src !== window.location.origin + '/cover-not-found.jpg') {
-              e.target.src = '/cover-not-found.jpg';
-            }
-          }}
-        />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-base sm:text-lg text-gray-900 mb-1 line-clamp-2">
-            {book.title} <span className="text-gray-400 text-xs sm:text-sm ml-1"> - {book.published_year}</span>
-          </h3>
+    <>
+      <div className="bg-[var(--bg-primary)] border border-[var(--border-light)] rounded-lg p-3 mb-2 flex-shrink-0">
+        <div className="flex gap-3">
+          <div className="w-20 sm:w-24 flex-shrink-0">
+            <BookCover book={book} />
+          </div>
 
-          <div className="flex flex-col gap-1 text-sm text-gray-600 mb-2">
-            <p className="m-0">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-base text-[var(--text-active)] mb-1 line-clamp-2">
+              {book.title}
+              <span className="text-[var(--text-muted)] text-xs sm:text-sm ml-1"> - {book.published_year}</span>
+            </h3>
+
+            <p className="text-[var(--text-hover)] text-sm line-clamp-1">
               {formatAuthors(book, 3)}
             </p>
-            <span className="">{book.categories}</span>
-            {book.num_pages && (
-              <span className="">{book.num_pages} pages</span>
-            )}
+            <p className="text-[var(--text-muted)] text-xs mt-0.5 line-clamp-1">
+              {book.categories}
+              {book.num_pages && ` • ${book.num_pages} pages`}
+            </p>
+
             {book.average_rating && (
-              <div className="flex items-center gap-1">
-                <div className="flex text-gray-400">
+              <div className="flex items-center gap-1 mt-1 text-[var(--text-muted)] text-xs">
+                <span>
                   {'★'.repeat(Math.floor(book.average_rating))}
                   {'☆'.repeat(5 - Math.floor(book.average_rating))}
-                </div>
+                </span>
                 <span>{book.average_rating}</span>
               </div>
             )}
           </div>
         </div>
+
+        {book.description && (
+          <div className="border-t border-[var(--border-light)] mt-3 pt-2">
+            <p className="text-sm text-[var(--text-hover)] line-clamp-2">
+              {book.description}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDetail(true)}
+              className="text-[var(--text-inactive)] hover:text-[var(--text-active)] font-medium mt-1 text-sm"
+            >
+              Read more
+            </button>
+          </div>
+        )}
       </div>
 
-      {book.description && (
-        <div className="border-t pt-3">
-          <div className="text-sm text-gray-600">
-            <p className="break-words">
-              {isExpanded
-                ? book.description
-                : truncateText(book.description, DESCRIPTION_CHAR_LIMIT)
-              }
-              {book.description.length > DESCRIPTION_CHAR_LIMIT && !isExpanded && '...'}
-            </p>
-            {book.description.length > DESCRIPTION_CHAR_LIMIT && (
-              <button
-                onClick={toggleDescription}
-                className="text-[(--text-inactive)] hover:text-gray-800 font-medium mt-2 text-sm"
-              >
-                {isExpanded ? 'See less' : 'See more'}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      <BookDetailModal book={book} isOpen={showDetail} onClose={() => setShowDetail(false)} />
+    </>
   );
 };

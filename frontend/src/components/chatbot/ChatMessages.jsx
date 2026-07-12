@@ -1,6 +1,9 @@
 import Markdown from 'react-markdown';
-import { useRef, useEffect, lazy, Suspense } from 'react'
+import remarkGfm from 'remark-gfm';
+import { useRef, useEffect, useState, lazy, Suspense } from 'react'
+import { Copy, Check } from 'lucide-react';
 import { BookGridStack } from '@/components/book/BooksGrid';
+import ChatFeedback from '@/components/chatbot/ChatFeedback';
 
 // Dynamic import for MermaidDiagram (large library)
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'));
@@ -10,16 +13,23 @@ const MermaidLoading = () => (
     <div className="message-bubble response">
         <div className="flex items-center justify-center h-32">
             <div className="loading-spinner"></div>
-            <span className="ml-2 text-gray-600">Loading diagram...</span>
+            <span className="ml-2 text-[var(--text-hover)]">Loading diagram...</span>
         </div>
     </div>
 );
 
-function ChatMessages({ messages, isStreaming }) {
+function ChatMessages({ messages, isStreaming, sessionId }) {
     const containerRef = useRef(null)
     const userMessageRefs = useRef({})
     const turnRefs = useRef({})
     const lastUserMessageId = useRef(null)
+    const [copiedId, setCopiedId] = useState(null)
+
+    const handleCopy = async (text, id) => {
+        await navigator.clipboard.writeText(text)
+        setCopiedId(id)
+        setTimeout(() => setCopiedId(current => current === id ? null : current), 1500)
+    }
 
     const scrollToNewestTurn = () => {
         if (messages.length > 0) {
@@ -52,12 +62,20 @@ function ChatMessages({ messages, isStreaming }) {
                 >
                     {/* User message */}
                     <div data-user-id={user.id}
-                        className="message-wrapper user"
+                        className="message-wrapper user relative"
                         ref={user.isUser ? (el) => userMessageRefs.current[user.id] = el : null}
                     >
                         <div className="message-bubble user">
                             {user.text}
                         </div>
+                        <button
+                            type="button"
+                            onClick={() => handleCopy(user.text, user.id)}
+                            title="Copy message"
+                            className="ml-2 self-end rounded-md text-[var(--text-muted)] hover:text-[var(--text-hover)] transition-colors"
+                        >
+                            {copiedId === user.id ? <Check size={16} /> : <Copy size={16} />}
+                        </button>
                     </div>
 
                     <div data-response-id={response.id} className="flex flex-col message-wrapper response">
@@ -73,7 +91,7 @@ function ChatMessages({ messages, isStreaming }) {
                                 if (section.type === 'text' && section.content) {
                                     return (
                                         <div key={key} className="message-bubble response markdown-container">
-                                            <Markdown>{section.content}</Markdown>
+                                            <Markdown remarkPlugins={[remarkGfm]}>{section.content}</Markdown>
                                         </div>
                                     );
                                 }
@@ -104,7 +122,7 @@ function ChatMessages({ messages, isStreaming }) {
                                 // Error section
                                 if (section.type === 'error' && section.content) {
                                     return (
-                                        <div key={key} className="message-bubble text-red-500 italic mt-2">
+                                        <div key={key} className="message-bubble text-[var(--accent-negative)] italic mt-2">
                                             <span>{section.content}</span>
                                         </div>
                                     );
@@ -122,11 +140,23 @@ function ChatMessages({ messages, isStreaming }) {
                             </div>
                         )}
 
+                        {/* Feedback controls - shown whenever the turn produced visible
+                            content and has finished, even if it later errored, timed
+                            out, or was stopped by the user */}
+                        {response.chatId && !response.isStreaming && !response.isLoading &&
+                            response.sections?.some(s =>
+                                (s.type === 'text' && s.content) ||
+                                (s.type === 'books' && s.books?.length > 0) ||
+                                (s.type === 'diagram' && s.mermaid)
+                            ) && (
+                                <ChatFeedback key={response.chatId} chatId={response.chatId} sessionId={sessionId} />
+                            )}
+
                         {/* AI disclaimer - show on last message */}
                         {index === messages.length - 1 && !response.isLoading && !response.isStreaming && (
                             (response.sections?.length > 0 || response.text) && (
                                 <div className="flex justify-end mt-5 mr-2">
-                                    <span className="text-xs text-gray-400 italic">
+                                    <span className="text-xs text-[var(--text-muted)] italic">
                                         AI can make mistakes. Please double-check responses.
                                     </span>
                                 </div>

@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal, Union, cast
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
 from common.operation import OperationResult, TokenUsage, task
-from common.utils import to_serializable, remove_empty_values
+from common.utils import to_serializable, remove_empty_values, uuid_8
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class SystemMessage(BaseMessage):
 
 class UserMessage(BaseMessage):
     role: Literal[Role.USER] = Role.USER
+    id: str = Field(default_factory=lambda: f"chat_{uuid_8()}")
     content: str
     created: str | None = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()

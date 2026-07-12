@@ -1,0 +1,58 @@
+/* ============================================================
+   Mermaid diagram frame (MermaidDiagram.jsx). The SVG itself is
+   colored via mermaid.initialize's themeVariables in JS, not
+   here — these rules only handle layout/framing.
+   ============================================================ */
+
+/* Frame — capped at a fraction of the viewport; panzoom explores the rest */
+.mermaid-container {
+  width: 90%;
+  max-height: 45vh;
+  overflow: hidden;
+  /* clip panned/zoomed content to the frame */
+  border: 0.5px solid var(--text-active);
+  border-radius: 0.5rem;
+  background: var(--bg-primary);
+  padding: 10px;
+  box-sizing: border-box;
+  min-width: 0;
+  /* critical in flex/grid ancestors */
+  min-height: 0;
+  box-shadow: var(--shadow-md);
+}
+
+/* Injected SVG wrapper */
+.mermaid-svg {
+  display: block;
+  width: 100%;
+}
+
+/* Natural size, scale DOWN only — width/height auto keep the SVG at its
+   rendered size (no more stretched text on small diagrams), max-* shrink
+   large diagrams proportionally to fit the frame */
+.mermaid-svg>svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: calc(45vh - 20px);
+  /* container cap minus its padding */
+  margin: 0 auto;
+  /* center small diagrams in the frame */
+}
+
+/* Error / loading area keeps consistent spacing */
+.mermaid-status {
+  padding: 8px 0;
+}
+
+/* Show source nicely on error */
+.mermaid-code {
+  margin-top: 8px;
+  overflow: auto;
+  white-space: pre;
+  /* preserve formatting */
+  background: transparent;
+  /* keep your monochrome look */
+  font-size: 12px;
+}

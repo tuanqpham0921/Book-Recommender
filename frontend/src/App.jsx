@@ -20,6 +20,7 @@ function App() {
       <Routes>
         <Route path="/" element={<BookRecommenderPage />} />
         <Route path="/blog" element={<BookRecommenderPage />} />
+        <Route path="/review" element={<BookRecommenderPage />} />
         {/* Catch all other routes and redirect to home */}
         <Route path="*" element={<BookRecommenderPage />} />
       </Routes>

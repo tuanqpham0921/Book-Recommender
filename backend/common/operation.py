@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from pydantic import BaseModel, Field
 from typing import Any, Coroutine, Generic, ParamSpec, TypeVar, overload
@@ -64,11 +65,6 @@ class OperationResult(BaseModel, Generic[OutputT]):
     def check_output_type(self) -> None:
         # default there's no output
         if self.output is None:
-            return
-        
-        # no output and no declared type: this envelope never claimed to
-        # produce anything (e.g. a failure envelope) — nothing to check
-        if self.output is None and self.output_type is None:
             return
 
         if self.output_type is None:
@@ -150,6 +146,15 @@ def task(
                 ):
                     result.token_usage = output.token_usage
                 return result
+            except asyncio.CancelledError:
+                # client disconnected (e.g. page refresh) mid-task. Unlike
+                # Workflow.__call__, there's no persistent self.result to
+                # stamp here — returning a result would swallow the
+                # cancellation, so just log which task was in flight and
+                # propagate; the enclosing Workflow.__call__ catches this
+                # and records it on the workflow's own result.
+                logger.warning(f"Task cancelled: {func_ref}")
+                raise
             except Exception as e:
                 # run time error is recorded, so the task is considered failed
                 logger.exception(e)

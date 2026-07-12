@@ -34,11 +34,13 @@ class AppBaseWorkflow(Workflow[OutputT]):
         sse_stream: SSEStream,
         output_type: type[OutputT] | None = None,
         messages: list[APIMessage] | None = None,
+        app_env: str | None = None,
     ):
         super().__init__(output_type)
         self.llm_client = llm_client
         self.sse_stream = sse_stream
         self.messages: list[APIMessage] = messages if messages is not None else []
+        self.app_env = app_env
 
     def finalize_result(self, *, ok: bool, message: str | None = None) -> None:
         self.result.ok = ok

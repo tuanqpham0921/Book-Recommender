@@ -12,6 +12,8 @@ from db.async_engine import check_connection
 import asyncio
 logger = logging.getLogger(__name__)
 
+PING_TIMEOUT = 10.0  # seconds
+
 class AppContext:
     app_env: str
     engine: AsyncEngine
@@ -35,7 +37,7 @@ class AppContext:
                 self.openai_client.ping(),
                 check_connection(self.session_factory),
             ), 
-            timeout=10.0
+            timeout=PING_TIMEOUT
         )
         logger.info("Pinging services Completed")
         

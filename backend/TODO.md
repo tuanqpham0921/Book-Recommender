@@ -1,60 +1,75 @@
 Continue:
-* don't try to save your traces to postgres
-    * just save it to logs and have it append to continue writting
-* then you can set up an eval script
-    * load in the user message, send the mermaids in json file to review
-    * and send metadata like how long it took and stuff (all are in your operation result)
-    * then you can optimize later
+* current goal is to have fake responses 
+* the code is able to load them in
+* and we can load it back in the front end for testings
 
-Note:
+* review SSE unit tests
+* test asyncio cancel and time out and maybe concurrency issues?
+* might need to move it to generate_reponse instead
+* make orchestration into a workflow?
+* assistant message is not joined for the db (mock executors)
+
+* rename your @task to @op_task or something (so no name conflicting)
+* rename OperationalResult to OperationResult
+* workflow self.result to self.op_result (so it's clearer)
+* rename all the issues to feedback
+* [DONE 2026-07-12] use TD for long concurrency, LR for long depends on
+    * can just make a indegree nodes level
+    * -> StrategyClassificationOutput.get_execution_levels() + app/common/mermaid.py
+      choose_orientation(); wired into planner/main.py's send_mermaid
+
+=======================================================================
+
+Reminder:
+* changing review path still finish the query
+    * expected? since it's not refreshing the page for a new session
+    * for dev review is fine to get all the current chat_runs
+        * for prod, we need to make it limit to just test suites?
 * currently your workflow and operation is fine
     * it could be better but we can deal it more stuff later
     * right now it supports run_async_step (need a @task for non failure)
-    * steps also has to be OperationalResult in add step to help detect that
-
-Reminder:
+    * steps also has to be OperationalResult in add step to help detect those
+* orchestrator is where you can load in cls and workflow for other things as well
+    * saving to db, feedback code etc
 1. need to create one executor for @task and workflow
     * do this later once you have time out and flush out more stuff
 2. add timeout to @task and @workflow (should be able to handle them)
-3. execution sql can just hold things like time, token usage, edit needed, run-time errors
-    * don't store the full result in there
-    * make it a background task on a seperate thread
-4. remove the private attributes (keep it in the output)
+3. remove the private attributes (keep it in the output)
     * might need to use create instead of parse
     * this  an be for later, when you actually need to load in buffer
-5. make sure that feedback and liked stuff can just go to json
-    feedback
-        {"session": "id", "comments": "....", maybe chat_id}
-    liked/dislike
-        * could go in a sql db instead
+4. your current interupt works. But it will lose progress in the child workflow
+    * this is because you are not self.add_step before the run (incremental changes)
+    * you only add the operationalresult after it has finish
+        run_async_step, await func, add_steps
+        so you'll lose all the await func execution
+    * this is fine for now, still save some repeated work
+    * but if you want better checkpoint, you need to add_steps(child_workflow.result) the operational result (reference to that obj)
+        * you also need to make the workflow make incremental edits to it
+        * this can come later, since it will require some re-thinking of your workflow (like returning op_result and appending or overwritting etc...)
+    * or you could just do a run_workflow instead
+        * which you can just add reference in the steps before run_async_step
+5. there's something wrong with how you overwrite the self.result messages
+    * figure out where the put in details vs message
+    * maybe push it to details with "prev message: ..."
+    * change your app/workflow to not overwrite and make sure tests passes 
 
-Eval and deployment testing:
-1. create a way to run all your test queries (prod mode)
-2. show rejected quries and resuls
-2. then a script to send all those to the frontend for you to review
-3. deploy your app without DB
+Ideas:
+* [DONE 2026-07-12] mermaid optimization (TD for high concurrent, LR for high depends_on)
+* once you have resume/checkpoint, you might need to move some stuff around
+    * you might need to have the model validate do the DAG processing
+    * that way you can pick up from orchestrator and continue
+    * but then you also needs steps as config, so you know what to run next etc...
+* add a tool catalog (as a UI or command query)
+* recommendation node and re-rank is ideal place for human in the loop
+    * if there are a lot of candidates, we can ask the user what they like
+* always need to clamp a recommendation node for books related
+    * feels more consumer like (do you have Dune? - yes, and I think you'll like these)
+    * maybe for later versions
+
 =======================================================================
 
 lower priority:
-* test your sse stream (might change later, and working right now)
 * test your ingestion (need to re-write to use workflow)
-
-=======================================================================
-
-
-Eval:
-1. test repeated queries (find dune, and find dune)
-2. add more request schemas (see how the planner do)
-3. test the response of reject reasons
-
-=======================================================================
-
-Front End:
-1. test your markdown and how it handle spacings (formatting)
-    * nested bullet points was one
-    * two dividers back to back? only one should show (or if there is no text before)
-2. test error messages
-3. test if your backend is not running or stalling
 
 =======================================================================
 
@@ -66,25 +81,140 @@ Features (not in code):
 
 =======================================================================
 
-Claude codebase sweep (2026-07-05) — critical or worth mentioning only:
-
-
-BEFORE EVAL (the eval script depends on these):
-4. Saved results drop the step trail: save_conversation_result pops "steps" —
-   the timings/token/failure metadata the eval wants is exactly in there.
-   Add a derived compact trail (name, ok, duration, tokens per step) instead of the full tree.
-5. Failure paths never save: save_chat_messages/save_conversation_result only run on
-   success and handled-without-planning. Rejected/failed queries (the interesting eval
-   cases!) leave no artifact. Save in one place that all exits pass through.
-6. Fixed filenames (conversation_result_dev.json) overwrite every run — eval over a
-   query set needs per-session names or append mode (matches the "Continue" note up top).
-7. Buffered/refused are terminal: buffer_goals and strategy buffer are captured but
-   nothing consumes them. Fine to defer the retry loop — but the eval should count them.
-
-=======================================================================
-
 Once everything is good, organize and review all your unit tests
 but after you have db saved, and eval tests set up
     * need to format and review name, comments carefully
     * you should have a way to navigate all your tests (probably at the top)
     * with all pages marker or seperators
+
+=======================================================================
+
+Code review findings (2026-07-10):
+
+Fix first (security, cheap and exploitable):
+* [FIXED 2026-07-12] db/stores/utils.py:36,44,62,66,111,126,162,168 - SQL injection: build_title_search/
+  build_author_search/apply_book_filters splice user strings into text(f"'{...}'")
+  instead of binding params. `' OR 1=1 --` breaks out of the literal.
+  -> passed the raw string straight to func.similarity() so SQLAlchemy binds it;
+  regression tests in tests/unit/db/stores/test_utils.py.
+* [FIXED 2026-07-12] app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is a raw str, not list[str].
+  CORSMiddleware does substring match on a plain string, not exact match, once you
+  configure more than one origin -> real CORS bypass. Split on comma before passing in.
+  -> field_validator splits the comma-separated env var into list[str] (NoDecode to
+  avoid pydantic-settings' JSON auto-decode on list fields); .env stays comma-separated.
+* [FIXED 2026-07-12] db/stores/base_store.py:19-20 - _execute_statement print()s fully compiled SQL with
+  literal_binds=True (real param values) on every query, in every environment. Remove
+  or gate behind logger.debug.
+
+Correctness bugs:
+* [FIXED 2026-07-12] common/utils/json_handler.py:52,66 - file_name.rstrip(".json") strips a char set, not
+  the literal suffix. Use removesuffix(".json").
+* [FIXED 2026-07-12] db/stores/utils.py:58 - build_author_search references model.author (singular);
+  BookModel only has `authors`. Dead code, breaks as soon as something calls it.
+* [FIXED 2026-07-12] config/constants.py:66-67 - BookGuides.__str__ returns "BookConstraints:\n" (copy-paste
+  from BookConstraints.__str__) - wrong section header shown to the LLM in prompts.
+* [FIXED 2026-07-12] common/operation.py:65-73 - check_output_type has unreachable branch: early return on
+  `output is None` makes the later `output is None and output_type is None` dead.
+* common/context.py:42-48 - AppContext.__aenter__ has ping_services() entirely commented
+  out - app reports ready without checking OpenAI/DB connectivity at boot.
+  NOT fixed (2026-07-12 pass): re-enabling changes startup behavior (fails boot if
+  DB/OpenAI unreachable) - deliberately left for the local-deploy follow-up.
+* [FIXED 2026-07-12] clients/openai_client.py:54 - chat completions have no semaphore (embeddings do) - no
+  concurrency limit, can blow past OpenAI rate limits.
+* [FIXED 2026-07-12] clients/openai_client.py:116 - ping() hardcodes "gpt-5-nano" instead of
+  settings.openai.BASE_MODEL.
+* [FIXED 2026-07-12] db/stores/base_store.py:17-24 - try/except Exception as e: raise e does nothing, either
+  delete or actually log context on failure.
+
+Consistency / tech debt:
+* db/schema/models.py:19-43 - Column(index=True) on several BookModel columns does
+  nothing since tables/indexes are created via raw SQL (01/02.sql), not
+  Base.metadata.create_all - misleading, and filters on published_year/average_rating/
+  genre run unindexed. Add real indexes or drop the flag.
+* db/stores/book_store.py:52-83 - search_by_book_filter loops one DB round-trip per
+  author instead of one query + grouping/ranking (apply_book_filters already ORs
+  across authors).
+* common/utils/identifiers.py:12-13 - uuid_8() is 32 bits of entropy, used as PK for
+  chat_runs.chat_id and feedback.id - collision = silent failed insert well before
+  "web scale." Consider a longer id.
+* app/api/schemas/external.py:26 - FeedbackIn.message has no max_length (ChatIn's length
+  check also lives ad hoc in the route, not the schema - move it in for consistency).
+* app/common/sse_stream.py:69-73 - send_chars streams one char at a time with
+  asyncio.sleep per char - hundreds of tiny SSE events + real added latency for
+  long responses. Consider chunking by word if this becomes a latency complaint.
+
+=======================================================================
+
+Code review findings (security review, 2026-07-12):
+
+Fix first (security, still open from 2026-07-10, not yet fixed):
+* [FIXED 2026-07-12] app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is still a raw str, not
+  list[str]. Confirmed via starlette source: CORSMiddleware.is_allowed_origin() does
+  `origin in self.allow_origins`, which on a plain string is substring/prefix matching,
+  not exact membership. With allow_credentials=True, an attacker who registers a domain
+  that is an exact prefix of the configured origin (e.g. https://app.example.co vs
+  https://app.example.com) gets a credentialed CORS response. Split ALLOW_ORIGINS into
+  an actual list[str] before passing to CORSMiddleware.
+
+New (found this review):
+* app/api/routes/chat_run.py:14,26 - GET /chat_runs and GET /chat_runs/tests have no
+  auth dependency, and there's no auth middleware anywhere in app/main.py. Both return
+  ChatRunModel.to_dict() (db/schema/models.py) for every row unscoped - full
+  user_message/assistant_message/session_id plus the planner/tasks/sse_events JSONB
+  traces for every session, paginated via limit/offset. Anyone can page through the
+  entire chat history of every user with a plain GET. Needs an auth check before this
+  ships anywhere reachable from the internet - at minimum gate it as an internal/admin
+  route.
+* app/api/routes/feedback.py:34-47,50-57 - GET /feedback?chat_id= and PUT
+  /feedback/reaction take caller-supplied chat_id/session_id with no ownership check
+  (feedback_store.py's get_by_chat_id/upsert_reaction just query/upsert on whatever IDs
+  are passed in). Docstring claims the write is "scoped to the reviewer's own
+  session_id" but nothing verifies the caller actually owns it. Combined with the
+  chat_runs disclosure above, both IDs are trivially harvestable, so anyone can read
+  others' filed feedback or silently overwrite another reviewer's like/dislike. Lower
+  severity than chat_runs (bounded to an internal review dataset) but same root cause -
+  needs real session ownership verification, not just "the ID is hard to guess."
+
+Investigated, not flagged:
+* db/stores/base_store.py:19-21 - print()-logs compiled SQL with literal_binds=True on
+  every query, but traced actual callers: only book_store.py routes through
+  _execute_statement (book title/author/ISBN/filter search + embeddings). chat_run_store
+  and feedback_store call session.execute directly and never hit this path, so no
+  chat/feedback free-text or session_id actually gets printed this way. Still sloppy
+  debug output worth removing/gating behind logger.debug, but not a real data-exposure
+  issue as originally suspected - no PII or secrets flow through it.
+
+=======================================================================
+
+Test coverage gaps (new, not already in this file):
+* db/stores/ - [PARTIAL 2026-07-12] utils.py now has SQL-injection regression tests
+  (tests/unit/db/stores/test_utils.py). Still zero tests for book_store.py,
+  chat_run_store.py, feedback_store.py, base_store.py.
+* app/api/routes/ - only chat_message.py has a test; session.py, chat_run.py,
+  feedback.py, health.py have none.
+* app/domains/{books,project,users}/schemas/ - no tests for domain request-schema
+  validators.
+* common/context.py (AppContext), db/bootstrap.py, db/readiness.py - untested.
+
+=======================================================================
+
+Code cleanup pass (2026-07-12):
+
+Walked the planner/request path (backend + frontend), fixed the cheap/mechanical
+items already tracked above (marked [FIXED 2026-07-12]/[DONE 2026-07-12] inline),
+implemented the mermaid TD/LR orientation idea, and added regression tests. Left
+untouched (need real design decisions, not just cleanup): chat_run.py/feedback.py
+auth, context.py ping_services, book_store.py per-author N+1 query, uuid_8 collision
+risk, sse_stream.send_chars per-char streaming, FeedbackIn.message max_length. Did
+not touch task_runner.py (currently disabled/removed from Orchestrator.run) or
+db/ingestion/ (legacy, out of scope per CLAUDE.md). Dockerfile/local-deploy review
+deferred to a separate follow-up.
+
+[FIXED 2026-07-12] tests/unit/app/orchestration/test_orchestrator.py::TestOrchestratorRun::
+test_does_not_record_when_result_is_none - was asserting the wrong layer: it mocked
+record_chat_run away entirely and expected Orchestrator._finalize to independently skip
+calling it when workflow.result is None, but _finalize has no such guard - it always
+calls record_chat_run unconditionally, and record_chat_run's own first guard clause is
+what decides not to persist. Renamed/fixed the orchestrator test to assert the
+unconditional hand-off, and added test_missing_workflow_result_records_nothing to
+test_run_recorder.py's TestRecordChatRun to cover the real guard behavior.

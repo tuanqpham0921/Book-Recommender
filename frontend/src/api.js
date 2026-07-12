@@ -1,8 +1,9 @@
 const BASE_URL = import.meta.env.VITE_API_URL
 // const BASE_URL = 'https://book-rec-api-286869228046.us-central1.run.app'
 
+const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
 
-async function fetch_api(url, options = {}, timeoutMs = 120000) {
+async function fetch_api(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -37,14 +38,24 @@ async function fetch_api(url, options = {}, timeoutMs = 120000) {
       const errorData = res.headers.get('content-type')?.includes('application/json')
         ? await res.json()
         : { error: 'Request failed' };
-      return Promise.reject({ status: res.status, data: errorData });
+      // reject with a real Error (not a plain object) so callers can rely
+      // on instanceof/.name checks (e.g. ChatBot.jsx's AbortError handling)
+      return Promise.reject(
+        Object.assign(new Error('Request failed'), { status: res.status, data: errorData })
+      );
     }
 
     return res;
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      return Promise.reject({ status: 408, data: { error: 'Request timeout or cancelled' } });
+      return Promise.reject(
+        Object.assign(new Error('Request timeout or cancelled'), {
+          name: 'AbortError',
+          status: 408,
+          data: { error: 'Request timeout or cancelled' },
+        })
+      );
     }
     throw error;
   }
@@ -77,7 +88,7 @@ async function createSession() {
   return await res.json();
 }
 
-async function sendChatMessage(sessionId, message, abortSignal = null, timeoutMs = 120000) {
+async function sendChatMessage(sessionId, message, abortSignal = null, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const res = await fetch_api(
     BASE_URL + `/session/${sessionId}/message`,
     {
@@ -100,6 +111,60 @@ async function getRecommendedBooks(sessionId) {
   return await res.json();
 }
 
+// Attach a like/dislike reaction to a recorded chat run
+async function updateChatFeedback(chatId, { liked = null } = {}) {
+  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/feedback`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ liked })
+  });
+  return await res.json();
+}
+
+// Fetch recorded chat runs (newest first) for the review page.
+// sessionFilter: 'all' | 'tests'
+async function getChatRuns(limit = 200, offset = 0, sessionFilter = 'all') {
+  const path = sessionFilter === 'tests' ? '/chat_runs/tests' : '/chat_runs';
+  const res = await fetch_api(BASE_URL + `${path}?limit=${limit}&offset=${offset}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  return await res.json();
+}
+
+// Fetch feedback/bug reports filed against one chat run
+async function getFeedback(chatId) {
+  const res = await fetch_api(BASE_URL + `/feedback?chat_id=${chatId}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  return await res.json();
+}
+
+// File one feedback/bug report entry. chatId is optional (omit for general
+// bug reports not tied to a specific query). review marks entries filed
+// from the internal /review page rather than the live chat's feedback widget.
+async function addFeedback({ chatId = null, sessionId = null, title, message, positive, review = false }) {
+  const res = await fetch_api(BASE_URL + '/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, title, message, positive, review })
+  });
+  return await res.json();
+}
+
+// Set (or change) a reviewer's like/dislike reaction to one run, scoped to
+// the reviewer's own review-page session — independent of chat_runs.liked
+// (the original end-user's reaction) and of any other reviewer session.
+async function setReviewerReaction(chatId, sessionId, liked) {
+  const res = await fetch_api(BASE_URL + '/feedback/reaction', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, liked })
+  });
+  return await res.json();
+}
+
 // TODO: implment this, using sse stream for now
 async function getTaskPlanDiagram(sessionId) {
   const res = await fetch_api(BASE_URL + `/diagram/${sessionId}/task_plan`, {
@@ -110,5 +175,6 @@ async function getTaskPlanDiagram(sessionId) {
 }
 
 export default {
-  createSession, sendChatMessage, getRecommendedBooks, backEndPing
+  createSession, sendChatMessage, getRecommendedBooks, backEndPing,
+  updateChatFeedback, getChatRuns, getFeedback, addFeedback, setReviewerReaction
 };

@@ -1,0 +1,90 @@
+/* ============================================================
+   Global resets and page-level defaults. No component-specific
+   classes belong here — see utilities.css / chat.css / blog.css.
+   ============================================================ */
+
+/* Universal Box Sizing Reset (safe, good practice) */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Prevent mobile zoom on input focus */
+/* Mobile browsers zoom in when font-size < 16px on form elements */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+/* Mobile safe area handling */
+/*
+  to help with iphone notches and home indicator bars (content can be hidden behind notch!)
+
+  iPhone X+ with notch: env(safe-area-inset-top) = ~44px
+  iPhone with home indicator: env(safe-area-inset-bottom) = ~34px
+  Regular phones: All values = 0px
+
+  hence we use the max() - so we test that the browser supports it first (if not then it's gets ignore entirely)
+*/
+@supports (padding: max(0px)) {
+
+  /* Only run this code if browser supports max() function */
+  .mobile-safe-area {
+    padding-left: max(env(safe-area-inset-left), 0px);
+    padding-right: max(env(safe-area-inset-right), 0px);
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+}
+
+@layer base {
+
+  body,
+  html,
+  #root {
+    font-size: 12px;
+    /* Smaller base font size on mobile */
+  }
+
+  @media (min-width: 640px) {
+
+    body,
+    html,
+    #root {
+      font-size: 14px;
+      /* Medium screens */
+    }
+  }
+
+  @media (min-width: 1024px) {
+
+    body,
+    html,
+    #root {
+      font-size: 16px;
+      /* Default size for larger screens */
+    }
+  }
+
+  ::-webkit-scrollbar {
+    @apply h-4 w-1;
+  }
+
+  ::-webkit-scrollbar:horizontal {
+    @apply h-1.5 w-1 p-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent rounded-sm;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--border-light);
+    border: 1px solid var(--bg-secondary);
+    border-radius: 1px;
+  }
+}

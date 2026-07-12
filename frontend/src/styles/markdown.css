@@ -1,0 +1,355 @@
+/* ============================================================
+   Markdown rendering — shared by the chat response bubbles and
+   the blog article view (react-markdown output).
+   ============================================================ */
+
+/* Custom markdown styles matching project design system */
+.markdown-body {
+  font-family: var(--font-sans);
+  color: var(--text-hover);
+  line-height: 1.75;
+  max-width: none;
+  background-color: transparent;
+}
+
+/* Headings - matching your project's hierarchy */
+.markdown-body h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-active);
+  margin: 2rem 0 1.5rem 0;
+  border-bottom: 2px solid var(--border-light);
+  padding-bottom: 0.5rem;
+}
+
+.markdown-body h2 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: var(--text-active);
+  margin: 2rem 0 1rem 0;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border-dark);
+}
+
+.markdown-body h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-active);
+  margin: 1.5rem 0 0.75rem 0;
+}
+
+.markdown-body h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-hover);
+  margin: 1.25rem 0 0.5rem 0;
+}
+
+/* Paragraphs - matching your blog content styles */
+.markdown-body p {
+  margin: 1.5rem 0;
+  font-size: 1.125rem;
+  color: var(--text-hover);
+  line-height: 1.75;
+}
+
+/* Lists - with proper bullet points */
+.markdown-body ul {
+  list-style: none;
+  margin: 1.5rem 0;
+  padding-left: 0;
+}
+
+.markdown-body ul li {
+  position: relative;
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+  font-size: 1.125rem;
+  color: var(--text-hover);
+  line-height: 1.75;
+}
+
+.markdown-body ul li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--text-active);
+  font-weight: 600;
+}
+
+.markdown-body ol {
+  margin: 1.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.markdown-body ol li {
+  margin: 0.75rem 0;
+  font-size: 1.125rem;
+  color: var(--text-hover);
+  line-height: 1.75;
+}
+
+/* Strong/Bold text */
+.markdown-body strong {
+  font-weight: 700;
+  color: var(--text-active);
+}
+
+/* Italic text */
+.markdown-body em {
+  font-style: italic;
+  color: var(--text-hover);
+}
+
+/* Code - inline */
+.markdown-body code {
+  background-color: var(--bg-secondary);
+  color: var(--text-active);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+  font-family: 'Monaco', 'Menlo', monospace;
+  border: 1px solid var(--border-light);
+}
+
+.markdown-body pre {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+/* Horizontal rules */
+.markdown-body hr {
+  height: 1px;
+  background-color: var(--border-light);
+  border: none;
+  margin: 3rem 0;
+}
+
+/* Blockquotes */
+.markdown-body blockquote {
+  border-left: 4px solid var(--border-medium);
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  background-color: var(--bg-secondary);
+  padding: 1rem 1rem 1rem 1.5rem;
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.markdown-body blockquote p {
+  font-style: italic;
+  color: var(--text-inactive);
+  margin: 0;
+}
+
+/* Links */
+.markdown-body a {
+  color: var(--text-active);
+  text-decoration: underline;
+  text-decoration-color: var(--underline-primary);
+  transition: color 0.2s ease;
+}
+
+.markdown-body a:hover {
+  color: var(--text-hover);
+  text-decoration-color: var(--underline-secondary);
+}
+
+/* Mobile responsive */
+@media (width < 640px) {
+  .markdown-body h1 {
+    font-size: 2rem;
+  }
+
+  .markdown-body h2 {
+    font-size: 1.75rem;
+  }
+
+  .markdown-body h3 {
+    font-size: 1.375rem;
+  }
+
+  .markdown-body p,
+  .markdown-body li {
+    font-size: 1rem;
+    margin: 1.25rem 0;
+  }
+}
+
+/* Compact markdown rendering used inside chat bubbles — same
+   design language as .markdown-body but tighter, since it lives
+   in a narrow message bubble rather than a full article. Every
+   block-level element gets an explicit margin so headers/lists/
+   quotes/code stack with consistent spacing instead of falling
+   back to mismatched browser defaults. */
+@utility markdown-container {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  color: var(--text-hover);
+
+  & p {
+    margin: 0 0 0.5rem 0;
+    white-space: normal;
+  }
+
+  & h1,
+  & h2,
+  & h3,
+  & h4,
+  & h5,
+  & h6 {
+    color: var(--text-active);
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 1rem 0 0.5rem 0;
+    white-space: normal;
+  }
+
+  & h1:first-child,
+  & h2:first-child,
+  & h3:first-child,
+  & h4:first-child,
+  & h5:first-child,
+  & h6:first-child {
+    margin-top: 0;
+  }
+
+  & h1 {
+    font-size: 1.25em;
+  }
+
+  & h2 {
+    font-size: 1.15em;
+  }
+
+  & h3 {
+    font-size: 1.05em;
+  }
+
+  & h4,
+  & h5,
+  & h6 {
+    font-size: 1em;
+  }
+
+  & strong {
+    font-weight: 700;
+    color: var(--text-active);
+  }
+
+  & em {
+    font-style: italic;
+  }
+
+  & li {
+    @apply mb-0.5;
+    white-space: normal;
+  }
+
+  & li:first-child {
+    margin-top: -1rem;
+  }
+
+  & ol {
+    @apply list-decimal mx-0 mt-0 mb-2 pl-8;
+    white-space: normal;
+  }
+
+  & ul {
+    @apply list-disc mx-0 mt-0 mb-2 pl-8;
+    white-space: normal;
+  }
+
+  & ul ul,
+  & ol ol,
+  & ul ol,
+  & ol ul {
+    margin: 0.25rem 0;
+  }
+
+  & a {
+    @apply underline;
+    color: var(--text-active);
+    text-decoration-color: var(--underline-primary);
+  }
+
+  & a:hover {
+    color: var(--text-hover);
+    text-decoration-color: var(--underline-secondary);
+  }
+
+  & code {
+    background-color: var(--bg-secondary);
+    color: var(--text-active);
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+    font-family: 'Monaco', 'Menlo', monospace;
+    border: 1px solid var(--border-light);
+    white-space: pre-wrap;
+  }
+
+  & pre {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin: 0 0 0.5rem 0;
+    overflow-x: auto;
+  }
+
+  & pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 0.85em;
+    white-space: pre;
+  }
+
+  & blockquote {
+    border-left: 3px solid var(--border-medium);
+    background-color: var(--bg-secondary);
+    color: var(--text-inactive);
+    font-style: italic;
+    padding: 0.5rem 0.75rem;
+    margin: 0 0 0.5rem 0;
+    border-radius: 0 0.375rem 0.375rem 0;
+  }
+
+  & blockquote p {
+    margin: 0;
+    white-space: normal;
+  }
+
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9em;
+  }
+
+  & th,
+  & td {
+    border: 1px solid var(--border-light);
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    white-space: normal;
+  }
+
+  & th {
+    background-color: var(--bg-secondary);
+    color: var(--text-active);
+    font-weight: 600;
+  }
+
+  &> :last-child {
+    @apply mb-0;
+  }
+
+  & hr {
+    margin: -1rem 0;
+    border: none;
+    border-top: 1px solid var(--border-light);
+  }
+}

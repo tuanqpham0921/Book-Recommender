@@ -5,8 +5,11 @@ import ChatMessages from '@/components/chatbot/ChatMessages'
 import api from '@/api';
 import { parseSSEStream } from '@/utils';
 
+const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
+
 function ChatBot() {
     const messagesEndRef = useRef(null)
+    const activeAbortControllerRef = useRef(null)
 
     const [turn, setTurn] = useImmer([])
 
@@ -22,6 +25,22 @@ function ChatBot() {
     useEffect(() => {
         scrollToBottom()
     }, [turn, !isStreaming])
+
+    // Every page load gets its own session, created up front rather than
+    // lazily on the first message — keeps chat_runs/feedback grouped by
+    // actual browser sessions instead of by "whenever the user first sent
+    // something."
+    useEffect(() => {
+        async function initSession() {
+            try {
+                const { id } = await api.createSession();
+                setSessionId(id);
+            } catch (err) {
+                console.error('Failed to create session:', err);
+            }
+        }
+        initSession();
+    }, []);
 
     async function handleSendMessage() {
         const trimmedMessage = newMessage.trim();
@@ -59,14 +78,15 @@ function ChatBot() {
         let sessionIdOrNew = sessionId;
         let stream = null;
         const abortController = new AbortController();
+        activeAbortControllerRef.current = abortController;
         let safetyTimer = null;
 
         try {
-            // Safety timer - abort the request after 3 minutes
+            // Safety timer 
             safetyTimer = setTimeout(() => {
                 console.warn('Safety timer triggered - aborting request');
-                abortController.abort('Request timeout after 3 minutes');
-            }, 180_000); // 3 minutes
+                abortController.abort('Request timeout after 2 minutes');
+            }, DEFAULT_TIMEOUT_MS); 
 
             if (!sessionId) {
                 const { id } = await api.createSession();
@@ -85,6 +105,30 @@ function ChatBot() {
                 }
 
                 console.log("🔗 event: ", event.type);
+
+                // 🆔 Chat id is known before any work starts on the backend —
+                // grab it immediately so feedback can attach to this run even
+                // if the turn later errors, times out, or is stopped early
+                if (event.type === 'chat.id') {
+                    setTurn(draft => {
+                        const last = draft[draft.length - 1];
+                        last.response.chatId = event.data?.chat_id || null;
+                    });
+                    continue;
+                }
+
+                // ✅ Backend finished — carries the chat_id of the recorded
+                // chat_runs row so feedback buttons can target it
+                if (event.type === 'complete') {
+                    setTurn(draft => {
+                        const last = draft[draft.length - 1];
+                        last.response.chatId = event.data?.chat_id || null;
+                        last.response.isLoading = false;
+                        last.response.loadingText = null;
+                        last.response.isStreaming = false;
+                    });
+                    break;
+                }
 
                 if (event.type === 'step.complete') {
                     setTurn(draft => {
@@ -198,12 +242,17 @@ function ChatBot() {
 
             // Handle abort error specifically
             if (err.name === 'AbortError' || abortController.signal.aborted) {
+                const userStopped = abortController.signal.reason === 'user_stop';
                 setTurn(draft => {
                     if (!draft.length) return;
                     const last = draft[draft.length - 1];
                     last.response.isLoading = false;
                     last.response.loadingText = null;
                     last.response.isStreaming = false;
+
+                    // User-initiated stop isn't an error — leave whatever
+                    // was already streamed as the final response, ChatGPT-style
+                    if (userStopped) return;
 
                     const sectionId = `${last.response.id}-section-${last.response.sections.length + 1}`;
                     last.response.sections.push({
@@ -240,6 +289,9 @@ function ChatBot() {
             if (abortController && !abortController.signal.aborted) {
                 abortController.abort('Cleanup');
             }
+            if (activeAbortControllerRef.current === abortController) {
+                activeAbortControllerRef.current = null;
+            }
 
             // Safety net to ensure that we set streaming is done
             setTurn(draft => {
@@ -252,17 +304,22 @@ function ChatBot() {
         }
     }
 
+    function handleStop() {
+        activeAbortControllerRef.current?.abort('user_stop');
+    }
+
     return (
         <div className="flex flex-col h-full w-full min-w-0 min-h-0">
                 <div className="flex-1 min-h-0 min-w-0 overflow-hidden pl-3 mr-3">
                     {turn.length === 0 ? (
-                        <div className="h-full w-full flex items-center justify-center text-gray-800 italic text-2xl">
+                        <div className="h-full w-full flex items-center justify-center text-[var(--text-hover)] italic text-2xl">
                             What are you in the mood to read today?
                         </div>
                     ) : (
                         <ChatMessages
                             messages={turn}
                             isStreaming={isStreaming}
+                            sessionId={sessionId}
                         />
                     )}
                 </div>
@@ -272,6 +329,8 @@ function ChatBot() {
                         isStreaming={isStreaming}
                         setNewMessage={setNewMessage}
                         onSendMessage={handleSendMessage}
+                        onStop={handleStop}
+                        sessionId={sessionId}
                     />
                 </div>
         </div>

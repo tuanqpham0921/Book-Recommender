@@ -20,4 +20,8 @@ logs/
 *.log
 
 # Test coverage
-.coverage
+.coverage*
+
+# chat runs
+chat_runs*.sql
+log.txt

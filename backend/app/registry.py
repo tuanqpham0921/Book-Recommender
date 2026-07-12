@@ -23,6 +23,7 @@ from app.domains.users.schemas.request_schemas import (
     UserInfoRequest,
 )
 from app.domains.users.node_types import UserNodeTypeEnum
+from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
 
 # -------------------------------------------------------------------
 # BOOK DOMAIN
@@ -127,6 +128,14 @@ def format_node_type_catalog() -> str:
         catalog.extend(["", *lines_for("Other supported actions", tuple(dict.fromkeys(extra)))])
 
     return "\n".join(catalog)
+
+
+# -------------------------------------------------------------------
+# EXECUTOR MAPPING
+
+# NOTE: temporary — points at the mock executors under playground/app_mock
+# until real domain executors are built, then this should map to those instead.
+EXECUTORS_CLS_MAPPING = MOCK_EXECUTORS_CLS_MAPPING
 
 
 def main() -> None:

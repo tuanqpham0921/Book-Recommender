@@ -15,6 +15,8 @@ function BookRecommenderPage() {
     const path = location.pathname
     if (path === '/blog') {
       setActiveView('blog')
+    } else if (path === '/review') {
+      setActiveView('review')
     } else {
       setActiveView('chat') // Default to chat for any other path
     }
@@ -25,6 +27,8 @@ function BookRecommenderPage() {
     setActiveView(view)
     if (view === 'blog') {
       navigate('/blog')
+    } else if (view === 'review') {
+      navigate('/review')
     } else {
       navigate('/')
     }

@@ -22,6 +22,7 @@ class OpenAIClient(BaseLLMClient):
             raise ValueError("OpenAI API key not set")
         
         self.client               = AsyncOpenAI(api_key=openai_settings.API_KEY)
+        self.base_model           = openai_settings.BASE_MODEL
         self.embedding_model      = openai_settings.EMBEDDING_MODEL
         self.embedding_dimensions = openai_settings.EMBEDDING_DIMENSIONS
         self.max_tokens = OpenAIConstants.MAX_TOKENS
@@ -51,11 +52,10 @@ class OpenAIClient(BaseLLMClient):
     @task
     async def execute(self, req: OpenAIBaseRequest, save_payload: bool = False) -> AssistantMessage:
         """Execute the chat completion."""
-        #TODO: add semaphore to the execute method
-        
         payload = req.to_payload()
 
-        final_completion = await self._chat_stream(payload, req.sse_stream)
+        async with self.semaphore:
+            final_completion = await self._chat_stream(payload, req.sse_stream)
         
         response_message = final_completion.choices[0].message
         assistant_msg = AssistantMessage(
@@ -88,7 +88,10 @@ class OpenAIClient(BaseLLMClient):
             final_completion = await stream.get_final_completion()
             # print_json(final_completion.model_dump(), "Final Completion")
 
-        # one section is done
+        # one section is done — LLM chunk boundaries aren't deterministic,
+        # so mark the section end explicitly in the transcript
+        if sse_stream:
+            sse_stream.flush_chars()
         return final_completion
 
     async def close(self):
@@ -113,7 +116,7 @@ class OpenAIClient(BaseLLMClient):
         """Ping the OpenAI API."""
         
         response = await self.client.responses.create(
-            model="gpt-5-nano",
+            model=self.base_model,
             input="ping"
         )
         return response

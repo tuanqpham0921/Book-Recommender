@@ -1,6 +1,11 @@
 """Tests for app/common/mermaid.py diagram generation."""
 
-from app.common.mermaid import clean_string_mermaid, mermaid_id, get_mermaid_diagram
+from app.common.mermaid import (
+    choose_orientation,
+    clean_string_mermaid,
+    mermaid_id,
+    get_mermaid_diagram,
+)
 from app.domains.base_request import AnalyzeBaseRequest
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
 from app.domains.node_types import UnknownNodeTypeEnum
@@ -63,7 +68,7 @@ class TestMermaidId:
 class TestGetMermaidDiagram:
     def test_starts_with_flowchart_header(self):
         r = _make_retrieval("task_1")
-        assert get_mermaid_diagram([r.id], {r.id: r}).startswith("flowchart LR")
+        assert get_mermaid_diagram([r.id], {r.id: r}).startswith("flowchart TD")
 
     def test_includes_node_for_each_task(self):
         r1 = _make_retrieval("task_1", title="Book A")
@@ -83,3 +88,35 @@ class TestGetMermaidDiagram:
         r2 = _make_retrieval("task_2", title="Book B")
         diagram = get_mermaid_diagram([r1.id, r2.id], {r1.id: r1, r2.id: r2})
         assert "-->" not in diagram
+
+    def test_uses_orientation_from_levels(self):
+        r = _make_retrieval("task_1")
+        a1 = _make_analyze("task_2", depends_on_ids=["task_1"])
+        a2 = _make_analyze("task_3", depends_on_ids=["task_2"])
+        levels = {"task_1": 0, "task_2": 1, "task_3": 2}
+        diagram = get_mermaid_diagram(
+            ["task_1", "task_2", "task_3"],
+            {"task_1": r, "task_2": a1, "task_3": a2},
+            levels,
+        )
+        assert diagram.startswith("flowchart LR")
+
+
+class TestChooseOrientation:
+    def test_no_levels_defaults_to_td(self):
+        assert choose_orientation(None) == "TD"
+        assert choose_orientation({}) == "TD"
+
+    def test_wide_shallow_graph_is_td(self):
+        # 3 nodes at level 0 (width 3), 1 level deep -> concurrency-heavy
+        levels = {"a": 0, "b": 0, "c": 0}
+        assert choose_orientation(levels) == "TD"
+
+    def test_narrow_deep_graph_is_lr(self):
+        # 1 node per level across 3 levels -> sequential-heavy
+        levels = {"a": 0, "b": 1, "c": 2}
+        assert choose_orientation(levels) == "LR"
+
+    def test_tie_favors_td(self):
+        levels = {"a": 0}
+        assert choose_orientation(levels) == "TD"

@@ -1,8 +1,10 @@
 import json
 from typing import Any
 
+from pydantic import Field
+
 from app.common.sse_stream import SSEStream
-from app.common.messages import UserMessage
+from app.common.messages import APIMessage, AssistantMessage, UserMessage
 from clients.openai_client import OpenAIClient
 from app.orchestration.request_context import RequestContext
 from app.domains.planner.parse_intent import (
@@ -26,18 +28,38 @@ CONVERSATION_SUMMARY_PROMPT_PATH = (
 )
 
 
-class OrchestrationOutput(AppWorkflowOutput):
+# NOTE: this is okay for now
+# we don't need parse_result, and strategy_result or diagram
+# this should store conversation summary, failed tasks, internal summary message for llm
+# maybe also referenced books or things from processing the steps
+class PlannerOutput(AppWorkflowOutput):
     session_id: str | None = None
     parse_result: InitialParseOutput | None = None
     strategy_result: StrategyClassificationOutput | None = None
     diagram: str | None = None
+    # full trace fed into this turn's LLM calls: chat_messages + everything
+    # the workflows generated — persisted so chat_messages can be rebuilt
+    pipeline_message: list[APIMessage] = Field(default_factory=list)
+    # plain-string AssistantMessage contents produced this turn, in order —
+    # joined with newlines at persist time (run_recorder) into the single
+    # chat_runs.assistant_message TEXT column used to seed the next turn's
+    # chat_messages
+    assistant_message: list[str] = Field(default_factory=list)
 
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
         return {}
 
 
-class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
+def _assistant_texts(messages: list[APIMessage]) -> list[str]:
+    return [
+        m.content
+        for m in messages
+        if isinstance(m, AssistantMessage) and isinstance(m.content, str) and m.content
+    ]
+
+
+class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )
@@ -46,12 +68,17 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
     def __init__(
-        self, sse_stream: SSEStream, user_message: UserMessage, llm_client: OpenAIClient
+        self,
+        sse_stream: SSEStream,
+        user_message: UserMessage,
+        llm_client: OpenAIClient,
+        app_env: str | None = None,
     ):
         super().__init__(
             llm_client=llm_client,
             sse_stream=sse_stream,
-            output_type=OrchestrationOutput,
+            output_type=PlannerOutput,
+            app_env=app_env,
         )
         self.user_message = user_message
 
@@ -59,7 +86,10 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
+        self.messages = request_context.pipeline_message
+        self.messages.extend(request_context.chat_messages)
         self.messages.append(self.user_message)
+        self.output.pipeline_message = self.messages
 
         parse_workflow = InitialParseWorkflow(
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages
@@ -78,11 +108,9 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             if parse_result.runtime_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
+            self.output.assistant_message = [self.initial_parse_failure_message]
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
-
-        # return
-        # ------------------------------------------------------------------------------------------------
 
         system_goals = parse_output.accepted_goals
         if not system_goals:
@@ -90,8 +118,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
             # streamed the reply (small talk / out-of-scope / refusals)
             self.result.ok = True
             self.result.message = "Conversation handled without planning"
-            self.save_chat_messages()
-            self.save_conversation_result()
+            self.output.assistant_message = _assistant_texts(self.messages)
             return
 
         strategy_workflow = StrategyClassificationWorkflow(
@@ -110,6 +137,9 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
                     self.strategy_classification_failure_message
                 )
                 return
+            self.output.assistant_message = [
+                self.strategy_classification_failure_message
+            ]
             await self.sse_stream.send_chars(
                 self.strategy_classification_failure_message
             )
@@ -117,7 +147,7 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
 
         self.output.diagram = await self.send_mermaid(strategy_output)
         seen_description = set()
-        await self.sse_stream.send_chars("\n\n# System Goals:\n")
+        await self.sse_stream.send_chars("\n\n## System Goals:\n")
         for system_goal in parse_output.accepted_goals:
             if system_goal.description in seen_description:
                 continue
@@ -133,44 +163,31 @@ class ConversationOrchestrator(AppBaseWorkflow[OrchestrationOutput]):
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
+        self.output.assistant_message = _assistant_texts(self.messages)
 
-        self.save_chat_messages()
-        self.save_conversation_result()
+        # self.save_chat_messages()
+        # self.save_conversation_result()
 
     async def send_mermaid(
         self, strategy_result: StrategyClassificationOutput
     ) -> str | None:
         from app.common.mermaid import get_mermaid_diagram
 
+        diagram = None
         try:
             diagram = get_mermaid_diagram(
                 strategy_result.execution_order,
                 strategy_result.get_accepted_id_to_node(),
+                strategy_result.get_execution_levels(),
             )
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")
             return None
 
-        await self.sse_stream.send_chars("# My Plan for Your Request")
+        if not diagram:
+            logger.info("No Mermaid diagram generated (empty or invalid)")
+            return None
+
+        await self.sse_stream.send_chars("## My Plan for Your Request")
         await self.sse_stream.send_mermaid(diagram)
         return diagram
-
-    def save_conversation_result(self, name: str = "dev") -> None:
-        from common.utils import save_file
-
-        data = self.result.model_dump()
-        data.pop("steps", None)
-        save_file(data, file_name=f"conversation_result_{name}.json")
-
-    def save_chat_messages(self, name: str = "dev") -> None:
-        from common.utils import save_file
-        from common.utils import to_serializable
-
-        if not self.messages:
-            return
-        logger.info(f"Saving chat messages to {name}.json")
-        data = {
-            "chat_messages": to_serializable(self.messages),
-            "token_usage": to_serializable(self.result.token_usage),
-        }
-        save_file(data, file_name=f"chat_messages_{name}.json")

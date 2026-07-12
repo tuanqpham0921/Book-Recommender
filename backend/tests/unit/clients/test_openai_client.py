@@ -195,10 +195,11 @@ class TestChatStream:
         event = MagicMock(type="content.delta", delta="hello")
         self.make_stream_mock([event], fake_completion)
 
-        sse = AsyncMock()
+        sse = AsyncMock(flush_chars=MagicMock())
         await self.client._chat_stream({}, sse_stream=sse)
 
         sse.send_chars.assert_called_once_with(data="hello")
+        sse.flush_chars.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_non_delta_event_skipped(self):
@@ -206,7 +207,7 @@ class TestChatStream:
         event = MagicMock(type="chunk", delta="ignored")
         self.make_stream_mock([event], fake_completion)
 
-        sse = AsyncMock()
+        sse = AsyncMock(flush_chars=MagicMock())
         await self.client._chat_stream({}, sse_stream=sse)
 
         sse.send_chars.assert_not_called()
@@ -230,7 +231,7 @@ class TestPing:
         self.client.client.responses.create = AsyncMock(return_value=MagicMock())
         await self.client.ping()
         self.client.client.responses.create.assert_called_once_with(
-            model="gpt-5-nano", input="ping"
+            model="gpt-4o", input="ping"
         )
 
     # NOTE: open_ai client ping is now a task

@@ -1,0 +1,164 @@
+/* ============================================================
+   Design tokens — the ONE place to retune type, spacing and
+   color for the whole app. Components and the other style
+   partials should reference these variables (or Tailwind
+   utilities backed by them), not raw hex/rgb values.
+   ============================================================ */
+@theme {
+  --animate-slide-up: slide-up 0.6s ease-out;
+  --animate-slide-up-smooth: slide-up-smooth 0.35s ease-out;
+
+  /* Typography — one font family, everywhere. Tailwind's default
+     type scale (text-sm/base/lg/...) is left as-is; override
+     `--text-*` here if the scale itself ever needs to change. */
+  --font-*: initial;
+  --font-sans: "Times New Roman", Times, serif;
+  --font-urbanist: "Times New Roman", Times, serif;
+
+  /* Spacing — the multiplier behind every padding, gap and margin
+     utility (p-2, gap-3, m-4, ...). Change this one value to
+     rescale spacing app-wide. */
+  --spacing: 0.25rem;
+
+  /* Design System Colors - Black/White/Gray Palette (the app's default look) */
+  --text-inactive: rgb(115, 115, 115);
+  /* gray-500 */
+  --text-hover: rgb(64, 64, 64);
+  /* gray-700 */
+  --text-active: rgb(0, 0, 0);
+  /* black */
+  --text-muted: rgb(163, 163, 163);
+  /* gray-400 for nav links */
+
+  --underline-primary: rgb(0, 0, 0);
+  /* black for buttons */
+  --underline-secondary: rgb(163, 163, 163);
+  /* gray-400 for nav */
+
+  /* Background Colors */
+  --bg-primary: rgb(255, 255, 255);
+  /* white */
+  --bg-secondary: rgb(248, 248, 248);
+  /* gray-50 */
+  --bg-tertiary: rgb(229, 229, 229);
+  /* gray-200 */
+  --bg-quaternary: rgb(156, 163, 175);
+  /* gray-400 - darker gray */
+  --bg-dark: rgb(23, 23, 23);
+  /* gray-900 */
+
+  /* Border Colors */
+  --border-light: rgb(229, 229, 229);
+  /* gray-200 */
+  --border-medium: rgb(163, 163, 163);
+  /* gray-400 */
+  --border-dark: rgb(64, 64, 64);
+  /* gray-700 */
+
+  /* Button Colors */
+  --btn-primary-bg: rgb(0, 0, 0);
+  /* black */
+  --btn-primary-hover: rgb(64, 64, 64);
+  /* gray-700 */
+  --btn-secondary-bg: rgb(255, 255, 255);
+  /* white */
+  --btn-secondary-border: rgb(229, 229, 229);
+  /* gray-200 */
+  --btn-secondary-hover: rgb(248, 248, 248);
+  /* gray-50 */
+
+  /* Shadow System - Systematic Elevation */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  /* Subtle border-like */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  /* Small cards */
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  /* Standard cards */
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  /* Raised elements */
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  /* Floating elements */
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  /* Modal/overlay */
+
+  /* Interactive Shadows - For hover/focus states */
+  --shadow-button-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Button hover */
+  --shadow-icon-glow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  /* Icon backgrounds */
+  --shadow-input-focus: 0 0 0 3px rgba(0, 0, 0, 0.1);
+  /* Focus rings */
+
+  /* Page Transition System */
+  --transition-page-fast: transform 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --transition-page-normal: transform 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --transition-page-slow: transform 800ms cubic-bezier(0.23, 1, 0.32, 1);
+  --transition-page-elegant: transform 750ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ------------------------------------------------------------
+   Accent tokens — the app is primarily black & white. These
+   variables are the single switch for the small amount of color
+   it's allowed to have (book covers, like/dislike, status,
+   errors). By default they resolve to the monochrome palette
+   above; ColorModeToggle sets data-color="on" on <html> and
+   every one of these repoints at once, everywhere they're used.
+   Components should always reach for var(--accent-*), never a
+   raw Tailwind color utility like text-green-600.
+   ------------------------------------------------------------ */
+:root {
+  --accent-positive: var(--text-active);
+  /* likes, success, "ok" status */
+  --accent-negative: var(--text-active);
+  /* dislikes, errors, "failed" status */
+  --accent-warning: var(--text-active);
+  /* written reports / needs attention */
+  --accent-info: var(--text-active);
+  /* active filters, highlighted state */
+
+  --accent-positive-bg: var(--bg-tertiary);
+  --accent-negative-bg: var(--bg-tertiary);
+  --accent-warning-bg: var(--bg-tertiary);
+  --accent-info-bg: var(--bg-tertiary);
+
+  --accent-positive-border: var(--border-medium);
+  --accent-negative-border: var(--border-medium);
+  --accent-warning-border: var(--border-medium);
+  --accent-info-border: var(--border-medium);
+
+  /* For inherently full-color content that `color`/--accent-* can't touch —
+     book cover art and emoji glyphs — desaturated by default to match the
+     monochrome UI. */
+  --mono-filter: grayscale(1);
+}
+
+:root[data-color="on"] {
+  --accent-positive: rgb(22, 163, 74);
+  /* green-600 */
+  --accent-negative: rgb(220, 38, 38);
+  /* red-600 */
+  --accent-warning: rgb(161, 98, 7);
+  /* yellow-700 */
+  --accent-info: rgb(79, 70, 229);
+  /* indigo-600 */
+
+  --accent-positive-bg: rgb(240, 253, 244);
+  /* green-50 */
+  --accent-negative-bg: rgb(254, 242, 242);
+  /* red-50 */
+  --accent-warning-bg: rgb(254, 252, 232);
+  /* yellow-50 */
+  --accent-info-bg: rgb(238, 242, 255);
+  /* indigo-50 */
+
+  --accent-positive-border: rgb(187, 247, 208);
+  /* green-200 */
+  --accent-negative-border: rgb(254, 202, 202);
+  /* red-200 */
+  --accent-warning-border: rgb(254, 240, 138);
+  /* yellow-200 */
+  --accent-info-border: rgb(199, 210, 254);
+  /* indigo-200 */
+
+  --mono-filter: none;
+}

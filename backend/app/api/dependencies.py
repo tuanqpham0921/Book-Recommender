@@ -5,12 +5,16 @@ from fastapi import Request, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.book_store import BookStore
+from db.stores.chat_run_store import ChatRunStore
+from db.stores.feedback_store import FeedbackStore
 from clients import OpenAIClient
 from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
 
+# how many prior turns to replay into chat_messages for LLM context
+CHAT_HISTORY_TURNS = 5
 
 def get_openai_client(request: Request) -> OpenAIClient:
     """Get the OpenAI client"""
@@ -58,6 +62,20 @@ async def get_book_store(
     return BookStore(session)
 
 
+async def get_chat_run_store(
+    session: AsyncSession = Depends(get_sqlalchemy_session),
+) -> ChatRunStore:
+    """Get ChatRunStore instance with injected session."""
+    return ChatRunStore(session)
+
+
+async def get_feedback_store(
+    session: AsyncSession = Depends(get_sqlalchemy_session),
+) -> FeedbackStore:
+    """Get FeedbackStore instance with injected session."""
+    return FeedbackStore(session)
+
+
 def get_app_env(request: Request) -> str:
     """Get the app environment"""
     app_env = getattr(request.app.state, "app_env", None)
@@ -74,20 +92,44 @@ async def get_request_context_factory(
     book_store=Depends(get_book_store),
     sse_stream=Depends(get_sse_stream),
     app_env: str = Depends(get_app_env),
+    session_factory=Depends(get_sqlalchemy_session_factory),
 ):
     """Factory to create request contexts with runtime arguments."""
-    from app.common.messages import UserMessage
+    from app.common.messages import APIMessage, AssistantMessage, UserMessage
     from app.orchestration.request_context import RequestContext
-    
-    def create_context(session_id: str, user_message: UserMessage):
+
+    async def load_chat_messages(session_id: str) -> list[APIMessage]:
+        """Replay the session's prior turns (newest-first from the store,
+        reversed here) as UserMessage/AssistantMessage pairs — reads only
+        the cheap user_message/assistant_message columns, no JSONB parsing,
+        so this stays fast regardless of how large a turn's orchestration
+        trace grows."""
+        async with session_factory() as session:
+            rows = await ChatRunStore(session).get_by_session(
+                session_id, limit=CHAT_HISTORY_TURNS
+            )
+
+        messages: list[APIMessage] = []
+        for row in reversed(rows):
+            if not row.user_message:
+                continue
+            messages.append(UserMessage(id=row.chat_id, content=row.user_message))
+            if row.assistant_message:
+                messages.append(AssistantMessage(content=row.assistant_message))
+        return messages
+
+    async def create_context(session_id: str, user_message: UserMessage):
+        chat_messages = await load_chat_messages(session_id)
 
         return RequestContext(
             app_env=app_env,
             session_id=session_id,
             user_message=user_message,
+            chat_messages=chat_messages,
             llm_client=llm_client,
             book_store=book_store,
             sse_stream=sse_stream,
+            session_factory=session_factory,
         )
 
     return create_context

@@ -33,15 +33,14 @@ def build_title_search(
     stmt = stmt.where(
         or_(
             model.title.ilike(f"%{book_title}%"),
-            func.similarity(model.title, text(f"'{book_title}'"))
-            > similarity_threshold,
+            func.similarity(model.title, book_title) > similarity_threshold,
         )
     )
     if authors:
         for author in authors:
             stmt = stmt.where(model.authors.ilike(f"%{author}%"))
 
-    stmt = stmt.order_by(func.similarity(model.title, text(f"'{book_title}'")).desc())
+    stmt = stmt.order_by(func.similarity(model.title, book_title).desc())
     stmt = stmt.limit(limit)
     return stmt
 
@@ -58,12 +57,11 @@ def build_author_search(model, author_name: str, similarity_threshold: float = 0
     stmt = select(model)
     stmt = stmt.where(
         or_(
-            model.author.ilike(f"%{author_name}%"),
-            func.similarity(model.authors, text(f"'{author_name}'"))
-            > similarity_threshold,
+            model.authors.ilike(f"%{author_name}%"),
+            func.similarity(model.authors, author_name) > similarity_threshold,
         )
     )
-    stmt = stmt.order_by(func.similarity(model.author, text(f"'{author_name}'")).desc())
+    stmt = stmt.order_by(func.similarity(model.authors, author_name).desc())
     return stmt
 
 
@@ -108,8 +106,7 @@ def apply_book_filters(
             author_conditions.append(
                 or_(
                     model.authors.ilike(f"%{name}%"),
-                    func.similarity(model.authors, text(f"'{name}'"))
-                    > similarity_threshold,
+                    func.similarity(model.authors, name) > similarity_threshold,
                 )
             )
             author_names.append(name)
@@ -123,8 +120,7 @@ def apply_book_filters(
             category_conditions.append(
                 or_(
                     model.categories.ilike(f"%{cat}%"),
-                    func.similarity(model.categories, text(f"'{cat}'"))
-                    > similarity_threshold,
+                    func.similarity(model.categories, cat) > similarity_threshold,
                 )
             )
             category_names.append(cat)
@@ -158,15 +154,11 @@ def apply_book_filters(
 
     if filters.authors:
         for name in author_names:
-            stmt = stmt.order_by(
-                func.similarity(model.authors, text(f"'{name}'")).desc()
-            )
+            stmt = stmt.order_by(func.similarity(model.authors, name).desc())
 
     if filters.categories:
         for cat in category_names:
-            stmt = stmt.order_by(
-                func.similarity(model.categories, text(f"'{cat}'")).desc()
-            )
+            stmt = stmt.order_by(func.similarity(model.categories, cat).desc())
 
     # Apply sorting
     if filters.sort_by:

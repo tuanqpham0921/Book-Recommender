@@ -1,4 +1,5 @@
-"""Tests for ConversationOrchestrator.add_step output routing."""
+"""Tests for PlannerWorkflow.add_step output routing."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -7,7 +8,7 @@ from app.common.messages import AssistantMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
-from app.domains.planner.main import ConversationOrchestrator, OrchestrationOutput
+from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.domains.planner.strategy_classification import StrategyClassificationOutput
 from common.operation import OperationResult, TokenUsage
@@ -16,12 +17,13 @@ from common.utils import load_json, save_file
 
 @pytest.fixture
 def orchestrator():
-    return ConversationOrchestrator(
+    return PlannerWorkflow(
         sse_stream=SSEStream(),
         user_message=UserMessage(content="test"),
         llm_client=MagicMock(),
     )
-    
+
+
 def _make_goal():
     goal = SystemGoal(
         description="Find a book about machine learning topics",
@@ -47,10 +49,10 @@ def _make_strategy():
     return strategy
 
 
-def _make_orchestration_output() -> OrchestrationOutput:
+def _make_orchestration_output() -> PlannerOutput:
     goal = _make_goal()
     strategy = _make_strategy()
-    return OrchestrationOutput(
+    return PlannerOutput(
         session_id="sess_1",
         parse_result=InitialParseOutput(accepted_goals=[goal]),
         strategy_result=StrategyClassificationOutput(
@@ -60,9 +62,9 @@ def _make_orchestration_output() -> OrchestrationOutput:
     )
 
 
-class TestConversationOrchestratorAddStep:
+class TestPlannerWorkflowAddStep:
     # storing parse/strategy outputs moved from an add_step override into
-    # run() itself — see ConversationOrchestrator.run
+    # run() itself — see PlannerWorkflow.run
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(
@@ -86,8 +88,9 @@ class TestConversationOrchestratorAddStep:
         orchestrator.add_step(step)
         assert step in orchestrator.result.steps
 
-class TestOrchestrationOutputJsonRoundTrip:
-    """model_dump_json / model_validate_json round-trip of OrchestrationOutput.
+
+class TestPlannerOutputJsonRoundTrip:
+    """model_dump_json / model_validate_json round-trip of PlannerOutput.
 
     Public fields (including which concrete BaseRequest subclass a strategy
     is) survive because `node_type` discriminates the union on reload.
@@ -98,7 +101,7 @@ class TestOrchestrationOutputJsonRoundTrip:
 
     def test_top_level_fields_survive(self):
         output = _make_orchestration_output()
-        restored = OrchestrationOutput.model_validate_json(output.model_dump_json())
+        restored = PlannerOutput.model_validate_json(output.model_dump_json())
 
         assert restored.session_id == output.session_id
         assert restored.diagram == output.diagram
@@ -107,7 +110,7 @@ class TestOrchestrationOutputJsonRoundTrip:
         output = _make_orchestration_output()
         original_strategy = output.strategy_result.accepted[0]
 
-        restored = OrchestrationOutput.model_validate_json(output.model_dump_json())
+        restored = PlannerOutput.model_validate_json(output.model_dump_json())
         restored_strategy = restored.strategy_result.accepted[0]
 
         assert isinstance(restored_strategy, FindByTitleRetrieval)
@@ -115,13 +118,16 @@ class TestOrchestrationOutputJsonRoundTrip:
         assert restored_strategy.title == original_strategy.title
         assert restored_strategy.target_goal == original_strategy.target_goal
         assert restored_strategy.confidence == original_strategy.confidence
-        assert restored.strategy_result.execution_order == output.strategy_result.execution_order
+        assert (
+            restored.strategy_result.execution_order
+            == output.strategy_result.execution_order
+        )
 
     def test_accepted_goal_public_fields_survive(self):
         output = _make_orchestration_output()
         original_goal = output.parse_result.accepted_goals[0]
 
-        restored = OrchestrationOutput.model_validate_json(output.model_dump_json())
+        restored = PlannerOutput.model_validate_json(output.model_dump_json())
         restored_goal = restored.parse_result.accepted_goals[0]
 
         assert restored_goal.description == original_goal.description
@@ -136,7 +142,7 @@ class TestOrchestrationOutputJsonRoundTrip:
         assert original_strategy._llm_id == "task_1"
         assert original_strategy._details == ["duplicate llm_id, created a new one"]
 
-        restored = OrchestrationOutput.model_validate_json(output.model_dump_json())
+        restored = PlannerOutput.model_validate_json(output.model_dump_json())
         restored_strategy = restored.strategy_result.accepted[0]
 
         assert restored_strategy._llm_id is None
@@ -148,7 +154,7 @@ class TestOrchestrationOutputJsonRoundTrip:
         original_goal = output.parse_result.accepted_goals[0]
         assert original_goal._refusal is True
 
-        restored = OrchestrationOutput.model_validate_json(output.model_dump_json())
+        restored = PlannerOutput.model_validate_json(output.model_dump_json())
         restored_goal = restored.parse_result.accepted_goals[0]
 
         # a fresh, unrelated id is generated by the PrivateAttr default_factory
@@ -157,7 +163,7 @@ class TestOrchestrationOutputJsonRoundTrip:
         assert restored_goal._refusal_reasons == []
 
 
-class TestOrchestrationOutputSaveFileRoundTrip:
+class TestPlannerOutputSaveFileRoundTrip:
     """save_file/load_json (common.utils) go through to_serializable, which
     walks __pydantic_private__ - so unlike model_dump_json/model_validate_json,
     private attrs (_llm_id, _details, _refusal, ...) do survive this round

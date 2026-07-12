@@ -9,7 +9,7 @@ from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.node_types import NodeTypeEnum
-from app.domains.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
+from app.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
 from clients.base import BaseLLMClient
 from clients.openai_requests import OpenAIChatRequest
@@ -210,7 +210,9 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         )
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            messages=[self.user_message],
+            # NOTE: this should be a list of previous messages as well
+            # but for now we can just do clear and direct instructions 
+            messages=[self.user_message], 
             tool_models=self.tool_models,
         )
         assistant_msg = await self.run_llm_call(req)

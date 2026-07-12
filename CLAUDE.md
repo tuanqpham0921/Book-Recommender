@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Files to Avoid Reading
+
+To save tokens, do not read these unless the task specifically requires it:
+
+- **Log files** (`backend/logs/` — `*.log` and chat-run JSON dumps): skip unless the task is formatting or restructuring the logs themselves.
+- **SQL backups/dumps** (`backend/data/*.sql`, e.g. `backup.sql`): never read these. The schema init SQL in `backend/db/schema/` (extensions/tables/indexes) is fine to read.
+
+If a file is in gitignore, you probably don't need to read it.
+Ask for confirmation before reading large files
+
 ## Commands
 
 ### Backend (run from `backend/`)
@@ -47,18 +57,20 @@ Instead of a fixed routing graph, this system uses **LLM-driven preplanning**: t
 
 1. **`parse_intent.py` (`InitialParseWorkflow`)** — sends the user message to the LLM with all available tool schemas (descriptions come from docstrings on the node classes). Returns a list of goals with IDs.
 2. **`strategy_classification.py` (`StrategyClassificationWorkflow`)** — takes those goals, loads the matching tools, and has the LLM select strategies via semantic understanding. The LLM can reject goals and resolves dependencies to produce an ordered execution plan.
-3. **`ConversationOrchestrator`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, streams it to the frontend, then instantiates the node classes and runs them with the parsed arguments.
+3. **`PlannerWorkflow`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, streams it to the frontend, then instantiates the node classes and runs them with the parsed arguments.
 
-Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/domains/registry.py` maps type strings to classes.
+Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/registry.py` maps type strings to classes.
 
-**Adding a new capability:** add a node class under the appropriate domain, register it in `registry.py`, and define its `BookNodeTypeEnum` entry — the planner picks it up automatically via the tool-loading step.
+**Adding a new capability:** add a node class under the appropriate domain, register it in `app/registry.py`, and define its `BookNodeTypeEnum` entry — the planner picks it up automatically via the tool-loading step.
 
 ### Request Flow
 
 1. **Frontend** sends a chat message via SSE to `POST /session/{id}/message`
-2. **`Orchestrator`** (`app/orchestration/orchestrator.py`) builds a `RequestContext` and delegates to `ConversationOrchestrator`
-3. **`ConversationOrchestrator`** runs the planner pipeline (parse → classify → diagram → execute)
+2. **`Orchestrator`** (`app/orchestration/orchestrator.py`) builds a `RequestContext` and delegates to `PlannerWorkflow`
+3. **`PlannerWorkflow`** runs the planner pipeline (parse → classify → diagram → execute)
 4. Results stream back to the client via **SSEStream** (`app/common/sse_stream.py`)
+
+**Current state:** `TaskRunnerWorkflow` (`app/domains/task_runner.py`) — the step that would actually execute the classified strategies — is implemented but currently commented out in `Orchestrator.run`. Today's request flow only runs the planner pipeline through diagram generation; it does not yet execute tasks end-to-end.
 
 ### Workflow / Operation Pattern
 
@@ -74,7 +86,7 @@ Infrastructure abstractions in `common/` that centralize logging, error catching
 
 - **`BookNodeTypeEnum`** — `Retrieve_by_ISBN13`, `Retrieve_by_Title`, `Retrieve_by_Traits`, `Analyze_Compare`, `Analyze_Recommend`
 - **`NodeTypeEnum`** — union of Book/User/Project/Unknown node types
-- `app/domains/registry.py` maps node type strings to their implementations
+- `app/registry.py` maps node type strings to their implementations
 
 ### Database
 

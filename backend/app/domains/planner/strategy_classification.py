@@ -19,7 +19,7 @@ from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.base_request import AnalyzeBaseRequest, BaseRequest
-from app.domains.registry import (
+from app.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
@@ -143,6 +143,26 @@ class StrategyClassificationOutput(AppWorkflowOutput):
     def get_refused_id_to_node(self):
         """Return dict of node_id -> serialized node data."""
         return {node.id: node for node in self.refused}
+
+    def get_execution_levels(self) -> dict[str, int]:
+        """BFS depth per accepted node: 0 for no dependencies, else
+        1 + max(level of its deps). Used to pick a wide/concurrent (TD) vs
+        deep/sequential (LR) mermaid layout."""
+        id_to_node = self.get_accepted_id_to_node()
+        levels: dict[str, int] = {}
+
+        def level_of(task_id: str) -> int:
+            if task_id in levels:
+                return levels[task_id]
+            deps = id_to_node[task_id].get_depends_on()
+            levels[task_id] = 1 + max(
+                (level_of(d) for d in deps if d in id_to_node), default=-1
+            )
+            return levels[task_id]
+
+        for task_id in id_to_node:
+            level_of(task_id)
+        return levels
 
 
 class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutput]):
