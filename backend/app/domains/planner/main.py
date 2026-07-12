@@ -147,7 +147,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
         self.output.diagram = await self.send_mermaid(strategy_output)
         seen_description = set()
-        await self.sse_stream.send_chars("\n\n# System Goals:\n")
+        await self.sse_stream.send_chars("\n\n## System Goals:\n")
         for system_goal in parse_output.accepted_goals:
             if system_goal.description in seen_description:
                 continue
@@ -187,6 +187,6 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             logger.info("No Mermaid diagram generated (empty or invalid)")
             return None
 
-        await self.sse_stream.send_chars("# My Plan for Your Request")
+        await self.sse_stream.send_chars("## My Plan for Your Request")
         await self.sse_stream.send_mermaid(diagram)
         return diagram
