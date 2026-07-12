@@ -1,10 +1,4 @@
-* refactored and make your code cleaner
-    * there should be consistent spacing/fonts in one place
-    * split up index.css some how
-    * might need to add sections better for chat messages
-
-* need to make the liked or disliked sorting better
-  * currently works and prioritize ones with comments and feedback
+* review your new code
 
 Do I need this with the new mermaid code?
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
