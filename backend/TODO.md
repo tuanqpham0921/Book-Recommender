@@ -33,7 +33,18 @@ Reminder:
     * saving to db, feedback code etc
 1. need to create one executor for @task and workflow
     * do this later once you have time out and flush out more stuff
-2. add timeout to @task and @workflow (should be able to handle them)
+2. [DONE 2026-07-12] add timeout to @task and @workflow (should be able to handle them)
+    * @task(timeout=..., retries=...) and Workflow(timeout=...) (constructor arg,
+      wraps the whole run()); retries default 1 (no retry), timeout default None
+    * run_async_step also got retries/timeout - it now takes a zero-arg callable
+      instead of a bare coroutine so it can call it fresh per attempt; only the
+      final attempt is added to steps, with OperationResult.retries saying how
+      many attempts it took
+    * NOTE: no automatic instance-level retry on Workflow itself - self.run()
+      can't safely be re-run on the same instance (single-use guard, subclass
+      state accumulates - see TestSingleUseGuard). Workflow-level retries go
+      through run_async_step with a factory that constructs a fresh instance
+      per attempt: run_async_step(lambda: SomeWorkflow(...)(), retries=3)
 3. remove the private attributes (keep it in the output)
     * might need to use create instead of parse
     * this  an be for later, when you actually need to load in buffer

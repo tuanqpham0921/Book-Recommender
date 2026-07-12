@@ -95,7 +95,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages
         )
         parse_result = await self.run_async_step(
-            parse_workflow(), raise_on_failure=False
+            lambda: parse_workflow(), raise_on_failure=False
         )
         # narrow through a local: the workflow pre-initializes its output,
         # so it is never None; parse_workflow.output raises if it ever were
@@ -125,7 +125,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages
         )
         strategy_result = await self.run_async_step(
-            strategy_workflow(system_goals), raise_on_failure=False
+            lambda: strategy_workflow(system_goals), raise_on_failure=False
         )
         strategy_output = strategy_workflow.output
         self.output.strategy_result = strategy_output

@@ -20,8 +20,11 @@ def _make_flaky_task(fail_times: int):
     return flaky_step
 
 
-async def _as_coro(step: OperationResult) -> OperationResult:
-    return step
+def _as_coro(step: OperationResult):
+    async def _inner() -> OperationResult:
+        return step
+
+    return _inner
 
 
 class _SuccessWorkflow(Workflow):
@@ -194,7 +197,7 @@ class TestCrashingSteps:
 
         class _BareCoroWorkflow(Workflow):
             async def run(self, *args, **kwargs):
-                await self.run_async_step(_explodes())
+                await self.run_async_step(_explodes)
 
         result = await _BareCoroWorkflow()()
         assert result.ok is False
@@ -213,9 +216,9 @@ class TestCrashingSteps:
             async def run(self, *args, **kwargs):
                 for i in range(5):
                     if i == 3:
-                        await self.run_async_step(_explodes())
-                    await self.run_async_step(_okay_step(i))
-                
+                        await self.run_async_step(_explodes)
+                    await self.run_async_step(lambda i=i: _okay_step(i))
+
 
         result = await _BareCoroWorkflow()()
         assert result.ok is False
@@ -244,10 +247,10 @@ class TestCrashingSteps:
                 for i in range(5):
                     if i == 3:
                         await self.run_async_step(
-                            _explodes(), raise_on_failure=self._raise
+                            _explodes, raise_on_failure=self._raise
                         )
                     await self.run_async_step(
-                        _okay_step(i), raise_on_failure=self._raise
+                        lambda i=i: _okay_step(i), raise_on_failure=self._raise
                     )
 
         result = await _BareCoroWorkflow(raise_on_failure)()
@@ -272,10 +275,10 @@ class TestCrashingSteps:
                 for i in range(5):
                     if i == 3:
                         await self.run_async_step(
-                            _explodes_enveloped(), raise_on_failure=False
+                            _explodes_enveloped, raise_on_failure=False
                         )
                     await self.run_async_step(
-                        _okay_step(i), raise_on_failure=False
+                        lambda i=i: _okay_step(i), raise_on_failure=False
                     )
 
         result = await _EnvelopedCrashWorkflow()()
@@ -300,7 +303,7 @@ class TestCrashingSteps:
                 self.continued_past_step = False
 
             async def run(self, *args, **kwargs):
-                await self.run_async_step(flaky_step(), raise_on_failure=True)
+                await self.run_async_step(flaky_step, raise_on_failure=True)
                 self.continued_past_step = True
 
         wf = _CrashingStepWorkflow()
@@ -325,7 +328,7 @@ class TestCrashingSteps:
             async def run(self, *args, **kwargs):
                 for _ in range(3):
                     step = await self.run_async_step(
-                        flaky_step(), raise_on_failure=False
+                        flaky_step, raise_on_failure=False
                     )
                     if step.ok:
                         self.result.ok = True
@@ -339,6 +342,108 @@ class TestCrashingSteps:
         assert result.steps[2].output == "succeeded on attempt 3"
         # the failed attempts remain in the trail for forensics
         assert result.steps[0].runtime_error.type == "ValueError"
+
+
+class TestRunAsyncStepRetriesAndTimeout:
+    """Built-in retries/timeout on run_async_step itself, as opposed to the
+    hand-rolled retry loop above — only the final attempt is recorded as a
+    step, with `.retries` on the envelope saying how many attempts it took."""
+
+    async def test_retries_until_success_records_one_step(self):
+        flaky_step = _make_flaky_task(fail_times=2)
+
+        class _RetryStepWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                step = await self.run_async_step(flaky_step, retries=3)
+                if step.ok:
+                    self.result.ok = True
+
+        result = await _RetryStepWorkflow()()
+        assert result.ok is True
+        assert len(result.steps) == 1
+        assert result.steps[0].output == "succeeded on attempt 3"
+        assert result.steps[0].retries == 2
+
+    async def test_exhausts_retries_and_fails(self):
+        flaky_step = _make_flaky_task(fail_times=99)
+
+        class _RetryStepWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                await self.run_async_step(flaky_step, retries=3, raise_on_failure=False)
+
+        result = await _RetryStepWorkflow()()
+        assert result.ok is False
+        assert len(result.steps) == 1
+        assert result.steps[0].retries == 2
+
+    async def test_default_retries_is_one_attempt(self):
+        flaky_step = _make_flaky_task(fail_times=1)
+
+        class _StepWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                await self.run_async_step(flaky_step, raise_on_failure=False)
+
+        result = await _StepWorkflow()()
+        assert result.ok is False
+        assert result.steps[0].retries == 0
+
+    async def test_timeout_produces_failed_step(self):
+        async def _slow():
+            await asyncio.sleep(1)
+            return OperationResult(ok=True, name="slow")
+
+        class _TimeoutStepWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                await self.run_async_step(
+                    _slow, timeout=0.01, raise_on_failure=False
+                )
+
+        result = await _TimeoutStepWorkflow()()
+        assert result.ok is False
+        assert result.steps[0].runtime_error.type == "TimeoutError"
+
+    async def test_factory_called_fresh_on_every_attempt(self):
+        calls = {"count": 0}
+
+        def factory():
+            calls["count"] += 1
+            if calls["count"] <= 2:
+                return _as_coro(OperationResult(ok=False, name="attempt"))()
+            return _as_coro(OperationResult(ok=True, name="attempt", output="done"))()
+
+        class _FactoryWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                await self.run_async_step(factory, retries=3, raise_on_failure=False)
+
+        result = await _FactoryWorkflow()()
+        assert calls["count"] == 3
+        assert result.steps[0].output == "done"
+
+
+class TestWorkflowTimeout:
+    async def test_default_timeout_is_none(self):
+        class _FastWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                await asyncio.sleep(0.01)
+                self.result.ok = True
+
+        result = await _FastWorkflow()()
+        assert result.ok is True
+
+    async def test_run_exceeding_timeout_fails_the_workflow(self):
+        class _SlowWorkflow(Workflow):
+            def __init__(self):
+                super().__init__(timeout=0.01)
+
+            async def run(self, *args, **kwargs):
+                await asyncio.sleep(1)
+                self.result.ok = True
+
+        result = await _SlowWorkflow()()
+        assert result.ok is False
+        assert result.runtime_error is not None
+        assert result.runtime_error.type == "TimeoutError"
+        assert "timed out" in result.message
 
 
 class TestAddStep:

@@ -198,7 +198,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         parse_result = tool_call.function.parsed_arguments
 
         dag_step = await self.run_async_step(
-            self._create_dag(parse_result, system_goals), raise_on_failure=False
+            lambda: self._create_dag(parse_result, system_goals), raise_on_failure=False
         )
 
         self._record_tool_call(tool_call)

@@ -85,7 +85,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 app_env=self.app_env,
             )
             step_result = await self.run_async_step(
-                executor(
+                lambda: executor(
                     task=task,
                     dependent_results=dependent_results,
                     request_context=request_context,

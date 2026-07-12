@@ -3,7 +3,7 @@ from common.operation import OperationResult, RuntimeErrorInfo
 import asyncio
 import logging
 import time
-from typing import Any, Generic, TypeVar
+from typing import Any, Callable, Generic, TypeVar
 
 
 from typing import Coroutine
@@ -26,10 +26,18 @@ class Workflow(ABC, Generic[OutputT]):
     Construct a new instance for every execution, including retries — the
     constructor sets up no expensive resources, so this is cheap."""
 
-    def __init__(self, output_type: type[OutputT] | None = None):
+    def __init__(
+        self,
+        output_type: type[OutputT] | None = None,
+        *,
+        timeout: float | None = None,
+    ):
         self.name = self.workflow_ref
         self.output_type = output_type
         self._called = False
+        # bounds the whole run() call, not individual steps — see
+        # run_async_step for per-step timeout/retries
+        self.timeout = timeout
 
         # intialize an envolope in memory to modify
         self.result: OperationResult[OutputT] = OperationResult(
@@ -56,7 +64,7 @@ class Workflow(ABC, Generic[OutputT]):
         time_start = time.perf_counter()
         try:
             self.logger.info(f"Running workflow: {self.workflow_name}")
-            await self.run(*args, **kwargs)
+            await asyncio.wait_for(self.run(*args, **kwargs), timeout=self.timeout)
             self.check_output_type()
 
             # not runtime failure, app still runs
@@ -64,6 +72,14 @@ class Workflow(ABC, Generic[OutputT]):
                 self.logger.warning(f"Workflow failed: {self.result.message}")
             else:
                 self.logger.info(f"Finished workflow: {self.workflow_name}")
+        except asyncio.TimeoutError as e:
+            # own except clause (ahead of the generic Exception one below) so
+            # the message is specific instead of "Workflow failed: "
+            self.result.ok = False
+            self.result.message = f"Workflow timed out after {self.timeout}s"
+            self.logger.warning(self.result.message)
+            self.result.runtime_error = RuntimeErrorInfo.from_exception(e)
+            self.result.runtime_error.message = self.result.message
         except asyncio.CancelledError as e:
             # client disconnected (e.g. page refresh) mid-workflow. Stamp
             # what we have so a caller can still record a partial run, then
@@ -102,15 +118,44 @@ class Workflow(ABC, Generic[OutputT]):
 
     async def run_async_step(
         self,
-        function: Coroutine[Any, Any, OperationResult[Any]],
+        function: Callable[[], Coroutine[Any, Any, OperationResult[Any]]],
         *,
         raise_on_failure: bool = True,
+        retries: int = 1,
+        timeout: float | None = None,
     ) -> OperationResult[Any]:
-        # NOTE: enable raise_on_failure = False if you want to retry
-        # so the caller can capture the envolope and deal with it
-        # default is True more most cases
+        """Run one step, calling `function()` fresh on each attempt.
 
-        step_result = await function
+        retries: total attempts before giving up on a *failed envelope*
+        (default 1 = no retry). A bare exception raised by `function()`
+        itself (no @task/envelope around it) is never retried and propagates
+        immediately — see TestCrashingSteps in test_workflow.py. If
+        `function` wraps a single-use Workflow instance
+        (`lambda: SomeWorkflow(...)()`), it must construct a new instance on
+        every call for retries to actually retry instead of hitting the
+        single-use guard.
+        timeout: per-attempt seconds passed to asyncio.wait_for (default
+        None = no timeout).
+        """
+        attempts = max(retries, 1)
+        step_result: OperationResult[Any]
+
+        for attempt in range(1, attempts + 1):
+            try:
+                step_result = await asyncio.wait_for(function(), timeout=timeout)
+            except asyncio.TimeoutError as e:
+                message = f"Step timed out after {timeout}s"
+                step_result = OperationResult(ok=False, message=message)
+                step_result.runtime_error = RuntimeErrorInfo.from_exception(e)
+                step_result.runtime_error.message = message
+
+            step_result.retries = attempt - 1
+            if step_result.ok or attempt >= attempts:
+                break
+            self.logger.warning(
+                f"Step attempt {attempt}/{attempts} failed: {step_result.message} - retrying"
+            )
+
         self.add_step(step_result)
 
         if step_result.ok:
