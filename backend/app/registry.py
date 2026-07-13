@@ -122,7 +122,7 @@ def format_node_type_catalog() -> str:
         *lines_for("Analyze — interpret, compare, or recommend using retrieved data", ANALYZE_CLASSES),
     ]
 
-    listed =  set(ANALYZE_CLASSES)
+    listed = set(RETRIEVAL_CLASSES) | set(ANALYZE_CLASSES)
     extra = [cls for cls in NODE_TYPE_TO_CLS.values() if cls not in listed]
     if extra:
         catalog.extend(["", *lines_for("Other supported actions", tuple(dict.fromkeys(extra)))])

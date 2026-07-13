@@ -32,3 +32,14 @@ class TestNodeToolDocstrings:
         ]
         assert not unlisted, f"Node types missing from catalog: {unlisted}"
         assert "No description" not in catalog
+
+    def test_catalog_lists_every_node_type_exactly_once(self):
+        # the "Other supported actions" section is only for registered classes
+        # missing from both tier lists — a node type appearing twice bloats
+        # every parse prompt and reads as two different capabilities
+        catalog = format_node_type_catalog()
+        duplicated = [
+            name for name in NODE_TYPE_TO_CLS
+            if catalog.count(f"- {name}:") != 1
+        ]
+        assert not duplicated, f"Node types listed more than once: {duplicated}"

@@ -9,8 +9,8 @@ venv/
 config/.env*
 !config/.env.example
 
-# Data
-data/*backup.sql
+# Backup Data
+*backup.sql
 
 # Data & Exports
 *.csv
