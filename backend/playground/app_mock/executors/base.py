@@ -18,9 +18,7 @@ class MockExecutorOutput(AppWorkflowOutput):
 class MockExecutorWorkflow(AppBaseWorkflow[MockExecutorOutput]):
     """Stand-in for a real domain executor that talks to the user: streams a
     canned reply and records it as an AssistantMessage on the shared message
-    trace — the same message the user actually saw, so it feeds
-    _assistant_texts()/chat_runs.assistant_message like the planner's own
-    replies do.
+    trace
     """
 
     success_message = "Mock executor completed successfully"

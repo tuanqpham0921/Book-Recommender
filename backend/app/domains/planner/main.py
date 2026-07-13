@@ -37,26 +37,10 @@ class PlannerOutput(AppWorkflowOutput):
     parse_result: InitialParseOutput | None = None
     strategy_result: StrategyClassificationOutput | None = None
     diagram: str | None = None
-    # full trace fed into this turn's LLM calls: chat_messages + everything
-    # the workflows generated — persisted so chat_messages can be rebuilt
-    pipeline_message: list[APIMessage] = Field(default_factory=list)
-    # plain-string AssistantMessage contents produced this turn, in order —
-    # joined with newlines at persist time (run_recorder) into the single
-    # chat_runs.assistant_message TEXT column used to seed the next turn's
-    # chat_messages
-    assistant_message: list[str] = Field(default_factory=list)
 
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
         return {}
-
-
-def _assistant_texts(messages: list[APIMessage]) -> list[str]:
-    return [
-        m.content
-        for m in messages
-        if isinstance(m, AssistantMessage) and isinstance(m.content, str) and m.content
-    ]
 
 
 class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
@@ -86,10 +70,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
-        self.messages = request_context.pipeline_message
-        self.messages.extend(request_context.chat_messages)
         self.messages.append(self.user_message)
-        self.output.pipeline_message = self.messages
 
         parse_workflow = InitialParseWorkflow(
             self.sse_stream, self.user_message, self.llm_client, messages=self.messages
@@ -118,7 +99,6 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             # streamed the reply (small talk / out-of-scope / refusals)
             self.result.ok = True
             self.result.message = "Conversation handled without planning"
-            self.output.assistant_message = _assistant_texts(self.messages)
             return
 
         strategy_workflow = StrategyClassificationWorkflow(
@@ -163,9 +143,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
-        self.output.assistant_message = _assistant_texts(self.messages)
 
-        # self.save_chat_messages()
         # self.save_conversation_result()
 
     async def send_mermaid(

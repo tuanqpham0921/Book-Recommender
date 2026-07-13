@@ -37,9 +37,6 @@ def build_chat_run_row(
         "session_id": session_id,
         "created_at": datetime.now(timezone.utc),
         "user_message": user_message,
-        "assistant_message": (
-            "\n".join(output.assistant_message) if output.assistant_message else None
-        ),
         "ok": result.ok,
         "runtime_error": result.runtime_error.type if result.runtime_error else None,
         "duration_s": result.duration,
@@ -89,15 +86,15 @@ async def record_chat_run(
         )
 
         if app_env == "development":
-            # save_file(row, file_name=f"chat_run_{row['chat_id']}")
             row_cleaned = remove_empty_values(row)
-            save_file(row_cleaned, file_name=f"chat_run_dev")
+            save_file(row_cleaned, file_name=f"chat_run_{row['chat_id']}")
+            # save_file(row_cleaned, file_name=f"chat_run_dev")
 
-            if task_runner:
+            if task_runner and task_runner.result:
                 result = to_serializable(task_runner.result)
                 result = remove_empty_values(result)
-                # save_file(result, file_name=f"task_reuslt_{row['chat_id']}")
-                save_file(result, file_name=f"task_reuslt_dev")
+                save_file(result, file_name=f"task_reuslt_{row['chat_id']}")
+                # save_file(result, file_name=f"task_reuslt_dev")
 
 
         async with request_context.session_factory() as session:

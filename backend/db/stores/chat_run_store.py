@@ -66,19 +66,6 @@ class ChatRunStore(BaseStore[ChatRunModel]):
         self.session.add(ChatRunModel(**row))
         await self.session.commit()
 
-    async def get_by_session(
-        self, session_id: str, limit: int = 50
-    ) -> List[ChatRunModel]:
-        """Get a session's chat runs, newest first."""
-        stmt = (
-            select(ChatRunModel)
-            .where(ChatRunModel.session_id == session_id)
-            .order_by(ChatRunModel.created_at.desc())
-            .limit(limit)
-        )
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
     async def get_all(self, limit: int = 200, offset: int = 0) -> List[Dict[str, Any]]:
         """Get all chat runs, newest first (for the review page), each
         annotated with reviewer_liked/reviewer_disliked/has_report from the

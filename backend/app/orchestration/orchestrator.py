@@ -61,7 +61,6 @@ class Orchestrator:
             #     task_runner = TaskRunnerWorkflow(
             #         sse_stream,
             #         request_context.llm_client,
-            #         messages=request_context.pipeline_message,
             #         app_env=request_context.app_env,
             #     )
             #     await asyncio.wait_for(
@@ -78,6 +77,8 @@ class Orchestrator:
                 "complete",
                 {"status": "completed", "chat_id": request_context.user_message.id},
             )
+            # close the sse_stream
+            await sse_stream.close()
             logger.info("✅ Orchestration completed successfully")
 
         except asyncio.CancelledError:

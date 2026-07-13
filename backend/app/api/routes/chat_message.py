@@ -50,6 +50,7 @@ async def generate_chat_response(
         # covers every exit: normal end (no-op), CancelledError (client
         # disconnect), GeneratorExit (aclose) — the task never outlives
         # the stream
+        await request_context.sse_stream.close()
         if not orchestrator_task.done():
             orchestrator_task.cancel()
             await asyncio.gather(orchestrator_task, return_exceptions=True)
