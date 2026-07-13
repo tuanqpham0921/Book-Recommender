@@ -13,3 +13,11 @@ NodeTypeEnum = Union[
     ProjectNodeTypeEnum,
     UnknownNodeTypeEnum,
 ]
+
+# for extended node types
+# comment out or keep when you want to extend
+from playground.app_mock.extended_node_types import ExtendedBookNodeTypeEnum
+NodeTypeEnum = Union[
+    NodeTypeEnum,
+    ExtendedBookNodeTypeEnum
+]

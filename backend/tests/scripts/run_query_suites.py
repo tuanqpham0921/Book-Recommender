@@ -9,6 +9,7 @@ Usage (from backend/):
     poetry run python tests/scripts/run_query_suites.py --difficulty easy
     poetry run python tests/scripts/run_query_suites.py --ids 1 16 50
     poetry run python tests/scripts/run_query_suites.py --new-session-per-query
+    poetry run python tests/scripts/run_query_suites.py --suite /home/tuani/Book-Recommender/backend/playground/app_mock/query_suite_extended.json
 """
 
 import argparse
