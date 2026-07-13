@@ -1,10 +1,13 @@
 import asyncio
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
 
 from app.api.routes.chat_message import generate_chat_response
+
+logger = logging.getLogger(__name__)
 
 # TODO: review this
 class _FakeSSEStream:
@@ -12,6 +15,7 @@ class _FakeSSEStream:
         self.error = error
         self.sent_error = None
         self.iterated = False
+        self.closed = False
 
     def __aiter__(self):
         return self
@@ -30,6 +34,9 @@ class _FakeSSEStream:
     async def send_error(self, text: str):
         self.sent_error = text
 
+    async def close(self):
+        self.closed = True
+        logger.info("sse stream closed")
 
 class _FakeOrchestrator:
     def __init__(self):
@@ -46,15 +53,16 @@ class _FakeOrchestrator:
 
 
 @pytest.mark.asyncio
-async def test_generate_chat_response_emits_error_and_cancels_on_stream_failure():
+async def test_generate_chat_response_emits_error_and_cancels_on_stream_failure(caplog):
     orchestrator = _FakeOrchestrator()
     request_context = SimpleNamespace(
         sse_stream=_FakeSSEStream(error=RuntimeError("boom"))
     )
 
-    events = [
-        event async for event in generate_chat_response(orchestrator, request_context)
-    ]
+    with caplog.at_level(logging.INFO, logger=__name__):
+        events = [
+            event async for event in generate_chat_response(orchestrator, request_context)
+        ]
 
     # the error must be YIELDED to the client, not send_error()'d into the
     # queue — this generator is the queue's only consumer and has stopped
@@ -66,3 +74,7 @@ async def test_generate_chat_response_emits_error_and_cancels_on_stream_failure(
 
     assert orchestrator.started is True
     assert orchestrator.cancelled is True
+
+    # the finally block must close the stream even on the error path
+    assert request_context.sse_stream.closed is True
+    assert "sse stream closed" in caplog.text
