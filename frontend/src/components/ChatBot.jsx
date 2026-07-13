@@ -26,22 +26,6 @@ function ChatBot() {
         scrollToBottom()
     }, [turn, !isStreaming])
 
-    // Every page load gets its own session, created up front rather than
-    // lazily on the first message — keeps chat_runs/feedback grouped by
-    // actual browser sessions instead of by "whenever the user first sent
-    // something."
-    useEffect(() => {
-        async function initSession() {
-            try {
-                const { id } = await api.createSession();
-                setSessionId(id);
-            } catch (err) {
-                console.error('Failed to create session:', err);
-            }
-        }
-        initSession();
-    }, []);
-
     async function handleSendMessage() {
         const trimmedMessage = newMessage.trim();
         if (!trimmedMessage || isStreaming) return;
@@ -88,6 +72,10 @@ function ChatBot() {
                 abortController.abort('Request timeout after 2 minutes');
             }, DEFAULT_TIMEOUT_MS); 
 
+            // Sessions are created lazily on the first message — page loads
+            // that never chat (bounces, review-only visits) don't write a
+            // session row. Feedback filed before any message goes out with
+            // session_id null, which the backend accepts.
             if (!sessionId) {
                 const { id } = await api.createSession();
                 setSessionId(id);
