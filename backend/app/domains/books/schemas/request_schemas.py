@@ -53,8 +53,7 @@ class RecommendationStrategy(AnalyzeBaseRequest):
         plus semantic_input; depends_on on lookups for the named books.
 
     semantic_input is for themes and mood only — not titles, authors, or filter fields.
-    filters constrain the recommendation result set; they do not replace retrieval when a reference
-    book must be resolved first.
+    filters constrain the recommendation result set; they do not replace retrieval when a reference book must be resolved first.
     """
 
     node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION

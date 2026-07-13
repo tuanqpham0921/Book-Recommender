@@ -1,8 +1,11 @@
 import inspect
+import logging
 from enum import Enum
 from typing import Annotated, Union
 
 from pydantic import Field
+
+logger = logging.getLogger(__name__)
 
 from app.domains.books.schemas.request_schemas import (
     CompareStrategy,
@@ -103,31 +106,72 @@ def class_docstring(cls: type) -> str:
     return docs.strip()
 
 
-def format_node_type_catalog() -> str:
-    """Build a catalog of supported capabilities grouped by tier."""
+CATALOG_TIERS: dict[str, tuple[type, ...]] = {
+    "Retrieval — lookup or fetch data": RETRIEVAL_CLASSES,
+    "Analyze — interpret, compare, or recommend using retrieved data": ANALYZE_CLASSES,
+}
 
-    def lines_for(label: str, classes: tuple[type, ...]) -> list[str]:
-        section = [f"{label}:"]
+
+def catalog_entries() -> dict[str, dict[str, str]]:
+    """Structured capability catalog: tier label -> {node_type: description}.
+
+    Every entry comes from NODE_TYPE_TO_CLS, so each node type appears exactly
+    once with its registered name. Registered classes missing from every tier
+    in CATALOG_TIERS fall into an "Other supported actions" section; a tier
+    class that was never registered has no node_type name for the LLM to use,
+    so it is skipped with a warning.
+    """
+    cls_to_node_type = {cls: name for name, cls in NODE_TYPE_TO_CLS.items()}
+    entries: dict[str, dict[str, str]] = {}
+    listed: set[type] = set()
+
+    for label, classes in CATALOG_TIERS.items():
+        section: dict[str, str] = {}
         for cls in classes:
-            for node_type, mapped_cls in NODE_TYPE_TO_CLS.items():
-                if mapped_cls is cls:
-                    section.append(f"  - {node_type}: {class_docstring(cls)}")
-                    break
-        return section
+            name = cls_to_node_type.get(cls)
+            if name is None:
+                logger.warning(
+                    f"{cls.__name__} is in catalog tier {label!r} but not in "
+                    "NODE_TYPE_TO_CLS — skipped from the capability catalog"
+                )
+                continue
+            section[name] = class_docstring(cls)
+            listed.add(cls)
+        if section:
+            entries[label] = section
 
-    catalog = [
-        "Supported capabilities (only these may become system_goals):",
-        *lines_for("Retrieval — lookup or fetch data", RETRIEVAL_CLASSES),
-        "",
-        *lines_for("Analyze — interpret, compare, or recommend using retrieved data", ANALYZE_CLASSES),
-    ]
-
-    listed = set(RETRIEVAL_CLASSES) | set(ANALYZE_CLASSES)
-    extra = [cls for cls in NODE_TYPE_TO_CLS.values() if cls not in listed]
+    extra = {
+        name: class_docstring(cls)
+        for name, cls in NODE_TYPE_TO_CLS.items()
+        if cls not in listed
+    }
     if extra:
-        catalog.extend(["", *lines_for("Other supported actions", tuple(dict.fromkeys(extra)))])
+        entries["Other supported actions"] = extra
 
-    return "\n".join(catalog)
+    return entries
+
+
+def format_node_type_catalog() -> str:
+    """Render catalog_entries() as the prompt block the planner LLM sees.
+
+    Each capability is its name on one line with the (possibly multi-line)
+    description indented under it, so long docstrings stay visually attached
+    to their name instead of bleeding into the next entry.
+    """
+    lines = []
+    for label, section in catalog_entries().items():
+        lines += ["", f"## {label}", ""]
+        for name, description in section.items():
+            lines.append(name)
+            lines += [
+                f"  {doc_line}" if doc_line.strip() else ""
+                for doc_line in description.splitlines()
+            ]
+            lines.append("")
+    if not lines:
+        raise  RuntimeError("Node type catalog is empty.")
+    
+    return "\n".join(lines).rstrip()
 
 
 # -------------------------------------------------------------------
