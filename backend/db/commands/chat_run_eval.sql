@@ -38,3 +38,15 @@ FROM chat_runs
 WHERE runtime_error IS NOT NULL
 GROUP BY runtime_error
 ORDER BY n DESC;
+
+-- chat_runs row size
+-- ensure that it's not alot
+SELECT
+    chat_id,
+    pg_column_size(t.*)              AS row_bytes,
+    pg_column_size(planner)          AS planner_bytes,
+    pg_column_size(tasks)            AS tasks_bytes,
+    pg_column_size(sse_events)       AS sse_events_bytes
+FROM chat_runs t
+ORDER BY row_bytes DESC
+LIMIT 20;
