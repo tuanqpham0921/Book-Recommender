@@ -1,4 +1,11 @@
 Continue:
+* create a better example and prompt loader
+* this way you can make the nodes better
+    * there's query types of example and parser types
+    * for initial parse, just the query types is good
+* also add a args in and out in the description
+* goal isto make the prompt as generic as possible
+
 * current goal is to have fake responses 
 * the code is able to load them in
 * and we can load it back in the front end for testings
