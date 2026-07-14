@@ -114,19 +114,10 @@ async function getRecommendedBooks(sessionId) {
   return await res.json();
 }
 
-// Attach a like/dislike reaction and/or the reviewed flag to a recorded
-// chat run; omitted (null) fields are left untouched.
-async function updateChatFeedback(chatId, { liked = null, reviewed = null } = {}) {
-  const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/feedback`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ liked, reviewed })
-  });
-  return await res.json();
-}
-
-// Fetch recorded chat runs (newest first) for the review page; sessionId
-// optionally narrows to runs whose session_id contains the search string.
+// Fetch recorded chat runs for the review page, in review-queue order
+// (least-reviewed first, newest first within a tie), each with its derived
+// num_reviews; sessionId optionally narrows to runs whose session_id
+// contains the search string.
 async function getChatRuns(limit = 200, offset = 0, sessionId = null) {
   const params = new URLSearchParams({ limit, offset });
   if (sessionId) params.set('session_id', sessionId);
@@ -137,7 +128,7 @@ async function getChatRuns(limit = 200, offset = 0, sessionId = null) {
   return await res.json();
 }
 
-// Fetch feedback/bug reports filed against one chat run
+// Fetch all reviews of one chat run, oldest first.
 async function getFeedback(chatId) {
   const res = await fetch_api(BASE_URL + `/feedback?chat_id=${chatId}`, {
     method: 'GET',
@@ -146,26 +137,15 @@ async function getFeedback(chatId) {
   return await res.json();
 }
 
-// File one feedback/bug report entry. chatId is optional (omit for general
-// bug reports not tied to a specific query). review marks entries filed
-// from the internal /review page rather than the live chat's feedback widget.
-async function addFeedback({ chatId = null, sessionId = null, title, message, positive, review = false }) {
-  const res = await fetch_api(BASE_URL + '/feedback', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, title, message, positive, review })
-  });
-  return await res.json();
-}
-
-// Set (or change) a reviewer's like/dislike reaction to one run, scoped to
-// the reviewer's own review-page session — independent of chat_runs.liked
-// (the original end-user's reaction) and of any other reviewer session.
-async function setReviewerReaction(chatId, sessionId, liked) {
-  const res = await fetch_api(BASE_URL + '/feedback/reaction', {
+// Submit (or replace) this review session's review of one chat run: the
+// overall like/dislike plus the full comments list ({title, message,
+// positive} each). One review per (chat_id, session_id) — re-submitting
+// from the same session replaces the previous version whole.
+async function submitReview({ chatId, sessionId, liked = null, comments = [] }) {
+  const res = await fetch_api(BASE_URL + '/feedback/review', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, liked })
+    body: JSON.stringify({ chat_id: chatId, session_id: sessionId, liked, comments })
   });
   return await res.json();
 }
@@ -181,5 +161,5 @@ async function getTaskPlanDiagram(sessionId) {
 
 export default {
   createSession, sendChatMessage, getRecommendedBooks, backEndPing,
-  updateChatFeedback, getChatRuns, getFeedback, addFeedback, setReviewerReaction
+  getChatRuns, getFeedback, submitReview
 };

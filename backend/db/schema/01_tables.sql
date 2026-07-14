@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS books (
 
 -- Chat run records: one row per orchestrated chat turn.
 -- Envelopes stored as JSONB (queryable via -> / ->>), hot stats promoted to columns.
--- liked: NULL = no feedback yet, TRUE = liked, FALSE = disliked.
--- reviewed: TRUE once a reviewer marked this run done on the review page.
+-- Review state lives entirely in the feedback table: a run's review count is
+-- derived by counting its feedback rows, never stored here.
 CREATE TABLE IF NOT EXISTS chat_runs (
     chat_id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
@@ -33,33 +33,26 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     mermaid TEXT,
     planner JSONB,
     tasks JSONB,
-    sse_events JSONB,
-    liked BOOLEAN,
-    reviewed BOOLEAN NOT NULL DEFAULT FALSE
+    sse_events JSONB
 );
 
--- Standalone feedback / bug reports. chat_id and session_id are both
--- optional and unenforced (no FK) — a report can reference an in-flight
--- chat_id before its chat_runs row exists, an in-progress session with no
--- chat_id yet, or neither (a general bug report). id gets its own
--- independently generated key since chat_id/session_id may be NULL.
--- review: TRUE when filed from the internal /review page, FALSE when filed
--- by an end user from the live chat's feedback widget.
--- liked: a reviewer's like/dislike reaction to one run, independent of the
--- run's own chat_runs.liked (the original end-user's reaction) — a reviewer
--- may disagree with the user, or review a run from a different session than
--- the one it was created in. NULL for ordinary issue/praise reports; one row
--- per (chat_id, session_id) carries a non-null liked (see unique index
--- below), upserted in place rather than appended like the report log.
+-- Reviews from the internal /review page: one row per (chat_id, session_id),
+-- where session_id is the *reviewing* session, not the session that produced
+-- the run. A session re-submitting replaces its review in place (see unique
+-- index) rather than appending; a different session appends a new review.
+-- liked: the reviewer's overall like/dislike of the run (optional).
+-- comments: JSONB list of {title, message, positive} observations, replaced
+-- whole on each submit.
+-- chat_id is unenforced (no FK) so a review can reference a run whose row
+-- hasn't been recorded yet. End-user feedback (live-chat widget) no longer
+-- writes here — it gets its own dedicated table later.
 CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY,
-    session_id TEXT,
-    chat_id TEXT,
-    title TEXT,
-    message TEXT,
-    positive BOOLEAN,
-    review BOOLEAN NOT NULL DEFAULT FALSE,
+    chat_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
     liked BOOLEAN,
+    comments JSONB NOT NULL DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT feedback_message_or_liked CHECK (message IS NOT NULL OR liked IS NOT NULL)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT feedback_liked_or_comments CHECK (liked IS NOT NULL OR jsonb_array_length(comments) > 0)
 );

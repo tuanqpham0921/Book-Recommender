@@ -1,20 +1,17 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { MessageCircle, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, X, Flag, Sparkles, ChevronDown } from 'lucide-react'
 import api from '@/api'
-import { IssueReportModal } from '@/components/chatbot/ChatFeedback'
 import Button from '@/design-system/Button'
 import IconButton from '@/design-system/IconButton'
 import Badge from '@/design-system/Badge'
 import Emoji from '@/design-system/Emoji'
+import Dropdown from '@/design-system/Dropdown'
+import DropdownItem from '@/design-system/DropdownItem'
 
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'))
 
-// The end user's own reaction recorded on the run (chat_runs.liked).
-function FeedbackBadge({ run }) {
-    if (run.liked === false) return <Badge tone="negative" title="Disliked"><Emoji>👎</Emoji> disliked</Badge>
-    if (run.liked === true) return <Badge tone="positive" title="Liked"><Emoji>👍</Emoji> liked</Badge>
-    return null
-}
+// Must match the backend's FeedbackCategory literal.
+const REVIEW_CATEGORIES = ['Content', 'Recommendation', 'Planner', 'Time', 'UI/UX', 'Other']
 
 function StatusBadge({ ok }) {
     if (ok === true) return <Badge tone="positive">ok</Badge>
@@ -22,57 +19,259 @@ function StatusBadge({ ok }) {
     return <Badge tone="neutral">unknown</Badge>
 }
 
-// One chat run row: summary line + expandable detail (feedback, mermaid, full
-// planner/tasks envelopes).
-function ChatRunRow({ run, sessionId, onToggleReviewed }) {
+// How many review sessions have filed a review of this run — derived by the
+// backend from feedback rows, drives the queue order (0 first).
+function ReviewCountBadge({ count }) {
+    if (!count) return <Badge tone="neutral" title="No reviews yet">unreviewed</Badge>
+    return (
+        <Badge tone="positive" title={`${count} review${count === 1 ? '' : 's'} filed`}>
+            ✓ {count} review{count === 1 ? '' : 's'}
+        </Badge>
+    )
+}
+
+// One already-filed review: overall reaction + its comments, read-only.
+function ReviewCard({ review, isOwn }) {
+    return (
+        <div className="p-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded">
+            <div className="flex items-center gap-2 mb-1">
+                {review.liked === true && <Badge tone="positive"><Emoji>👍</Emoji> liked</Badge>}
+                {review.liked === false && <Badge tone="negative"><Emoji>👎</Emoji> disliked</Badge>}
+                <span className="text-[11px] text-[var(--text-muted)]">
+                    {review.updated_at ? new Date(review.updated_at).toLocaleString() : ''}
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">
+                    {isOwn ? '(this session)' : `session ${review.session_id}`}
+                </span>
+            </div>
+            <div className="flex flex-col gap-1">
+                {(review.comments ?? []).map((comment, i) => (
+                    <div key={i} className="text-xs">
+                        {comment.title && (
+                            <Badge tone={comment.positive ? 'positive' : 'negative'} className="mr-2">
+                                {comment.title}
+                            </Badge>
+                        )}
+                        <span className="text-[var(--text-hover)] whitespace-pre-wrap break-words">{comment.message}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+// Editor for this review session's own review of one run: an overall
+// like/dislike plus a list of {title, message, positive} comments, submitted
+// whole. Re-submitting from the same session replaces the previous version
+// (backend upserts on chat_id + session_id); after a page refresh the
+// session changes, so a new submission files an additional review instead.
+function ReviewEditor({ chatId, sessionId, ownReview, onSubmitted }) {
+    const [liked, setLiked] = useState(ownReview?.liked ?? null)
+    const [comments, setComments] = useState(ownReview?.comments ?? [])
+    const [category, setCategory] = useState('')
+    const [positive, setPositive] = useState(false)
+    const [message, setMessage] = useState('')
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isDirty, setIsDirty] = useState(false)
+    const [error, setError] = useState(null)
+
+    const canSubmit = !isSubmitting && isDirty && (liked !== null || comments.length > 0)
+
+    function toggleLiked(value) {
+        setLiked(prev => (prev === value ? null : value))
+        setIsDirty(true)
+    }
+
+    function addComment() {
+        const trimmed = message.trim()
+        if (!trimmed) return
+        setComments(prev => [...prev, { title: category || null, message: trimmed, positive }])
+        setMessage('')
+        setCategory('')
+        setPositive(false)
+        setIsDirty(true)
+    }
+
+    function removeComment(index) {
+        setComments(prev => prev.filter((_, i) => i !== index))
+        setIsDirty(true)
+    }
+
+    async function handleSubmit() {
+        if (!canSubmit || !sessionId) return
+        setError(null)
+        setIsSubmitting(true)
+        try {
+            const saved = await api.submitReview({ chatId, sessionId, liked, comments })
+            setIsDirty(false)
+            onSubmitted(saved, !ownReview)
+        } catch (err) {
+            console.error('Failed to submit review:', err)
+            setError('Could not save review')
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
+
+    return (
+        <div className="border border-[var(--border-light)] rounded-md p-3 mb-3">
+            <div className="flex items-center gap-1 mb-2">
+                <span className="text-xs text-[var(--text-inactive)] mr-1">Overall:</span>
+                <IconButton
+                    onClick={() => toggleLiked(true)}
+                    disabled={isSubmitting}
+                    title="I like this response"
+                    tone="positive"
+                    active={liked === true}
+                >
+                    <ThumbsUp size={14} />
+                </IconButton>
+                <IconButton
+                    onClick={() => toggleLiked(false)}
+                    disabled={isSubmitting}
+                    title="I dislike this response"
+                    tone="negative"
+                    active={liked === false}
+                >
+                    <ThumbsDown size={14} />
+                </IconButton>
+            </div>
+
+            {comments.length > 0 && (
+                <div className="flex flex-col gap-1 mb-2">
+                    {comments.map((comment, i) => (
+                        <div key={i} className="flex items-start gap-2 p-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded text-xs">
+                            {comment.title && (
+                                <Badge tone={comment.positive ? 'positive' : 'negative'} className="whitespace-nowrap">
+                                    {comment.title}
+                                </Badge>
+                            )}
+                            <span className="flex-1 text-[var(--text-hover)] whitespace-pre-wrap break-words">{comment.message}</span>
+                            <IconButton onClick={() => removeComment(i)} title="Remove comment" disabled={isSubmitting}>
+                                <X size={12} />
+                            </IconButton>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <div className="flex gap-2 mb-2">
+                <Button
+                    size="sm"
+                    variant="secondary"
+                    tone="negative"
+                    active={!positive}
+                    onClick={() => setPositive(false)}
+                >
+                    <Flag size={12} /> Issue
+                </Button>
+                <Button
+                    size="sm"
+                    variant="secondary"
+                    tone="positive"
+                    active={positive}
+                    onClick={() => setPositive(true)}
+                >
+                    <Sparkles size={12} /> Praise
+                </Button>
+                <Dropdown
+                    className="flex-1"
+                    panelClassName="w-full max-h-48 overflow-y-auto rounded-md"
+                    trigger={({ toggle }) => (
+                        <button
+                            type="button"
+                            onClick={toggle}
+                            style={{ fontSize: '0.75rem' }}
+                            className="w-full flex items-center justify-between border border-[var(--border-light)] rounded-md px-2 py-1 bg-[var(--bg-primary)] text-left"
+                        >
+                            <span className={category ? 'text-[var(--text-active)]' : 'text-[var(--text-muted)]'}>
+                                {category || 'Category (optional)'}
+                            </span>
+                            <ChevronDown size={14} className="text-[var(--text-muted)]" />
+                        </button>
+                    )}
+                >
+                    {({ close }) => REVIEW_CATEGORIES.map((c) => (
+                        <DropdownItem
+                            key={c}
+                            selected={c === category}
+                            onClick={() => { setCategory(c); close() }}
+                        >
+                            {c}
+                        </DropdownItem>
+                    ))}
+                </Dropdown>
+            </div>
+
+            <textarea
+                value={message}
+                onChange={(e) => { if (e.target.value.length <= 500) setMessage(e.target.value) }}
+                placeholder="What was good or bad about this response?"
+                rows={2}
+                maxLength={500}
+                // Inline size needed to beat base.css's unlayered textarea font-size reset (mobile zoom guard)
+                style={{ fontSize: '0.875rem' }}
+                className="w-full text-sm border border-[var(--border-light)] rounded-md p-2 resize-none focus:outline-1 focus:outline-[var(--border-medium)]"
+            />
+
+            <div className="flex items-center justify-between mt-1">
+                {error
+                    ? <span className="text-xs text-[var(--accent-negative)] italic">{error}</span>
+                    : <span className="text-xs text-[var(--text-muted)]">{message.length}/500</span>}
+                <div className="flex gap-2">
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={addComment}
+                        disabled={isSubmitting || !message.trim()}
+                    >
+                        Add comment
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={handleSubmit}
+                        disabled={!canSubmit || !sessionId}
+                        title={ownReview ? 'Replace your review from this session' : 'File your review'}
+                    >
+                        {isSubmitting ? 'Submitting…' : ownReview ? 'Update review' : 'Submit review'}
+                    </Button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+// One chat run row: summary line + expandable detail (review editor, filed
+// reviews, mermaid, full planner/tasks envelopes).
+function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
     const [expanded, setExpanded] = useState(false)
     const [feedback, setFeedback] = useState(null)
-    const [showFeedbackModal, setShowFeedbackModal] = useState(false)
-    const [isSavingReaction, setIsSavingReaction] = useState(false)
     const diagram = run.planner?.output?.diagram
     const parseResult = run.planner?.output?.parse_result
     const errorDetail = run.planner?.runtime_error
 
-    // This reviewer session's own like/dislike on this run — independent of
-    // run.liked (the original end-user's reaction) and of any other
-    // reviewer session. One row per (chat_id, session_id), so at most one
-    // match here.
-    const reviewerReaction = feedback?.find(
-        (entry) => entry.session_id === sessionId && entry.liked !== null && entry.liked !== undefined
-    )?.liked ?? null
+    // This session's own review, if it already filed one — the editor then
+    // updates it in place instead of appending a new review.
+    const ownReview = feedback?.find((entry) => entry.session_id === sessionId) ?? null
 
-    // Pure reaction rows (title/message/positive all null) are already
-    // reflected by the thumbs buttons above — only show written reports here.
-    const writtenFeedback = feedback?.filter((entry) => entry.message) ?? []
-
-    async function loadFeedback() {
-        try {
-            const data = await api.getFeedback(run.chat_id)
-            setFeedback(data.feedback || [])
-        } catch (err) {
-            console.error('Failed to load feedback:', err)
-            setFeedback([])
-        }
-    }
-
-    // Load once on first expand; re-queried after the report modal closes
-    // (below) so a just-submitted entry shows up without a full page refresh.
+    // Load once on first expand.
     useEffect(() => {
         if (!expanded || feedback !== null) return
-        loadFeedback()
+        api.getFeedback(run.chat_id)
+            .then(data => setFeedback(data.feedback || []))
+            .catch(err => {
+                console.error('Failed to load reviews:', err)
+                setFeedback([])
+            })
     }, [expanded, feedback, run.chat_id])
 
-    async function handleReviewerReaction(liked) {
-        if (isSavingReaction || reviewerReaction === liked || !sessionId) return
-        setIsSavingReaction(true)
-        try {
-            await api.setReviewerReaction(run.chat_id, sessionId, liked)
-            await loadFeedback()
-        } catch (err) {
-            console.error('Failed to save reviewer reaction:', err)
-        } finally {
-            setIsSavingReaction(false)
-        }
+    function handleSubmitted(savedReview, isNew) {
+        setFeedback(prev => {
+            const rest = (prev ?? []).filter(entry => entry.id !== savedReview.id)
+            return [...rest, savedReview]
+        })
+        onReviewSubmitted(run.chat_id, isNew)
     }
 
     return (
@@ -94,29 +293,11 @@ function ChatRunRow({ run, sessionId, onToggleReviewed }) {
                 <span className="flex-1 whitespace-pre-wrap break-words text-sm text-[var(--text-active)] mt-1">
                     {run.user_message || <em className="text-[var(--text-muted)]">no message</em>}
                 </span>
-                <span className="text-sm mt-0.5"><FeedbackBadge run={run} /></span>
-                <Button
-                    size="sm"
-                    tone="positive"
-                    active={run.reviewed}
-                    onClick={(e) => { e.stopPropagation(); onToggleReviewed(run) }}
-                    title={run.reviewed ? 'Move back to unreviewed runs' : 'Mark as reviewed'}
-                    className="whitespace-nowrap"
-                >
-                    {run.reviewed ? '✓ reviewed' : 'un-reviewed'}
-                </Button>
+                <span className="mt-0.5 whitespace-nowrap"><ReviewCountBadge count={run.num_reviews} /></span>
                 <span className="text-xs text-[var(--text-muted)] whitespace-nowrap mt-1">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
                 </span>
             </div>
-
-            <IssueReportModal
-                chatId={run.chat_id}
-                sessionId={sessionId}
-                isOpen={showFeedbackModal}
-                onClose={() => { setShowFeedbackModal(false); loadFeedback() }}
-                review
-            />
 
             {expanded && (
                 <div className="px-4 pb-4 border-t border-[var(--border-light)] text-sm">
@@ -127,64 +308,33 @@ function ChatRunRow({ run, sessionId, onToggleReviewed }) {
                         <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
                     </div>
 
-                    <div className="flex items-center gap-1 mb-3">
-                        <span className="text-xs text-[var(--text-inactive)] mr-1">Your reaction (this reviewer session):</span>
-                        <IconButton
-                            onClick={() => handleReviewerReaction(true)}
-                            disabled={isSavingReaction || !sessionId}
-                            title="I like this response"
-                            tone="positive"
-                            active={reviewerReaction === true}
-                        >
-                            <ThumbsUp size={14} />
-                        </IconButton>
-                        <IconButton
-                            onClick={() => handleReviewerReaction(false)}
-                            disabled={isSavingReaction || !sessionId}
-                            title="I dislike this response"
-                            tone="negative"
-                            active={reviewerReaction === false}
-                        >
-                            <ThumbsDown size={14} />
-                        </IconButton>
-                        <IconButton
-                            onClick={() => setShowFeedbackModal(true)}
-                            title="Report on this run"
-                        >
-                            <MessageCircle size={16} />
-                        </IconButton>
-                    </div>
+                    {feedback === null ? (
+                        <div className="text-xs text-[var(--text-muted)] italic mb-3">Loading reviews…</div>
+                    ) : (
+                        <>
+                            <ReviewEditor
+                                // Remount when this session's review appears/changes id so
+                                // the editor picks up the saved version as its baseline.
+                                key={ownReview?.id ?? 'new'}
+                                chatId={run.chat_id}
+                                sessionId={sessionId}
+                                ownReview={ownReview}
+                                onSubmitted={handleSubmitted}
+                            />
 
-                    {writtenFeedback.length > 0 && (
-                        <details className="mb-3">
-                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">
-                                Reports ({writtenFeedback.length})
-                            </summary>
-                            <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-2 pr-1">
-                                {writtenFeedback.map((entry, i) => (
-                                    <div key={i} className="p-2 bg-[var(--accent-warning-bg)] border border-[var(--accent-warning-border)] rounded">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            {entry.title && (
-                                                <Badge tone={entry.positive ? 'positive' : 'negative'}>
-                                                    {entry.title}
-                                                </Badge>
-                                            )}
-                                            {entry.created_at && (
-                                                <span className="text-[11px] text-[var(--text-muted)]">
-                                                    {new Date(entry.created_at).toLocaleString()}
-                                                </span>
-                                            )}
-                                            {entry.review && (
-                                                <span className="text-[11px] text-[var(--text-muted)]">
-                                                    {'(reviewer)'}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="text-[var(--text-hover)]">{entry.message}</div>
+                            {feedback.length > 0 && (
+                                <details className="mb-3" open>
+                                    <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">
+                                        Reviews ({feedback.length})
+                                    </summary>
+                                    <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-2 pr-1">
+                                        {feedback.map((entry) => (
+                                            <ReviewCard key={entry.id} review={entry} isOwn={entry.session_id === sessionId} />
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        </details>
+                                </details>
+                            )}
+                        </>
                     )}
 
                     {errorDetail && (
@@ -284,16 +434,20 @@ function ChatRunRow({ run, sessionId, onToggleReviewed }) {
     )
 }
 
-// Internal review page: lists every recorded chat run, newest first, with a
-// simple search by session id.
+// Internal review page: a shared review queue over every recorded chat run.
+// The backend orders runs by how many reviews they already have (derived
+// from feedback rows, least first), so unreviewed conversations surface at
+// the top for whoever opens the page — no assignments needed.
 function ChatReviewPage() {
     const [runs, setRuns] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
     const [sessionSearch, setSessionSearch] = useState('')
-    // Own session, separate from any live chat session — feedback filed
-    // from this page is tagged review=true and shouldn't be grouped under
-    // whatever session a visitor's actual chat conversation is using.
+    // Own session, separate from any live chat session — reviews filed from
+    // this page are keyed by it, one review per (run, session). A fresh
+    // session per page load means a re-visit files a new review rather than
+    // editing the old one; a stable reviewer identity can replace this once
+    // login exists.
     const [sessionId, setSessionId] = useState(null)
 
     async function loadRuns(search = sessionSearch) {
@@ -320,20 +474,17 @@ function ChatReviewPage() {
         loadRuns('')
     }, [])
 
-    // Flip a run's reviewed flag; the run moves between the unreviewed and
-    // reviewed sections locally without a full reload.
-    async function toggleReviewed(run) {
-        const reviewed = !run.reviewed
-        try {
-            await api.updateChatFeedback(run.chat_id, { reviewed })
-            setRuns(prev => prev.map(r => r.chat_id === run.chat_id ? { ...r, reviewed } : r))
-        } catch (err) {
-            console.error('Failed to update reviewed flag:', err)
-        }
+    // Keep the derived count in sync locally after a submit (a first review
+    // moves the run into the reviewed section) without a full reload.
+    function handleReviewSubmitted(chatId, isNew) {
+        if (!isNew) return
+        setRuns(prev => prev.map(r =>
+            r.chat_id === chatId ? { ...r, num_reviews: (r.num_reviews ?? 0) + 1 } : r
+        ))
     }
 
-    const unreviewedRuns = runs.filter(run => !run.reviewed)
-    const reviewedRuns = runs.filter(run => run.reviewed)
+    const unreviewedRuns = runs.filter(run => !run.num_reviews)
+    const reviewedRuns = runs.filter(run => run.num_reviews > 0)
 
     return (
         <div className="min-h-full bg-[var(--bg-secondary)]">
@@ -341,7 +492,7 @@ function ChatReviewPage() {
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                         <span className="text-sm text-[var(--text-inactive)]">
-                            {isLoading ? 'Loading runs…' : `${unreviewedRuns.length} unreviewed run${unreviewedRuns.length === 1 ? '' : 's'}`}
+                            {isLoading ? 'Loading runs…' : `${unreviewedRuns.length} run${unreviewedRuns.length === 1 ? '' : 's'} awaiting review`}
                         </span>
                         <input
                             value={sessionSearch}
@@ -368,7 +519,7 @@ function ChatReviewPage() {
 
                 <div className="flex flex-col gap-2">
                     {unreviewedRuns.map(run => (
-                        <ChatRunRow key={run.chat_id} run={run} sessionId={sessionId} onToggleReviewed={toggleReviewed} />
+                        <ChatRunRow key={run.chat_id} run={run} sessionId={sessionId} onReviewSubmitted={handleReviewSubmitted} />
                     ))}
                 </div>
 
@@ -379,7 +530,7 @@ function ChatReviewPage() {
                         </h2>
                         <div className="flex flex-col gap-2">
                             {reviewedRuns.map(run => (
-                                <ChatRunRow key={run.chat_id} run={run} sessionId={sessionId} onToggleReviewed={toggleReviewed} />
+                                <ChatRunRow key={run.chat_id} run={run} sessionId={sessionId} onReviewSubmitted={handleReviewSubmitted} />
                             ))}
                         </div>
                     </div>

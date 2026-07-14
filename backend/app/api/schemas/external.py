@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 class SessionOut(BaseModel):
     id: str
@@ -9,33 +9,34 @@ class SessionOut(BaseModel):
 class ChatIn(BaseModel):
     message: str
 
-class ChatRunFeedbackIn(BaseModel):
-    """Like/dislike reaction and/or reviewed flag on one chat run; omitted
-    fields are left untouched."""
-
-    liked: bool | None = None
-    reviewed: bool | None = None
-
 FeedbackCategory = Literal["Content", "Recommendation", "Planner", "Time", "UI/UX", "Other"]
 
-class FeedbackIn(BaseModel):
-    """One feedback / bug report entry. chat_id is optional — omit it for
-    reports not tied to a specific query (general bug reports)."""
+class ReviewCommentIn(BaseModel):
+    """One observation inside a review."""
 
-    chat_id: str | None = None
-    session_id: str | None = None
     title: FeedbackCategory | None = None
     message: str
-    positive: bool
-    review: bool = False
+    positive: bool = False
 
-class ReviewerReactionIn(BaseModel):
-    """A reviewer's like/dislike reaction to one run, from a review-page
-    session that may differ from the session that produced the run."""
+class ReviewIn(BaseModel):
+    """One review of a chat run, upserted whole per (chat_id, session_id):
+    the reviewer's overall like/dislike plus their comment list. session_id
+    is the reviewing session, which may differ from the session that
+    produced the run; re-submitting from the same session replaces the
+    previous version."""
 
     chat_id: str
     session_id: str
-    liked: bool
+    liked: bool | None = None
+    comments: list[ReviewCommentIn] = []
+
+    @model_validator(mode="after")
+    def _has_substance(self):
+        if self.liked is None and not self.comments:
+            raise ValueError(
+                "a review needs an overall reaction or at least one comment"
+            )
+        return self
 
 class HealthStatus(BaseModel):
     """Health check response model."""

@@ -41,7 +41,6 @@ def build_chat_run_row(
         "runtime_error": result.runtime_error.type if result.runtime_error else None,
         "duration_s": result.duration,
         "total_tokens": result.token_usage.total,
-        "liked": None,
         "mermaid": output.diagram,
         "planner": to_serializable(result),
         "tasks": to_serializable(tasks) if tasks is not None else None,

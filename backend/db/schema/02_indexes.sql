@@ -7,9 +7,8 @@ CREATE INDEX IF NOT EXISTS books_embedding_idx
 CREATE INDEX IF NOT EXISTS chat_runs_session_idx
     ON chat_runs (session_id, created_at);
 
--- One reviewer reaction per (chat_id, session_id) — enables upsert instead
--- of append. Partial so it doesn't constrain the append-only issue-report
--- rows, which have liked IS NULL and may repeat for the same pair.
-CREATE UNIQUE INDEX IF NOT EXISTS feedback_reviewer_reaction_idx
-    ON feedback (chat_id, session_id)
-    WHERE liked IS NOT NULL;
+-- One review per (chat_id, session_id) — the upsert target for re-submits
+-- from the same reviewing session. Its leading column also serves the
+-- per-chat review-count join on the review page.
+CREATE UNIQUE INDEX IF NOT EXISTS feedback_review_idx
+    ON feedback (chat_id, session_id);

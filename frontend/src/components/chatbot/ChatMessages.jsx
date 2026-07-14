@@ -3,7 +3,6 @@ import remarkGfm from 'remark-gfm';
 import { useRef, useEffect, useState, lazy, Suspense } from 'react'
 import { Copy, Check } from 'lucide-react';
 import { BookGridStack } from '@/components/book/BooksGrid';
-import ChatFeedback from '@/components/chatbot/ChatFeedback';
 
 // Dynamic import for MermaidDiagram (large library)
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'));
@@ -18,7 +17,7 @@ const MermaidLoading = () => (
     </div>
 );
 
-function ChatMessages({ messages, isStreaming, sessionId }) {
+function ChatMessages({ messages }) {
     const containerRef = useRef(null)
     const userMessageRefs = useRef({})
     const turnRefs = useRef({})
@@ -139,18 +138,6 @@ function ChatMessages({ messages, isStreaming, sessionId }) {
                                 <span className="loading-text">{response.loadingText}</span>
                             </div>
                         )}
-
-                        {/* Feedback controls - shown whenever the turn produced visible
-                            content and has finished, even if it later errored, timed
-                            out, or was stopped by the user */}
-                        {response.chatId && !response.isStreaming && !response.isLoading &&
-                            response.sections?.some(s =>
-                                (s.type === 'text' && s.content) ||
-                                (s.type === 'books' && s.books?.length > 0) ||
-                                (s.type === 'diagram' && s.mermaid)
-                            ) && (
-                                <ChatFeedback key={response.chatId} chatId={response.chatId} sessionId={sessionId} />
-                            )}
 
                         {/* AI disclaimer - show on last message */}
                         {index === messages.length - 1 && !response.isLoading && !response.isStreaming && (

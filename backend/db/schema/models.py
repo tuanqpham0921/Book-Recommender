@@ -94,13 +94,6 @@ class ChatRunModel(Base):
     # stays compact. Own column so replay reads skip the planner/tasks blobs.
     sse_events = Column(JSONB, nullable=True)
 
-    # user feedback: liked is None until the user reacts (True = like, False = dislike)
-    liked = Column(Boolean, nullable=True)
-
-    # review-page bookkeeping: marked True once a reviewer is done with this
-    # run, moving it out of the unreviewed list
-    reviewed = Column(Boolean, nullable=False, default=False, server_default="false")
-
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"
 
@@ -113,29 +106,32 @@ class ChatRunModel(Base):
 
 
 class FeedbackModel(Base):
-    """Standalone feedback / bug report. chat_id and session_id are both
-    optional and unenforced (no FK) so a report can be filed against an
-    in-flight chat_id before its chat_runs row exists, or with neither
-    (a general bug report not tied to any query)."""
+    """One review of a chat run from the internal /review page: the
+    reviewer's overall like/dislike plus a JSONB list of
+    {title, message, positive} comments. One row per (chat_id, session_id) —
+    session_id is the *reviewing* session, not the one that produced the
+    run — upserted whole on re-submit (see feedback_review_idx). chat_id is
+    unenforced (no FK) so a review can reference a run whose row hasn't been
+    recorded yet. A run's review count is derived by counting rows here,
+    never stored on chat_runs."""
 
     __tablename__ = "feedback"
 
     id = Column(String, primary_key=True)
-    session_id = Column(String, nullable=True, index=True)
-    chat_id = Column(String, nullable=True, index=True)
-    title = Column(Text, nullable=True)
-    message = Column(Text, nullable=True)
-    positive = Column(Boolean, nullable=True)
-    # True when filed from the internal /review page, False when filed by an
-    # end user from the live chat's feedback widget.
-    review = Column(Boolean, nullable=False, default=False, server_default="false")
-    # A reviewer's like/dislike reaction to this run — distinct from
-    # chat_runs.liked (the original end-user's own reaction). NULL for
-    # ordinary issue/praise reports; one row per (chat_id, session_id) is
-    # upserted when non-null (see feedback_reviewer_reaction_idx).
+    chat_id = Column(String, nullable=False, index=True)
+    session_id = Column(String, nullable=False)
+    # overall like/dislike; optional when the review carries comments
     liked = Column(Boolean, nullable=True)
+    # list of {title, message, positive}; replaced whole on each submit
+    comments = Column(JSONB, nullable=False, default=list, server_default="'[]'::jsonb")
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     def __repr__(self):
@@ -144,6 +140,7 @@ class FeedbackModel(Base):
     def to_dict(self) -> dict:
         """Convert model to dictionary (table columns only)."""
         row = {c.name: getattr(self, c.name) for c in FeedbackModel.__table__.columns}
-        if row.get("created_at") is not None:
-            row["created_at"] = row["created_at"].isoformat()
+        for ts in ("created_at", "updated_at"):
+            if row.get(ts) is not None:
+                row[ts] = row[ts].isoformat()
         return row

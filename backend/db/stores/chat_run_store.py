@@ -1,9 +1,9 @@
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.schema import ChatRunModel
+from db.schema import ChatRunModel, FeedbackModel
 from .base_store import BaseStore
 
 
@@ -24,39 +24,22 @@ class ChatRunStore(BaseStore[ChatRunModel]):
         offset: int = 0,
         session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Get chat runs, newest first (for the review page); optionally only
-        those whose session_id contains the given search string."""
-        stmt = select(ChatRunModel).order_by(ChatRunModel.created_at.desc())
+        """Get chat runs in review-queue order: least-reviewed first (each
+        run's num_reviews is derived by counting its feedback rows, never
+        stored), newest first within a tie. Optionally only runs whose
+        session_id contains the given search string."""
+        num_reviews = func.count(FeedbackModel.id).label("num_reviews")
+        stmt = (
+            select(ChatRunModel, num_reviews)
+            .outerjoin(FeedbackModel, FeedbackModel.chat_id == ChatRunModel.chat_id)
+            .group_by(ChatRunModel.chat_id)
+            .order_by(num_reviews.asc(), ChatRunModel.created_at.desc())
+        )
         if session_id:
             stmt = stmt.where(ChatRunModel.session_id.ilike(f"%{session_id}%"))
         stmt = stmt.limit(limit).offset(offset)
 
         result = await self.session.execute(stmt)
-        return [run.to_dict() for run in result.scalars().all()]
-
-    async def update_feedback(
-        self,
-        chat_id: str,
-        liked: Optional[bool] = None,
-        reviewed: Optional[bool] = None,
-    ) -> bool:
-        """Set the like/dislike reaction and/or the reviewed flag on a run;
-        omitted (None) fields are left untouched.
-
-        Returns False when no row matches chat_id."""
-        values: Dict[str, Any] = {}
-        if liked is not None:
-            values["liked"] = liked
-        if reviewed is not None:
-            values["reviewed"] = reviewed
-        if not values:
-            return True
-
-        stmt = (
-            update(ChatRunModel)
-            .where(ChatRunModel.chat_id == chat_id)
-            .values(**values)
-        )
-        result = await self.session.execute(stmt)
-        await self.session.commit()
-        return result.rowcount > 0
+        return [
+            {**run.to_dict(), "num_reviews": count} for run, count in result.all()
+        ]

@@ -304,11 +304,7 @@ function ChatBot() {
                             What are you in the mood to read today?
                         </div>
                     ) : (
-                        <ChatMessages
-                            messages={turn}
-                            isStreaming={isStreaming}
-                            sessionId={sessionId}
-                        />
+                        <ChatMessages messages={turn} />
                     )}
                 </div>
                 <div className="flex-shrink-0 min-w-0">
@@ -318,7 +314,6 @@ function ChatBot() {
                         setNewMessage={setNewMessage}
                         onSendMessage={handleSendMessage}
                         onStop={handleStop}
-                        sessionId={sessionId}
                     />
                 </div>
         </div>

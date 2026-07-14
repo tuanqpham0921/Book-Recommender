@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.schemas import FeedbackIn, ReviewerReactionIn
+from app.api.schemas import ReviewIn
 from app.api.dependencies import get_feedback_store
 from db.stores.feedback_store import FeedbackStore
 
@@ -11,38 +11,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Feedback"])
 
 
-@router.post("/feedback")
-async def create_feedback(
-    feedback: FeedbackIn,
+@router.put("/feedback/review")
+async def submit_review(
+    review: ReviewIn,
     store: FeedbackStore = Depends(get_feedback_store),
 ):
-    """File a feedback / bug report entry. chat_id is optional — reports
-    can be filed against an in-flight chat before its run is recorded, or
-    with no chat_id at all (a general bug report)."""
-    row = await store.create(
-        message=feedback.message,
-        title=feedback.title,
-        positive=feedback.positive,
-        chat_id=feedback.chat_id,
-        session_id=feedback.session_id,
-        review=feedback.review,
+    """Submit (or replace) one reviewing session's review of a chat run:
+    the overall like/dislike plus the full comments list. One row per
+    (chat_id, session_id) — re-submitting from the same session replaces
+    the previous version whole; a different session appends a new review."""
+    row = await store.upsert_review(
+        chat_id=review.chat_id,
+        session_id=review.session_id,
+        liked=review.liked,
+        comments=[comment.model_dump() for comment in review.comments],
     )
-    logger.info("🚩 Feedback logged (chat_id=%s): %s", feedback.chat_id, feedback.title)
-    return row.to_dict()
-
-
-@router.put("/feedback/reaction")
-async def set_reviewer_reaction(
-    reaction: ReviewerReactionIn,
-    store: FeedbackStore = Depends(get_feedback_store),
-):
-    """Set (or change) a reviewer's like/dislike reaction to one run. Scoped
-    to the reviewer's own session_id, independent of chat_runs.liked (the
-    original end-user's own reaction) and of any other reviewer session."""
-    row = await store.upsert_reaction(
-        chat_id=reaction.chat_id,
-        session_id=reaction.session_id,
-        liked=reaction.liked,
+    logger.info(
+        "📝 Review recorded for chat run %s (%d comment(s))",
+        review.chat_id,
+        len(review.comments),
     )
     return row.to_dict()
 
@@ -52,6 +39,6 @@ async def get_feedback(
     chat_id: str = Query(...),
     store: FeedbackStore = Depends(get_feedback_store),
 ):
-    """Get all feedback entries filed against one chat run."""
+    """Get all reviews of one chat run, oldest first."""
     rows = await store.get_by_chat_id(chat_id)
     return {"feedback": [row.to_dict() for row in rows]}

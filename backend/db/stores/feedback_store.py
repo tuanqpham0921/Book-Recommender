@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,62 +10,38 @@ from .base_store import BaseStore
 
 
 class FeedbackStore(BaseStore[FeedbackModel]):
-    """SQLAlchemy-based feedback / bug report data access layer."""
+    """SQLAlchemy-based review data access layer."""
 
     def __init__(self, session: AsyncSession):
         super().__init__(session, FeedbackModel)
 
-    async def create(
-        self,
-        message: str,
-        title: Optional[str] = None,
-        positive: Optional[bool] = None,
-        chat_id: Optional[str] = None,
-        session_id: Optional[str] = None,
-        review: bool = False,
-    ) -> FeedbackModel:
-        """Insert one feedback entry. chat_id/session_id are both optional —
-        works fine for a general bug report tied to neither. review marks
-        whether this was filed from the internal /review page rather than
-        the live chat's end-user feedback widget."""
-        row = FeedbackModel(
-            id=f"fb_{uuid_8()}",
-            session_id=session_id,
-            chat_id=chat_id,
-            title=title,
-            message=message,
-            positive=positive,
-            review=review,
-        )
-        self.session.add(row)
-        await self.session.commit()
-        await self.session.refresh(row)
-        return row
-
-    async def upsert_reaction(
+    async def upsert_review(
         self,
         chat_id: str,
         session_id: str,
-        liked: bool,
-        review: bool = True,
+        liked: Optional[bool],
+        comments: List[Dict[str, Any]],
     ) -> FeedbackModel:
-        """Set (or change) one reviewer's like/dislike reaction to a run.
-        One row per (chat_id, session_id) — a second call from the same
-        reviewer session updates the existing row instead of adding another,
-        unlike the append-only issue/praise log."""
+        """Insert or replace one reviewing session's review of a run. One row
+        per (chat_id, session_id): re-submitting from the same session
+        replaces liked and the whole comments list rather than merging, so
+        the client always sends the full review."""
         stmt = (
             insert(FeedbackModel)
             .values(
                 id=f"fb_{uuid_8()}",
-                session_id=session_id,
                 chat_id=chat_id,
+                session_id=session_id,
                 liked=liked,
-                review=review,
+                comments=comments,
             )
             .on_conflict_do_update(
                 index_elements=[FeedbackModel.chat_id, FeedbackModel.session_id],
-                index_where=FeedbackModel.liked.isnot(None),
-                set_={"liked": liked},
+                set_={
+                    "liked": liked,
+                    "comments": comments,
+                    "updated_at": func.now(),
+                },
             )
             .returning(FeedbackModel)
         )
@@ -74,7 +50,7 @@ class FeedbackStore(BaseStore[FeedbackModel]):
         return result.scalar_one()
 
     async def get_by_chat_id(self, chat_id: str) -> List[FeedbackModel]:
-        """Get all feedback entries filed against one chat run, oldest first."""
+        """Get all reviews of one chat run, oldest first."""
         stmt = (
             select(FeedbackModel)
             .where(FeedbackModel.chat_id == chat_id)

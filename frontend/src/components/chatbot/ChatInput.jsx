@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { ArrowUp, MessageCircle, Lightbulb, Square } from 'lucide-react';
+import { ArrowUp, Lightbulb, Square } from 'lucide-react';
 import { userInputSuggestions } from '@/data/chatSuggestions';
-import { IssueReportModal } from '@/components/chatbot/ChatFeedback';
 import { useOutsideClick } from '@/hooks/useOutsideClick';
 import IconButton from '@/design-system/IconButton';
 import DropdownItem from '@/design-system/DropdownItem';
 
 const TEXTAREA_MAX_HEIGHT_PX = 128 // keep in sync with max-h-32 below
 
-function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onStop, sessionId }) {
+function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onStop }) {
     const [showSuggestions, setShowSuggestions] = useState(true)
-    const [showFeedbackModal, setShowFeedbackModal] = useState(false)
     const suggestionsRef = useRef(null) // Ref for the suggestions container
     const hintsButtonRef = useRef(null) // Ref for the hints button
     const textareaRef = useRef(null) // Ref for auto-growing the textarea
@@ -89,14 +87,6 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                 {/* Button row - always its own space below the textarea, so
                     wrapped/multi-line text never sits under the icons */}
                 <div className="flex items-center justify-end gap-1 px-2 pb-2">
-                    {/* Overall Feedback Button */}
-                    <IconButton
-                        onClick={() => setShowFeedbackModal(true)}
-                        title="Share overall feedback"
-                    >
-                        <MessageCircle size={20} />
-                    </IconButton>
-
                     {/* Hints Button */}
                     <IconButton
                         ref={hintsButtonRef} // Attach ref to hints button
@@ -130,12 +120,6 @@ function ChatInput({ newMessage, isStreaming, setNewMessage, onSendMessage, onSt
                 </span>
             </div>
 
-            <IssueReportModal
-                chatId={null}
-                sessionId={sessionId}
-                isOpen={showFeedbackModal}
-                onClose={() => setShowFeedbackModal(false)}
-            />
         </div>
     )
 }
