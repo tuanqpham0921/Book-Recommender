@@ -1,3 +1,21 @@
+* make the page scrollable on the side bars
+* mermaid view port should have a min heigh
+  * some are to long and short for max concurrency
+  * you can probably start a new row
+    so it goes
+      g1, g2, g3
+      where each graph can row them or something
+
+polish
+  * move the feedback and hints and colors into one
+  * move it away from the sent so you dont accidently click them
+  * align the review page preview
+  * change the emojies and arrows to something better
+  * move praise and issues closer to submit button
+    so you can flow top down
+  * chatinput is scrollable at start
+  * first input make scrol right away
+
 * review your new code
 
 Do I need this with the new mermaid code?

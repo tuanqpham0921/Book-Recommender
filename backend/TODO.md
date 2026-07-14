@@ -1,29 +1,39 @@
 Continue:
-* create a better example and prompt loader
-* this way you can make the nodes better
-    * there's query types of example and parser types
-    * for initial parse, just the query types is good
-* also add a args in and out in the description
-* goal isto make the prompt as generic as possible
+  * add more info to the nodes
+      * need example queries and parser (probably starts with just queries)
+      * need to add arguments in and out like a function
+      * this can help the llm for both
+  * this is a good golden test suites
+      * so go in and lable them better for automatic tests
+      * starts with system goals
+      * maybe your system goals is your plan...
+          * which also just push the args parser to later
+          * and it's being the system goals DAG...
+      * but yeah label them, correctly
+      * maybe have a build in chat id, which it does already (number)
+          * need to show the chats descriptions and notes
+  * maybe remove all session feedback page
+      * have a better feedback page (show the system goals)
+      * probably just search by session id
+      * always show the system goals first
+      * make the praise and issue optional
+  * There's a semaphores bug (also try lowering it and see)
+  * need a better rejection (compleixity, prompt injection, and weird stuff)
+      * for v1, try not to recover or buffer goals
+      * just clear direct queries (maybe even no this, or that, previous one etc)
+          * no follow up or continue answers
+          * one query and the system can or can't finish it
+          * then direct the user to follow up query with direct answers
+      * just try to set up a good infrastrucutre, logging, retrieval nodes
 
-* current goal is to have fake responses 
-* the code is able to load them in
-* and we can load it back in the front end for testings
+=======================================================================
 
-* review SSE unit tests
-* test asyncio cancel and time out and maybe concurrency issues?
-* might need to move it to generate_reponse instead
+Polish
 * make orchestration into a workflow?
-* assistant message is not joined for the db (mock executors)
-
 * rename your @task to @op_task or something (so no name conflicting)
 * rename OperationalResult to OperationResult
 * workflow self.result to self.op_result (so it's clearer)
 * rename all the issues to feedback
-* [DONE 2026-07-12] use TD for long concurrency, LR for long depends on
-    * can just make a indegree nodes level
-    * -> StrategyClassificationOutput.get_execution_levels() + app/common/mermaid.py
-      choose_orientation(); wired into planner/main.py's send_mermaid
 
 =======================================================================
 
@@ -61,7 +71,6 @@ Reminder:
     * change your app/workflow to not overwrite and make sure tests passes 
 
 Ideas:
-* [DONE 2026-07-12] mermaid optimization (TD for high concurrent, LR for high depends_on)
 * once you have resume/checkpoint, you might need to move some stuff around
     * you might need to have the model validate do the DAG processing
     * that way you can pick up from orchestrator and continue
@@ -98,41 +107,6 @@ but after you have db saved, and eval tests set up
 
 Code review findings (2026-07-10):
 
-Fix first (security, cheap and exploitable):
-* [FIXED 2026-07-12] db/stores/utils.py:36,44,62,66,111,126,162,168 - SQL injection: build_title_search/
-  build_author_search/apply_book_filters splice user strings into text(f"'{...}'")
-  instead of binding params. `' OR 1=1 --` breaks out of the literal.
-  -> passed the raw string straight to func.similarity() so SQLAlchemy binds it;
-  regression tests in tests/unit/db/stores/test_utils.py.
-* [FIXED 2026-07-12] app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is a raw str, not list[str].
-  CORSMiddleware does substring match on a plain string, not exact match, once you
-  configure more than one origin -> real CORS bypass. Split on comma before passing in.
-  -> field_validator splits the comma-separated env var into list[str] (NoDecode to
-  avoid pydantic-settings' JSON auto-decode on list fields); .env stays comma-separated.
-* [FIXED 2026-07-12] db/stores/base_store.py:19-20 - _execute_statement print()s fully compiled SQL with
-  literal_binds=True (real param values) on every query, in every environment. Remove
-  or gate behind logger.debug.
-
-Correctness bugs:
-* [FIXED 2026-07-12] common/utils/json_handler.py:52,66 - file_name.rstrip(".json") strips a char set, not
-  the literal suffix. Use removesuffix(".json").
-* [FIXED 2026-07-12] db/stores/utils.py:58 - build_author_search references model.author (singular);
-  BookModel only has `authors`. Dead code, breaks as soon as something calls it.
-* [FIXED 2026-07-12] config/constants.py:66-67 - BookGuides.__str__ returns "BookConstraints:\n" (copy-paste
-  from BookConstraints.__str__) - wrong section header shown to the LLM in prompts.
-* [FIXED 2026-07-12] common/operation.py:65-73 - check_output_type has unreachable branch: early return on
-  `output is None` makes the later `output is None and output_type is None` dead.
-* common/context.py:42-48 - AppContext.__aenter__ has ping_services() entirely commented
-  out - app reports ready without checking OpenAI/DB connectivity at boot.
-  NOT fixed (2026-07-12 pass): re-enabling changes startup behavior (fails boot if
-  DB/OpenAI unreachable) - deliberately left for the local-deploy follow-up.
-* [FIXED 2026-07-12] clients/openai_client.py:54 - chat completions have no semaphore (embeddings do) - no
-  concurrency limit, can blow past OpenAI rate limits.
-* [FIXED 2026-07-12] clients/openai_client.py:116 - ping() hardcodes "gpt-5-nano" instead of
-  settings.openai.BASE_MODEL.
-* [FIXED 2026-07-12] db/stores/base_store.py:17-24 - try/except Exception as e: raise e does nothing, either
-  delete or actually log context on failure.
-
 Consistency / tech debt:
 * db/schema/models.py:19-43 - Column(index=True) on several BookModel columns does
   nothing since tables/indexes are created via raw SQL (01/02.sql), not
@@ -153,15 +127,6 @@ Consistency / tech debt:
 =======================================================================
 
 Code review findings (security review, 2026-07-12):
-
-Fix first (security, still open from 2026-07-10, not yet fixed):
-* [FIXED 2026-07-12] app/main.py:55, config/settings/app.py:8 - ALLOW_ORIGINS is still a raw str, not
-  list[str]. Confirmed via starlette source: CORSMiddleware.is_allowed_origin() does
-  `origin in self.allow_origins`, which on a plain string is substring/prefix matching,
-  not exact membership. With allow_credentials=True, an attacker who registers a domain
-  that is an exact prefix of the configured origin (e.g. https://app.example.co vs
-  https://app.example.com) gets a credentialed CORS response. Split ALLOW_ORIGINS into
-  an actual list[str] before passing to CORSMiddleware.
 
 New (found this review):
 * app/api/routes/chat_run.py:14,26 - GET /chat_runs and GET /chat_runs/tests have no
