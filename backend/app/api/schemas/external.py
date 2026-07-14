@@ -10,9 +10,11 @@ class ChatIn(BaseModel):
     message: str
 
 class ChatRunFeedbackIn(BaseModel):
-    """Like/dislike reaction on one chat run; omitted field is left untouched."""
+    """Like/dislike reaction and/or reviewed flag on one chat run; omitted
+    fields are left untouched."""
 
     liked: bool | None = None
+    reviewed: bool | None = None
 
 FeedbackCategory = Literal["Content", "Recommendation", "Planner", "Time", "UI/UX", "Other"]
 

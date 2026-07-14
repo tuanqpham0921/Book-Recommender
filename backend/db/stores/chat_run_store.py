@@ -38,13 +38,17 @@ class ChatRunStore(BaseStore[ChatRunModel]):
         self,
         chat_id: str,
         liked: Optional[bool] = None,
+        reviewed: Optional[bool] = None,
     ) -> bool:
-        """Set the like/dislike reaction on a run.
+        """Set the like/dislike reaction and/or the reviewed flag on a run;
+        omitted (None) fields are left untouched.
 
         Returns False when no row matches chat_id."""
         values: Dict[str, Any] = {}
         if liked is not None:
             values["liked"] = liked
+        if reviewed is not None:
+            values["reviewed"] = reviewed
         if not values:
             return True
 

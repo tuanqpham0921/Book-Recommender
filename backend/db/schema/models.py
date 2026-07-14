@@ -97,6 +97,10 @@ class ChatRunModel(Base):
     # user feedback: liked is None until the user reacts (True = like, False = dislike)
     liked = Column(Boolean, nullable=True)
 
+    # review-page bookkeeping: marked True once a reviewer is done with this
+    # run, moving it out of the unreviewed list
+    reviewed = Column(Boolean, nullable=False, default=False, server_default="false")
+
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"
 

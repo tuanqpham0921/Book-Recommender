@@ -30,8 +30,11 @@ async def update_chat_run_feedback(
     feedback: ChatRunFeedbackIn,
     store: ChatRunStore = Depends(get_chat_run_store),
 ):
-    """Attach a like/dislike reaction to a recorded chat run."""
-    found = await store.update_feedback(chat_id, liked=feedback.liked)
+    """Attach a like/dislike reaction and/or the reviewed flag to a
+    recorded chat run."""
+    found = await store.update_feedback(
+        chat_id, liked=feedback.liked, reviewed=feedback.reviewed
+    )
     if not found:
         raise HTTPException(status_code=404, detail=f"Chat run {chat_id} not found")
 

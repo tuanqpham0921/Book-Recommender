@@ -114,12 +114,13 @@ async function getRecommendedBooks(sessionId) {
   return await res.json();
 }
 
-// Attach a like/dislike reaction to a recorded chat run
-async function updateChatFeedback(chatId, { liked = null } = {}) {
+// Attach a like/dislike reaction and/or the reviewed flag to a recorded
+// chat run; omitted (null) fields are left untouched.
+async function updateChatFeedback(chatId, { liked = null, reviewed = null } = {}) {
   const res = await fetch_api(BASE_URL + `/chat_runs/${chatId}/feedback`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ liked })
+    body: JSON.stringify({ liked, reviewed })
   });
   return await res.json();
 }
