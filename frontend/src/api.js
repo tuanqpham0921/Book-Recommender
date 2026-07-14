@@ -124,11 +124,12 @@ async function updateChatFeedback(chatId, { liked = null } = {}) {
   return await res.json();
 }
 
-// Fetch recorded chat runs (newest first) for the review page.
-// sessionFilter: 'all' | 'tests'
-async function getChatRuns(limit = 200, offset = 0, sessionFilter = 'all') {
-  const path = sessionFilter === 'tests' ? '/chat_runs/tests' : '/chat_runs';
-  const res = await fetch_api(BASE_URL + `${path}?limit=${limit}&offset=${offset}`, {
+// Fetch recorded chat runs (newest first) for the review page; sessionId
+// optionally narrows to runs whose session_id contains the search string.
+async function getChatRuns(limit = 200, offset = 0, sessionId = null) {
+  const params = new URLSearchParams({ limit, offset });
+  if (sessionId) params.set('session_id', sessionId);
+  const res = await fetch_api(BASE_URL + `/chat_runs?${params}`, {
     method: 'GET',
     headers: { 'Content-Type': 'application/json' }
   });

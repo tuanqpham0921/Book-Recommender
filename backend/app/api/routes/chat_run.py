@@ -15,22 +15,12 @@ router = APIRouter(tags=["ChatRuns"])
 async def list_chat_runs(
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    session_id: str | None = Query(default=None),
     store: ChatRunStore = Depends(get_chat_run_store),
 ):
-    """List recorded chat runs, newest first (review page)."""
-    # TODO: this should not get the tests
-    runs = await store.get_all(limit=limit, offset=offset)
-    return {"runs": runs}
-
-
-@router.get("/chat_runs/tests")
-async def list_test_chat_runs(
-    limit: int = Query(default=200, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-    store: ChatRunStore = Depends(get_chat_run_store),
-):
-    """List chat runs filed by test suites, newest first (review page)."""
-    runs = await store.get_test_runs(limit=limit, offset=offset)
+    """List recorded chat runs, newest first (review page); optionally only
+    those whose session_id contains the given search string."""
+    runs = await store.get_all(limit=limit, offset=offset, session_id=session_id)
     return {"runs": runs}
 
 
