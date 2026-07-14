@@ -1,32 +1,41 @@
 Continue:
-  * add more info to the nodes
-      * need example queries and parser (probably starts with just queries)
-      * need to add arguments in and out like a function
-      * this can help the llm for both
-  * this is a good golden test suites
-      * so go in and lable them better for automatic tests
-      * starts with system goals
-      * maybe your system goals is your plan...
-          * which also just push the args parser to later
-          * and it's being the system goals DAG...
-      * but yeah label them, correctly
-      * maybe have a build in chat id, which it does already (number)
-          * need to show the chats descriptions and notes
-  * maybe remove all session feedback page
-      * have a better feedback page (show the system goals)
-      * probably just search by session id
-      * always show the system goals first
-      * make the praise and issue optional
-  * There's a semaphores bug (also try lowering it and see)
-  * need a better rejection (compleixity, prompt injection, and weird stuff)
-      * for v1, try not to recover or buffer goals
-      * just clear direct queries (maybe even no this, or that, previous one etc)
-          * no follow up or continue answers
-          * one query and the system can or can't finish it
-          * then direct the user to follow up query with direct answers
-      * just try to set up a good infrastrucutre, logging, retrieval nodes
+    * add more info to the nodes
+        * need example queries and parser (probably starts with just queries)
+        * need to add arguments in and out like a function
+        * this can help the llm for both
+    
+    * make a basic stats generator for chat_runs and feed_back
+
+    * this is a good golden test suites
+        * so go in and lable them better for automatic tests
+        * starts with system goals
+        * maybe your system goals is your plan...
+            * which also just push the args parser to later
+            * and it's being the system goals DAG...
+        * but yeah label them, correctly
+        * maybe have a build in chat id, which it does already (number)
+            * need to show the chats descriptions and notes
+
+    * maybe remove all session feedback page
+        * have a better feedback page (show the system goals)
+        * probably just search by session id
+        * always show the system goals first
+        * make the praise and issue optional
+
+    * There's a semaphores bug (also try lowering it and see)
+
+    * need a better rejection (compleixity, prompt injection, and weird stuff)
+        * for v1, try not to recover or buffer goals
+        * just clear direct queries (maybe even no this, or that, previous one etc)
+            * no follow up or continue answers
+            * one query and the system can or can't finish it
+            * then direct the user to follow up query with direct answers
+        * just try to set up a good infrastrucutre, logging, retrieval nodes
 
 =======================================================================
+Test:
+* test more concurrency and timeout (unit tests? and the semaphores?)
+* add bad words to test suites and the Chronicles of Zephyrian Doombringer' series and everything by its author
 
 Polish
 * make orchestration into a workflow?
@@ -38,6 +47,7 @@ Polish
 =======================================================================
 
 Reminder:
+* don't add more frontend features, you should be reducing features
 * changing review path still finish the query
     * expected? since it's not refreshing the page for a new session
     * for dev review is fine to get all the current chat_runs
