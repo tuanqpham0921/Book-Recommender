@@ -89,7 +89,6 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             if parse_result.runtime_error:
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
-            self.output.assistant_message = [self.initial_parse_failure_message]
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
@@ -117,9 +116,6 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
                     self.strategy_classification_failure_message
                 )
                 return
-            self.output.assistant_message = [
-                self.strategy_classification_failure_message
-            ]
             await self.sse_stream.send_chars(
                 self.strategy_classification_failure_message
             )
