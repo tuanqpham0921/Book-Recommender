@@ -126,14 +126,27 @@ postgres-dump-feedback:
 		> $(MAKEFILE_DIR)data/feedback_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "feedback dumped to $(MAKEFILE_DIR)data/"
 
+# dump test_runs data to a timestamped .sql file (data only, restorable via psql <)
+# — the suite/case links written by evals/run_suites.py, keyed by chat_id
+.PHONY: postgres-dump-test-runs
+postgres-dump-test-runs:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB --table=test_runs --data-only --column-inserts \
+		> $(MAKEFILE_DIR)data/test_runs_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "test_runs dumped to $(MAKEFILE_DIR)data/"
+
 # wipe all recorded chat runs (dev convenience — irreversible)
+# CASCADE: feedback.chat_id and test_runs.chat_id both reference chat_runs,
+# and TRUNCATE refuses a table with incoming FK references (even empty ones)
+# unless told to cascade — this also empties feedback and test_runs.
 # NOTE: for dev
 .PHONY: postgres-clear-chat-runs
 postgres-clear-chat-runs:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE chat_runs;"
-	@echo "chat_runs table cleared"
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE chat_runs CASCADE;"
+	@echo "chat_runs table cleared (feedback, test_runs cascaded)"
 
 # wipe all recorded feedback (dev convenience — irreversible)
 # NOTE: for dev
@@ -144,7 +157,20 @@ postgres-clear-feedback:
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE feedback;"
 	@echo "feedback table cleared"
 
-# wipe all recorded chat runs and feedback (dev convenience — irreversible)
+# wipe all recorded suite/case links (dev convenience — irreversible).
+# Standalone use only — postgres-clear-chat-runs already cascades into this
+# table, so postgres-logs-clear doesn't need to call it too.
+# NOTE: for dev
+.PHONY: postgres-clear-test-runs
+postgres-clear-test-runs:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE test_runs;"
+	@echo "test_runs table cleared"
+
+# wipe all recorded chat runs, feedback, and suite/case links (dev convenience
+# — irreversible). postgres-clear-chat-runs alone cascades into both, so the
+# explicit postgres-clear-feedback call is redundant but kept for clarity.
 .PHONY: postgres-logs-clear
 postgres-logs-clear:
 	make postgres-clear-feedback

@@ -110,15 +110,20 @@ class FeedbackModel(Base):
     reviewer's overall like/dislike plus a JSONB list of
     {title, message, positive} comments. One row per (chat_id, session_id) —
     session_id is the *reviewing* session, not the one that produced the
-    run — upserted whole on re-submit (see feedback_review_idx). chat_id is
-    unenforced (no FK) so a review can reference a run whose row hasn't been
-    recorded yet. A run's review count is derived by counting rows here,
-    never stored on chat_runs."""
+    run — upserted whole on re-submit (see feedback_review_idx). chat_id
+    CASCADEs from chat_runs (the review page only lists already-persisted
+    runs, so the target run always exists by submit time). A run's review
+    count is derived by counting rows here, never stored on chat_runs."""
 
     __tablename__ = "feedback"
 
     id = Column(String, primary_key=True)
-    chat_id = Column(String, nullable=False, index=True)
+    chat_id = Column(
+        String,
+        ForeignKey("chat_runs.chat_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     session_id = Column(String, nullable=False)
     # overall like/dislike; optional when the review carries comments
     liked = Column(Boolean, nullable=True)

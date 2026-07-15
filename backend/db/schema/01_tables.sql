@@ -54,12 +54,12 @@ CREATE TABLE IF NOT EXISTS test_runs (
 -- liked: the reviewer's overall like/dislike of the run (optional).
 -- comments: JSONB list of {title, message, positive} observations, replaced
 -- whole on each submit.
--- chat_id is unenforced (no FK) so a review can reference a run whose row
--- hasn't been recorded yet. End-user feedback (live-chat widget) no longer
--- writes here — it gets its own dedicated table later.
+-- chat_id CASCADEs from chat_runs: the review page only lists runs already
+-- persisted there, so a review's target run always exists by submit time —
+-- wiping chat_runs cleans up its reviews too.
 CREATE TABLE IF NOT EXISTS feedback (
     id TEXT PRIMARY KEY,
-    chat_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL REFERENCES chat_runs(chat_id) ON DELETE CASCADE,
     session_id TEXT NOT NULL,
     liked BOOLEAN,
     comments JSONB NOT NULL DEFAULT '[]'::jsonb,
