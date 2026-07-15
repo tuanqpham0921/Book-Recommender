@@ -32,7 +32,7 @@ make query-suite                # POST the base eval suite at a running backend 
 make query-suite-all            # fire all 4 eval suites concurrently
 ```
 
-Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), the report generator `evals/report.py` (`make suite-report` — joins `test_runs ⋈ chat_runs` and the suite JSONs), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
+Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), the post-processor `evals/eval.py` (`make suite-eval` — joins `test_runs ⋈ chat_runs`, diffs accepted goal types against each case's `expected_nodes`, saves a report to `evals/results/`), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
 
 Environment config lives at `config/.env` (see `config/README` for structure).
 

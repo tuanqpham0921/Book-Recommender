@@ -8,13 +8,14 @@ The flow:
 1. run the test suites (make query-suite / query-suite-all)
     * the runner records one test_runs row per query: chat_id (FK to
       chat_runs) + suite_name + suite_case_id — skip with --no-record
-2. generate the regression report: make suite-report
-    * joins test_runs with chat_runs, pulls query/difficulty/note from the
-      suite JSONs
-    * includes the commit sha and basic stats (ok/failed counts, runtime
-      errors, avg/total tokens, avg duration)
-    * latest run per case by default; ARGS="--all" for every run,
-      ARGS="--output evals/results/<campaign>/report.md" to save it
+2. post-process into the node-expectation report: make suite-eval
+    * joins test_runs with chat_runs and diffs each run's accepted goal
+      types against expected_nodes in the suite JSONs (matched/missing/extra)
+    * includes the commit sha, per-case query/difficulty from the JSON,
+      and match/mismatch counts per suite
+    * saved to evals/results/eval_<timestamp>.md; latest run per case by
+      default; ARGS="--all" for every run, ARGS="--output <path>" to choose
+      the file
 3. dump both chat_runs and feedback
     * need to dump the console somehow
     * before it overwrites

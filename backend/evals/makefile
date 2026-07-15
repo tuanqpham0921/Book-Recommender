@@ -89,11 +89,13 @@ query-suite-all-tmux:
 	tmux select-layout -t query_suites tiled
 	tmux attach-session -t query_suites
 
-# regression report: joins test_runs (written by the runner) with chat_runs
-# and the suite JSONs. Latest run per case by default; forward flags via ARGS,
-# e.g. make suite-report ARGS="--all --output evals/results/my_campaign/report.md"
-.PHONY: suite-report
-suite-report:
-	poetry run python evals/report.py $(ARGS)
+# post-process suite runs: joins test_runs (written by the runner) with
+# chat_runs and diffs each run's accepted goal types against expected_nodes
+# in the suite JSONs (matched/missing/extra). Saves a markdown report to
+# evals/results/eval_<timestamp>.md. Latest run per case by default; forward
+# flags via ARGS, e.g. make suite-eval ARGS="--all --output evals/results/my_campaign/eval.md"
+.PHONY: suite-eval
+suite-eval:
+	poetry run python evals/eval.py $(ARGS)
 
 # TODO: touch or echo a new personal_review
