@@ -33,12 +33,18 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     mermaid TEXT,
     planner JSONB,
     tasks JSONB,
-    sse_events JSONB,
-    -- set only for runs produced by evals/run_suites.py:
-    -- which suite file (stem, e.g. 'query_suite') and which entry id in it.
-    -- NULL for real user chats, so evals can filter on suite_name IS NULL.
-    suite_name TEXT,
-    suite_case_id INTEGER
+    sse_events JSONB
+);
+
+-- Links an eval-suite case to the chat run it produced. Written by
+-- evals/run_suites.py after a suite run; joined with chat_runs by the
+-- evals report script (evals/report.py). CASCADE: wiping chat_runs
+-- between eval campaigns auto-cleans these rows.
+CREATE TABLE IF NOT EXISTS test_runs (
+    chat_id TEXT PRIMARY KEY REFERENCES chat_runs(chat_id) ON DELETE CASCADE,
+    suite_name TEXT NOT NULL,
+    suite_case_id INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Reviews from the internal /review page: one row per (chat_id, session_id),

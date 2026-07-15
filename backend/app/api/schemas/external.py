@@ -8,11 +8,6 @@ class SessionOut(BaseModel):
 
 class ChatIn(BaseModel):
     message: str
-    # set only by the query-suite runner (evals/run_suites.py)
-    # so the resulting chat_runs row can be traced back to its suite entry;
-    # the frontend never sends these
-    suite_name: str | None = None
-    suite_case_id: int | None = None
 
 FeedbackCategory = Literal["Content", "Recommendation", "Planner", "Time", "UI/UX", "Other"]
 

@@ -19,122 +19,6 @@ function StatusBadge({ ok }) {
     return <Badge tone="neutral">unknown</Badge>
 }
 
-// Which query-suite entry produced this run, when it came from the suite
-// runner. suite_case is the backend's lookup of that entry in the suite
-// JSON — null when the file isn't available or the case id no longer exists.
-// Flags cases whose suite entry defines no expectations yet (currently
-// expected system goal types; expected_nodes is the legacy shape), so
-// reviewing doubles as spotting regression-suite gaps.
-function SuiteBadges({ run }) {
-    if (!run.suite_name) return null
-    const suiteCase = run.suite_case
-    const hasExpectations =
-        suiteCase?.expected_goal_types?.length > 0 || suiteCase?.expected_nodes?.length > 0
-    return (
-        <>
-            <Badge tone="neutral" title={suiteCase?.note} className="whitespace-nowrap">
-                {run.suite_name} #{run.suite_case_id}
-            </Badge>
-            {!suiteCase && (
-                <Badge tone="negative" title="Suite file unavailable or case id not found" className="whitespace-nowrap">
-                    case missing
-                </Badge>
-            )}
-            {suiteCase && !hasExpectations && (
-                <Badge tone="negative" title="This suite entry defines no expected system goals" className="whitespace-nowrap">
-                    no expected goals
-                </Badge>
-            )}
-            <GoalDiffBadge diff={run.goal_diff} />
-        </>
-    )
-}
-
-// Header summary of goal_diff (backend's multiset diff of the suite case's
-// expected goal types vs the goals the run actually accepted). Null when the
-// case defines no expectations — SuiteBadges already flags that separately.
-function GoalDiffBadge({ diff }) {
-    if (!diff) return null
-    if (!diff.missing.length && !diff.extra.length) {
-        return (
-            <Badge tone="positive" title="Accepted goals match the suite's expected goal types" className="whitespace-nowrap">
-                goals match
-            </Badge>
-        )
-    }
-    const parts = []
-    if (diff.missing.length) parts.push(`missing: ${diff.missing.join(', ')}`)
-    if (diff.extra.length) parts.push(`extra: ${diff.extra.join(', ')}`)
-    return (
-        <Badge tone="negative" title={parts.join(' — ')} className="whitespace-nowrap">
-            goal mismatch
-        </Badge>
-    )
-}
-
-// Expanded-view details of the suite case behind a run: note, difficulty,
-// and what the suite expects — shown above the actual system goals so a
-// reviewer can compare expected vs produced without opening the JSON.
-function SuiteCaseDetail({ run }) {
-    if (!run.suite_name) return null
-    const suiteCase = run.suite_case
-    if (!suiteCase) {
-        return (
-            <div className="mb-3 p-2 bg-[var(--accent-negative-bg)] border border-[var(--accent-negative-border)] rounded text-xs">
-                Suite case {run.suite_name} #{run.suite_case_id} could not be loaded —
-                suite file unavailable or the case id no longer exists.
-            </div>
-        )
-    }
-    const expectedTypes = suiteCase.expected_goal_types
-    return (
-        <div className="mb-3 p-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded text-xs flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-                <span className="font-semibold">{suiteCase.suite_name} #{suiteCase.id}</span>
-                {suiteCase.difficulty && <Badge tone="neutral">{suiteCase.difficulty}</Badge>}
-            </div>
-            {suiteCase.note && (
-                <p className="text-[var(--text-inactive)] italic">{suiteCase.note}</p>
-            )}
-            <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold">Expected system goals:</span>
-                {expectedTypes?.length > 0 ? (
-                    expectedTypes.map((type, i) => (
-                        <Badge key={`${type}-${i}`} tone="positive" className="whitespace-nowrap">{type}</Badge>
-                    ))
-                ) : (
-                    <span className="text-[var(--text-muted)] italic">none defined in the suite yet</span>
-                )}
-            </div>
-            {run.goal_diff && (
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">vs accepted goals:</span>
-                    {run.goal_diff.matched.map((type, i) => (
-                        <Badge key={`matched-${type}-${i}`} tone="positive" title="Expected and produced" className="whitespace-nowrap">{type}</Badge>
-                    ))}
-                    {run.goal_diff.missing.map((type, i) => (
-                        <Badge key={`missing-${type}-${i}`} tone="negative" title="Expected but the run never accepted this goal type" className="whitespace-nowrap">missing: {type}</Badge>
-                    ))}
-                    {run.goal_diff.extra.map((type, i) => (
-                        <Badge key={`extra-${type}-${i}`} tone="warning" title="Accepted by the run but not expected by the suite" className="whitespace-nowrap">extra: {type}</Badge>
-                    ))}
-                    {!run.goal_diff.missing.length && !run.goal_diff.extra.length && (
-                        <span className="text-[var(--text-muted)]">all expected goals produced</span>
-                    )}
-                </div>
-            )}
-            {suiteCase.expected_nodes?.length > 0 && (
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">Expected nodes (legacy):</span>
-                    {suiteCase.expected_nodes.map((node, i) => (
-                        <Badge key={`${node}-${i}`} tone="neutral" className="whitespace-nowrap">{node}</Badge>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}
-
 // How many review sessions have filed a review of this run — derived by the
 // backend from feedback rows, drives the queue order (0 first).
 function ReviewCountBadge({ count }) {
@@ -409,7 +293,6 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                 <span className="flex-1 whitespace-pre-wrap break-words text-sm text-[var(--text-active)] mt-1">
                     {run.user_message || <em className="text-[var(--text-muted)]">no message</em>}
                 </span>
-                <span className="mt-0.5 flex gap-1 whitespace-nowrap"><SuiteBadges run={run} /></span>
                 <span className="mt-0.5 whitespace-nowrap"><ReviewCountBadge count={run.num_reviews} /></span>
                 <span className="text-xs text-[var(--text-muted)] whitespace-nowrap mt-1">
                     {run.created_at ? new Date(run.created_at).toLocaleString() : ''}
@@ -424,8 +307,6 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                         <div><span className="font-semibold">duration:</span> {run.duration_s?.toFixed?.(2) ?? '—'}s</div>
                         <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
                     </div>
-
-                    <SuiteCaseDetail run={run} />
 
                     {errorDetail && (
                         <details className="mb-3">

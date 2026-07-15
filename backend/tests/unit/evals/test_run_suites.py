@@ -1,7 +1,7 @@
 """Tests for the query-suite runner: suite loading/filtering, the request
-payload it sends (message plus suite_name/suite_case_id so the chat_runs row
-links back to its suite entry), and that the default suite path survives
-repo restructures."""
+payload it sends, the chat_id it captures from the chat.id SSE event (used
+to write test_runs rows after the run), and that the default suite path
+survives repo restructures."""
 
 import json
 from contextlib import contextmanager
@@ -54,49 +54,62 @@ class TestLoadSuite:
 
 
 class FakeClient:
-    """Captures the request send_query makes and streams one SSE event back."""
+    """Captures the request send_query makes and streams SSE events back."""
 
-    def __init__(self):
+    def __init__(self, lines=None):
         self.captured = None
+        self.lines = lines if lines is not None else []
 
     @contextmanager
     def stream(self, method, url, json=None, timeout=None):
         self.captured = {"method": method, "url": url, "json": json}
-        yield FakeResponse()
+        yield FakeResponse(self.lines)
 
 
 class FakeResponse:
+    def __init__(self, lines):
+        self.lines = lines
+
     def raise_for_status(self):
         pass
 
     def iter_lines(self):
-        return iter(['data: {"type": "content.delta", "data": "hi"}'])
+        return iter(self.lines)
 
 
 class TestSendQuery:
-    def test_payload_carries_suite_link(self):
+    def test_payload_is_message_only(self):
         client = FakeClient()
 
-        send_query(
-            client,
-            session_id="test_abc123",
-            message="What is the book Dune?",
-            suite_name="query_suite",
-            suite_case_id=1,
-        )
+        send_query(client, session_id="test_abc123", message="What is the book Dune?")
 
         assert client.captured["method"] == "POST"
         assert client.captured["url"] == "/session/test_abc123/message"
-        assert client.captured["json"] == {
-            "message": "What is the book Dune?",
-            "suite_name": "query_suite",
-            "suite_case_id": 1,
-        }
+        assert client.captured["json"] == {"message": "What is the book Dune?"}
+
+    def test_captures_chat_id_from_stream(self):
+        client = FakeClient(
+            [
+                'data: {"type": "chat.id", "data": {"chat_id": "chat_42"}}',
+                'data: {"type": "content.delta", "data": "hi"}',
+            ]
+        )
+
+        chat_id = send_query(client, session_id="test_abc123", message="hello")
+
+        assert chat_id == "chat_42"
+
+    def test_no_chat_id_event_returns_none(self):
+        client = FakeClient(['data: {"type": "content.delta", "data": "hi"}'])
+
+        chat_id = send_query(client, session_id="test_abc123", message="hello")
+
+        assert chat_id is None
 
 
 class TestDefaultSuitePath:
     def test_default_suite_exists(self):
-        # guards the evals/suites/ layout — the runner, the review page's
-        # QUERY_SUITES_DIR constant, and the make targets all assume it
+        # guards the evals/suites/ layout — the runner and the make targets
+        # all assume it
         assert DEFAULT_SUITE_PATH.is_file()
         assert DEFAULT_SUITE_PATH.parent.name == "suites"

@@ -1,6 +1,6 @@
 # SQLAlchemy models (shared by stores / DB layers)
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, DateTime, Integer, String, Float, Text, Boolean, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Float, Text, Boolean, func
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -88,11 +88,6 @@ class ChatRunModel(Base):
     planner = Column(JSONB, nullable=True)
     tasks = Column(JSONB, nullable=True)
 
-    # set only for runs produced by the query-suite runner: suite file stem
-    # (e.g. 'query_suite') and the entry id inside it; NULL for real chats
-    suite_name = Column(Text, nullable=True)
-    suite_case_id = Column(Integer, nullable=True)
-
     # SSE transcript: exactly what the user saw this turn, in order, with
     # t/t_end second-offsets for replay pacing. Consecutive content.delta
     # chars are coalesced into sections (see SSEStream.flush_chars), so this
@@ -148,4 +143,36 @@ class FeedbackModel(Base):
         for ts in ("created_at", "updated_at"):
             if row.get(ts) is not None:
                 row[ts] = row[ts].isoformat()
+        return row
+
+
+class TestRunModel(Base):
+    """Links an eval-suite case to the chat run it produced: suite file stem
+    (e.g. 'query_suite') plus the entry id inside it. Written by
+    evals/run_suites.py after a suite run finishes; evals/report.py joins
+    this with chat_runs to build the regression report. CASCADE so wiping
+    chat_runs between eval campaigns auto-cleans these rows."""
+
+    __tablename__ = "test_runs"
+
+    chat_id = Column(
+        String, ForeignKey("chat_runs.chat_id", ondelete="CASCADE"), primary_key=True
+    )
+    suite_name = Column(Text, nullable=False)
+    suite_case_id = Column(Integer, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    def __repr__(self):
+        return (
+            f"<TestRunModel(chat_id='{self.chat_id}', "
+            f"suite='{self.suite_name}#{self.suite_case_id}')>"
+        )
+
+    def to_dict(self) -> dict:
+        """Convert model to dictionary (table columns only)."""
+        row = {c.name: getattr(self, c.name) for c in TestRunModel.__table__.columns}
+        if row.get("created_at") is not None:
+            row["created_at"] = row["created_at"].isoformat()
         return row

@@ -101,25 +101,6 @@ class TestBuildChatRunRow:
         assert row["planner"]["output"]["strategy_result"]["execution_order"] == [
             "task_abcd1234"
         ]
-        # not a suite run: both suite columns stay NULL
-        assert row["suite_name"] is None
-        assert row["suite_case_id"] is None
-
-    def test_suite_fields_pass_through(self):
-        result, output = _make_result_and_output()
-
-        row = build_chat_run_row(
-            session_id="sess_1",
-            user_chat_id="chat_1",
-            user_message="Find me a book",
-            result=result,
-            output=output,
-            suite_name="query_suite",
-            suite_case_id=7,
-        )
-
-        assert row["suite_name"] == "query_suite"
-        assert row["suite_case_id"] == 7
 
     def test_serialization_preserves_private_attrs(self):
         result, output = _make_result_and_output()

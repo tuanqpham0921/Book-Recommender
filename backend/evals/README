@@ -5,22 +5,22 @@ has raw .sql data, and is useful for future and keeping track of things
 
 The flow:
 
-1. run the test suites
-2. dump both chat_runs and feedback
+1. run the test suites (make query-suite / query-suite-all)
+    * the runner records one test_runs row per query: chat_id (FK to
+      chat_runs) + suite_name + suite_case_id — skip with --no-record
+2. generate the regression report: make suite-report
+    * joins test_runs with chat_runs, pulls query/difficulty/note from the
+      suite JSONs
+    * includes the commit sha and basic stats (ok/failed counts, runtime
+      errors, avg/total tokens, avg duration)
+    * latest run per case by default; ARGS="--all" for every run,
+      ARGS="--output evals/results/<campaign>/report.md" to save it
+3. dump both chat_runs and feedback
     * need to dump the console somehow
     * before it overwrites
-3. make a personal review.md
-    * save chat id, session id, comit id
-    * write a report
+    * (test_runs cascades away when chat_runs rows are deleted)
+4. make a personal review.md
     * TODO: need a better structure later
     * maybe even a jupyter notebook
-4. ask claude to review if you want
-
-!!! Important, save the commit sha or something
-!!! so we can reference it back
-
-it should also have basic stats
-    * like average token counts, total token counts, etc...
-    * how many failed, how many have run-time errors
-    * we can build this over time
+5. ask claude to review if you want
 

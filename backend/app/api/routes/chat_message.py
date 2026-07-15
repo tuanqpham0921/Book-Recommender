@@ -74,10 +74,7 @@ async def chat(
         )
 
     request_context = await request_context_factory(
-        session_id,
-        UserMessage(content=chat_in.message),
-        suite_name=chat_in.suite_name,
-        suite_case_id=chat_in.suite_case_id,
+        session_id, UserMessage(content=chat_in.message)
     )
     logger.info(f"🚀 Starting chat for session: {request_context.session_id}")
 

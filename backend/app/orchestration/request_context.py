@@ -25,8 +25,3 @@ class RequestContext(BaseModel):
 
     # for writes that outlive the request-scoped session (e.g. chat run records)
     session_factory: async_sessionmaker[AsyncSession]
-
-    # which query-suite entry produced this request, if any (see ChatIn);
-    # recorded on the chat_runs row, None for real user chats
-    suite_name: str | None = None
-    suite_case_id: int | None = None
