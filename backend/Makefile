@@ -101,7 +101,7 @@ postgres-restore-data:
 # schema: legacy chat_runs columns are discarded, feedback rows are folded into
 # review rows (raw copies archived in feedback_legacy). Re-running skips rows
 # that are already present.
-# usage: make postgres-restore-eval DIR=data/eval/dev_e5abcf65_scaling
+# usage: make postgres-restore-eval DIR=evals/results/dev_e5abcf65_scaling
 .PHONY: postgres-restore-eval
 postgres-restore-eval:
 	set -a && . $(ENV_FILE) && set +a && \
@@ -181,11 +181,10 @@ local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
 
 # Query-suite / eval-run commands (query-suite, query-suite-all, ...) live in
-# data/eval/makefile — the gitignored personal eval area. Pulled in here so they
-# still run as `make query-suite-all` from backend/ (cwd stays backend/, so the
-# relative suite/log paths in those recipes resolve). `-include` (leading hyphen)
-# means make won't error if that gitignored file is absent on a fresh checkout.
--include $(MAKEFILE_DIR)data/eval/makefile
+# evals/makefile, next to the suite JSONs and runner they drive. Pulled in here
+# so they still run as `make query-suite-all` from backend/ (cwd stays backend/,
+# so the relative suite/log paths in those recipes resolve).
+include $(MAKEFILE_DIR)evals/makefile
 
 # .Phony: lint
 # lint:

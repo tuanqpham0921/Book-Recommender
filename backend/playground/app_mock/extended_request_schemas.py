@@ -4,7 +4,7 @@ Parked in playground/ — not wired into app.domains.books.schemas or the
 registry, so none of this is reachable by the live planner. Every class here
 is a candidate capability that was being evaluated for how parse_intent and
 strategy_classification scale as the tool catalog grows (see
-query_suite_extended.json in this same directory). Docstrings are the tool
+evals/suites/query_suite_extended.json). Docstrings are the tool
 descriptions the LLM would see if wired back in, so they follow the same
 "use when / not when" style as request_schemas.py — keep them discriminating
 against neighbor tools.

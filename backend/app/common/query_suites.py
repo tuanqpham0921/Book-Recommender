@@ -1,9 +1,9 @@
-"""Look up query-suite entries (tests/query_suite*.json) by suite name + case id.
+"""Look up query-suite entries (evals/suites/*.json) by suite name + case id.
 
 Used by the review page to show, next to a recorded suite run, the suite
 case that produced it: its note, difficulty, and what the suite expects
 (system goal types today, node lists as the legacy shape). The suite files
-are test data and are not shipped in deploy images, so every lookup degrades
+are eval data and are not shipped in deploy images, so every lookup degrades
 to None instead of raising when a file is missing or malformed.
 """
 

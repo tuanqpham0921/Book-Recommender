@@ -8,7 +8,7 @@ class SessionOut(BaseModel):
 
 class ChatIn(BaseModel):
     message: str
-    # set only by the query-suite runner (tests/scripts/run_query_suites.py)
+    # set only by the query-suite runner (evals/run_suites.py)
     # so the resulting chat_runs row can be traced back to its suite entry;
     # the frontend never sends these
     suite_name: str | None = None

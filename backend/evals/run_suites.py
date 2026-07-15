@@ -1,15 +1,15 @@
 """Send a suite of queries to the backend one after another.
 
-Queries are loaded from tests/query_suite.json (override with --suite).
+Queries are loaded from evals/suites/query_suite.json (override with --suite).
 Each query is POSTed to /session/{id}/message and its SSE stream is
 consumed to completion before the next query is sent.
 
-Usage (from backend/):
-    poetry run python tests/scripts/run_query_suites.py
-    poetry run python tests/scripts/run_query_suites.py --difficulty easy
-    poetry run python tests/scripts/run_query_suites.py --ids 1 16 50
-    poetry run python tests/scripts/run_query_suites.py --new-session-per-query
-    poetry run python tests/scripts/run_query_suites.py --suite /home/tuani/Book-Recommender/backend/playground/app_mock/query_suite_extended.json
+Usage (from backend/, or via the make targets in evals/makefile):
+    poetry run python evals/run_suites.py
+    poetry run python evals/run_suites.py --difficulty easy
+    poetry run python evals/run_suites.py --ids 1 16 50
+    poetry run python evals/run_suites.py --new-session-per-query
+    poetry run python evals/run_suites.py --suite evals/suites/query_suite_extended.json
 """
 
 import argparse
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import httpx
 
-DEFAULT_SUITE_PATH = Path(__file__).parent.parent / "query_suite.json"
+DEFAULT_SUITE_PATH = Path(__file__).parent / "suites" / "query_suite.json"
 
 STREAM_TIMEOUT_SECONDS = 300.0
 EVENT_PRINT_LIMIT = 200

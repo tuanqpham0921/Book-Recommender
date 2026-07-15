@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 To save tokens, do not read these unless the task specifically requires it:
 
 - **Log files** (`backend/logs/` — `*.log` and chat-run JSON dumps): skip unless the task is formatting or restructuring the logs themselves.
-- **SQL backups/dumps** (`backend/data/*.sql`, e.g. `backup.sql`): never read these. The schema init SQL in `backend/db/schema/` (extensions/tables/indexes) is fine to read.
+- **SQL backups/dumps** (`backend/data/*.sql`, e.g. `backup.sql`; `backend/evals/results/**/*.sql` raw eval dumps): never read these. The schema init SQL in `backend/db/schema/` (extensions/tables/indexes) is fine to read.
 
 If a file is in gitignore, you probably don't need to read it.
 Ask for confirmation before reading large files
@@ -26,7 +26,11 @@ make postgres-start             # start PostgreSQL via Docker Compose
 make postgres-stop              # stop PostgreSQL container
 make postgres-restore           # restore data from data/backup.sql
 make postgres-cli               # open psql shell
+make query-suite                # POST the base eval suite at a running backend (make dev first)
+make query-suite-all            # fire all 4 eval suites concurrently
 ```
+
+Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs — each entry's id + suite file stem is recorded on the `chat_runs` row), the runner `evals/run_suites.py`, make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
 
 Environment config lives at `config/.env` (see `config/README` for structure).
 

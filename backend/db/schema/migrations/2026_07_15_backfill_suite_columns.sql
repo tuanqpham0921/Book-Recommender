@@ -4,10 +4,8 @@
 -- runner always sent the suite's query verbatim from a test_ session, and
 -- query texts are unique across the four suite files (asserted at
 -- generation time). Already-linked rows (suite_name set) are left alone,
--- so re-running is safe. query_suite_extended lives in playground/app_mock/,
--- outside the review page's suite lookup dir (tests/) — those runs get the
--- badge but show "case missing" until the file moves.
--- Generated from the suite JSONs — regenerate rather than edit.
+-- so re-running is safe.
+-- Generated from the suite JSONs (evals/suites/) — regenerate rather than edit.
 --
 -- Apply with: make postgres-query FILE=db/schema/migrations/2026_07_15_backfill_suite_columns.sql
 BEGIN;
