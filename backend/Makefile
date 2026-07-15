@@ -136,6 +136,22 @@ postgres-dump-test-runs:
 		> $(MAKEFILE_DIR)data/test_runs_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "test_runs dumped to $(MAKEFILE_DIR)data/"
 
+# dump chat_runs plus every table FK'd to it (feedback, test_runs) into ONE
+# timestamped .sql file, so the set is restored/moved together. pg_dump
+# topo-sorts data-only dumps by FK dependency, so chat_runs's INSERTs land
+# before feedback's/test_runs's in the file — required since these are plain
+# (non-deferred) constraints: a referencing row inserted before its chat_runs
+# row would fail. Restore with: make postgres-query FILE=data/<this file>
+.PHONY: postgres-dump-chat-runs-cascade
+postgres-dump-chat-runs-cascade:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB \
+			--table=chat_runs --table=feedback --table=test_runs \
+			--data-only --column-inserts \
+		> $(MAKEFILE_DIR)data/chat_runs_cascade_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "chat_runs + feedback + test_runs dumped to $(MAKEFILE_DIR)data/"
+
 # wipe all recorded chat runs (dev convenience — irreversible)
 # CASCADE: feedback.chat_id and test_runs.chat_id both reference chat_runs,
 # and TRUNCATE refuses a table with incoming FK references (even empty ones)
