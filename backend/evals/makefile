@@ -98,4 +98,11 @@ query-suite-all-tmux:
 suite-eval:
 	poetry run python evals/eval.py $(ARGS)
 
+# regression report: joins test_runs (written by the runner) with chat_runs
+# and the suite JSONs. Latest run per case by default; forward flags via ARGS,
+# e.g. make suite-report ARGS="--all --output evals/results/my_campaign/report.md"
+.PHONY: suite-report
+suite-report:
+	poetry run python evals/report.py $(ARGS)
+
 # TODO: touch or echo a new personal_review
