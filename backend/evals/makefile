@@ -105,4 +105,3 @@ suite-eval:
 suite-report:
 	poetry run python evals/report.py $(ARGS)
 
-# TODO: touch or echo a new personal_review

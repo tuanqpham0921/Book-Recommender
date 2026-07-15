@@ -88,25 +88,13 @@ postgres-dump:
 		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > $(MAKEFILE_DIR)data/backup.sql
 	@echo "PostgreSQL data dumped to $(MAKEFILE_DIR)data/backup.sql"
 
-# restore the postgres data from a file
-.PHONY: postgres-restore-data
-postgres-restore-data:
+# restore the postgres books data from a file
+.PHONY: postgres-restore-books
+postgres-restore-books:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup.sql
-	@echo "PostgreSQL data restored from $(MAKEFILE_DIR)data/backup.sql"
-
-# restore an old-format eval dump pair (newest chat_runs_*.sql + feedback_*.sql
-# in DIR, data-only --column-inserts, pre-review-queue schema) into the current
-# schema: legacy chat_runs columns are discarded, feedback rows are folded into
-# review rows (raw copies archived in feedback_legacy). Re-running skips rows
-# that are already present.
-# usage: make postgres-restore-eval DIR=evals/results/dev_e5abcf65_scaling
-.PHONY: postgres-restore-eval
-postgres-restore-eval:
-	set -a && . $(ENV_FILE) && set +a && \
-	POSTGRES_CONTAINER=$(POSTGRES_CONTAINER) \
-		$(MAKEFILE_DIR)scripts/restore_eval_dump.sh $(MAKEFILE_DIR)$(DIR)
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup/backup.sql
+	@echo "PostgreSQL data restored from $(MAKEFILE_DIR)data/backup/backup.sql
 
 # dump chat_runs data to a timestamped .sql file (data only, restorable via psql <)
 .PHONY: postgres-dump-chat-runs
@@ -183,14 +171,6 @@ postgres-clear-test-runs:
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE test_runs;"
 	@echo "test_runs table cleared"
-
-# wipe all recorded chat runs, feedback, and suite/case links (dev convenience
-# — irreversible). postgres-clear-chat-runs alone cascades into both, so the
-# explicit postgres-clear-feedback call is redundant but kept for clarity.
-.PHONY: postgres-logs-clear
-postgres-logs-clear:
-	make postgres-clear-feedback
-	make postgres-clear-chat-runs
 
 # -------------------
 # Docker commands
