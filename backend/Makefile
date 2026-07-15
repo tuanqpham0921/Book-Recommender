@@ -96,6 +96,18 @@ postgres-restore-data:
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup.sql
 	@echo "PostgreSQL data restored from $(MAKEFILE_DIR)data/backup.sql"
 
+# restore an old-format eval dump pair (newest chat_runs_*.sql + feedback_*.sql
+# in DIR, data-only --column-inserts, pre-review-queue schema) into the current
+# schema: legacy chat_runs columns are discarded, feedback rows are folded into
+# review rows (raw copies archived in feedback_legacy). Re-running skips rows
+# that are already present.
+# usage: make postgres-restore-eval DIR=data/eval/dev_e5abcf65_scaling
+.PHONY: postgres-restore-eval
+postgres-restore-eval:
+	set -a && . $(ENV_FILE) && set +a && \
+	POSTGRES_CONTAINER=$(POSTGRES_CONTAINER) \
+		$(MAKEFILE_DIR)scripts/restore_eval_dump.sh $(MAKEFILE_DIR)$(DIR)
+
 # dump chat_runs data to a timestamped .sql file (data only, restorable via psql <)
 .PHONY: postgres-dump-chat-runs
 postgres-dump-chat-runs:

@@ -1,4 +1,11 @@
 Continue:
+    make sure to dump this feedback and chat run migration
+    * feedback page
+        test this some more
+        merge back to test_orchestration
+
+    why is npm run build not pushing to mine?
+
     * add more info to the nodes
         * need example queries and parser (probably starts with just queries)
         * need to add arguments in and out like a function
