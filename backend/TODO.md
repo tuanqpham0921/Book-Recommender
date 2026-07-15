@@ -1,8 +1,13 @@
 Continue:
-    make sure to dump this feedback and chat run migration
-    * feedback page
-        test this some more
-        merge back to test_orchestration
+    * dump current chat_runs, and feedback
+    * run everything again minimally, just parse intent
+        * format the system goals correctly
+
+    * understand the integration tests more
+        * how I set up a away to mock end-to-end tests
+    * you should split up tests and queries better (endpoint)
+    * there should be structure inputs/ouputs and stuff
+
 
     why is npm run build not pushing to mine?
 
