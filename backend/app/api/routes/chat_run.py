@@ -30,7 +30,7 @@ async def list_chat_runs(
             suite_case = get_suite_case(run["suite_name"], run.get("suite_case_id"))
             run["suite_case"] = suite_case
             run["goal_diff"] = diff_goal_types(
-                suite_case["expected_goal_types"] if suite_case else None,
+                suite_case["expected_nodes"] if suite_case else None,
                 accepted_goal_types(run.get("planner")),
             )
     return {"runs": runs}
