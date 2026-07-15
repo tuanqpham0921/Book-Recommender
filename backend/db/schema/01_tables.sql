@@ -33,7 +33,12 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     mermaid TEXT,
     planner JSONB,
     tasks JSONB,
-    sse_events JSONB
+    sse_events JSONB,
+    -- set only for runs produced by tests/scripts/run_query_suites.py:
+    -- which suite file (stem, e.g. 'query_suite') and which entry id in it.
+    -- NULL for real user chats, so evals can filter on suite_name IS NULL.
+    suite_name TEXT,
+    suite_case_id INTEGER
 );
 
 -- Reviews from the internal /review page: one row per (chat_id, session_id),

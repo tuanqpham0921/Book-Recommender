@@ -36,6 +36,9 @@ class FilesLocationConstants:
     PAYLOAD_DIR = EXPORT_DIR / "payloads"
     
     BACKUP_DIR = DATA_DIR / "backup"
+    # query suite JSON files (query_suite.json etc.) used by the suite
+    # runner and the review page's suite-case lookup; absent in deploy images
+    QUERY_SUITES_DIR = PROJECT_ROOT / "tests"
     SCHEMA_DIR = PROJECT_ROOT / "db" / "schema"
     SCHEMA_EXTENSIONS_FILE = SCHEMA_DIR / "00_extensions.sql"
     SCHEMA_TABLES_FILE = SCHEMA_DIR / "01_tables.sql"

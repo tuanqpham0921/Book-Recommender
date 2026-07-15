@@ -57,7 +57,13 @@ def create_session() -> str:
     return session_id
 
 
-def send_query(client: httpx.Client, session_id: str, message: str) -> None:
+def send_query(
+    client: httpx.Client,
+    session_id: str,
+    message: str,
+    suite_name: str,
+    suite_case_id: int,
+) -> None:
     started = time.monotonic()
     event_count = 0
     content_parts: list[str] = []
@@ -65,7 +71,13 @@ def send_query(client: httpx.Client, session_id: str, message: str) -> None:
     with client.stream(
         "POST",
         f"/session/{session_id}/message",
-        json={"message": message},
+        # suite_name/suite_case_id are recorded on the chat_runs row so the
+        # run can be traced back to its suite entry (review page, regression)
+        json={
+            "message": message,
+            "suite_name": suite_name,
+            "suite_case_id": suite_case_id,
+        },
         timeout=httpx.Timeout(STREAM_TIMEOUT_SECONDS, connect=10.0),
     ) as response:
         response.raise_for_status()
@@ -139,7 +151,13 @@ def main() -> int:
                 f"(id={entry['id']}, {entry['difficulty']}): {entry['query']}"
             )
             try:
-                send_query(client, session_id, entry["query"])
+                send_query(
+                    client,
+                    session_id,
+                    entry["query"],
+                    suite_name=args.suite.stem,
+                    suite_case_id=entry["id"],
+                )
             except httpx.HTTPError as e:
                 print(f"  FAILED: {e}", file=sys.stderr)
                 # return 1

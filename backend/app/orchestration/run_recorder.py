@@ -28,6 +28,8 @@ def build_chat_run_row(
     output: PlannerOutput,
     tasks: OperationResult[TaskRunnerOutput] | None = None,
     sse_events: list[dict] | None = None,
+    suite_name: str | None = None,
+    suite_case_id: int | None = None,
 ) -> dict[str, Any]:
     """Map a finished conversation (+ optional task run) onto ChatRunModel
     columns. Promoted stats (ok, duration, tokens, mermaid) up front for
@@ -45,6 +47,8 @@ def build_chat_run_row(
         "planner": to_serializable(result),
         "tasks": to_serializable(tasks) if tasks is not None else None,
         "sse_events": sse_events,
+        "suite_name": suite_name,
+        "suite_case_id": suite_case_id,
     }
 
 
@@ -82,6 +86,8 @@ async def record_chat_run(
             output=workflow.output,
             tasks=task_runner.result if task_runner is not None else None,
             sse_events=sse_stream.events,
+            suite_name=request_context.suite_name,
+            suite_case_id=request_context.suite_case_id,
         )
 
         if app_env == "development":

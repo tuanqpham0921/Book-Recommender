@@ -88,6 +88,11 @@ class ChatRunModel(Base):
     planner = Column(JSONB, nullable=True)
     tasks = Column(JSONB, nullable=True)
 
+    # set only for runs produced by the query-suite runner: suite file stem
+    # (e.g. 'query_suite') and the entry id inside it; NULL for real chats
+    suite_name = Column(Text, nullable=True)
+    suite_case_id = Column(Integer, nullable=True)
+
     # SSE transcript: exactly what the user saw this turn, in order, with
     # t/t_end second-offsets for replay pacing. Consecutive content.delta
     # chars are coalesced into sections (see SSEStream.flush_chars), so this

@@ -96,7 +96,12 @@ async def get_request_context_factory(
     from app.common.messages import UserMessage
     from app.orchestration.request_context import RequestContext
 
-    async def create_context(session_id: str, user_message: UserMessage):
+    async def create_context(
+        session_id: str,
+        user_message: UserMessage,
+        suite_name: str | None = None,
+        suite_case_id: int | None = None,
+    ):
         return RequestContext(
             app_env=app_env,
             session_id=session_id,
@@ -105,6 +110,8 @@ async def get_request_context_factory(
             book_store=book_store,
             sse_stream=sse_stream,
             session_factory=session_factory,
+            suite_name=suite_name,
+            suite_case_id=suite_case_id,
         )
 
     return create_context
