@@ -9,7 +9,7 @@ import os
 import pytest
 
 from app.common import query_suites
-from app.common.query_suites import get_suite_case
+from app.common.query_suites import accepted_goal_types, diff_goal_types, get_suite_case
 from config import FilesLocationConstants
 
 
@@ -108,3 +108,89 @@ class TestGetSuiteCase:
         os.utime(path, (stat.st_atime, stat.st_mtime + 1))
 
         assert get_suite_case("my_suite", 1)["difficulty"] == "hard"
+
+
+def make_planner(*goal_types):
+    """chat_runs.planner JSONB shape, down to output.parse_result.accepted_goals."""
+    return {
+        "output": {
+            "parse_result": {
+                "accepted_goals": [
+                    {"_id": f"goal_{i}", "target_node_type": t, "confidence": 0.9}
+                    for i, t in enumerate(goal_types)
+                ]
+            }
+        }
+    }
+
+
+class TestAcceptedGoalTypes:
+    def test_extracts_types_in_order(self):
+        planner = make_planner("Retrieve_by_Title", "Analyze_Compare")
+
+        assert accepted_goal_types(planner) == ["Retrieve_by_Title", "Analyze_Compare"]
+
+    def test_none_planner(self):
+        assert accepted_goal_types(None) == []
+
+    def test_planner_without_parse_result(self):
+        # run errored before parsing finished — output holds no parse_result
+        assert accepted_goal_types({"output": None}) == []
+        assert accepted_goal_types({"output": {}}) == []
+
+    def test_goal_missing_target_node_type_is_skipped(self):
+        planner = make_planner("Retrieve_by_Title")
+        planner["output"]["parse_result"]["accepted_goals"].append({"_id": "goal_x"})
+
+        assert accepted_goal_types(planner) == ["Retrieve_by_Title"]
+
+
+class TestDiffGoalTypes:
+    def test_exact_match(self):
+        diff = diff_goal_types(
+            ["Retrieve_by_Title", "Analyze_Compare"],
+            ["Analyze_Compare", "Retrieve_by_Title"],
+        )
+
+        assert diff == {
+            "matched": ["Analyze_Compare", "Retrieve_by_Title"],
+            "missing": [],
+            "extra": [],
+        }
+
+    def test_missing_and_extra(self):
+        diff = diff_goal_types(
+            ["Retrieve_by_Title", "Analyze_Compare"],
+            ["Retrieve_by_Title", "Analyze_Recommend"],
+        )
+
+        assert diff == {
+            "matched": ["Retrieve_by_Title"],
+            "missing": ["Analyze_Compare"],
+            "extra": ["Analyze_Recommend"],
+        }
+
+    def test_duplicates_count(self):
+        # expecting the same type twice but producing it once leaves one missing
+        diff = diff_goal_types(
+            ["Retrieve_by_Title", "Retrieve_by_Title"],
+            ["Retrieve_by_Title"],
+        )
+
+        assert diff == {
+            "matched": ["Retrieve_by_Title"],
+            "missing": ["Retrieve_by_Title"],
+            "extra": [],
+        }
+
+    def test_no_expectations_returns_none_not_empty_diff(self):
+        assert diff_goal_types(None, ["Retrieve_by_Title"]) is None
+
+    def test_run_without_goals_marks_all_expected_missing(self):
+        diff = diff_goal_types(["Retrieve_by_Title"], [])
+
+        assert diff == {
+            "matched": [],
+            "missing": ["Retrieve_by_Title"],
+            "extra": [],
+        }

@@ -45,7 +45,30 @@ function SuiteBadges({ run }) {
                     no expected goals
                 </Badge>
             )}
+            <GoalDiffBadge diff={run.goal_diff} />
         </>
+    )
+}
+
+// Header summary of goal_diff (backend's multiset diff of the suite case's
+// expected goal types vs the goals the run actually accepted). Null when the
+// case defines no expectations — SuiteBadges already flags that separately.
+function GoalDiffBadge({ diff }) {
+    if (!diff) return null
+    if (!diff.missing.length && !diff.extra.length) {
+        return (
+            <Badge tone="positive" title="Accepted goals match the suite's expected goal types" className="whitespace-nowrap">
+                goals match
+            </Badge>
+        )
+    }
+    const parts = []
+    if (diff.missing.length) parts.push(`missing: ${diff.missing.join(', ')}`)
+    if (diff.extra.length) parts.push(`extra: ${diff.extra.join(', ')}`)
+    return (
+        <Badge tone="negative" title={parts.join(' — ')} className="whitespace-nowrap">
+            goal mismatch
+        </Badge>
     )
 }
 
@@ -83,6 +106,23 @@ function SuiteCaseDetail({ run }) {
                     <span className="text-[var(--text-muted)] italic">none defined in the suite yet</span>
                 )}
             </div>
+            {run.goal_diff && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">vs accepted goals:</span>
+                    {run.goal_diff.matched.map((type, i) => (
+                        <Badge key={`matched-${type}-${i}`} tone="positive" title="Expected and produced" className="whitespace-nowrap">{type}</Badge>
+                    ))}
+                    {run.goal_diff.missing.map((type, i) => (
+                        <Badge key={`missing-${type}-${i}`} tone="negative" title="Expected but the run never accepted this goal type" className="whitespace-nowrap">missing: {type}</Badge>
+                    ))}
+                    {run.goal_diff.extra.map((type, i) => (
+                        <Badge key={`extra-${type}-${i}`} tone="warning" title="Accepted by the run but not expected by the suite" className="whitespace-nowrap">extra: {type}</Badge>
+                    ))}
+                    {!run.goal_diff.missing.length && !run.goal_diff.extra.length && (
+                        <span className="text-[var(--text-muted)]">all expected goals produced</span>
+                    )}
+                </div>
+            )}
             {suiteCase.expected_nodes?.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold">Expected nodes (legacy):</span>

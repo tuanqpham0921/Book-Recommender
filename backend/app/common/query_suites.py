@@ -10,6 +10,7 @@ to None instead of raising when a file is missing or malformed.
 import json
 import logging
 import re
+from collections import Counter
 from functools import lru_cache
 from typing import Any
 
@@ -86,4 +87,40 @@ def get_suite_case(suite_name: str | None, case_id: int | None) -> dict[str, Any
         "note": entry.get("note"),
         "expected_goal_types": _expected_goal_types(entry),
         "expected_nodes": entry.get("expected_nodes"),
+    }
+
+
+def accepted_goal_types(planner: Any) -> list[str]:
+    """target_node_type of each accepted goal in a recorded planner envelope
+    (the chat_runs.planner JSONB dict). [] when the run has no parse result,
+    e.g. it errored before parsing finished."""
+    if not isinstance(planner, dict):
+        return []
+    output = planner.get("output")
+    parse_result = output.get("parse_result") if isinstance(output, dict) else None
+    goals = parse_result.get("accepted_goals") if isinstance(parse_result, dict) else None
+    if not isinstance(goals, list):
+        return []
+    return [
+        goal["target_node_type"]
+        for goal in goals
+        if isinstance(goal, dict) and isinstance(goal.get("target_node_type"), str)
+    ]
+
+
+def diff_goal_types(
+    expected: list[str] | None, actual: list[str]
+) -> dict[str, list[str]] | None:
+    """Multiset diff of a suite case's expected goal types against the types a
+    run actually produced — duplicates count, so expecting Retrieve_by_Title
+    twice and producing it once leaves one missing. None (not an empty diff)
+    when the case defines no expectations, matching expected_goal_types."""
+    if expected is None:
+        return None
+    expected_counts = Counter(expected)
+    actual_counts = Counter(actual)
+    return {
+        "matched": sorted((expected_counts & actual_counts).elements()),
+        "missing": sorted((expected_counts - actual_counts).elements()),
+        "extra": sorted((actual_counts - expected_counts).elements()),
     }

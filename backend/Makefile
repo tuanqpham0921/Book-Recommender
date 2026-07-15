@@ -168,6 +168,16 @@ docker-clean-all:
 tests:
 	poetry run pytest -s tests/unit/
 
+# in-process API tests: real FastAPI app over httpx ASGI transport, stores
+# faked via dependency_overrides — no DB or LLM needed, safe to run anywhere
+.PHONY: tests-integration
+tests-integration:
+	poetry run pytest -s tests/integration/
+
+.PHONY: tests-all
+tests-all:
+	poetry run pytest -s tests/unit/ tests/integration/
+
 .PHONY: typecheck
 typecheck:
 	poetry run pyright

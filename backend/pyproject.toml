@@ -24,7 +24,7 @@ log_cli = true
 testpaths = ["tests"]
 markers = [
     "unit: fast, no I/O",
-    "integration: requires running services",
+    "integration: cross-layer tests (whole API routes in-process; faked stores, no services)",
 ]
 
 [tool.poetry.dependencies]

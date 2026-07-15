@@ -19,7 +19,9 @@ Ask for confirmation before reading large files
 ```bash
 poetry install                  # install dependencies
 make dev                        # start FastAPI with hot reload on :8000
-make tests                      # run unit + integration tests
+make tests                      # run unit tests (tests/unit/)
+make tests-integration          # in-process API tests (tests/integration/) — faked stores, no services needed
+make tests-all                  # both of the above
 poetry run pytest -s tests/unit/path/to/test_file.py  # run a single test
 make ingestion                  # run the book data ingestion script
 make postgres-start             # start PostgreSQL via Docker Compose
