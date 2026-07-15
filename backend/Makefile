@@ -72,12 +72,13 @@ postgres-query:
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)$(or $(FILE),data/sql_dev_commands.sql)
 
+BACKUP_FILE ?= $(MAKEFILE_DIR)data/backup.sql
 # restore plain-SQL backup (data/backup.sql) into the compose postgres container
 .PHONY: postgres-restore
 postgres-restore:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup.sql
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(BACKUP_FILE)
 
 # dump the postgres data to a file (overwrites existing backup.sql)
 # currently throw an error because entry point init and backup does have IF NOT EXISTS
@@ -222,14 +223,3 @@ include $(MAKEFILE_DIR)evals/makefile
 # lint:
 # 	poetry run ruff check --fix clients/ tests/unit/clients/
 #   poetry run black common/utils/ tests/unit/common/utils/
-
-# -------------------
-# Evals commands
-# -------------------
-
-# run the chat_runs eval summary (total/avg tokens & duration, ok vs not-ok, runtime_error counts)
-.PHONY: chat-runs-eval
-chat-runs-eval:
-	set -a && . $(ENV_FILE) && set +a && \
-	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)db/chat_run_eval.sql
