@@ -25,4 +25,5 @@ logs/
 # Evals
 chat_runs*.sql
 feedback_*.sql
+chat_run*
 log.txt
