@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documentation Map & Conventions
+
+- **`docs/`** is the durable planning layer: [roadmap](docs/roadmap.md), [backlog](docs/backlog.md), [eval strategy](docs/eval-strategy.md), and design decision records (`docs/design/`). The `TODO.md` files in `backend/`/`frontend/` are ephemeral scratchpads only. Eval campaign outputs stay in `backend/evals/results/`.
+- **Read the nearest folder's `README.md` before making changes there** — most backend/frontend folders have one with the local context (e.g. `backend/app/`, `backend/app/domains/`, `backend/db/`, `backend/evals/`, `backend/playground/`, `frontend/src/`).
+- **Keep docs in sync**: a change to routes, the node registry, enums, or the request flow must update the nearest README, this file's architecture section, and the relevant `docs/` file in the same change.
+
 ## Files to Avoid Reading
 
 To save tokens, do not read these unless the task specifically requires it:
@@ -32,9 +38,9 @@ make query-suite                # POST the base eval suite at a running backend 
 make query-suite-all            # fire all 4 eval suites concurrently
 ```
 
-Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), the post-processor `evals/eval.py` (`make suite-eval` — joins `test_runs ⋈ chat_runs`, diffs accepted goal types against each case's `expected_nodes`, saves a report to `evals/results/`), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
+Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), the post-processor `evals/eval.py` (`make suite-eval` — joins `test_runs ⋈ chat_runs`, diffs accepted goal types against each case's `expected_nodes`, saves a report to `evals/results/`), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`. **This suite/expected_nodes diff is the project's golden-test mechanism** — strategy and growth plan in [docs/eval-strategy.md](docs/eval-strategy.md).
 
-Environment config lives at `config/.env` (see `config/README` for structure).
+Environment config lives at `config/.env` (see `config/README.md` for structure).
 
 ### Frontend (run from `frontend/`)
 
@@ -59,24 +65,28 @@ Instead of a fixed routing graph, this system uses **LLM-driven preplanning**: t
 
 **Tradeoff:** Two LLM calls (parse + classify) before real work starts. Acceptable for a chatbot where latency expectations are relaxed.
 
-### Planner Pipeline (`app/orchestration/planner/`)
+### Planner Pipeline (`app/domains/planner/`)
 
-1. **`parse_intent.py` (`InitialParseWorkflow`)** — sends the user message to the LLM with all available tool schemas (descriptions come from docstrings on the node classes). Returns a list of goals with IDs.
-2. **`strategy_classification.py` (`StrategyClassificationWorkflow`)** — takes those goals, loads the matching tools, and has the LLM select strategies via semantic understanding. The LLM can reject goals and resolves dependencies to produce an ordered execution plan.
-3. **`PlannerWorkflow`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, streams it to the frontend, then instantiates the node classes and runs them with the parsed arguments.
+1. **`parse_intent.py` (`InitialParseWorkflow`)** — sends the user message to the LLM with all available tool schemas (descriptions come from docstrings on the node request-schema classes). Returns a list of goals with IDs.
+2. **`strategy_classification.py` (`StrategyClassificationWorkflow`)** — takes those goals, loads the matching tools, and has the LLM select strategies via semantic understanding. The LLM can reject goals and resolves dependencies to produce an ordered execution plan (topological sort, cycle rejection).
+3. **`PlannerWorkflow`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, and streams it plus the goal list to the frontend. (Task execution happens in `TaskRunnerWorkflow`, currently disabled — see Request Flow below.)
 
-Node implementations live in `app/domains/` keyed by `NodeTypeEnum`. `app/registry.py` maps type strings to classes.
+Node **request schemas** live in `app/domains/` keyed by `NodeTypeEnum`; `app/registry.py` maps type strings to classes. Schemas describe *what* to do; **executors** (the *how*) are looked up separately via `EXECUTORS_CLS_MAPPING` in the same file — currently pointing at the **mock executors** in `playground/app_mock/` until real ones are built. The "PLAYGROUND EXTENSION" block at the bottom of `registry.py` folds ~18 scaling-test node types into the live registry; it is a deliberate **manual comment-toggle** (currently enabled) — see `backend/playground/README.md`.
 
-**Adding a new capability:** add a node class under the appropriate domain, register it in `app/registry.py`, and define its `BookNodeTypeEnum` entry — the planner picks it up automatically via the tool-loading step.
+**Adding a new capability:** see the step-by-step recipe in `backend/app/domains/README.md` (enum entry → request schema with LLM-facing docstring → registry → executor mapping → eval cases). The planner picks it up automatically via the tool-loading step. The V1 node set is a settled decision: [docs/design/node-taxonomy-v1.md](docs/design/node-taxonomy-v1.md).
 
 ### Request Flow
 
 1. **Frontend** sends a chat message via SSE to `POST /session/{id}/message`
 2. **`Orchestrator`** (`app/orchestration/orchestrator.py`) builds a `RequestContext` and delegates to `PlannerWorkflow`
-3. **`PlannerWorkflow`** runs the planner pipeline (parse → classify → diagram → execute)
+3. **`PlannerWorkflow`** runs the planner pipeline (parse → classify → diagram)
 4. Results stream back to the client via **SSEStream** (`app/common/sse_stream.py`)
 
-**Current state:** `TaskRunnerWorkflow` (`app/domains/task_runner.py`) — the step that would actually execute the classified strategies — is implemented but currently commented out in `Orchestrator.run`. Today's request flow only runs the planner pipeline through diagram generation; it does not yet execute tasks end-to-end.
+**Current state:** `TaskRunnerWorkflow` (`app/domains/task_runner.py`) — the step that would actually execute the classified strategies — is implemented but currently commented out in `Orchestrator.run`. Today's request flow only runs the planner pipeline through diagram generation; it does not yet execute tasks end-to-end. Conversation is **single-turn**: each request is processed statelessly (turns are recorded to `chat_runs` but never read back).
+
+### API Surface
+
+`GET /health` · `GET /ping` · `GET /ready` — health/readiness. `POST /session/new` — mints a session id. `POST /session/{session_id}/message` — SSE chat. `GET /chat_runs` — review queue (least-reviewed first). `PUT /feedback/review` — upsert one review per (chat_id, session_id). `GET /feedback?chat_id=` — list reviews for a run. That is the whole surface — there is no `/add_feedback` and no `/chat_runs/tests`. No auth exists yet (pre-deploy blocker, docs/backlog.md).
 
 ### Workflow / Operation Pattern
 
@@ -110,7 +120,7 @@ Infrastructure abstractions in `common/` that centralize logging, error catching
 
 ### Frontend
 
-- Single-page React app — one route `/` and `/blog` both render `BookRecommenderPage`
+- Single-page React app — `/`, `/blog`, and `/review` all render `BookRecommenderPage`, which maps the path to a view (chat / blog post / review queue); see `frontend/src/README.md`
 - `src/api.js` — all backend calls; uses `VITE_API_URL`; SSE streaming handled in the chat component
 - State management uses `use-immer` for complex nested state
 - Mermaid diagrams rendered client-side with pan/zoom via `@panzoom/panzoom`
