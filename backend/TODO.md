@@ -1,7 +1,4 @@
 Continue:
-    * dump current chat_runs, and feedback
-    * run everything again minimally, just parse intent
-        * format the system goals correctly
 
     * understand the integration tests more
         * how I set up a away to mock end-to-end tests
@@ -16,7 +13,6 @@ Continue:
         * need to add arguments in and out like a function
         * this can help the llm for both
     
-    * make a basic stats generator for chat_runs and feed_back
 
     * this is a good golden test suites
         * so go in and lable them better for automatic tests
@@ -28,10 +24,6 @@ Continue:
         * maybe have a build in chat id, which it does already (number)
             * need to show the chats descriptions and notes
 
-    * maybe remove all session feedback page
-        * have a better feedback page (show the system goals)
-        * probably just search by session id
-        * always show the system goals first
         * make the praise and issue optional
 
     * There's a semaphores bug (also try lowering it and see)
