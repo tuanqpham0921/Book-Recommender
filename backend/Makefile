@@ -72,12 +72,13 @@ postgres-query:
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)$(or $(FILE),data/sql_dev_commands.sql)
 
+BACKUP_FILE ?= $(MAKEFILE_DIR)data/backup.sql
 # restore plain-SQL backup (data/backup.sql) into the compose postgres container
 .PHONY: postgres-restore
 postgres-restore:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup.sql
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(BACKUP_FILE)
 
 # dump the postgres data to a file (overwrites existing backup.sql)
 # currently throw an error because entry point init and backup does have IF NOT EXISTS
@@ -88,25 +89,13 @@ postgres-dump:
 		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB > $(MAKEFILE_DIR)data/backup.sql
 	@echo "PostgreSQL data dumped to $(MAKEFILE_DIR)data/backup.sql"
 
-# restore the postgres data from a file
-.PHONY: postgres-restore-data
-postgres-restore-data:
+# restore the postgres books data from a file
+.PHONY: postgres-restore-books
+postgres-restore-books:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup.sql
-	@echo "PostgreSQL data restored from $(MAKEFILE_DIR)data/backup.sql"
-
-# restore an old-format eval dump pair (newest chat_runs_*.sql + feedback_*.sql
-# in DIR, data-only --column-inserts, pre-review-queue schema) into the current
-# schema: legacy chat_runs columns are discarded, feedback rows are folded into
-# review rows (raw copies archived in feedback_legacy). Re-running skips rows
-# that are already present.
-# usage: make postgres-restore-eval DIR=data/eval/dev_e5abcf65_scaling
-.PHONY: postgres-restore-eval
-postgres-restore-eval:
-	set -a && . $(ENV_FILE) && set +a && \
-	POSTGRES_CONTAINER=$(POSTGRES_CONTAINER) \
-		$(MAKEFILE_DIR)scripts/restore_eval_dump.sh $(MAKEFILE_DIR)$(DIR)
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)data/backup/backup.sql
+	@echo "PostgreSQL data restored from $(MAKEFILE_DIR)data/backup/backup.sql
 
 # dump chat_runs data to a timestamped .sql file (data only, restorable via psql <)
 .PHONY: postgres-dump-chat-runs
@@ -126,14 +115,43 @@ postgres-dump-feedback:
 		> $(MAKEFILE_DIR)data/feedback_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "feedback dumped to $(MAKEFILE_DIR)data/"
 
+# dump test_runs data to a timestamped .sql file (data only, restorable via psql <)
+# — the suite/case links written by evals/run_suites.py, keyed by chat_id
+.PHONY: postgres-dump-test-runs
+postgres-dump-test-runs:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB --table=test_runs --data-only --column-inserts \
+		> $(MAKEFILE_DIR)data/test_runs_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "test_runs dumped to $(MAKEFILE_DIR)data/"
+
+# dump chat_runs plus every table FK'd to it (feedback, test_runs) into ONE
+# timestamped .sql file, so the set is restored/moved together. pg_dump
+# topo-sorts data-only dumps by FK dependency, so chat_runs's INSERTs land
+# before feedback's/test_runs's in the file — required since these are plain
+# (non-deferred) constraints: a referencing row inserted before its chat_runs
+# row would fail. Restore with: make postgres-query FILE=data/<this file>
+.PHONY: postgres-dump-chat-runs-cascade
+postgres-dump-chat-runs-cascade:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		pg_dump -U $$POSTGRES_USER -d $$POSTGRES_DB \
+			--table=chat_runs --table=feedback --table=test_runs \
+			--data-only --column-inserts \
+		> $(MAKEFILE_DIR)data/chat_runs_cascade_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "chat_runs + feedback + test_runs dumped to $(MAKEFILE_DIR)data/"
+
 # wipe all recorded chat runs (dev convenience — irreversible)
+# CASCADE: feedback.chat_id and test_runs.chat_id both reference chat_runs,
+# and TRUNCATE refuses a table with incoming FK references (even empty ones)
+# unless told to cascade — this also empties feedback and test_runs.
 # NOTE: for dev
 .PHONY: postgres-clear-chat-runs
 postgres-clear-chat-runs:
 	set -a && . $(ENV_FILE) && set +a && \
 	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE chat_runs;"
-	@echo "chat_runs table cleared"
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE chat_runs CASCADE;"
+	@echo "chat_runs table cleared (feedback, test_runs cascaded)"
 
 # wipe all recorded feedback (dev convenience — irreversible)
 # NOTE: for dev
@@ -144,11 +162,16 @@ postgres-clear-feedback:
 		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE feedback;"
 	@echo "feedback table cleared"
 
-# wipe all recorded chat runs and feedback (dev convenience — irreversible)
-.PHONY: postgres-logs-clear
-postgres-logs-clear:
-	make postgres-clear-feedback
-	make postgres-clear-chat-runs
+# wipe all recorded suite/case links (dev convenience — irreversible).
+# Standalone use only — postgres-clear-chat-runs already cascades into this
+# table, so postgres-logs-clear doesn't need to call it too.
+# NOTE: for dev
+.PHONY: postgres-clear-test-runs
+postgres-clear-test-runs:
+	set -a && . $(ENV_FILE) && set +a && \
+	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
+		psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c "TRUNCATE TABLE test_runs;"
+	@echo "test_runs table cleared"
 
 # -------------------
 # Docker commands
@@ -168,6 +191,16 @@ docker-clean-all:
 tests:
 	poetry run pytest -s tests/unit/
 
+# in-process API tests: real FastAPI app over httpx ASGI transport, stores
+# faked via dependency_overrides — no DB or LLM needed, safe to run anywhere
+.PHONY: tests-integration
+tests-integration:
+	poetry run pytest -s tests/integration/
+
+.PHONY: tests-all
+tests-all:
+	poetry run pytest -s tests/unit/ tests/integration/
+
 .PHONY: typecheck
 typecheck:
 	poetry run pyright
@@ -181,24 +214,12 @@ local-end-to-end-test:
 	./tests/scripts/local_end_to_end_test.sh
 
 # Query-suite / eval-run commands (query-suite, query-suite-all, ...) live in
-# data/eval/makefile — the gitignored personal eval area. Pulled in here so they
-# still run as `make query-suite-all` from backend/ (cwd stays backend/, so the
-# relative suite/log paths in those recipes resolve). `-include` (leading hyphen)
-# means make won't error if that gitignored file is absent on a fresh checkout.
--include $(MAKEFILE_DIR)data/eval/makefile
+# evals/makefile, next to the suite JSONs and runner they drive. Pulled in here
+# so they still run as `make query-suite-all` from backend/ (cwd stays backend/,
+# so the relative suite/log paths in those recipes resolve).
+include $(MAKEFILE_DIR)evals/makefile
 
 # .Phony: lint
 # lint:
 # 	poetry run ruff check --fix clients/ tests/unit/clients/
 #   poetry run black common/utils/ tests/unit/common/utils/
-
-# -------------------
-# Evals commands
-# -------------------
-
-# run the chat_runs eval summary (total/avg tokens & duration, ok vs not-ok, runtime_error counts)
-.PHONY: chat-runs-eval
-chat-runs-eval:
-	set -a && . $(ENV_FILE) && set +a && \
-	docker exec -i -e PGPASSWORD=$$POSTGRES_PASSWORD $(POSTGRES_CONTAINER) \
-		psql -U $$POSTGRES_USER -d $$POSTGRES_DB < $(MAKEFILE_DIR)db/chat_run_eval.sql

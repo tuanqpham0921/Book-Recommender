@@ -1,8 +1,10 @@
 Continue:
-    make sure to dump this feedback and chat run migration
-    * feedback page
-        test this some more
-        merge back to test_orchestration
+
+    * understand the integration tests more
+        * how I set up a away to mock end-to-end tests
+    * you should split up tests and queries better (endpoint)
+    * there should be structure inputs/ouputs and stuff
+
 
     why is npm run build not pushing to mine?
 
@@ -11,7 +13,6 @@ Continue:
         * need to add arguments in and out like a function
         * this can help the llm for both
     
-    * make a basic stats generator for chat_runs and feed_back
 
     * this is a good golden test suites
         * so go in and lable them better for automatic tests
@@ -23,10 +24,6 @@ Continue:
         * maybe have a build in chat id, which it does already (number)
             * need to show the chats descriptions and notes
 
-    * maybe remove all session feedback page
-        * have a better feedback page (show the system goals)
-        * probably just search by session id
-        * always show the system goals first
         * make the praise and issue optional
 
     * There's a semaphores bug (also try lowering it and see)

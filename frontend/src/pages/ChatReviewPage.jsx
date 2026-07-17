@@ -308,35 +308,6 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                         <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
                     </div>
 
-                    {feedback === null ? (
-                        <div className="text-xs text-[var(--text-muted)] italic mb-3">Loading reviews…</div>
-                    ) : (
-                        <>
-                            <ReviewEditor
-                                // Remount when this session's review appears/changes id so
-                                // the editor picks up the saved version as its baseline.
-                                key={ownReview?.id ?? 'new'}
-                                chatId={run.chat_id}
-                                sessionId={sessionId}
-                                ownReview={ownReview}
-                                onSubmitted={handleSubmitted}
-                            />
-
-                            {feedback.length > 0 && (
-                                <details className="mb-3" open>
-                                    <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">
-                                        Reviews ({feedback.length})
-                                    </summary>
-                                    <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-2 pr-1">
-                                        {feedback.map((entry) => (
-                                            <ReviewCard key={entry.id} review={entry} isOwn={entry.session_id === sessionId} />
-                                        ))}
-                                    </div>
-                                </details>
-                            )}
-                        </>
-                    )}
-
                     {errorDetail && (
                         <details className="mb-3">
                             <summary className="cursor-pointer text-[var(--accent-negative)] font-semibold">
@@ -345,17 +316,6 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                             <pre className="mt-1 p-2 bg-[var(--accent-negative-bg)] border border-[var(--accent-negative-border)] rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
                                 {errorDetail.traceback}
                             </pre>
-                        </details>
-                    )}
-
-                    {diagram && (
-                        <details className="mb-3">
-                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Task plan diagram</summary>
-                            <Suspense fallback={<div className="text-[var(--text-muted)] p-2">Loading diagram...</div>}>
-                                <div className="border border-[var(--border-light)] rounded p-2 mt-1">
-                                    <MermaidDiagram chart={diagram} className="w-full" />
-                                </div>
-                            </Suspense>
                         </details>
                     )}
 
@@ -413,6 +373,17 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                         </details>
                     )}
 
+                    {diagram && (
+                        <details className="mb-3">
+                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Task plan diagram</summary>
+                            <Suspense fallback={<div className="text-[var(--text-muted)] p-2">Loading diagram...</div>}>
+                                <div className="border border-[var(--border-light)] rounded p-2 mt-1">
+                                    <MermaidDiagram chart={diagram} className="w-full" />
+                                </div>
+                            </Suspense>
+                        </details>
+                    )}
+
                     <details>
                         <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Planner envelope</summary>
                         <pre className="mt-1 p-2 bg-[var(--bg-secondary)] border border-[var(--border-light)] rounded overflow-x-auto text-xs max-h-96 overflow-y-auto">
@@ -427,6 +398,35 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                                 {JSON.stringify(run.tasks, null, 2)}
                             </pre>
                         </details>
+                    )}
+
+                    {feedback === null ? (
+                        <div className="text-xs text-[var(--text-muted)] italic mb-3">Loading reviews…</div>
+                    ) : (
+                        <>
+                            <ReviewEditor
+                                // Remount when this session's review appears/changes id so
+                                // the editor picks up the saved version as its baseline.
+                                key={ownReview?.id ?? 'new'}
+                                chatId={run.chat_id}
+                                sessionId={sessionId}
+                                ownReview={ownReview}
+                                onSubmitted={handleSubmitted}
+                            />
+
+                            {feedback.length > 0 && (
+                                <details className="mb-3" open>
+                                    <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">
+                                        Reviews ({feedback.length})
+                                    </summary>
+                                    <div className="mt-2 max-h-64 overflow-y-auto flex flex-col gap-2 pr-1">
+                                        {feedback.map((entry) => (
+                                            <ReviewCard key={entry.id} review={entry} isOwn={entry.session_id === sessionId} />
+                                        ))}
+                                    </div>
+                                </details>
+                            )}
+                        </>
                     )}
                 </div>
             )}

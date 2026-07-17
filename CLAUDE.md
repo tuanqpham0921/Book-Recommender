@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 To save tokens, do not read these unless the task specifically requires it:
 
 - **Log files** (`backend/logs/` — `*.log` and chat-run JSON dumps): skip unless the task is formatting or restructuring the logs themselves.
-- **SQL backups/dumps** (`backend/data/*.sql`, e.g. `backup.sql`): never read these. The schema init SQL in `backend/db/schema/` (extensions/tables/indexes) is fine to read.
+- **SQL backups/dumps** (`backend/data/*.sql`, e.g. `backup.sql`; `backend/evals/results/**/*.sql` raw eval dumps): never read these. The schema init SQL in `backend/db/schema/` (extensions/tables/indexes) is fine to read.
 
 If a file is in gitignore, you probably don't need to read it.
 Ask for confirmation before reading large files
@@ -19,14 +19,20 @@ Ask for confirmation before reading large files
 ```bash
 poetry install                  # install dependencies
 make dev                        # start FastAPI with hot reload on :8000
-make tests                      # run unit + integration tests
+make tests                      # run unit tests (tests/unit/)
+make tests-integration          # in-process API tests (tests/integration/) — faked stores, no services needed
+make tests-all                  # both of the above
 poetry run pytest -s tests/unit/path/to/test_file.py  # run a single test
 make ingestion                  # run the book data ingestion script
 make postgres-start             # start PostgreSQL via Docker Compose
 make postgres-stop              # stop PostgreSQL container
 make postgres-restore           # restore data from data/backup.sql
 make postgres-cli               # open psql shell
+make query-suite                # POST the base eval suite at a running backend (make dev first)
+make query-suite-all            # fire all 4 eval suites concurrently
 ```
+
+Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), the post-processor `evals/eval.py` (`make suite-eval` — joins `test_runs ⋈ chat_runs`, diffs accepted goal types against each case's `expected_nodes`, saves a report to `evals/results/`), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
 
 Environment config lives at `config/.env` (see `config/README` for structure).
 
