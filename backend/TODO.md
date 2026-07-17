@@ -1,12 +1,33 @@
+Current plan:
+    * figure out what nodes you need/want for v1 before golden tests
+        * 1 dimension high priority db query only
+            * so retrieve author, titles, isbn, genere
+            * no cross columns
+        * just recommendation only, no compare or analyze by themes
+        * V1 is more about having infrastrure nodes(?)
+            * so feedbacks, rejection nodes, explanation nodes
+            * continunations, and handling context chat messages
+            * just the 1 dimension retrieval and recommend is enough
+            * making sure rejection of unsupported/unimplemented nodes is addressed correctly
+            * the idea is to show case the planner more than the book recommendation
+                * it could technincally be anything rather than just book commendation
+task:
+    * get those 1 dimension retrieval in
+    * remove compare nodes, figure out your recommend and retrieval by traits
+        * maybe analyze is response generation that always get attached
+        * when the intent is to find books?
+    * make the prompt more generic and make the nodes smarter
+        * add examples in the description catalog
+        * it should be something like "you are a parse intent assistnant, you have access to these tools and that's it. select the tools to complete the user query."
+    * get the rejection and explanations/clarifcation nodes
+    * then you can update your golden tests and have automatic testings
+
 Continue:
 
     * understand the integration tests more
         * how I set up a away to mock end-to-end tests
     * you should split up tests and queries better (endpoint)
     * there should be structure inputs/ouputs and stuff
-
-
-    why is npm run build not pushing to mine?
 
     * add more info to the nodes
         * need example queries and parser (probably starts with just queries)
@@ -51,6 +72,9 @@ Polish
 =======================================================================
 
 Reminder:
+* overal the planner works, probably need better and smarter nodes
+* frontend and feedback works, there are probably minor bugs
+    * this can be polish later
 * don't add more frontend features, you should be reducing features
 * changing review path still finish the query
     * expected? since it's not refreshing the page for a new session
