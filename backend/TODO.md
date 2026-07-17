@@ -122,11 +122,6 @@ Ideas:
 
 =======================================================================
 
-lower priority:
-* test your ingestion (need to re-write to use workflow)
-
-=======================================================================
-
 Features (not in code):
 * do openAI always make new lines at the end?
 3. goal is to test and see the ochestration router
