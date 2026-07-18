@@ -13,17 +13,32 @@ logger = logging.getLogger(__name__)
 
 
 class CompareStrategy(AnalyzeBaseRequest):
-    """Contrast two or more named books — the analyze step when the user asks how titles differ or relate.
+    """Purpose: Contrast two or more named books — the analyze step when the user asks how titles differ or relate.
 
-    Use when the user wants a side-by-side read on specific books, not when they want new suggestions
-    (Recommendation) or only want to find a single title (FindByTitle / FindByISBN13).
-    Common cases:
-      - Direct compare: "Compare X and Y, "how are X and Y different"
-      - Criteria-focused: "compare their themes", "which is longer / darker / more literary"
-      - Multi-book: three or more titles → separate retrieval per book; depends_on lists all of them.
+    Args:
+        comparison_criteria: The user's comparison lens (theme, tone, length,
+            style, etc.) when stated; omit when they only want a general comparison.
+        depends_on: Task ids of the prior retrieval steps, one per book being
+            compared (minimum 2).
 
-    comparison_criteria holds the user's comparison lens (theme, tone, length, style, etc.) when stated;
-    omit it when they only ask for a general comparison.
+    Returns: Markdown-formatted comparison text, used directly as the assistant's reply.
+
+    Use when: the user wants a side-by-side read on specific named books.
+
+    Do not use: when they want new suggestions instead (Analyze_Recommend), or
+    only want to find a single title (Retrieve_by_Title / Retrieve_by_ISBN13).
+
+    Constraints: requires at least 2 task ids in depends_on — refuses itself
+    otherwise. Three or more titles → one retrieval per book, depends_on lists
+    all of them.
+
+    Example queries:
+        - "Compare X and Y"
+        - "how are X and Y different"
+        - "compare their themes"
+        - "which is longer / darker / more literary"
+
+    Example call: {"comparison_criteria": "tone", "depends_on": ["task_1", "task_2"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.COMPARE] = BookNodeTypeEnum.COMPARE
@@ -41,21 +56,40 @@ class CompareStrategy(AnalyzeBaseRequest):
 
 
 class RecommendationStrategy(AnalyzeBaseRequest):
-    """Suggest books that fit the user's ask — the analyze step for most recommendation queries.
+    """Purpose: Suggest books that fit the user's ask — the analyze step for most recommendation queries.
 
-    Use when the user wants new titles to read, not when they only want to look up a known book
-    or an author's/genre's full catalog (Retrieve_by_Author / Retrieve_by_Genre). This node does
-    not query the database itself — it reasons over retrieved books (depends_on) and/or the
-    user's stated taste; it never carries its own filters.
-    Common cases:
-      - Similarity: "books like X", "more like X or Y books" → reference_books with those
-      - Thematic / mood: "cozy mysteries", "epic sci-fi with strong world-building" → semantic_input
-        for theme, tone, or concept
-      - Mixed: named anchor book(s) plus a twist ("like X but darker/shorter") → reference_books
-        plus semantic_input; depends_on on lookups for the named books.
+    Args:
+        semantic_input: Thematic/conceptual description from the query (theme,
+            tone, or mood) — not titles, authors, or genres.
+        reference_books: Book titles to base recommendations on (deduplicated
+            automatically).
+        depends_on: Task ids of prior retrieval steps this recommendation reasons
+            over (e.g. lookups for any named reference_books).
 
-    semantic_input is for themes and mood only — not titles, authors, or genres (those are
-    Retrieve_by_Title / Retrieve_by_Author / Retrieve_by_Genre).
+    Returns: Markdown-formatted recommendation text, used directly as the assistant's reply.
+
+    Use when: the user wants new titles to read.
+        - Similarity: "books like X", "more like X or Y books" → reference_books
+        - Thematic / mood: "cozy mysteries", "epic sci-fi with strong world-building" → semantic_input
+        - Mixed: named anchor book(s) plus a twist ("like X but darker/shorter")
+          → reference_books plus semantic_input
+
+    Do not use: when they only want to look up a known book or an author's/genre's
+    full catalog (Retrieve_by_Author / Retrieve_by_Genre) instead of suggestions.
+
+    Constraints: does not carry its own database filters — it reasons over
+    retrieved books (depends_on) and/or stated taste; requires at least 1 task
+    id in depends_on, so a supporting retrieval step is still needed even for
+    purely thematic requests with no named book.
+
+    Example queries:
+        - "books like Dune"
+        - "more like Dune or Foundation"
+        - "cozy mysteries"
+        - "epic sci-fi with strong world-building"
+        - "like Dune but darker and shorter"
+
+    Example call: {"semantic_input": "cozy and hopeful", "reference_books": ["The House in the Cerulean Sea"], "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION
@@ -74,12 +108,33 @@ class RecommendationStrategy(AnalyzeBaseRequest):
 
 
 class FindByTitleRetrieval(DomainRequest):
-    """Retrieve a single known book by its title from the database.
+    """Purpose: Retrieve a single known book by its title from the database.
 
-    Use when a specific title is named: "find Dune", "do you have The Great Gatsby".
-    authors is only a disambiguating hint here ("Dune by Frank Herbert") — when the
-    author is the actual subject of the search ("books by Frank Herbert"), use
-    Retrieve_by_Author instead.
+    Args:
+        title: Book title to search for.
+        authors: Optional author name(s), used only to disambiguate between
+            similarly titled books (e.g. "Dune" by Frank Herbert) — omit when the
+            author isn't a distinguishing detail.
+
+    Returns: A FindByTitleOutput — the searched title plus a list of matching
+    BookSummary records (isbn13, title, authors, categories, genre,
+    published_year, num_pages, average_rating, ratings_count, is_children).
+
+    Use when: a specific title is named — "find Dune", "do you have The Great Gatsby".
+
+    Do not use: when the author is the actual subject of the search ("books by
+    Frank Herbert" → Retrieve_by_Author), or when no specific title is named
+    (Retrieve_by_Genre / Analyze_Recommend).
+
+    Constraints: one title per node — for multiple named titles, emit one node
+    per title.
+
+    Example queries:
+        - "find Dune"
+        - "do you have The Great Gatsby"
+        - "Dune by Frank Herbert"
+
+    Example call: {"title": "Dune", "authors": ["Frank Herbert"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
@@ -90,9 +145,28 @@ class FindByTitleRetrieval(DomainRequest):
 
 
 class FindByISBN13Retrieval(DomainRequest):
-    """Retrieve a single book by its exact ISBN13 from the database.
+    """Purpose: Retrieve a single book by its exact ISBN13 from the database.
 
-    Use only when an ISBN13 is explicitly given or already known from a prior step.
+    Args:
+        isbn13: ISBN13 to search for.
+
+    Returns: A FindByISBN13Output — the searched isbn13 plus the matching
+    BookSummary, or null if not found.
+
+    Use when: an ISBN13 is explicitly given by the user, or already known from
+    a prior step's result.
+
+    Do not use: when only a title, author, or genre is known (Retrieve_by_Title
+    / Retrieve_by_Author / Retrieve_by_Genre instead) — the ISBN13 must be a
+    literal identifier already in hand.
+
+    Constraints: exactly one ISBN13 per node.
+
+    Example queries:
+        - "look up ISBN 9780441172719"
+        - "what book is 978-0-14-303943-3"
+
+    Example call: {"isbn13": "9780441172719"}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_ISBN13] = BookNodeTypeEnum.FIND_ISBN13
@@ -100,12 +174,31 @@ class FindByISBN13Retrieval(DomainRequest):
 
 
 class FindByAuthorRetrieval(DomainRequest):
-    """Retrieve books written by one or more named authors — an author's bibliography.
+    """Purpose: Retrieve books written by one or more named authors — an author's bibliography.
 
-    Use when the author is the subject of the search: "books by Ursula K. Le Guin",
-    "what else has Brandon Sanderson written", "show me some Agatha Christie".
-    Not for: a single named title where the author is only a hint ("Dune by Frank
-    Herbert" → Retrieve_by_Title), or taste-based suggestions (Analyze_Recommend).
+    Args:
+        authors: Author name(s) whose books to retrieve (at least one).
+
+    Returns: A FindByAuthorOutput — the searched authors plus a list of matching
+    BookSummary records.
+
+    Use when: the author is the subject of the search — "books by Ursula K. Le
+    Guin", "what else has Brandon Sanderson written", "show me some Agatha
+    Christie".
+
+    Do not use: for a single named title where the author is only a
+    disambiguating hint ("Dune by Frank Herbert" → Retrieve_by_Title), or
+    taste-based suggestions (Analyze_Recommend).
+
+    Constraints: multiple authors in one node are treated as one combined
+    bibliography search, not separate per-author searches.
+
+    Example queries:
+        - "books by Ursula K. Le Guin"
+        - "what else has Brandon Sanderson written"
+        - "show me some Agatha Christie"
+
+    Example call: {"authors": ["Ursula K. Le Guin"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_AUTHOR] = BookNodeTypeEnum.FIND_AUTHOR
@@ -115,12 +208,30 @@ class FindByAuthorRetrieval(DomainRequest):
 
 
 class FindByGenreRetrieval(DomainRequest):
-    """Retrieve books belonging to a named genre or category from the database.
+    """Purpose: Retrieve books belonging to a named genre or category from the database.
 
-    Use when genre is the primary axis of the search: "fantasy books", "any good
-    mysteries", "nonfiction about space". Not for: a themed or mood-based search that
-    isn't a clean genre label ("something cozy and hopeful" → Analyze_Recommend), or a
-    single known title (Retrieve_by_Title).
+    Args:
+        genre: Genre or category to search for.
+
+    Returns: A FindByGenreOutput — the searched genre plus a list of matching
+    BookSummary records.
+
+    Use when: genre is the primary axis of the search — "fantasy books", "any
+    good mysteries", "nonfiction about space".
+
+    Do not use: for a themed or mood-based search that isn't a clean genre label
+    ("something cozy and hopeful" → Analyze_Recommend), or a single known title
+    (Retrieve_by_Title).
+
+    Constraints: single genre per node — no cross-column filtering (e.g. genre
+    plus a rating threshold isn't supported in this node).
+
+    Example queries:
+        - "fantasy books"
+        - "any good mysteries"
+        - "nonfiction about space"
+
+    Example call: {"genre": "fantasy"}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_GENRE] = BookNodeTypeEnum.FIND_GENRE

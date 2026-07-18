@@ -6,13 +6,34 @@ from app.domains.project.node_types import ProjectNodeTypeEnum
 
 
 class FeedbackRequest(DomainRequest):
-    """Record the user's feedback, opinion, bug report, or suggestion about this app itself.
+    """Purpose: Record the user's feedback, opinion, bug report, or suggestion about this app itself.
 
-    Use when the user is commenting on the app/planner/experience: "this recommendation
-    tool is great", "the chat feels slow", "you should add X feature", "found a bug when
-    I asked about...". Not for: reacting to a specific bad recommendation by wanting
-    different books (that's a new Analyze_Recommend, not feedback), or asking questions
-    about the project rather than commenting on it (Retrieve_Project_Info).
+    Args:
+        contact_info: Optional contact info (email, phone, etc.) — fill only when
+            the user volunteers it, for a possible follow-up.
+        feedback: The user's feedback text.
+
+    Returns: Confirmation that the feedback was recorded.
+
+    Use when: the user is commenting on the app/planner/experience — "this
+    recommendation tool is great", "the chat feels slow", "you should add X
+    feature", "found a bug when I asked about...".
+
+    Do not use: for reacting to a specific bad recommendation by wanting
+    different books (that's a new Analyze_Recommend, not feedback), or asking
+    questions about the project rather than commenting on it
+    (Retrieve_Project_Info).
+
+    Constraints: feedback is required text; contact_info is optional and must
+    not be invented if the user didn't provide it.
+
+    Example queries:
+        - "this recommendation tool is great"
+        - "the chat feels slow"
+        - "you should add a dark mode"
+        - "found a bug when I asked about sci-fi books"
+
+    Example call: {"feedback": "The chat feels slow when comparing books.", "contact_info": "user@example.com"}
     """
 
     node_type: Literal[ProjectNodeTypeEnum.FEEDBACK] = ProjectNodeTypeEnum.FEEDBACK
@@ -26,7 +47,34 @@ class FeedbackRequest(DomainRequest):
 
 
 class ProjectInfoRequest(DomainRequest):
-    """request information about the app, tech stack, architecture, or project metadata (fields list)"""
+    """Purpose: Retrieve information about the app, tech stack, architecture, or project metadata.
+
+    Args:
+        fields: One or more ProjectInfoField values to retrieve (name,
+            description, technology_stack, project_url, project_github_url,
+            project_github_repo_name, project_github_repo_url, all).
+
+    Returns: The requested project metadata fields, rendered as a short
+    description of the project.
+
+    Use when: the user asks about the project itself — "what tech stack does
+    this use", "what is this app", "where's the GitHub repo", "tell me about
+    this project".
+
+    Do not use: when the user is commenting on or critiquing the app rather
+    than asking about it (Feedback).
+
+    Constraints: fields must come from ProjectInfoField; use "all" for a
+    general "tell me about this project" ask.
+
+    Example queries:
+        - "what tech stack does this use"
+        - "what is this app"
+        - "where's the GitHub repo"
+        - "tell me about this project"
+
+    Example call: {"fields": ["technology_stack"]}
+    """
 
     node_type: Literal[ProjectNodeTypeEnum.PROJECT_INFO] = ProjectNodeTypeEnum.PROJECT_INFO
     fields: list[ProjectInfoField] = Field(..., description="Fields to retrieve")

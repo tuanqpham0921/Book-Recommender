@@ -28,13 +28,29 @@ MAX_RATING = 5.0
 
 
 class FindSeriesRetrieval(DomainRequest):
-    """Retrieve every book belonging to a named series or saga.
+    """Purpose: Retrieve every book belonging to a named series or saga.
 
-    Use when the user refers to a series as a whole: "the Dune saga", "all the
-    Mistborn books", "the Narnia series". Pairs with Analyze_Reading_Order when
-    the user also asks what order to read them in.
-    Not for: one specific entry of a series ("find Dune" → Retrieve_by_Title) or
-    an author's unrelated works (Retrieve_by_Author).
+    Args:
+        series_name: Name of the series or saga.
+        author: Optional author hint to disambiguate same-named series.
+
+    Returns: The named series plus its books (title, ISBN13, position in series).
+
+    Use when: the user refers to a series as a whole — "the Dune saga", "all
+    the Mistborn books", "the Narnia series". Pairs with Analyze_Reading_Order
+    when the user also asks what order to read them in.
+
+    Do not use: for one specific entry of a series ("find Dune" →
+    Retrieve_by_Title) or an author's unrelated works (Retrieve_by_Author).
+
+    Constraints: one series per node.
+
+    Example queries:
+        - "the Dune saga"
+        - "all the Mistborn books"
+        - "the Narnia series"
+
+    Example call: {"series_name": "Mistborn", "author": "Brandon Sanderson"}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_SERIES] = BookNodeTypeEnum.FIND_SERIES
@@ -45,12 +61,29 @@ class FindSeriesRetrieval(DomainRequest):
 
 
 class AuthorInfoRetrieval(DomainRequest):
-    """Retrieve facts about an author as a person — bio, style, background.
+    """Purpose: Retrieve facts about an author as a person — bio, style, background.
 
-    Use when the author themself is the question: "who is Haruki Murakami",
+    Args:
+        author_name: Author to look up.
+        aspects: Specific angle when stated (biography, writing style,
+            influences, …).
+
+    Returns: A short profile of the author covering the requested aspects.
+
+    Use when: the author themself is the question — "who is Haruki Murakami",
     "tell me about Toni Morrison's background", "what is Le Guin known for".
-    Not for: listing their books (Retrieve_by_Author) or info about the person
-    who built this app (Retrieve_Developer_Info).
+
+    Do not use: for listing their books (Retrieve_by_Author) or info about the
+    person who built this app (Retrieve_Developer_Info).
+
+    Constraints: one author per node.
+
+    Example queries:
+        - "who is Haruki Murakami"
+        - "tell me about Toni Morrison's background"
+        - "what is Le Guin known for"
+
+    Example call: {"author_name": "Ursula K. Le Guin", "aspects": "writing style"}
     """
 
     node_type: Literal[BookNodeTypeEnum.AUTHOR_INFO] = BookNodeTypeEnum.AUTHOR_INFO
@@ -62,13 +95,33 @@ class AuthorInfoRetrieval(DomainRequest):
 
 
 class NewReleasesRetrieval(DomainRequest):
-    """Retrieve recently published books, optionally scoped by genre or other filters.
+    """Purpose: Retrieve recently published books, optionally scoped by genre or other filters.
 
-    Use for recency-framed asks: "what's new", "recent sci-fi releases",
+    Args:
+        since_year: Earliest publication year to include, when the user
+            implies one.
+        filters: Constraints on the returned books — BooksFilter (authors,
+            categories, keywords, genre, is_children, page/year/rating
+            ranges, sort_by, limit).
+
+    Returns: A list of matching books, most recent first (or per filters.sort_by).
+
+    Use when: recency-framed asks — "what's new", "recent sci-fi releases",
     "books that came out in the last couple of years".
-    Not for: a year range on an otherwise trait-driven search ("fantasy from the
-    90s" → Retrieve_by_Traits with year filters) or popularity framing
-    (Retrieve_Popular).
+
+    Do not use: for a year range on an otherwise trait-driven search ("fantasy
+    from the 90s" → Retrieve_by_Traits with year filters) or popularity
+    framing (Retrieve_Popular).
+
+    Constraints: since_year narrows the recency window; leave filters empty
+    for an unscoped "what's new" ask.
+
+    Example queries:
+        - "what's new"
+        - "recent sci-fi releases"
+        - "books that came out in the last couple of years"
+
+    Example call: {"since_year": 2024, "filters": {"categories": ["Science Fiction"]}}
     """
 
     node_type: Literal[BookNodeTypeEnum.NEW_RELEASES] = BookNodeTypeEnum.NEW_RELEASES
@@ -81,13 +134,32 @@ class NewReleasesRetrieval(DomainRequest):
 
 
 class PopularBooksRetrieval(DomainRequest):
-    """Retrieve widely read, highly rated books — what most people love.
+    """Purpose: Retrieve widely read, highly rated books — what most people love.
 
-    Use for popularity/consensus framing: "what's popular", "bestsellers",
+    Args:
+        filters: Constraints on the returned books — BooksFilter (authors,
+            categories, keywords, genre, is_children, page/year/rating
+            ranges, sort_by, limit).
+
+    Returns: A list of books ranked by rating and review count.
+
+    Use when: popularity/consensus framing — "what's popular", "bestsellers",
     "most loved fantasy books", "what does everyone recommend".
-    Not for: personalized suggestions from the user's taste (Analyze_Recommend),
-    a plain sort-by-rating trait search (Retrieve_by_Traits), or recency framing
-    (Retrieve_New_Releases).
+
+    Do not use: for personalized suggestions from the user's taste
+    (Analyze_Recommend), a plain sort-by-rating trait search
+    (Retrieve_by_Traits), or recency framing (Retrieve_New_Releases).
+
+    Constraints: filters is optional — leave empty for an unscoped "what's
+    popular" ask.
+
+    Example queries:
+        - "what's popular"
+        - "bestsellers"
+        - "most loved fantasy books"
+        - "what does everyone recommend"
+
+    Example call: {"filters": {"categories": ["Fantasy"], "sort_by": "rating"}}
     """
 
     node_type: Literal[BookNodeTypeEnum.POPULAR] = BookNodeTypeEnum.POPULAR
@@ -97,12 +169,32 @@ class PopularBooksRetrieval(DomainRequest):
 
 
 class RandomBookRetrieval(DomainRequest):
-    """Retrieve a random pick from the catalog — a surprise with no taste signal.
+    """Purpose: Retrieve a random pick from the catalog — a surprise with no taste signal.
 
-    Use when the user explicitly cedes the choice: "surprise me", "pick anything",
-    "random book please". Optional filters keep the surprise inside bounds the
-    user set ("surprise me with a short sci-fi").
-    Not for: asks that carry taste or mood ("something spooky" → Analyze_Recommend).
+    Args:
+        filters: Bounds for the random pick — BooksFilter (authors,
+            categories, keywords, genre, is_children, page/year/rating
+            ranges, limit).
+
+    Returns: A single randomly selected book within the given bounds.
+
+    Use when: the user explicitly cedes the choice — "surprise me", "pick
+    anything", "random book please". Optional filters keep the surprise inside
+    bounds the user set ("surprise me with a short sci-fi").
+
+    Do not use: for asks that carry taste or mood ("something spooky" →
+    Analyze_Recommend).
+
+    Constraints: filters is optional; sort_by/limit in filters are not
+    meaningful for a single random pick.
+
+    Example queries:
+        - "surprise me"
+        - "pick anything"
+        - "random book please"
+        - "surprise me with a short sci-fi"
+
+    Example call: {"filters": {"categories": ["Science Fiction"], "max_pages": 250}}
     """
 
     node_type: Literal[BookNodeTypeEnum.RANDOM] = BookNodeTypeEnum.RANDOM
@@ -116,13 +208,31 @@ class RandomBookRetrieval(DomainRequest):
 
 
 class SummarizeStrategy(AnalyzeBaseRequest):
-    """Summarize retrieved book(s) — plot, premise, or a focused angle.
+    """Purpose: Summarize retrieved book(s) — plot, premise, or a focused angle.
 
-    Use when the user wants to know what a book is about: "summarize X",
-    "what happens in X", "give me the gist of X". depends_on lists the
-    retrieval task(s) for the book(s) being summarized.
-    Not for: extracting themes/motifs (Analyze_Themes) or side-by-side
+    Args:
+        spoiler_free: Avoid plot spoilers unless the user asks for the full story.
+        focus: Specific angle to center the summary on, when stated.
+        depends_on: Task ids of the retrieval step(s) for the book(s) being
+            summarized.
+
+    Returns: A prose summary of the book(s), respecting spoiler_free and focus.
+
+    Use when: the user wants to know what a book is about — "summarize X",
+    "what happens in X", "give me the gist of X".
+
+    Do not use: for extracting themes/motifs (Analyze_Themes) or side-by-side
     contrast of several books (Analyze_Compare).
+
+    Constraints: requires at least 1 task id in depends_on — refuses itself
+    otherwise.
+
+    Example queries:
+        - "summarize Dune"
+        - "what happens in Dune"
+        - "give me the gist of Dune"
+
+    Example call: {"spoiler_free": true, "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.SUMMARIZE] = BookNodeTypeEnum.SUMMARIZE
@@ -135,13 +245,29 @@ class SummarizeStrategy(AnalyzeBaseRequest):
 
 
 class ThemesStrategy(AnalyzeBaseRequest):
-    """Extract the themes, motifs, or message of retrieved book(s).
+    """Purpose: Extract the themes, motifs, or message of retrieved book(s).
 
-    Use for interpretive asks about meaning: "what are the themes of X",
-    "what is X really about", "what's the message of X". depends_on lists the
-    retrieval task(s) for the book(s) analyzed.
-    Not for: plot recaps (Analyze_Summarize) or contrasting themes across books
-    (Analyze_Compare with comparison_criteria=themes).
+    Args:
+        aspect: Specific theme or motif the user asked about, when stated.
+        depends_on: Task ids of the retrieval step(s) for the book(s) analyzed.
+
+    Returns: A prose breakdown of the book(s)' themes, motifs, or message.
+
+    Use when: interpretive asks about meaning — "what are the themes of X",
+    "what is X really about", "what's the message of X".
+
+    Do not use: for plot recaps (Analyze_Summarize) or contrasting themes
+    across books (Analyze_Compare with comparison_criteria=themes).
+
+    Constraints: requires at least 1 task id in depends_on — refuses itself
+    otherwise.
+
+    Example queries:
+        - "what are the themes of Dune"
+        - "what is Dune really about"
+        - "what's the message of Dune"
+
+    Example call: {"aspect": "power and religion", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.THEMES] = BookNodeTypeEnum.THEMES
@@ -151,13 +277,30 @@ class ThemesStrategy(AnalyzeBaseRequest):
 
 
 class ReadingOrderStrategy(AnalyzeBaseRequest):
-    """Order a set of retrieved books into the sequence they should be read.
+    """Purpose: Order a set of retrieved books into the sequence they should be read.
 
-    Use for "what order" asks: "in what order should I read the Dune books",
-    "where do I start with Discworld". depends_on lists the series or title
-    retrieval task(s) providing the books to order.
-    Not for: picking which books to read at all (Analyze_Recommend) or building
-    a schedule over time (Analyze_Reading_Plan).
+    Args:
+        order_preference: Ordering convention the user asked for, when stated
+            (publication, chronological, recommended).
+        depends_on: Task ids of the series or title retrieval step(s)
+            providing the books to order.
+
+    Returns: The books in the resolved reading order, with the convention used.
+
+    Use when: "what order" asks — "in what order should I read the Dune
+    books", "where do I start with Discworld".
+
+    Do not use: for picking which books to read at all (Analyze_Recommend) or
+    building a schedule over time (Analyze_Reading_Plan).
+
+    Constraints: requires at least 1 task id in depends_on — refuses itself
+    otherwise.
+
+    Example queries:
+        - "in what order should I read the Dune books"
+        - "where do I start with Discworld"
+
+    Example call: {"order_preference": "publication", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_ORDER] = BookNodeTypeEnum.READING_ORDER
@@ -167,13 +310,30 @@ class ReadingOrderStrategy(AnalyzeBaseRequest):
 
 
 class ReadingLevelStrategy(AnalyzeBaseRequest):
-    """Assess age-appropriateness or difficulty of retrieved book(s).
+    """Purpose: Assess age-appropriateness or difficulty of retrieved book(s).
 
-    Use for suitability asks: "is X okay for a 10-year-old", "how hard a read is
-    X", "is X appropriate for my class". depends_on lists the retrieval task(s)
-    for the book(s) assessed.
-    Not for: finding children's books in the first place (Retrieve_by_Traits
-    with is_children).
+    Args:
+        reader_context: Who the book is for, in the user's words (age, grade,
+            sensitivities).
+        depends_on: Task ids of the retrieval step(s) for the book(s) assessed.
+
+    Returns: An assessment of the book(s)' suitability/difficulty for reader_context.
+
+    Use when: suitability asks — "is X okay for a 10-year-old", "how hard a
+    read is X", "is X appropriate for my class".
+
+    Do not use: for finding children's books in the first place
+    (Retrieve_by_Traits with is_children).
+
+    Constraints: requires at least 1 task id in depends_on — refuses itself
+    otherwise.
+
+    Example queries:
+        - "is Dune okay for a 10-year-old"
+        - "how hard a read is Dune"
+        - "is this appropriate for my class"
+
+    Example call: {"reader_context": "10-year-old, advanced reader", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LEVEL] = BookNodeTypeEnum.READING_LEVEL
@@ -183,13 +343,31 @@ class ReadingLevelStrategy(AnalyzeBaseRequest):
 
 
 class ReadingTimeStrategy(AnalyzeBaseRequest):
-    """Estimate how long retrieved book(s) will take to finish.
+    """Purpose: Estimate how long retrieved book(s) will take to finish.
 
-    Use for time asks: "how long will X take me", "can I finish X in a weekend",
-    "how many hours is X". depends_on lists the retrieval task(s) for the
-    book(s) estimated.
-    Not for: filtering by page count (Retrieve_by_Traits) or planning multiple
-    books over time (Analyze_Reading_Plan).
+    Args:
+        minutes_per_day: Daily reading time the user stated, in minutes.
+        reading_speed: Reading speed the user stated about themself (slow,
+            average, fast).
+        depends_on: Task ids of the retrieval step(s) for the book(s) estimated.
+
+    Returns: An estimated time-to-finish for the book(s), given the stated pace.
+
+    Use when: time asks — "how long will X take me", "can I finish X in a
+    weekend", "how many hours is X".
+
+    Do not use: for filtering by page count (Retrieve_by_Traits) or planning
+    multiple books over time (Analyze_Reading_Plan).
+
+    Constraints: requires at least 1 task id in depends_on — refuses itself
+    otherwise.
+
+    Example queries:
+        - "how long will Dune take me"
+        - "can I finish Dune in a weekend"
+        - "how many hours is Dune"
+
+    Example call: {"minutes_per_day": 30, "reading_speed": "average", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_TIME] = BookNodeTypeEnum.READING_TIME
@@ -202,14 +380,31 @@ class ReadingTimeStrategy(AnalyzeBaseRequest):
 
 
 class ReadingPlanStrategy(AnalyzeBaseRequest):
-    """Build a multi-book reading plan toward a stated goal or timeframe.
+    """Purpose: Build a multi-book reading plan toward a stated goal or timeframe.
 
-    Use when the user wants a sequenced program, not a one-off pick: "get me
-    into Russian classics over three months", "a plan to read more non-fiction
-    this year". depends_on lists the retrieval/recommendation task(s) supplying
-    candidate books.
-    Not for: a single suggestion (Analyze_Recommend) or ordering an existing
-    series (Analyze_Reading_Order).
+    Args:
+        plan_goal: What the plan should achieve, in the user's words.
+        timeframe: Duration or deadline the user stated (e.g. "3 months").
+        depends_on: Task ids of the retrieval/recommendation step(s) supplying
+            candidate books for the plan.
+
+    Returns: A sequenced, multi-book reading plan toward plan_goal within timeframe.
+
+    Use when: the user wants a sequenced program, not a one-off pick — "get me
+    into Russian classics over three months", "a plan to read more
+    non-fiction this year".
+
+    Do not use: for a single suggestion (Analyze_Recommend) or ordering an
+    existing series (Analyze_Reading_Order).
+
+    Constraints: requires at least 1 task id in depends_on — refuses itself
+    otherwise.
+
+    Example queries:
+        - "get me into Russian classics over three months"
+        - "a plan to read more non-fiction this year"
+
+    Example call: {"plan_goal": "read more Russian classics", "timeframe": "3 months", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_PLAN] = BookNodeTypeEnum.READING_PLAN
@@ -224,12 +419,27 @@ class ReadingPlanStrategy(AnalyzeBaseRequest):
 
 
 class SaveToReadingListAction(DomainRequest):
-    """Add named book(s) to the user's reading list.
+    """Purpose: Add named book(s) to the user's reading list.
 
-    Use for save intents: "add X to my list", "save that for later",
-    "I want to read X eventually".
-    Not for: marking a book finished (Mark_Book_As_Read) or asking what is on
-    the list (Retrieve_Reading_List).
+    Args:
+        titles: Book titles to add (deduplicated automatically).
+
+    Returns: Confirmation that the title(s) were added to the reading list.
+
+    Use when: save intents — "add X to my list", "save that for later", "I
+    want to read X eventually".
+
+    Do not use: for marking a book finished (Mark_Book_As_Read) or asking
+    what is on the list (Retrieve_Reading_List).
+
+    Constraints: at least 1 title required.
+
+    Example queries:
+        - "add Dune to my list"
+        - "save that for later"
+        - "I want to read Dune eventually"
+
+    Example call: {"titles": ["Dune"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LIST_ADD] = BookNodeTypeEnum.READING_LIST_ADD
@@ -241,12 +451,28 @@ class SaveToReadingListAction(DomainRequest):
 
 
 class ViewReadingListRetrieval(DomainRequest):
-    """Show the user's reading list, optionally filtered by status.
+    """Purpose: Show the user's reading list, optionally filtered by status.
 
-    Use for list reads: "what's on my reading list", "show my saved books",
-    "what am I currently reading".
-    Not for: reading statistics (Retrieve_Reading_Stats) or general account
-    info (Retrieve_User_Info).
+    Args:
+        status: Only show entries with this status, when the user asks
+            (want_to_read, reading, finished).
+
+    Returns: The user's reading list entries matching status (or all, if unset).
+
+    Use when: list reads — "what's on my reading list", "show my saved
+    books", "what am I currently reading".
+
+    Do not use: for reading statistics (Retrieve_Reading_Stats) or general
+    account info (Retrieve_User_Info).
+
+    Constraints: status must be one of the three listed values, when given.
+
+    Example queries:
+        - "what's on my reading list"
+        - "show my saved books"
+        - "what am I currently reading"
+
+    Example call: {"status": "reading"}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LIST_VIEW] = BookNodeTypeEnum.READING_LIST_VIEW
@@ -256,11 +482,27 @@ class ViewReadingListRetrieval(DomainRequest):
 
 
 class RemoveFromReadingListAction(DomainRequest):
-    """Remove named book(s) from the user's reading list.
+    """Purpose: Remove named book(s) from the user's reading list.
 
-    Use for removal intents: "take X off my list", "remove X", "I'm no longer
-    interested in X".
-    Not for: marking finished (Mark_Book_As_Read) — finishing is not removal.
+    Args:
+        titles: Book titles to remove (deduplicated automatically).
+
+    Returns: Confirmation that the title(s) were removed from the reading list.
+
+    Use when: removal intents — "take X off my list", "remove X", "I'm no
+    longer interested in X".
+
+    Do not use: for marking finished (Mark_Book_As_Read) — finishing is not
+    removal.
+
+    Constraints: at least 1 title required.
+
+    Example queries:
+        - "take Dune off my list"
+        - "remove Dune"
+        - "I'm no longer interested in Dune"
+
+    Example call: {"titles": ["Dune"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LIST_REMOVE] = BookNodeTypeEnum.READING_LIST_REMOVE
@@ -272,12 +514,28 @@ class RemoveFromReadingListAction(DomainRequest):
 
 
 class MarkBookAsReadAction(DomainRequest):
-    """Record that the user finished a book, with an optional rating in the same breath.
+    """Purpose: Record that the user finished a book, with an optional rating in the same breath.
 
-    Use for completion statements: "I finished X", "just read X", "mark X as
-    read — loved it, 5 stars" (rating captured here, no separate Rate_Book).
-    Not for: a rating on a book without a completion signal (Rate_Book) or
-    saving for later (Save_To_Reading_List).
+    Args:
+        title: Book the user finished.
+        rating: Star rating (1-5) when the user gives one alongside finishing.
+
+    Returns: Confirmation that the book was marked finished (and rated, if given).
+
+    Use when: completion statements — "I finished X", "just read X", "mark X
+    as read — loved it, 5 stars" (rating captured here, no separate Rate_Book).
+
+    Do not use: for a rating on a book without a completion signal (Rate_Book)
+    or saving for later (Save_To_Reading_List).
+
+    Constraints: rating, when given, must be between 1 and 5.
+
+    Example queries:
+        - "I finished Dune"
+        - "just read Dune"
+        - "mark Dune as read — loved it, 5 stars"
+
+    Example call: {"title": "Dune", "rating": 5}
     """
 
     node_type: Literal[BookNodeTypeEnum.MARK_AS_READ] = BookNodeTypeEnum.MARK_AS_READ
@@ -289,12 +547,28 @@ class MarkBookAsReadAction(DomainRequest):
 
 
 class RateBookAction(DomainRequest):
-    """Record the user's star rating for a book they already know.
+    """Purpose: Record the user's star rating for a book they already know.
 
-    Use for standalone rating intents: "give X 4 stars", "rate X a 2",
-    "X was a 5/5 for me".
-    Not for: a rating stated while finishing a book ("just finished X, 5 stars"
-    → Mark_Book_As_Read with rating).
+    Args:
+        title: Book being rated.
+        rating: Star rating from 1 to 5.
+
+    Returns: Confirmation that the rating was recorded.
+
+    Use when: standalone rating intents — "give X 4 stars", "rate X a 2", "X
+    was a 5/5 for me".
+
+    Do not use: for a rating stated while finishing a book ("just finished X,
+    5 stars" → Mark_Book_As_Read with rating).
+
+    Constraints: rating is required and must be between 1 and 5.
+
+    Example queries:
+        - "give Dune 4 stars"
+        - "rate Dune a 2"
+        - "Dune was a 5/5 for me"
+
+    Example call: {"title": "Dune", "rating": 4}
     """
 
     node_type: Literal[BookNodeTypeEnum.RATE_BOOK] = BookNodeTypeEnum.RATE_BOOK
@@ -305,12 +579,29 @@ class RateBookAction(DomainRequest):
 
 
 class ReadingStatsRetrieval(DomainRequest):
-    """Retrieve the user's reading statistics — counts, pages, genre breakdown.
+    """Purpose: Retrieve the user's reading statistics — counts, pages, genre breakdown.
 
-    Use for stats asks: "how many books have I read this year", "what genres do
-    I read most", "my reading stats".
-    Not for: the list itself (Retrieve_Reading_List) or account info like token
-    usage (Retrieve_User_Info).
+    Args:
+        aspects: Specific stats requested (books_read, pages_read,
+            genre_breakdown, average_rating, all); omit or use "all" for an
+            overview.
+
+    Returns: The requested reading statistics.
+
+    Use when: stats asks — "how many books have I read this year", "what
+    genres do I read most", "my reading stats".
+
+    Do not use: for the list itself (Retrieve_Reading_List) or account info
+    like token usage (Retrieve_User_Info).
+
+    Constraints: aspects values must come from the listed literal set.
+
+    Example queries:
+        - "how many books have I read this year"
+        - "what genres do I read most"
+        - "my reading stats"
+
+    Example call: {"aspects": ["books_read", "genre_breakdown"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_STATS] = BookNodeTypeEnum.READING_STATS

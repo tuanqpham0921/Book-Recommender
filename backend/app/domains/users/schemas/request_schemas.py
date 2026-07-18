@@ -6,14 +6,60 @@ from app.domains.users.node_types import UserNodeTypeEnum
 
 
 class UserInfoRequest(DomainRequest):
-    """Get user information from the database."""
+    """Purpose: Retrieve information about the current user from the database.
+
+    Args:
+        field: One or more UserInfoEnum values to retrieve (name, age, bio,
+            token_usage, saved_memory, previous_conversation,
+            current_conversation).
+
+    Returns: The requested user profile/session fields.
+
+    Use when: the user asks about themselves — "what's my saved memory", "how
+    many tokens have I used", "what's in my profile".
+
+    Do not use: for questions about the developer/maintainer of the app
+    (Retrieve_Developer_Info), or about the project itself
+    (Retrieve_Project_Info).
+
+    Constraints: field values must come from UserInfoEnum.
+
+    Example queries:
+        - "what's my saved memory"
+        - "how many tokens have I used"
+        - "what's in my profile"
+
+    Example call: {"field": ["saved_memory"]}
+    """
 
     node_type: Literal[UserNodeTypeEnum.USER_INFO] = UserNodeTypeEnum.USER_INFO
     field: list[UserInfoEnum] = Field(..., description="Field to retrieve")
 
 
 class DeveloperInfoRequest(DomainRequest):
-    """Get developer information from the database."""
+    """Purpose: Retrieve information about the developer/maintainer of this app.
+
+    Args:
+        field: One or more DeveloperInfoEnum values to retrieve (name, bio,
+            email, linkedin_url).
+
+    Returns: The requested developer profile fields.
+
+    Use when: the user asks about who built the app — "who made this", "what's
+    the developer's email", "link me their LinkedIn".
+
+    Do not use: for questions about the user themselves (Retrieve_User_Info),
+    or about the project's tech/architecture (Retrieve_Project_Info).
+
+    Constraints: field values must come from DeveloperInfoEnum.
+
+    Example queries:
+        - "who made this"
+        - "what's the developer's email"
+        - "link me their LinkedIn"
+
+    Example call: {"field": ["name", "linkedin_url"]}
+    """
 
     node_type: Literal[UserNodeTypeEnum.DEVELOPER_INFO] = UserNodeTypeEnum.DEVELOPER_INFO
     field: list[DeveloperInfoEnum] = Field(..., description="Field to retrieve")
