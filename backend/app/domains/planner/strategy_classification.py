@@ -1,7 +1,7 @@
 import json
 import logging
 from collections.abc import Sequence
-from typing import Any, Literal, cast
+from typing import Any, Literal, Union, cast
 from functools import reduce
 from operator import or_
 from collections import defaultdict, deque
@@ -24,6 +24,7 @@ from app.registry import (
     BOOK_RETRIEVAL_CLASSES,
     NODE_TYPE_TO_CLS,
     AnyStrategyRequest,
+    REQUEST_CLASSES
 )
 from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
@@ -63,7 +64,7 @@ class StrategyRequest(BaseModel):
         PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION
     )
 
-    strategies: list[AnyStrategyRequest] = Field(
+    strategies: list[Union[REQUEST_CLASSES]] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
     )
@@ -261,7 +262,11 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
             book_constraints=str(BookConstraints()),
             book_guides=str(BookGuides()),
         )
+        
         strategy_request = self._build_strategy_request(system_goals)
+        # NOTE: full model for eval
+        # strategy_request = StrategyRequest
+        
         req = OpenAIParserRequest(
             prompt=system_prompt,
             messages=[self.user_message, self._format_system_goals(system_goals)],
