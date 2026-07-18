@@ -348,5 +348,12 @@
     "query": "Compare Dune, Foundation, and Neuromancer on world-building and technology themes. Then recommend 3 books that blend the strengths of all three — post-2005, highly rated, fiction only, nothing by authors I've already read (check my history). Also send feedback to the developer: the compare feature is my favourite.",
     "note": "Three FindByTitle + Compare + UserInfo + Recommend + Feedback. Seven nodes across book and user domains. The Recommend exclusion depends on UserInfo output; Feedback runs in parallel. Maximum realistic complexity for this system.",
     "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_User_Info", "Analyze_Recommend", "Provide_Feedback"]
+  },
+  {
+    "id": 51,
+    "difficulty": "easy",
+    "query": "Did Jane Austen write Dune?",
+    "note": "Single FindByTitle. Authorship-verification phrasing — the named author is a disambiguating hint on the title lookup, not a bibliography search, so this must stay one node (not FindByTitle + FindByAuthor).",
+    "expected_nodes": ["Retrieve_by_Title"]
   }
 ]

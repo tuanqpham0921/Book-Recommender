@@ -116,7 +116,11 @@ class FindByTitleRetrieval(DomainRequest):
     BookSummary records (isbn13, title, authors, categories, genre,
     published_year, num_pages, average_rating, ratings_count, is_children).
 
-    Use when: a specific title is named — "find Dune", "do you have The Great Gatsby".
+    Use when: a specific title is named — "find Dune", "do you have The Great
+    Gatsby". Also use for authorship-verification questions ("did Frank
+    Herbert write Dune", "is Dune by Frank Herbert") — the title is still the
+    lookup target, with the named author passed as a disambiguating hint to
+    confirm or deny.
 
     Do not use: when the author is the actual subject of the search ("books by
     Frank Herbert"), or when no specific title is named.
@@ -128,6 +132,8 @@ class FindByTitleRetrieval(DomainRequest):
         - "find Dune"
         - "do you have The Great Gatsby"
         - "Dune by Frank Herbert"
+        - "did Frank Herbert write Dune"
+        - "is Dune by Frank Herbert"
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
@@ -177,7 +183,10 @@ class FindByAuthorRetrieval(DomainRequest):
     Christie".
 
     Do not use: for a single named title where the author is only a
-    disambiguating hint ("Dune by Frank Herbert"), or taste-based suggestions.
+    disambiguating hint ("Dune by Frank Herbert") — this includes
+    authorship-verification questions like "did Frank Herbert write Dune" or
+    "is Dune by Frank Herbert", which stay a single title lookup — or
+    taste-based suggestions.
 
     Constraints: multiple authors in one node are treated as one combined
     bibliography search, not separate per-author searches.
