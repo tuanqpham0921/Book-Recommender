@@ -25,8 +25,8 @@ class CompareStrategy(AnalyzeBaseRequest):
 
     Use when: the user wants a side-by-side read on specific named books.
 
-    Do not use: when they want new suggestions instead (Analyze_Recommend), or
-    only want to find a single title (Retrieve_by_Title / Retrieve_by_ISBN13).
+    Do not use: when they want new suggestions instead, or only want to find
+    a single title.
 
     Constraints: requires at least 2 task ids in depends_on — refuses itself
     otherwise. Three or more titles → one retrieval per book, depends_on lists
@@ -75,7 +75,7 @@ class RecommendationStrategy(AnalyzeBaseRequest):
           → reference_books plus semantic_input
 
     Do not use: when they only want to look up a known book or an author's/genre's
-    full catalog (Retrieve_by_Author / Retrieve_by_Genre) instead of suggestions.
+    full catalog instead of suggestions.
 
     Constraints: does not carry its own database filters — it reasons over
     retrieved books (depends_on) and/or stated taste; requires at least 1 task
@@ -123,8 +123,7 @@ class FindByTitleRetrieval(DomainRequest):
     Use when: a specific title is named — "find Dune", "do you have The Great Gatsby".
 
     Do not use: when the author is the actual subject of the search ("books by
-    Frank Herbert" → Retrieve_by_Author), or when no specific title is named
-    (Retrieve_by_Genre / Analyze_Recommend).
+    Frank Herbert"), or when no specific title is named.
 
     Constraints: one title per node — for multiple named titles, emit one node
     per title.
@@ -156,9 +155,8 @@ class FindByISBN13Retrieval(DomainRequest):
     Use when: an ISBN13 is explicitly given by the user, or already known from
     a prior step's result.
 
-    Do not use: when only a title, author, or genre is known (Retrieve_by_Title
-    / Retrieve_by_Author / Retrieve_by_Genre instead) — the ISBN13 must be a
-    literal identifier already in hand.
+    Do not use: when only a title, author, or genre is known — the ISBN13 must
+    be a literal identifier already in hand.
 
     Constraints: exactly one ISBN13 per node.
 
@@ -187,8 +185,7 @@ class FindByAuthorRetrieval(DomainRequest):
     Christie".
 
     Do not use: for a single named title where the author is only a
-    disambiguating hint ("Dune by Frank Herbert" → Retrieve_by_Title), or
-    taste-based suggestions (Analyze_Recommend).
+    disambiguating hint ("Dune by Frank Herbert"), or taste-based suggestions.
 
     Constraints: multiple authors in one node are treated as one combined
     bibliography search, not separate per-author searches.
@@ -220,8 +217,7 @@ class FindByGenreRetrieval(DomainRequest):
     good mysteries", "nonfiction about space".
 
     Do not use: for a themed or mood-based search that isn't a clean genre label
-    ("something cozy and hopeful" → Analyze_Recommend), or a single known title
-    (Retrieve_by_Title).
+    ("something cozy and hopeful"), or a single known title.
 
     Constraints: single genre per node — no cross-column filtering (e.g. genre
     plus a rating threshold isn't supported in this node).

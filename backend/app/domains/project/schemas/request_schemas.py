@@ -20,9 +20,8 @@ class FeedbackRequest(DomainRequest):
     feature", "found a bug when I asked about...".
 
     Do not use: for reacting to a specific bad recommendation by wanting
-    different books (that's a new Analyze_Recommend, not feedback), or asking
-    questions about the project rather than commenting on it
-    (Retrieve_Project_Info).
+    different books (that's a new recommendation request, not feedback), or
+    asking questions about the project rather than commenting on it.
 
     Constraints: feedback is required text; contact_info is optional and must
     not be invented if the user didn't provide it.
@@ -62,7 +61,7 @@ class ProjectInfoRequest(DomainRequest):
     this project".
 
     Do not use: when the user is commenting on or critiquing the app rather
-    than asking about it (Feedback).
+    than asking about it.
 
     Constraints: fields must come from ProjectInfoField; use "all" for a
     general "tell me about this project" ask.

@@ -6,8 +6,9 @@ is a candidate capability that was being evaluated for how parse_intent and
 strategy_classification scale as the tool catalog grows (see
 evals/suites/query_suite_extended.json). Docstrings are the tool
 descriptions the LLM would see if wired back in, so they follow the same
-"use when / not when" style as request_schemas.py — keep them discriminating
-against neighbor tools.
+"use when / not when" style as request_schemas.py — describe the
+discriminating scenario in plain language rather than naming a sibling node
+type, so each docstring stays readable standalone.
 """
 
 from typing import Optional, Literal, List
@@ -37,11 +38,11 @@ class FindSeriesRetrieval(DomainRequest):
     Returns: The named series plus its books (title, ISBN13, position in series).
 
     Use when: the user refers to a series as a whole — "the Dune saga", "all
-    the Mistborn books", "the Narnia series". Pairs with Analyze_Reading_Order
-    when the user also asks what order to read them in.
+    the Mistborn books", "the Narnia series". Often followed by a
+    reading-order request when the user also asks what order to read them in.
 
-    Do not use: for one specific entry of a series ("find Dune" →
-    Retrieve_by_Title) or an author's unrelated works (Retrieve_by_Author).
+    Do not use: for one specific entry of a series ("find Dune"), or an
+    author's unrelated works.
 
     Constraints: one series per node.
 
@@ -73,8 +74,8 @@ class AuthorInfoRetrieval(DomainRequest):
     Use when: the author themself is the question — "who is Haruki Murakami",
     "tell me about Toni Morrison's background", "what is Le Guin known for".
 
-    Do not use: for listing their books (Retrieve_by_Author) or info about the
-    person who built this app (Retrieve_Developer_Info).
+    Do not use: for listing their books, or info about the person who built
+    this app.
 
     Constraints: one author per node.
 
@@ -110,8 +111,7 @@ class NewReleasesRetrieval(DomainRequest):
     "books that came out in the last couple of years".
 
     Do not use: for a year range on an otherwise trait-driven search ("fantasy
-    from the 90s" → Retrieve_by_Traits with year filters) or popularity
-    framing (Retrieve_Popular).
+    from the 90s"), or popularity framing.
 
     Constraints: since_year narrows the recency window; leave filters empty
     for an unscoped "what's new" ask.
@@ -146,9 +146,8 @@ class PopularBooksRetrieval(DomainRequest):
     Use when: popularity/consensus framing — "what's popular", "bestsellers",
     "most loved fantasy books", "what does everyone recommend".
 
-    Do not use: for personalized suggestions from the user's taste
-    (Analyze_Recommend), a plain sort-by-rating trait search
-    (Retrieve_by_Traits), or recency framing (Retrieve_New_Releases).
+    Do not use: for personalized suggestions from the user's taste, a plain
+    sort-by-rating trait search, or recency framing.
 
     Constraints: filters is optional — leave empty for an unscoped "what's
     popular" ask.
@@ -182,8 +181,7 @@ class RandomBookRetrieval(DomainRequest):
     anything", "random book please". Optional filters keep the surprise inside
     bounds the user set ("surprise me with a short sci-fi").
 
-    Do not use: for asks that carry taste or mood ("something spooky" →
-    Analyze_Recommend).
+    Do not use: for asks that carry taste or mood ("something spooky").
 
     Constraints: filters is optional; sort_by/limit in filters are not
     meaningful for a single random pick.
@@ -221,8 +219,8 @@ class SummarizeStrategy(AnalyzeBaseRequest):
     Use when: the user wants to know what a book is about — "summarize X",
     "what happens in X", "give me the gist of X".
 
-    Do not use: for extracting themes/motifs (Analyze_Themes) or side-by-side
-    contrast of several books (Analyze_Compare).
+    Do not use: for extracting themes/motifs, or side-by-side contrast of
+    several books.
 
     Constraints: requires at least 1 task id in depends_on — refuses itself
     otherwise.
@@ -256,8 +254,7 @@ class ThemesStrategy(AnalyzeBaseRequest):
     Use when: interpretive asks about meaning — "what are the themes of X",
     "what is X really about", "what's the message of X".
 
-    Do not use: for plot recaps (Analyze_Summarize) or contrasting themes
-    across books (Analyze_Compare with comparison_criteria=themes).
+    Do not use: for plot recaps, or contrasting themes across several books.
 
     Constraints: requires at least 1 task id in depends_on — refuses itself
     otherwise.
@@ -290,8 +287,8 @@ class ReadingOrderStrategy(AnalyzeBaseRequest):
     Use when: "what order" asks — "in what order should I read the Dune
     books", "where do I start with Discworld".
 
-    Do not use: for picking which books to read at all (Analyze_Recommend) or
-    building a schedule over time (Analyze_Reading_Plan).
+    Do not use: for picking which books to read at all, or building a
+    schedule over time.
 
     Constraints: requires at least 1 task id in depends_on — refuses itself
     otherwise.
@@ -322,8 +319,7 @@ class ReadingLevelStrategy(AnalyzeBaseRequest):
     Use when: suitability asks — "is X okay for a 10-year-old", "how hard a
     read is X", "is X appropriate for my class".
 
-    Do not use: for finding children's books in the first place
-    (Retrieve_by_Traits with is_children).
+    Do not use: for finding children's books in the first place.
 
     Constraints: requires at least 1 task id in depends_on — refuses itself
     otherwise.
@@ -356,8 +352,8 @@ class ReadingTimeStrategy(AnalyzeBaseRequest):
     Use when: time asks — "how long will X take me", "can I finish X in a
     weekend", "how many hours is X".
 
-    Do not use: for filtering by page count (Retrieve_by_Traits) or planning
-    multiple books over time (Analyze_Reading_Plan).
+    Do not use: for filtering by page count, or planning multiple books over
+    time.
 
     Constraints: requires at least 1 task id in depends_on — refuses itself
     otherwise.
@@ -394,8 +390,7 @@ class ReadingPlanStrategy(AnalyzeBaseRequest):
     into Russian classics over three months", "a plan to read more
     non-fiction this year".
 
-    Do not use: for a single suggestion (Analyze_Recommend) or ordering an
-    existing series (Analyze_Reading_Order).
+    Do not use: for a single suggestion, or ordering an existing series.
 
     Constraints: requires at least 1 task id in depends_on — refuses itself
     otherwise.
@@ -429,8 +424,7 @@ class SaveToReadingListAction(DomainRequest):
     Use when: save intents — "add X to my list", "save that for later", "I
     want to read X eventually".
 
-    Do not use: for marking a book finished (Mark_Book_As_Read) or asking
-    what is on the list (Retrieve_Reading_List).
+    Do not use: for marking a book finished, or asking what is on the list.
 
     Constraints: at least 1 title required.
 
@@ -462,8 +456,7 @@ class ViewReadingListRetrieval(DomainRequest):
     Use when: list reads — "what's on my reading list", "show my saved
     books", "what am I currently reading".
 
-    Do not use: for reading statistics (Retrieve_Reading_Stats) or general
-    account info (Retrieve_User_Info).
+    Do not use: for reading statistics, or general account info.
 
     Constraints: status must be one of the three listed values, when given.
 
@@ -492,8 +485,7 @@ class RemoveFromReadingListAction(DomainRequest):
     Use when: removal intents — "take X off my list", "remove X", "I'm no
     longer interested in X".
 
-    Do not use: for marking finished (Mark_Book_As_Read) — finishing is not
-    removal.
+    Do not use: for marking finished — finishing is not removal.
 
     Constraints: at least 1 title required.
 
@@ -523,10 +515,10 @@ class MarkBookAsReadAction(DomainRequest):
     Returns: Confirmation that the book was marked finished (and rated, if given).
 
     Use when: completion statements — "I finished X", "just read X", "mark X
-    as read — loved it, 5 stars" (rating captured here, no separate Rate_Book).
+    as read — loved it, 5 stars" (rating captured here in the same node).
 
-    Do not use: for a rating on a book without a completion signal (Rate_Book)
-    or saving for later (Save_To_Reading_List).
+    Do not use: for a rating on a book without a completion signal, or saving
+    for later.
 
     Constraints: rating, when given, must be between 1 and 5.
 
@@ -559,7 +551,8 @@ class RateBookAction(DomainRequest):
     was a 5/5 for me".
 
     Do not use: for a rating stated while finishing a book ("just finished X,
-    5 stars" → Mark_Book_As_Read with rating).
+    5 stars" — that's a completion statement with a rating, not a standalone
+    rating).
 
     Constraints: rating is required and must be between 1 and 5.
 
@@ -591,8 +584,7 @@ class ReadingStatsRetrieval(DomainRequest):
     Use when: stats asks — "how many books have I read this year", "what
     genres do I read most", "my reading stats".
 
-    Do not use: for the list itself (Retrieve_Reading_List) or account info
-    like token usage (Retrieve_User_Info).
+    Do not use: for the list itself, or general account info like token usage.
 
     Constraints: aspects values must come from the listed literal set.
 

@@ -18,9 +18,8 @@ class UserInfoRequest(DomainRequest):
     Use when: the user asks about themselves — "what's my saved memory", "how
     many tokens have I used", "what's in my profile".
 
-    Do not use: for questions about the developer/maintainer of the app
-    (Retrieve_Developer_Info), or about the project itself
-    (Retrieve_Project_Info).
+    Do not use: for questions about the developer/maintainer of the app, or
+    about the project itself.
 
     Constraints: field values must come from UserInfoEnum.
 
@@ -48,8 +47,8 @@ class DeveloperInfoRequest(DomainRequest):
     Use when: the user asks about who built the app — "who made this", "what's
     the developer's email", "link me their LinkedIn".
 
-    Do not use: for questions about the user themselves (Retrieve_User_Info),
-    or about the project's tech/architecture (Retrieve_Project_Info).
+    Do not use: for questions about the user themselves, or about the
+    project's tech/architecture.
 
     Constraints: field values must come from DeveloperInfoEnum.
 
