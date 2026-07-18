@@ -43,8 +43,6 @@ class SystemGoal(BaseModel):
     Args:
         description: A concise, instructive description of the goal (10-100 characters).
         confidence: How confident the system is that it can fulfill this goal
-            with the given catalog — 1.0 is very confident, 0.0 is not
-            confident at all.
         target_node_type: The single capability name from the catalog that
             fulfills this goal.
 
