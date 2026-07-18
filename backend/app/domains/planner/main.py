@@ -87,6 +87,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.result.ok = False
             self.result.message = self.initial_parse_failure_message
             if parse_result.runtime_error:
+                self.result.runtime_error = parse_result.runtime_error
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
             await self.sse_stream.send_chars(self.initial_parse_failure_message)
@@ -112,6 +113,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.result.ok = False
             self.result.message = self.strategy_classification_failure_message
             if strategy_result.runtime_error:
+                self.result.runtime_error = strategy_result.runtime_error
                 await self.sse_stream.send_error(
                     self.strategy_classification_failure_message
                 )

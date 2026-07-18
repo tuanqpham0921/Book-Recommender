@@ -1,6 +1,6 @@
 """Tests for PlannerWorkflow.add_step output routing."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,7 +11,7 @@ from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.domains.planner.strategy_classification import StrategyClassificationOutput
-from common.operation import OperationResult, TokenUsage
+from common.operation import OperationResult, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
 
@@ -87,6 +87,71 @@ class TestPlannerWorkflowAddStep:
         step = OperationResult(ok=True, name="some_step", output=InitialParseOutput())
         orchestrator.add_step(step)
         assert step in orchestrator.result.steps
+
+
+def _make_runtime_error(message: str) -> RuntimeErrorInfo:
+    try:
+        raise ValueError(message)
+    except ValueError as e:
+        return RuntimeErrorInfo.from_exception(e)
+
+
+def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
+    """A stand-in for an InitialParseWorkflow/StrategyClassificationWorkflow
+    instance: calling it (as run_async_step does) awaits to step_result,
+    while .output (accessed directly by PlannerWorkflow.run) returns output."""
+    workflow = AsyncMock(return_value=step_result)
+    workflow.output = output
+    return workflow
+
+
+class TestPlannerWorkflowRuntimeErrorPropagation:
+    """self.result.runtime_error must come from whichever child step
+    actually crashed — a copy-paste bug once had the strategy-classification
+    branch pulling from parse_result instead of strategy_result, which
+    silently discarded the real error (parse_result.runtime_error is always
+    None by the time that branch runs, since both of parse's own failure
+    paths return early)."""
+
+    async def test_parse_failure_runtime_error_propagates(self, orchestrator):
+        parse_error = _make_runtime_error("parse crashed")
+        parse_workflow = _mock_child_workflow(
+            OperationResult(ok=False, runtime_error=parse_error),
+            InitialParseOutput(),
+        )
+
+        with patch(
+            "app.domains.planner.main.InitialParseWorkflow",
+            return_value=parse_workflow,
+        ):
+            await orchestrator.run(request_context=MagicMock(session_id="sess_1"))
+
+        assert orchestrator.result.runtime_error is parse_error
+
+    async def test_strategy_failure_runtime_error_propagates(self, orchestrator):
+        parse_output = InitialParseOutput(accepted_goals=[_make_goal()])
+        parse_workflow = _mock_child_workflow(
+            OperationResult(ok=True, output=parse_output), parse_output
+        )
+
+        strategy_error = _make_runtime_error("strategy crashed")
+        strategy_workflow = _mock_child_workflow(
+            OperationResult(ok=False, runtime_error=strategy_error),
+            StrategyClassificationOutput(),
+        )
+
+        with patch(
+            "app.domains.planner.main.InitialParseWorkflow",
+            return_value=parse_workflow,
+        ), patch(
+            "app.domains.planner.main.StrategyClassificationWorkflow",
+            return_value=strategy_workflow,
+        ):
+            await orchestrator.run(request_context=MagicMock(session_id="sess_1"))
+
+        # the bug: this used to be parse_result.runtime_error (always None
+        # here, since parse succeeded), silently swallowing strategy_error
+        assert orchestrator.result.runtime_error is strategy_error
 
 
 class TestPlannerOutputJsonRoundTrip:
