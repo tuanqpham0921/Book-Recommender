@@ -7,6 +7,7 @@ from operator import or_
 from collections import defaultdict, deque
 from pydantic import (
     BaseModel,
+    ConfigDict,
     Field,
     PrivateAttr,
     create_model,
@@ -30,7 +31,6 @@ from app.domains.planner.parse_intent import SystemGoal
 from clients import OpenAIParserRequest
 from clients.base import BaseLLMClient
 from common.utils import uuid_8, to_serializable, remove_empty_values
-from config import BookConstraints, BookGuides
 from common.operation import task
 from .node_types import PlannerNodeTypeEnum
 
@@ -59,6 +59,87 @@ class StrategyRequest(BaseModel):
     Constraints: at most MAX_STRATEGIES (15) strategies per call;
     depends_on may only reference task ids assigned within this same call.
     """
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "Show me books similar to Pride and Prejudice",
+                    "system_goals": [
+                        {
+                            "id": "goal_1",
+                            "description": "Find Pride and Prejudice by title",
+                        }
+                    ],
+                    "request": {
+                        "strategies": [
+                            {
+                                "node_type": "Retrieve_by_Title",
+                                "id": "task_1",
+                                "description": "Find Pride and Prejudice by title",
+                                "reasoning": "The title must be retrieved before it can be used as a recommendation reference",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_1"],
+                                "title": "Pride and Prejudice",
+                            },
+                            {
+                                "node_type": "Analyze_Recommend",
+                                "id": "task_2",
+                                "description": "Recommend books similar to Pride and Prejudice",
+                                "reasoning": "The user wants similar books, reasoning over the retrieved title",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_1"],
+                                "depends_on": ["task_1"],
+                                "reference_books": ["Pride and Prejudice"],
+                            },
+                        ]
+                    },
+                },
+                {
+                    "query": "Please compare Flights and Satantango books",
+                    "system_goals": [
+                        {"id": "goal_1", "description": "Find Flights by title"},
+                        {"id": "goal_2", "description": "Find Satantango by title"},
+                        {
+                            "id": "goal_3",
+                            "description": "Compare Flights and Satantango",
+                        },
+                    ],
+                    "request": {
+                        "strategies": [
+                            {
+                                "node_type": "Retrieve_by_Title",
+                                "id": "task_1",
+                                "description": "Find Flights by title",
+                                "reasoning": "Both titles must be retrieved before they can be compared",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_1", "goal_3"],
+                                "title": "Flights",
+                            },
+                            {
+                                "node_type": "Retrieve_by_Title",
+                                "id": "task_2",
+                                "description": "Find Satantango by title",
+                                "reasoning": "Both titles must be retrieved before they can be compared",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_2", "goal_3"],
+                                "title": "Satantango",
+                            },
+                            {
+                                "node_type": "Analyze_Compare",
+                                "id": "task_3",
+                                "description": "Compare Flights and Satantango",
+                                "reasoning": "Both titles are retrieved, so comparing them fulfills the compare goal",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_3"],
+                                "depends_on": ["task_1", "task_2"],
+                            },
+                        ]
+                    },
+                },
+            ]
+        }
+    )
 
     node_type: Literal[PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION] = (
         PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION
@@ -257,12 +338,8 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
     async def _run_llm_args_parse(
         self, system_goals: list[SystemGoal]
     ) -> ParsedFunctionToolCall:
-        system_prompt = format_prompt(
-            prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH,
-            book_constraints=str(BookConstraints()),
-            book_guides=str(BookGuides()),
-        )
-        
+        system_prompt = format_prompt(prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH)
+
         strategy_request = self._build_strategy_request(system_goals)
         # NOTE: full model for eval
         # strategy_request = StrategyRequest
