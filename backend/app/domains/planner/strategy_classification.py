@@ -43,10 +43,20 @@ MAX_STRATEGIES = 15
 
 
 class StrategyRequest(BaseModel):
-    """
-    Generate a set of strategy requests to satisfy the user's request.
-    Each strategy should represent a discrete unit of work.
-    The strategies should be a list of the request classes in the REQUEST_CLASSES tuple.
+    """Purpose: The tool call for the strategy-classification LLM step —
+    selects and fills one request strategy per system goal.
+
+    Args:
+        strategies: One entry per discrete unit of work, built from the
+            request classes available for this call. Each strategy assigns
+            its own task id and, for analyze strategies, depends_on listing
+            the retrieval task ids it needs.
+
+    Returns: The set of strategy requests the workflow topologically sorts
+    into a dependency-ordered execution plan.
+
+    Constraints: at most MAX_STRATEGIES (15) strategies per call;
+    depends_on may only reference task ids assigned within this same call.
     """
 
     node_type: Literal[PlannerNodeTypeEnum.STRATEGY_CLASSIFICATION] = (
@@ -56,7 +66,6 @@ class StrategyRequest(BaseModel):
     strategies: list[AnyStrategyRequest] = Field(
         default_factory=list,
         max_length=MAX_STRATEGIES,
-        description="List of strategies generated from the query",
     )
 
     # invisible to LLM output
@@ -82,7 +91,6 @@ class StrategyRequest(BaseModel):
                 Field(
                     default_factory=list,
                     max_length=MAX_STRATEGIES,
-                    description="List of strategies generated from the query",
                 ),
             ),
         )

@@ -36,23 +36,42 @@ MAX_SYSTEM_GOALS = 10
 
 
 class SystemGoal(BaseModel):
+    """Purpose: One parsed goal from the user's message — a capability the
+    system should attempt, with the confidence that it maps cleanly to a
+    supported node type. One entry in InitialParseRequest.system_goals.
+
+    Args:
+        description: A concise, instructive description of the goal (10-100 characters).
+        confidence: How confident the system is that it can fulfill this goal
+            with the given catalog — 1.0 is very confident, 0.0 is not
+            confident at all.
+        target_node_type: The single capability name from the catalog that
+            fulfills this goal.
+
+    Returns: One candidate goal that strategy classification later turns
+    into a request strategy, or refuses.
+
+    Constraints: exactly one target_node_type per goal — a multi-part
+    request becomes separate goals, not one goal with multiple types.
+    """
+
     node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = PlannerNodeTypeEnum.SYSTEM_GOAL
 
     description: DescriptionStr = Field(
         ...,
         max_length=MAX_STRING_LENGTH,
-        description="Description of the system goal",
+        json_schema_extra={"example": "Find Dune by title"},
     )
     confidence: ConfidenceFloat = Field(
         ...,
         ge=MIN_CONFIDENCE,
         le=MAX_CONFIDENCE,
-        description="Confidence between 0 and 1 that the system can handle this goal",
+        json_schema_extra={"example": 1.0},
     )
 
     target_node_type: NodeTypeEnum = Field(
         ...,
-        description="the node type to complete this goal",
+        json_schema_extra={"example": "Retrieve_by_Title"},
     )
 
     _refusal: bool = PrivateAttr(default=False)
@@ -72,31 +91,44 @@ class SystemGoal(BaseModel):
         self._refusal_reasons.extend(reasons)
 
 class InitialParseRequest(BaseModel):
-    """
-    Initial parse for the Book Recommender: extract system_goals with confidence,
-    and separate small_talk and out_of_scope from in-domain requests.
+    """Purpose: Initial parse of the user's message — the tool call for the
+    parse-intent LLM step. Splits the message into system_goals (mapped
+    capabilities), small_talk, and out_of_scope content.
+
+    Args:
+        small_talk: The small-talk portion of the message, when present.
+        out_of_scope: The out-of-domain portion of the message, when present.
+        system_goals: One SystemGoal per capability the message maps to;
+            empty when nothing in-domain was found.
+        reasoning: Short explanation of how the message was classified.
+
+    Returns: The parsed breakdown that strategy classification
+    (system_goals) and the response step (small_talk/out_of_scope/reasoning)
+    consume next.
+
+    Constraints: at most MAX_SYSTEM_GOALS (10) goals per call; every
+    in-domain part of the message should map to exactly one goal.
     """
     node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = PlannerNodeTypeEnum.PARSE_INTENT
 
     small_talk: OptionalStr = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
-        description="Small talk in the request",
+        json_schema_extra={"example": "Hi!"},
     )
     out_of_scope: OptionalStr = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
-        description="Out-of-domain content",
+        json_schema_extra={"example": "What's the weather like today?"},
     )
     system_goals: list[SystemGoal] = Field(
         default_factory=list,
         max_length=MAX_SYSTEM_GOALS,
-        description="System goals for the query",
     )
     reasoning: ReasoningStr = Field(
         ...,
         max_length=MAX_STRING_LENGTH,
-        description="Reasoning for classification",
+        json_schema_extra={"example": "Direct match to a supported capability"},
     )
     
     _overflow_system_goals: list[SystemGoal] = PrivateAttr(default_factory=list)
