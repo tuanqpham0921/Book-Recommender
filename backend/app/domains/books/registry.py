@@ -10,6 +10,7 @@ from app.domains.books.schemas.request_schemas import (
     FindByGenreRetrieval,
     FindByTitleRetrieval,
     RecommendationStrategy,
+    CompareStrategy
 )
 
 # CompareStrategy (Analyze_Compare) is intentionally parked: the class still
@@ -25,6 +26,7 @@ BOOK_RETRIEVAL_CLASSES = (
 )
 BOOK_ANALYZE_CLASSES = (
     RecommendationStrategy,
+    CompareStrategy
 )
 BOOK_REQUEST_CLASSES = BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES
 
@@ -35,4 +37,5 @@ BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
     BookNodeTypeEnum.FIND_GENRE.value: FindByGenreRetrieval,
     BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
+    BookNodeTypeEnum.COMPARE.value: CompareStrategy
 }
