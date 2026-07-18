@@ -37,13 +37,11 @@ class CompareStrategy(AnalyzeBaseRequest):
         - "how are X and Y different"
         - "compare their themes"
         - "which is longer / darker / more literary"
-
-    Example call: {"comparison_criteria": "tone", "depends_on": ["task_1", "task_2"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.COMPARE] = BookNodeTypeEnum.COMPARE
     comparison_criteria: Optional[str] = Field(
-        None, description="Specific fields or aspects to compare"
+        None, json_schema_extra={"example": "tone"}
     )
 
     def model_post_init(self, __context) -> None:
@@ -88,16 +86,14 @@ class RecommendationStrategy(AnalyzeBaseRequest):
         - "cozy mysteries"
         - "epic sci-fi with strong world-building"
         - "like Dune but darker and shorter"
-
-    Example call: {"semantic_input": "cozy and hopeful", "reference_books": ["The House in the Cerulean Sea"], "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION
     semantic_input: Optional[str] = Field(
-        None, description="Thematic/conceptual description from the query"
+        None, json_schema_extra={"example": "cozy and hopeful"}
     )
     reference_books: Optional[List[str]] = Field(
-        None, description="Books titles to base recommendations on"
+        None, json_schema_extra={"example": ["The House in the Cerulean Sea"]}
     )
 
     def model_post_init(self, __context) -> None:
@@ -132,14 +128,12 @@ class FindByTitleRetrieval(DomainRequest):
         - "find Dune"
         - "do you have The Great Gatsby"
         - "Dune by Frank Herbert"
-
-    Example call: {"title": "Dune", "authors": ["Frank Herbert"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
-    title: str = Field(..., description="Book title to search for")
+    title: str = Field(..., json_schema_extra={"example": "Dune"})
     authors: Optional[list[str]] = Field(
-        default=None, description="Author associated with this book"
+        default=None, json_schema_extra={"example": ["Frank Herbert"]}
     )
 
 
@@ -163,12 +157,10 @@ class FindByISBN13Retrieval(DomainRequest):
     Example queries:
         - "look up ISBN 9780441172719"
         - "what book is 978-0-14-303943-3"
-
-    Example call: {"isbn13": "9780441172719"}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_ISBN13] = BookNodeTypeEnum.FIND_ISBN13
-    isbn13: str = Field(..., description="ISBN13 to search for")
+    isbn13: str = Field(..., json_schema_extra={"example": "9780441172719"})
 
 
 class FindByAuthorRetrieval(DomainRequest):
@@ -194,13 +186,11 @@ class FindByAuthorRetrieval(DomainRequest):
         - "books by Ursula K. Le Guin"
         - "what else has Brandon Sanderson written"
         - "show me some Agatha Christie"
-
-    Example call: {"authors": ["Ursula K. Le Guin"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_AUTHOR] = BookNodeTypeEnum.FIND_AUTHOR
     authors: List[str] = Field(
-        ..., min_length=1, description="Author names whose books to retrieve"
+        ..., min_length=1, json_schema_extra={"example": ["Ursula K. Le Guin"]}
     )
 
 
@@ -226,9 +216,7 @@ class FindByGenreRetrieval(DomainRequest):
         - "fantasy books"
         - "any good mysteries"
         - "nonfiction about space"
-
-    Example call: {"genre": "fantasy"}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_GENRE] = BookNodeTypeEnum.FIND_GENRE
-    genre: str = Field(..., description="Genre or category to search for")
+    genre: str = Field(..., json_schema_extra={"example": "fantasy"})

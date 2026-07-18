@@ -50,14 +50,12 @@ class FindSeriesRetrieval(DomainRequest):
         - "the Dune saga"
         - "all the Mistborn books"
         - "the Narnia series"
-
-    Example call: {"series_name": "Mistborn", "author": "Brandon Sanderson"}
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_SERIES] = BookNodeTypeEnum.FIND_SERIES
-    series_name: str = Field(..., description="Name of the series or saga")
+    series_name: str = Field(..., json_schema_extra={"example": "Mistborn"})
     author: Optional[str] = Field(
-        None, description="Author hint to disambiguate same-named series"
+        None, json_schema_extra={"example": "Brandon Sanderson"}
     )
 
 
@@ -83,15 +81,13 @@ class AuthorInfoRetrieval(DomainRequest):
         - "who is Haruki Murakami"
         - "tell me about Toni Morrison's background"
         - "what is Le Guin known for"
-
-    Example call: {"author_name": "Ursula K. Le Guin", "aspects": "writing style"}
     """
 
     node_type: Literal[BookNodeTypeEnum.AUTHOR_INFO] = BookNodeTypeEnum.AUTHOR_INFO
-    author_name: str = Field(..., description="Author to look up")
+    author_name: str = Field(..., json_schema_extra={"example": "Ursula K. Le Guin"})
     aspects: Optional[str] = Field(
         None,
-        description="Specific angle when stated (biography, writing style, influences, …)",
+        json_schema_extra={"example": "writing style"},
     )
 
 
@@ -120,16 +116,12 @@ class NewReleasesRetrieval(DomainRequest):
         - "what's new"
         - "recent sci-fi releases"
         - "books that came out in the last couple of years"
-
-    Example call: {"since_year": 2024, "filters": {"categories": ["Science Fiction"]}}
     """
 
     node_type: Literal[BookNodeTypeEnum.NEW_RELEASES] = BookNodeTypeEnum.NEW_RELEASES
-    since_year: Optional[int] = Field(
-        None, description="Earliest publication year to include, when the user implies one"
-    )
+    since_year: Optional[int] = Field(None, json_schema_extra={"example": 2024})
     filters: Optional[BooksFilter] = Field(
-        None, description="Constraints on the returned books (genre, rating, pages, …)"
+        None, json_schema_extra={"example": {"categories": ["Science Fiction"]}}
     )
 
 
@@ -157,13 +149,11 @@ class PopularBooksRetrieval(DomainRequest):
         - "bestsellers"
         - "most loved fantasy books"
         - "what does everyone recommend"
-
-    Example call: {"filters": {"categories": ["Fantasy"], "sort_by": "rating"}}
     """
 
     node_type: Literal[BookNodeTypeEnum.POPULAR] = BookNodeTypeEnum.POPULAR
     filters: Optional[BooksFilter] = Field(
-        None, description="Constraints on the returned books (genre, year, pages, …)"
+        None, json_schema_extra={"example": {"categories": ["Fantasy"], "sort_by": "rating"}}
     )
 
 
@@ -191,13 +181,12 @@ class RandomBookRetrieval(DomainRequest):
         - "pick anything"
         - "random book please"
         - "surprise me with a short sci-fi"
-
-    Example call: {"filters": {"categories": ["Science Fiction"], "max_pages": 250}}
     """
 
     node_type: Literal[BookNodeTypeEnum.RANDOM] = BookNodeTypeEnum.RANDOM
     filters: Optional[BooksFilter] = Field(
-        None, description="Bounds for the random pick (genre, pages, rating, …)"
+        None,
+        json_schema_extra={"example": {"categories": ["Science Fiction"], "max_pages": 250}},
     )
 
 
@@ -229,17 +218,11 @@ class SummarizeStrategy(AnalyzeBaseRequest):
         - "summarize Dune"
         - "what happens in Dune"
         - "give me the gist of Dune"
-
-    Example call: {"spoiler_free": true, "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.SUMMARIZE] = BookNodeTypeEnum.SUMMARIZE
-    spoiler_free: bool = Field(
-        True, description="Avoid plot spoilers unless the user asks for the full story"
-    )
-    focus: Optional[str] = Field(
-        None, description="Specific angle to center the summary on, when stated"
-    )
+    spoiler_free: bool = Field(True, json_schema_extra={"example": True})
+    focus: Optional[str] = Field(None)
 
 
 class ThemesStrategy(AnalyzeBaseRequest):
@@ -263,13 +246,11 @@ class ThemesStrategy(AnalyzeBaseRequest):
         - "what are the themes of Dune"
         - "what is Dune really about"
         - "what's the message of Dune"
-
-    Example call: {"aspect": "power and religion", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.THEMES] = BookNodeTypeEnum.THEMES
     aspect: Optional[str] = Field(
-        None, description="Specific theme or motif the user asked about, when stated"
+        None, json_schema_extra={"example": "power and religion"}
     )
 
 
@@ -296,13 +277,11 @@ class ReadingOrderStrategy(AnalyzeBaseRequest):
     Example queries:
         - "in what order should I read the Dune books"
         - "where do I start with Discworld"
-
-    Example call: {"order_preference": "publication", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_ORDER] = BookNodeTypeEnum.READING_ORDER
     order_preference: Optional[Literal["publication", "chronological", "recommended"]] = Field(
-        None, description="Ordering convention the user asked for, when stated"
+        None, json_schema_extra={"example": "publication"}
     )
 
 
@@ -328,13 +307,11 @@ class ReadingLevelStrategy(AnalyzeBaseRequest):
         - "is Dune okay for a 10-year-old"
         - "how hard a read is Dune"
         - "is this appropriate for my class"
-
-    Example call: {"reader_context": "10-year-old, advanced reader", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LEVEL] = BookNodeTypeEnum.READING_LEVEL
     reader_context: Optional[str] = Field(
-        None, description="Who the book is for, in the user's words (age, grade, sensitivities)"
+        None, json_schema_extra={"example": "10-year-old, advanced reader"}
     )
 
 
@@ -362,16 +339,12 @@ class ReadingTimeStrategy(AnalyzeBaseRequest):
         - "how long will Dune take me"
         - "can I finish Dune in a weekend"
         - "how many hours is Dune"
-
-    Example call: {"minutes_per_day": 30, "reading_speed": "average", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_TIME] = BookNodeTypeEnum.READING_TIME
-    minutes_per_day: Optional[int] = Field(
-        None, description="Daily reading time the user stated, in minutes"
-    )
+    minutes_per_day: Optional[int] = Field(None, json_schema_extra={"example": 30})
     reading_speed: Optional[Literal["slow", "average", "fast"]] = Field(
-        None, description="Reading speed the user stated about themself"
+        None, json_schema_extra={"example": "average"}
     )
 
 
@@ -398,15 +371,13 @@ class ReadingPlanStrategy(AnalyzeBaseRequest):
     Example queries:
         - "get me into Russian classics over three months"
         - "a plan to read more non-fiction this year"
-
-    Example call: {"plan_goal": "read more Russian classics", "timeframe": "3 months", "depends_on": ["task_1"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_PLAN] = BookNodeTypeEnum.READING_PLAN
-    plan_goal: str = Field(..., description="What the plan should achieve, in the user's words")
-    timeframe: Optional[str] = Field(
-        None, description="Duration or deadline the user stated (e.g. '3 months')"
+    plan_goal: str = Field(
+        ..., json_schema_extra={"example": "read more Russian classics"}
     )
+    timeframe: Optional[str] = Field(None, json_schema_extra={"example": "3 months"})
 
 
 # -------------------------------------------------------------------
@@ -432,12 +403,12 @@ class SaveToReadingListAction(DomainRequest):
         - "add Dune to my list"
         - "save that for later"
         - "I want to read Dune eventually"
-
-    Example call: {"titles": ["Dune"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LIST_ADD] = BookNodeTypeEnum.READING_LIST_ADD
-    titles: List[str] = Field(..., min_length=1, description="Book titles to add")
+    titles: List[str] = Field(
+        ..., min_length=1, json_schema_extra={"example": ["Dune"]}
+    )
 
     def model_post_init(self, __context) -> None:
         self.titles = list(dict.fromkeys(self.titles))
@@ -464,13 +435,11 @@ class ViewReadingListRetrieval(DomainRequest):
         - "what's on my reading list"
         - "show my saved books"
         - "what am I currently reading"
-
-    Example call: {"status": "reading"}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LIST_VIEW] = BookNodeTypeEnum.READING_LIST_VIEW
     status: Optional[Literal["want_to_read", "reading", "finished"]] = Field(
-        None, description="Only show entries with this status, when the user asks"
+        None, json_schema_extra={"example": "reading"}
     )
 
 
@@ -493,12 +462,12 @@ class RemoveFromReadingListAction(DomainRequest):
         - "take Dune off my list"
         - "remove Dune"
         - "I'm no longer interested in Dune"
-
-    Example call: {"titles": ["Dune"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_LIST_REMOVE] = BookNodeTypeEnum.READING_LIST_REMOVE
-    titles: List[str] = Field(..., min_length=1, description="Book titles to remove")
+    titles: List[str] = Field(
+        ..., min_length=1, json_schema_extra={"example": ["Dune"]}
+    )
 
     def model_post_init(self, __context) -> None:
         self.titles = list(dict.fromkeys(self.titles))
@@ -526,15 +495,13 @@ class MarkBookAsReadAction(DomainRequest):
         - "I finished Dune"
         - "just read Dune"
         - "mark Dune as read — loved it, 5 stars"
-
-    Example call: {"title": "Dune", "rating": 5}
     """
 
     node_type: Literal[BookNodeTypeEnum.MARK_AS_READ] = BookNodeTypeEnum.MARK_AS_READ
-    title: str = Field(..., description="Book the user finished")
+    title: str = Field(..., json_schema_extra={"example": "Dune"})
     rating: Optional[float] = Field(
         None, ge=MIN_RATING, le=MAX_RATING,
-        description="Star rating (1-5) when the user gives one alongside finishing",
+        json_schema_extra={"example": 5},
     )
 
 
@@ -560,14 +527,12 @@ class RateBookAction(DomainRequest):
         - "give Dune 4 stars"
         - "rate Dune a 2"
         - "Dune was a 5/5 for me"
-
-    Example call: {"title": "Dune", "rating": 4}
     """
 
     node_type: Literal[BookNodeTypeEnum.RATE_BOOK] = BookNodeTypeEnum.RATE_BOOK
-    title: str = Field(..., description="Book being rated")
+    title: str = Field(..., json_schema_extra={"example": "Dune"})
     rating: float = Field(
-        ..., ge=MIN_RATING, le=MAX_RATING, description="Star rating from 1 to 5"
+        ..., ge=MIN_RATING, le=MAX_RATING, json_schema_extra={"example": 4}
     )
 
 
@@ -592,11 +557,9 @@ class ReadingStatsRetrieval(DomainRequest):
         - "how many books have I read this year"
         - "what genres do I read most"
         - "my reading stats"
-
-    Example call: {"aspects": ["books_read", "genre_breakdown"]}
     """
 
     node_type: Literal[BookNodeTypeEnum.READING_STATS] = BookNodeTypeEnum.READING_STATS
     aspects: Optional[
         List[Literal["books_read", "pages_read", "genre_breakdown", "average_rating", "all"]]
-    ] = Field(None, description="Specific stats requested; omit or use 'all' for an overview")
+    ] = Field(None, json_schema_extra={"example": ["books_read", "genre_breakdown"]})

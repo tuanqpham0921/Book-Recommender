@@ -27,12 +27,12 @@ class UserInfoRequest(DomainRequest):
         - "what's my saved memory"
         - "how many tokens have I used"
         - "what's in my profile"
-
-    Example call: {"field": ["saved_memory"]}
     """
 
     node_type: Literal[UserNodeTypeEnum.USER_INFO] = UserNodeTypeEnum.USER_INFO
-    field: list[UserInfoEnum] = Field(..., description="Field to retrieve")
+    field: list[UserInfoEnum] = Field(
+        ..., json_schema_extra={"example": ["saved_memory"]}
+    )
 
 
 class DeveloperInfoRequest(DomainRequest):
@@ -56,9 +56,9 @@ class DeveloperInfoRequest(DomainRequest):
         - "who made this"
         - "what's the developer's email"
         - "link me their LinkedIn"
-
-    Example call: {"field": ["name", "linkedin_url"]}
     """
 
     node_type: Literal[UserNodeTypeEnum.DEVELOPER_INFO] = UserNodeTypeEnum.DEVELOPER_INFO
-    field: list[DeveloperInfoEnum] = Field(..., description="Field to retrieve")
+    field: list[DeveloperInfoEnum] = Field(
+        ..., json_schema_extra={"example": ["name", "linkedin_url"]}
+    )

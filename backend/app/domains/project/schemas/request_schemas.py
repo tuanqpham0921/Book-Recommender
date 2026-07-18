@@ -31,8 +31,6 @@ class FeedbackRequest(DomainRequest):
         - "the chat feels slow"
         - "you should add a dark mode"
         - "found a bug when I asked about sci-fi books"
-
-    Example call: {"feedback": "The chat feels slow when comparing books.", "contact_info": "user@example.com"}
     """
 
     node_type: Literal[ProjectNodeTypeEnum.FEEDBACK] = ProjectNodeTypeEnum.FEEDBACK
@@ -40,9 +38,11 @@ class FeedbackRequest(DomainRequest):
     # something like awesome "can you please provide your email so we can get back to you? if not it's ok too"
     contact_info: Optional[str] = Field(
         default=None,
-        description="Contact information of the user providing the feedback (email, phone, etc.)",
+        json_schema_extra={"example": "user@example.com"},
     )
-    feedback: str = Field(..., description="User's feedback to the project")
+    feedback: str = Field(
+        ..., json_schema_extra={"example": "The chat feels slow when comparing books."}
+    )
 
 
 class ProjectInfoRequest(DomainRequest):
@@ -71,9 +71,9 @@ class ProjectInfoRequest(DomainRequest):
         - "what is this app"
         - "where's the GitHub repo"
         - "tell me about this project"
-
-    Example call: {"fields": ["technology_stack"]}
     """
 
     node_type: Literal[ProjectNodeTypeEnum.PROJECT_INFO] = ProjectNodeTypeEnum.PROJECT_INFO
-    fields: list[ProjectInfoField] = Field(..., description="Fields to retrieve")
+    fields: list[ProjectInfoField] = Field(
+        ..., json_schema_extra={"example": ["technology_stack"]}
+    )
