@@ -8,7 +8,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from evals.run_suites import DEFAULT_SUITE_PATH, load_suite, send_query
+from evals.run_suites import DEFAULT_SUITE_PATH, load_suite, send_query, should_sleep
 
 
 SUITE = [
@@ -105,6 +105,23 @@ class TestSendQuery:
         chat_id = send_query(client, session_id="test_abc123", message="hello")
 
         assert chat_id is None
+
+
+class TestShouldSleep:
+    def test_sleeps_between_queries(self):
+        assert should_sleep(1, 4, 45.0) is True
+
+    def test_never_sleeps_after_the_last_query(self):
+        assert should_sleep(4, 4, 45.0) is False
+
+    def test_disabled_when_sleep_seconds_is_zero(self):
+        assert should_sleep(1, 4, 0) is False
+
+    def test_disabled_when_sleep_seconds_is_negative(self):
+        assert should_sleep(1, 4, -5) is False
+
+    def test_single_query_suite_never_sleeps(self):
+        assert should_sleep(1, 1, 45.0) is False
 
 
 class TestDefaultSuitePath:

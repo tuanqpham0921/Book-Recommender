@@ -2,13 +2,17 @@
 
 Queries are loaded from evals/suites/query_suite.json (override with --suite).
 Each query is POSTed to /session/{id}/message and its SSE stream is
-consumed to completion before the next query is sent.
+consumed to completion before the next query is sent. By default the runner
+sleeps 45s between queries (override with --sleep, 0 to disable) to stay
+under the OpenAI TPM rate limit (see docs/backlog.md Reliability).
 
-After the run, one test_runs row is written per completed query linking the
-chat_runs row (chat_id, captured from the chat.id SSE event) back to its
-suite entry (suite_name, suite_case_id) — evals/report.py joins on that to
-build the regression report. Skip the DB write with --no-record, e.g. when
-the target backend's database isn't reachable from this machine.
+A test_runs row is written right after each completed query (linking the
+chat_runs row — chat_id, captured from the chat.id SSE event — back to its
+suite entry: suite_name, suite_case_id), not batched until the end — so a
+run that's interrupted partway still has everything it completed recorded.
+evals/report.py joins on that to build the regression report. Skip the DB
+write with --no-record, e.g. when the target backend's database isn't
+reachable from this machine.
 
 Usage (from backend/, or via the make targets in evals/makefile):
     poetry run python evals/run_suites.py
@@ -16,6 +20,7 @@ Usage (from backend/, or via the make targets in evals/makefile):
     poetry run python evals/run_suites.py --ids 1 16 50
     poetry run python evals/run_suites.py --new-session-per-query
     poetry run python evals/run_suites.py --suite evals/suites/query_suite_extended.json
+    poetry run python evals/run_suites.py --sleep 0
 """
 
 import argparse
@@ -31,11 +36,15 @@ DEFAULT_SUITE_PATH = Path(__file__).parent / "suites" / "query_suite.json"
 
 STREAM_TIMEOUT_SECONDS = 300.0
 EVENT_PRINT_LIMIT = 200
+DEFAULT_SLEEP_SECONDS = 45.0
 
 
-# TODO
-# add sleep for 45s before the next one
-# make updating the the feedback query progressively
+def should_sleep(index: int, total: int, sleep_seconds: float) -> bool:
+    """Whether to pause after the query at `index` (1-based) of `total` —
+    never after the last one (nothing follows it), never when sleeping is
+    disabled (sleep_seconds <= 0)."""
+    return sleep_seconds > 0 and index < total
+
 
 def truncate(text: str, limit: int = EVENT_PRINT_LIMIT) -> str:
     if len(text) <= limit:
@@ -119,12 +128,17 @@ def send_query(
 def record_test_runs(links: list[dict]) -> None:
     """Insert one test_runs row per completed query, linking its chat_runs
     row to the suite entry that produced it. Each link dict already matches
-    TestRunModel columns: chat_id, suite_name, suite_case_id.
+    TestRunModel columns: chat_id, suite_name, suite_case_id. Called with a
+    single-item list right after each query (see main()) rather than once
+    for the whole run, so a row is only ever missing from chat_runs by the
+    small margin between the SSE stream closing and the backend's own
+    record_chat_run() commit finishing — not by an entire suite's worth of
+    subsequent queries.
 
     test_runs.chat_id is a real FK, and the backend commits a run's
     chat_runs row just *after* its SSE stream closes — so only chat_ids
     already present in chat_runs are inserted, with one short retry for
-    stragglers (in practice only ever the final query of the run)."""
+    stragglers."""
     # imported here, not at module top: plain runs against a remote backend
     # (--no-record) shouldn't require DB config or the backend's dependencies
     import asyncio
@@ -204,6 +218,13 @@ def main() -> int:
         action="store_true",
         help="Skip writing test_runs rows to the database after the run.",
     )
+    parser.add_argument(
+        "--sleep",
+        type=float,
+        default=DEFAULT_SLEEP_SECONDS,
+        help=f"Seconds to sleep between queries, to stay under the OpenAI "
+        f"TPM rate limit (default: {DEFAULT_SLEEP_SECONDS:.0f}). 0 disables it.",
+    )
     args = parser.parse_args()
 
     entries = load_suite(args.suite, args.difficulty, args.ids)
@@ -212,7 +233,6 @@ def main() -> int:
         return 1
     print(f"loaded {len(entries)} queries from {args.suite}")
 
-    links: list[dict] = []
     with httpx.Client(base_url=args.base_url) as client:
         session_id = None
         for i, entry in enumerate(entries, start=1):
@@ -227,19 +247,22 @@ def main() -> int:
                 chat_id = send_query(client, session_id, entry["query"])
             except httpx.HTTPError as e:
                 print(f"  FAILED: {e}", file=sys.stderr)
-                # return 1
-                continue
-            if chat_id:
-                links.append(
-                    {
-                        "chat_id": chat_id,
-                        "suite_name": args.suite.stem,
-                        "suite_case_id": entry["id"],
-                    }
+                chat_id = None
+
+            if chat_id and not args.no_record:
+                record_test_runs(
+                    [
+                        {
+                            "chat_id": chat_id,
+                            "suite_name": args.suite.stem,
+                            "suite_case_id": entry["id"],
+                        }
+                    ]
                 )
 
-    if links and not args.no_record:
-        record_test_runs(links)
+            if should_sleep(i, len(entries), args.sleep):
+                print(f"  sleeping {args.sleep:.0f}s before the next query...")
+                time.sleep(args.sleep)
 
     return 0
 

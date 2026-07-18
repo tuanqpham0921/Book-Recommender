@@ -28,10 +28,12 @@ make query-suite-all-seq    # sequential; -all-tmux for one pane per suite
 ```
 
 The runner (`run_suites.py`) POSTs each query to `/session/{id}/message`, consumes the
-SSE stream, and records one `test_runs` row per query (chat_id FK → `chat_runs` +
-suite name + case id). Sessions are minted as `test_<uuid8>` so eval traffic is
-filterable. Flags: `--suite`, `--difficulty`, `--ids`, `--new-session-per-query`,
-`--no-record`.
+SSE stream, and records its `test_runs` row (chat_id FK → `chat_runs` + suite name +
+case id) right away — not batched until the run finishes — so an interrupted run still
+has everything it completed recorded. Sessions are minted as `test_<uuid8>` so eval
+traffic is filterable. By default it sleeps 45s between queries to stay under the
+OpenAI TPM rate limit (`--sleep 0` to disable). Flags: `--suite`, `--difficulty`,
+`--ids`, `--new-session-per-query`, `--no-record`, `--sleep`.
 
 Then post-process:
 
