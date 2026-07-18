@@ -69,13 +69,24 @@ observations in [eval-strategy.md](eval-strategy.md).
 exactly the V1 catalog from the taxonomy doc. (Retrieval side already matches; Compare
 removal and Provide_Feedback registration still pending.)
 
-### Phase 2 — Prompt & docstring catalog improvements
-- Make the parse-intent prompt generic: "you are a parse-intent assistant, you have
-  access to these tools and that's it — select the tools to complete the user query."
-- Add example queries to every node docstring (the catalog the LLM sees), including
-  compound-intent examples so secondary goals (feedback, project info) stop getting
-  dropped.
-- Add argument in/out signatures to catalog entries — "like a function".
+### Phase 2 — Prompt & docstring catalog improvements ✅ (2026-07-18)
+- [x] **Generic prompts (2026-07-18)**: both `0_initial_system.txt` (parse-intent) and
+  `2_strategy_classification.txt` (strategy-classification) rewritten into the same
+  generic markdown shape (`Role/Objective/Trust Boundaries/Rules/Guidelines/Output/Catalog`).
+  Zero book-specific wording in either; the book-specific `{book_constraints}`/`{book_guides}`
+  placeholders and their call-site injection were dropped along with the old free-text
+  Examples blocks.
+- [x] **Example queries + Args/Returns signatures on every node docstring**: all V1 node
+  schemas (`app/domains/{books,project,users}/schemas/request_schemas.py`) follow
+  `Purpose/Args/Returns/Use when/Do not use/Constraints/Example queries`. Compound-intent
+  coverage (secondary goals like feedback/project info alongside a book request, so they
+  stop getting dropped) lives as eval cases in `evals/suites/query_suite.json`
+  (ids 37/41/45/47/50) — actual pass/fail verification is Phase 4's job.
+- [x] **Few-shot examples moved into schemas**: worked examples for both pipeline-stage
+  tool calls (`InitialParseRequest`, `StrategyRequest`) now live as
+  `model_config` JSON-schema `examples` on the pydantic models themselves
+  (`parse_intent.py`, `strategy_classification.py`) instead of free-text prompt blocks —
+  this way they survive into the actual OpenAI tool schema sent to the LLM.
 
 **Exit:** catalog renders examples + signatures; prompt contains nothing book-specific.
 
