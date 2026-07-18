@@ -10,7 +10,7 @@ class ExtendedBookNodeTypeEnum(str, Enum):
     """
 
     # Retrievals — catalog lookups
-    FIND_AUTHOR = "Retrieve_by_Author"
+    # FIND_AUTHOR = "Retrieve_by_Author" — promoted to app.domains.books.node_types (V1 core)
     FIND_SERIES = "Retrieve_Series"
     AUTHOR_INFO = "Retrieve_Author_Info"
     NEW_RELEASES = "Retrieve_New_Releases"

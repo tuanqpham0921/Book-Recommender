@@ -17,7 +17,6 @@ from pydantic import Field
 from playground.app_mock.extended_node_types import ExtendedBookNodeTypeEnum
 from playground.app_mock.extended_request_schemas import (
     AuthorInfoRetrieval,
-    FindByAuthorRetrieval,
     FindSeriesRetrieval,
     MarkBookAsReadAction,
     NewReleasesRetrieval,
@@ -39,7 +38,6 @@ from playground.app_mock.extended_request_schemas import (
 # -------------------------------------------------------------------
 # BOOK DOMAIN (extended)
 ExtendedBOOK_RETRIEVAL_CLASSES = (
-    FindByAuthorRetrieval,
     FindSeriesRetrieval,
     AuthorInfoRetrieval,
     NewReleasesRetrieval,
@@ -79,7 +77,6 @@ ExtendedREQUEST_CLASSES = (
 )
 ExtendedAnyStrategyRequest = Annotated[
     Union[
-        FindByAuthorRetrieval,
         FindSeriesRetrieval,
         AuthorInfoRetrieval,
         NewReleasesRetrieval,
@@ -104,7 +101,6 @@ ExtendedAnyStrategyRequest = Annotated[
 
 # Manual node_type → class lookup — add new mappings here
 ExtendedNODE_TYPE_TO_CLS: dict[str, type] = {
-    ExtendedBookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
     ExtendedBookNodeTypeEnum.FIND_SERIES.value: FindSeriesRetrieval,
     ExtendedBookNodeTypeEnum.AUTHOR_INFO.value: AuthorInfoRetrieval,
     ExtendedBookNodeTypeEnum.NEW_RELEASES.value: NewReleasesRetrieval,

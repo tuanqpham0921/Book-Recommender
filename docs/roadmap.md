@@ -37,18 +37,37 @@ Create `docs/`, migrate the TODO files, fix stale READMEs/CLAUDE.md, record revi
 observations in [eval-strategy.md](eval-strategy.md).
 
 ### Phase 1 — Node taxonomy & registry cleanup
-- Strip `filters` from `RecommendationStrategy`; enforce single-dimension filters on
-  `FindByTraitsRetrieval`.
-- Remove `Analyze_Compare` from `NODE_TYPE_TO_CLS`/catalog/union (class stays parked).
-- Register `Provide_Feedback`.
-- Add the clarification/rejection node: schema + enum entry + registration + planner
+- [x] **Retrieval taxonomy (2026-07-17)**: `Retrieve_by_Traits` deleted; `Retrieve_by_Author`
+  (promoted from the extended playground schemas) and `Retrieve_by_Genre` (new) added
+  alongside the existing `Retrieve_by_Title`/`Retrieve_by_ISBN13` — four single-dimension
+  nodes, no `BooksFilter` object on any of them. `filters` stripped from
+  `RecommendationStrategy` too. Output contracts added
+  (`app/domains/books/schemas/output_schemas.py`). Book-domain registry entries moved to
+  `app/domains/books/registry.py`, composed by `app/registry.py`. Mock executors updated
+  to match. Full detail: [design/node-taxonomy-v1.md](design/node-taxonomy-v1.md).
+- [x] **Remove `Analyze_Compare` (2026-07-17)**: pulled from `BOOK_ANALYZE_CLASSES`,
+  `BOOK_NODE_TYPE_TO_CLS`, `AnyStrategyRequest`, and the mock executor mapping.
+  `CompareStrategy`/`CompareBooksExecutor` stay defined and directly importable
+  (genuinely parked, not deleted) — the planner just never offers or accepts them
+  (`parse_intent.py` gates on `NODE_TYPE_TO_CLS` membership).
+- [x] **Register `Provide_Feedback` (2026-07-17)**: added to `PROJECT_NODE_TYPE_TO_CLS`
+  (new `app/domains/project/registry.py`, mirroring the books domain), given a
+  discriminating docstring (vs. `Retrieve_Project_Info` and vs. re-requesting
+  recommendations), and given a mock executor
+  (`playground/app_mock/executors/project/feedback.py`) so a plan targeting it actually
+  runs. Falls into the catalog's "Other supported actions" tier (not retrieval or
+  analyze). Note: this is a *conversational* feedback node, unrelated to the reviewer
+  workflow's `PUT /feedback/review` endpoint — different mechanism, same word.
+- [ ] Add the clarification/rejection node: schema + enum entry + registration + planner
   handling, so refused goals produce a helpful reply instead of a silently smaller plan.
   Cover complexity overload, prompt injection, and degenerate input (the adversarial
-  suite's categories).
+  suite's categories) — plus cross-column/quantitative queries ("over 300 pages"), which
+  have no node to route to now that `Retrieve_by_Traits` is gone.
 - Extension block untouched — it stays the manual toggle.
 
 **Exit:** with the extension block commented out, `python -m app.registry` prints
-exactly the V1 catalog from the taxonomy doc.
+exactly the V1 catalog from the taxonomy doc. (Retrieval side already matches; Compare
+removal and Provide_Feedback registration still pending.)
 
 ### Phase 2 — Prompt & docstring catalog improvements
 - Make the parse-intent prompt generic: "you are a parse-intent assistant, you have

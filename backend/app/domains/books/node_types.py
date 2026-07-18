@@ -2,10 +2,11 @@ from enum import Enum
 
 
 class BookNodeTypeEnum(str, Enum):
-    # Retrievals
+    # Retrievals — single dimension, no cross-column filtering
     FIND_ISBN13 = "Retrieve_by_ISBN13"
     FIND_TITLE = "Retrieve_by_Title"
-    FIND_TRAITS = "Retrieve_by_Traits"
+    FIND_AUTHOR = "Retrieve_by_Author"
+    FIND_GENRE = "Retrieve_by_Genre"
 
     # Strategies
     COMPARE = "Analyze_Compare"

@@ -100,7 +100,7 @@ Infrastructure abstractions in `common/` that centralize logging, error catching
 
 `app/domains/` defines what the system can do:
 
-- **`BookNodeTypeEnum`** — `Retrieve_by_ISBN13`, `Retrieve_by_Title`, `Retrieve_by_Traits`, `Analyze_Compare`, `Analyze_Recommend`
+- **`BookNodeTypeEnum`** — `Retrieve_by_ISBN13`, `Retrieve_by_Title`, `Retrieve_by_Author`, `Retrieve_by_Genre`, `Analyze_Compare`, `Analyze_Recommend`. Each retrieval node is single-dimension (no cross-column filtering) — see [docs/design/node-taxonomy-v1.md](docs/design/node-taxonomy-v1.md). Per-domain class tuples and the node_type→class mapping for this domain live in `app/domains/books/registry.py`; `app/registry.py` composes it with the other domains.
 - **`NodeTypeEnum`** — union of Book/User/Project/Unknown node types
 - `app/registry.py` maps node type strings to their implementations
 

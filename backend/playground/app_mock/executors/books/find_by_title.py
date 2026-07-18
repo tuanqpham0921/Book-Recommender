@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.domains.books.schemas import FindByTitleRetrieval
+from app.domains.books.schemas.output_schemas import BookSummary, FindByTitleOutput
 from ..base import MockRetrievalExecutorWorkflow
 from ...utils.mock_books import find_by_title
 
@@ -17,4 +18,8 @@ class FindByTitleExecutor(MockRetrievalExecutorWorkflow):
         self, task: FindByTitleRetrieval, dependent_results: dict
     ) -> dict[str, Any]:
         books = self.select_books(task, dependent_results)
-        return {"title": task.title, "isbn13s": [b["isbn13"] for b in books]}
+        output = FindByTitleOutput(
+            title=task.title,
+            books=[BookSummary.model_validate(b) for b in books],
+        )
+        return output.model_dump()

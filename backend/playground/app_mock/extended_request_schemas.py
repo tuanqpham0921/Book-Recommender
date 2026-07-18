@@ -27,25 +27,6 @@ MAX_RATING = 5.0
 # Retrievals — catalog lookups
 
 
-class FindByAuthorRetrieval(DomainRequest):
-    """Retrieve books written by one or more named authors — an author's bibliography.
-
-    Use when the author is the subject of the search: "books by Ursula K. Le Guin",
-    "what else has Brandon Sanderson written", "show me some Agatha Christie".
-    Not for: a single named title where the author is only a hint ("Dune by Frank
-    Herbert" → Retrieve_by_Title), facts about the author themself
-    (Retrieve_Author_Info), or taste-based suggestions (Analyze_Recommend).
-    """
-
-    node_type: Literal[BookNodeTypeEnum.FIND_AUTHOR] = BookNodeTypeEnum.FIND_AUTHOR
-    authors: List[str] = Field(
-        ..., min_length=1, description="Author names whose books to retrieve"
-    )
-    filters: Optional[BooksFilter] = Field(
-        None, description="Constraints on the returned books (year, rating, pages, …)"
-    )
-
-
 class FindSeriesRetrieval(DomainRequest):
     """Retrieve every book belonging to a named series or saga.
 

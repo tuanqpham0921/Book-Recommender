@@ -7,7 +7,6 @@ from typing import Optional, Literal, List
 from pydantic import Field
 from app.domains.base_request import DomainRequest, AnalyzeBaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
-from db.schema import BooksFilter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -44,16 +43,19 @@ class CompareStrategy(AnalyzeBaseRequest):
 class RecommendationStrategy(AnalyzeBaseRequest):
     """Suggest books that fit the user's ask — the analyze step for most recommendation queries.
 
-    Use when the user wants new titles to read, not when they only want to look up a known book.
+    Use when the user wants new titles to read, not when they only want to look up a known book
+    or an author's/genre's full catalog (Retrieve_by_Author / Retrieve_by_Genre). This node does
+    not query the database itself — it reasons over retrieved books (depends_on) and/or the
+    user's stated taste; it never carries its own filters.
     Common cases:
       - Similarity: "books like X", "more like X or Y books" → reference_books with those
       - Thematic / mood: "cozy mysteries", "epic sci-fi with strong world-building" → semantic_input
-        for theme, tone, or concept; optional filters for genre, length, rating, etc.
+        for theme, tone, or concept
       - Mixed: named anchor book(s) plus a twist ("like X but darker/shorter") → reference_books
         plus semantic_input; depends_on on lookups for the named books.
 
-    semantic_input is for themes and mood only — not titles, authors, or filter fields.
-    filters constrain the recommendation result set; they do not replace retrieval when a reference book must be resolved first.
+    semantic_input is for themes and mood only — not titles, authors, or genres (those are
+    Retrieve_by_Title / Retrieve_by_Author / Retrieve_by_Genre).
     """
 
     node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION
@@ -62,9 +64,6 @@ class RecommendationStrategy(AnalyzeBaseRequest):
     )
     reference_books: Optional[List[str]] = Field(
         None, description="Books titles to base recommendations on"
-    )
-    filters: Optional[BooksFilter] = Field(
-        None, description="Optional result constraints"
     )
 
     def model_post_init(self, __context) -> None:
@@ -75,7 +74,13 @@ class RecommendationStrategy(AnalyzeBaseRequest):
 
 
 class FindByTitleRetrieval(DomainRequest):
-    """Retrieve a book by title from the database."""
+    """Retrieve a single known book by its title from the database.
+
+    Use when a specific title is named: "find Dune", "do you have The Great Gatsby".
+    authors is only a disambiguating hint here ("Dune by Frank Herbert") — when the
+    author is the actual subject of the search ("books by Frank Herbert"), use
+    Retrieve_by_Author instead.
+    """
 
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
     title: str = Field(..., description="Book title to search for")
@@ -85,19 +90,38 @@ class FindByTitleRetrieval(DomainRequest):
 
 
 class FindByISBN13Retrieval(DomainRequest):
-    """Retrieve a book by ISBN13 from the database."""
+    """Retrieve a single book by its exact ISBN13 from the database.
+
+    Use only when an ISBN13 is explicitly given or already known from a prior step.
+    """
 
     node_type: Literal[BookNodeTypeEnum.FIND_ISBN13] = BookNodeTypeEnum.FIND_ISBN13
     isbn13: str = Field(..., description="ISBN13 to search for")
 
 
-class FindByTraitsRetrieval(DomainRequest):
-    """Retrieve a book by traits (not isbn13 or title) from the database.
-    (trait, genre, rating, page count, or filter-based search)
+class FindByAuthorRetrieval(DomainRequest):
+    """Retrieve books written by one or more named authors — an author's bibliography.
+
+    Use when the author is the subject of the search: "books by Ursula K. Le Guin",
+    "what else has Brandon Sanderson written", "show me some Agatha Christie".
+    Not for: a single named title where the author is only a hint ("Dune by Frank
+    Herbert" → Retrieve_by_Title), or taste-based suggestions (Analyze_Recommend).
     """
 
-    node_type: Literal[BookNodeTypeEnum.FIND_TRAITS] = BookNodeTypeEnum.FIND_TRAITS
-    search_criteria: str = Field(
-        ..., description="Non-specific search criteria for traits-based search"
+    node_type: Literal[BookNodeTypeEnum.FIND_AUTHOR] = BookNodeTypeEnum.FIND_AUTHOR
+    authors: List[str] = Field(
+        ..., min_length=1, description="Author names whose books to retrieve"
     )
-    filters: BooksFilter = Field(..., description="Optional filters for database query")
+
+
+class FindByGenreRetrieval(DomainRequest):
+    """Retrieve books belonging to a named genre or category from the database.
+
+    Use when genre is the primary axis of the search: "fantasy books", "any good
+    mysteries", "nonfiction about space". Not for: a themed or mood-based search that
+    isn't a clean genre label ("something cozy and hopeful" → Analyze_Recommend), or a
+    single known title (Retrieve_by_Title).
+    """
+
+    node_type: Literal[BookNodeTypeEnum.FIND_GENRE] = BookNodeTypeEnum.FIND_GENRE
+    genre: str = Field(..., description="Genre or category to search for")

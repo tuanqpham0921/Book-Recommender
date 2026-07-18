@@ -7,19 +7,24 @@ from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
-from app.domains.books.schemas.request_schemas import (
-    CompareStrategy,
+from app.domains.books.registry import (
+    BOOK_NODE_TYPE_TO_CLS,
+    BOOK_RETRIEVAL_CLASSES,
+    BOOK_ANALYZE_CLASSES,
+    BOOK_REQUEST_CLASSES,
     FindByISBN13Retrieval,
+    FindByAuthorRetrieval,
+    FindByGenreRetrieval,
     FindByTitleRetrieval,
-    FindByTraitsRetrieval,
     RecommendationStrategy,
 )
-from app.domains.books.node_types import BookNodeTypeEnum
-from app.domains.project.schemas.request_schemas import (
+from app.domains.project.registry import (
+    PROJECT_NODE_TYPE_TO_CLS,
+    PROJECT_RETRIEVAL_CLASSES,
+    PROJECT_REQUEST_CLASSES,
     FeedbackRequest,
     ProjectInfoRequest,
 )
-from app.domains.project.node_types import ProjectNodeTypeEnum
 from app.domains.node_types import NodeTypeEnum
 from app.domains.users.schemas.request_schemas import (
     DeveloperInfoRequest,
@@ -29,25 +34,14 @@ from app.domains.users.node_types import UserNodeTypeEnum
 from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
 
 # -------------------------------------------------------------------
-# BOOK DOMAIN
-BOOK_RETRIEVAL_CLASSES = (
-    FindByTitleRetrieval,
-    FindByISBN13Retrieval,
-    FindByTraitsRetrieval,
-)
-BOOK_ANALYZE_CLASSES = (
-    CompareStrategy,
-    RecommendationStrategy,
-)
-BOOK_REQUEST_CLASSES = BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES
+# BOOK DOMAIN — class tuples and BOOK_NODE_TYPE_TO_CLS come from
+# app.domains.books.registry (imported above); this domain doesn't define
+# them inline anymore.
 
 # -------------------------------------------------------------------
-# PROJECT DOMAIN
-PROJECT_RETRIEVAL_CLASSES = (
-    ProjectInfoRequest,
-)
-
-PROJECT_REQUEST_CLASSES = PROJECT_RETRIEVAL_CLASSES
+# PROJECT DOMAIN — class tuples and PROJECT_NODE_TYPE_TO_CLS come from
+# app.domains.project.registry (imported above); this domain doesn't define
+# them inline anymore.
 
 # -------------------------------------------------------------------
 # USER DOMAIN
@@ -66,11 +60,11 @@ ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
 REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
 AnyStrategyRequest = Annotated[
     Union[
-        CompareStrategy,
         RecommendationStrategy,
         FindByTitleRetrieval,
         FindByISBN13Retrieval,
-        FindByTraitsRetrieval,
+        FindByAuthorRetrieval,
+        FindByGenreRetrieval,
         UserInfoRequest,
         DeveloperInfoRequest,
         FeedbackRequest,
@@ -80,16 +74,13 @@ AnyStrategyRequest = Annotated[
 ]
 
 
-# Manual node_type → class lookup — add new mappings here
+# Manual node_type → class lookup — add new mappings here (book/project
+# entries come from their own domains.*.registry modules)
 NODE_TYPE_TO_CLS: dict[str, type] = {
-    BookNodeTypeEnum.COMPARE.value: CompareStrategy,
-    BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
-    BookNodeTypeEnum.FIND_TITLE.value: FindByTitleRetrieval,
-    BookNodeTypeEnum.FIND_ISBN13.value: FindByISBN13Retrieval,
-    BookNodeTypeEnum.FIND_TRAITS.value: FindByTraitsRetrieval,
+    **BOOK_NODE_TYPE_TO_CLS,
+    **PROJECT_NODE_TYPE_TO_CLS,
     UserNodeTypeEnum.USER_INFO.value: UserInfoRequest,
     UserNodeTypeEnum.DEVELOPER_INFO.value: DeveloperInfoRequest,
-    ProjectNodeTypeEnum.PROJECT_INFO.value: ProjectInfoRequest,
 }
 
 

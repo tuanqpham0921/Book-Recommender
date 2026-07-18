@@ -135,5 +135,21 @@ def find_by_isbn13(isbn13: str) -> dict:
     return MOCK_BOOKS[0]
 
 
-def find_by_traits() -> list[dict]:
-    return list(MOCK_BOOKS)
+def find_by_author(authors: list[str]) -> list[dict]:
+    """Case-insensitive substring match against any of the given author
+    names; falls back to the first book so the mock always has something to
+    stream."""
+    queries = [a.strip().lower() for a in authors]
+    matches = [
+        book for book in MOCK_BOOKS
+        if any(query in book["authors"].lower() for query in queries)
+    ]
+    return matches or [MOCK_BOOKS[0]]
+
+
+def find_by_genre(genre: str) -> list[dict]:
+    """Case-insensitive genre match; falls back to the first book so the
+    mock always has something to stream."""
+    query = genre.strip().lower()
+    matches = [book for book in MOCK_BOOKS if book["genre"].lower() == query]
+    return matches or [MOCK_BOOKS[0]]

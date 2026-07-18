@@ -6,7 +6,14 @@ from app.domains.project.node_types import ProjectNodeTypeEnum
 
 
 class FeedbackRequest(DomainRequest):
-    """User wants to send feedback about the project (feedback text, optional contact_info)."""
+    """Record the user's feedback, opinion, bug report, or suggestion about this app itself.
+
+    Use when the user is commenting on the app/planner/experience: "this recommendation
+    tool is great", "the chat feels slow", "you should add X feature", "found a bug when
+    I asked about...". Not for: reacting to a specific bad recommendation by wanting
+    different books (that's a new Analyze_Recommend, not feedback), or asking questions
+    about the project rather than commenting on it (Retrieve_Project_Info).
+    """
 
     node_type: Literal[ProjectNodeTypeEnum.FEEDBACK] = ProjectNodeTypeEnum.FEEDBACK
     # NOTE: good place to have a simple HITL (Human In The Loop) for feedback

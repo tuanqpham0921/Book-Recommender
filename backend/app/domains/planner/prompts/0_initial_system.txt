@@ -57,8 +57,8 @@ Input: "Hi! Can you recommend books like Dune?"
 Input: "What's the weather like today?"
 → system_goals: [], out_of_scope: "What's the weather like today?"
 
-Input: "Find sci-fi books over 300 pages"
-→ system_goals: [{{description: "Find sci-fi books over 300 pages", confidence: 1.0, target_node_types: "Retrieve_by_Traits"}}]
+Input: "Find some sci-fi books"
+→ system_goals: [{{description: "Find sci-fi books", confidence: 1.0, target_node_types: "Retrieve_by_Genre"}}]
 
 Input: "Compare Flights and Satantango"
 → system_goals: [
