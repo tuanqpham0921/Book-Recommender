@@ -109,3 +109,4 @@ suite-report:
 
 # TODO: make the path to variable names
 # add the report and eval to all
+# make a better run make, so it dumps and copy the logs over
