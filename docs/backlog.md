@@ -32,6 +32,21 @@ line numbers may drift, the file and symbol names are the stable part.
 - **`FeedbackIn.message` has no max_length** (`app/api/schemas/external.py`) — also move
   `ChatIn`'s ad-hoc length check from the route into the schema for consistency.
 
+## Reliability (P1 — discovered during Phase 2 eval runs)
+
+- **OpenAI TPM rate limit hit under concurrent suite runs** — after the Phase 2 docstring
+  expansion (fuller `Purpose/Args/Returns/.../Example queries` catalog entries, larger
+  `StrategyRequest` tool schemas), running the eval suites concurrently (`make
+  query-suite-all`) trips OpenAI's tokens-per-minute limit; several `run ok: ❌` rows in
+  the eval report reflect this (eval report commit `9d0e402`,
+  `backend/evals/results/7_18_nodes_description/`). Three options, not yet decided:
+  (1) leave as-is and surface a user-facing "rate limited, try again" message — cheapest
+  to ship but the user feels it directly; (2) exponential backoff/retry on the OpenAI
+  client call — smooths over transient limits but adds latency and isn't guaranteed to be
+  enough under real concurrent load; (3) request a higher TPM tier from OpenAI — solves it
+  structurally but is an account-level fix, not a code fix, and doesn't help local/free-tier
+  dev. Needs a decision before V1 production traffic.
+
 ## Correctness (P1 = ship-blocking, otherwise P2)
 
 - **P1 — Frontend double-session race** (`ChatBot.jsx` mount-time `initSession()` +
@@ -47,6 +62,16 @@ line numbers may drift, the file and symbol names are the stable part.
 - **P2 — Semaphores bug (investigate)** — concurrency issue seen during suite runs; also
   try lowering the semaphore limit and observe. Pairs with the concurrency/timeout test
   item below.
+- **P2 — Review page doesn't distinguish error types** (`frontend/src/pages/ChatReviewPage.jsx`
+  `ChatRunRow`) — the negative badge and "Planner envelope" detail both key off one flat
+  `run.planner?.runtime_error`/`.message`. A genuine unhandled exception in the workflow
+  and a child step's `StepFailure` aborting upward currently stamp the exact same
+  `runtime_error` field (`backend/common/workflow.py` — an interim fix; the fuller
+  discriminated-union error redesign was deliberately deferred), so both render
+  identically in the UI. A reviewer can't tell "the workflow itself crashed" from "a step
+  under it failed" without opening the raw JSON envelope. Needs either a backend-side
+  error-kind field to key off of, or at minimum a distinct label/color derived from
+  what's already in `errorDetail` (e.g. exception class parsed from the traceback).
 
 ## Performance (P2)
 
