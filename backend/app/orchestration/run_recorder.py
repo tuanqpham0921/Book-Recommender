@@ -86,13 +86,13 @@ async def record_chat_run(
 
         if app_env == "development":
             row_cleaned = remove_empty_values(row)
-            save_file(row_cleaned, file_name=f"chat_run_{row['chat_id']}")
+            save_file(row_cleaned, file_name=f"{row['chat_id']}")
             # save_file(row_cleaned, file_name=f"chat_run_dev")
 
             if task_runner and task_runner.result:
                 result = to_serializable(task_runner.result)
                 result = remove_empty_values(result)
-                save_file(result, file_name=f"task_reuslt_{row['chat_id']}")
+                save_file(result, file_name=f"task_result_{row['chat_id']}")
                 # save_file(result, file_name=f"task_reuslt_dev")
 
 
