@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Any, Optional, Literal, cast
 from openai.types.chat import ParsedFunctionToolCall
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, ValidationError
 
 from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
@@ -109,6 +109,104 @@ class InitialParseRequest(BaseModel):
     Constraints: at most MAX_SYSTEM_GOALS (10) goals per call; every
     in-domain part of the message should map to exactly one goal.
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "Hi! Can you recommend books like Dune?",
+                    "request": {
+                        "small_talk": "Hi!",
+                        "system_goals": [
+                            {
+                                "description": "Find Dune by title",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Title",
+                            },
+                            {
+                                "description": "Recommend books similar to Dune",
+                                "confidence": 1.0,
+                                "target_node_type": "Analyze_Recommend",
+                            },
+                        ],
+                        "reasoning": "Greeting plus a direct match to two supported capabilities",
+                    },
+                },
+                {
+                    "query": "What's the weather like today?",
+                    "request": {
+                        "system_goals": [],
+                        "out_of_scope": "What's the weather like today?",
+                        "reasoning": "No supported capability covers weather",
+                    },
+                },
+                {
+                    "query": "Find some sci-fi books",
+                    "request": {
+                        "system_goals": [
+                            {
+                                "description": "Find sci-fi books",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Genre",
+                            }
+                        ],
+                        "reasoning": "Direct match to a supported capability",
+                    },
+                },
+                {
+                    "query": "Compare Flights and Satantango",
+                    "request": {
+                        "system_goals": [
+                            {
+                                "description": "Find Flights",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Title",
+                            },
+                            {
+                                "description": "Find Satantango",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Title",
+                            },
+                            {
+                                "description": "Compare Flights and Satantango",
+                                "confidence": 1.0,
+                                "target_node_type": "Analyze_Compare",
+                            },
+                        ],
+                        "reasoning": "Comparison requires retrieving both titles before comparing them",
+                    },
+                },
+                {
+                    "query": "What's my saved memory?",
+                    "request": {
+                        "system_goals": [
+                            {
+                                "description": "Retrieve user saved memory",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_User_Info",
+                            }
+                        ],
+                        "reasoning": "Direct match to a supported capability",
+                    },
+                },
+                {
+                    "query": "Can you help me with calculus homework?",
+                    "request": {
+                        "system_goals": [],
+                        "out_of_scope": "Can you help me with calculus homework?",
+                        "reasoning": "No supported capability covers homework help",
+                    },
+                },
+                {
+                    "query": "that one",
+                    "request": {
+                        "system_goals": [],
+                        "reasoning": "Ambiguous — no mappable capability",
+                    },
+                },
+            ]
+        }
+    )
+
     node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = PlannerNodeTypeEnum.PARSE_INTENT
 
     small_talk: OptionalStr = Field(
