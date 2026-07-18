@@ -33,6 +33,10 @@ STREAM_TIMEOUT_SECONDS = 300.0
 EVENT_PRINT_LIMIT = 200
 
 
+# TODO
+# add sleep for 45s before the next one
+# make updating the the feedback query progressively
+
 def truncate(text: str, limit: int = EVENT_PRINT_LIMIT) -> str:
     if len(text) <= limit:
         return text
