@@ -30,8 +30,13 @@ def make_client():
         return OpenAIClient(make_settings())
 
 
-def make_fake_completion(content="hi", total=10, prompt=7, completion=3):
-    usage = MagicMock(total_tokens=total, prompt_tokens=prompt, completion_tokens=completion)
+def make_fake_completion(content="hi", total=10, prompt=7, completion=3, cached=0):
+    usage = MagicMock(
+        total_tokens=total,
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        prompt_tokens_details=MagicMock(cached_tokens=cached),
+    )
     message = MagicMock(content=content, tool_calls=None, refusal=None)
     completion = MagicMock(id="cmpl-123", choices=[MagicMock(message=message)], usage=usage)
     return completion
@@ -135,6 +140,53 @@ class TestExecute:
         assert result.token_usage.total == 10
         assert result.token_usage.prompt == 7
         assert result.token_usage.completion == 3
+
+    @pytest.mark.asyncio
+    async def test_cached_tokens_propagated(self):
+        fake_completion = make_fake_completion(total=10, prompt=8, completion=2, cached=6)
+        self.client._chat_stream = AsyncMock(return_value=fake_completion)
+
+        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        result = await self.client.execute(req)
+
+        assert result.token_usage.cached == 6
+        assert result.token_usage.cache_hit_rate == 6 / 8
+
+    @pytest.mark.asyncio
+    async def test_missing_prompt_tokens_details_defaults_cached_to_zero(self):
+        # older models/endpoints return usage without prompt_tokens_details
+        fake_completion = make_fake_completion()
+        fake_completion.usage.prompt_tokens_details = None
+        self.client._chat_stream = AsyncMock(return_value=fake_completion)
+
+        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        result = await self.client.execute(req)
+
+        assert result.token_usage.cached == 0
+
+    @pytest.mark.asyncio
+    async def test_none_cached_tokens_defaults_to_zero(self):
+        # prompt_tokens_details present but cached_tokens itself is None
+        fake_completion = make_fake_completion()
+        fake_completion.usage.prompt_tokens_details = MagicMock(cached_tokens=None)
+        self.client._chat_stream = AsyncMock(return_value=fake_completion)
+
+        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        result = await self.client.execute(req)
+
+        assert result.token_usage.cached == 0
+
+    @pytest.mark.asyncio
+    async def test_no_usage_defaults_to_empty_token_usage(self):
+        fake_completion = make_fake_completion()
+        fake_completion.usage = None
+        self.client._chat_stream = AsyncMock(return_value=fake_completion)
+
+        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        result = await self.client.execute(req)
+
+        assert result.token_usage.total == 0
+        assert result.token_usage.cached == 0
 
     @pytest.mark.asyncio
     async def test_save_payload_called_when_flag_set(self):

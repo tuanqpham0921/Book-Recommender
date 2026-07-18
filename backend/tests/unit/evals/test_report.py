@@ -8,7 +8,13 @@ from datetime import datetime, timezone
 import pytest
 
 import evals.report as report
-from evals.report import build_report, latest_per_case, load_suite_entries, summarize
+from evals.report import (
+    build_report,
+    latest_per_case,
+    load_suite_entries,
+    summarize,
+    token_counts,
+)
 
 
 def make_row(case_id, *, suite_name="my_suite", chat_id=None, created_at=None, **overrides):
@@ -22,6 +28,7 @@ def make_row(case_id, *, suite_name="my_suite", chat_id=None, created_at=None, *
         "runtime_error": None,
         "duration_s": 4.0,
         "total_tokens": 100,
+        "token_usage": {"total": 100, "prompt": 80, "completion": 20, "cached": 0},
         "user_message": "recorded message",
     }
     row.update(overrides)
@@ -70,12 +77,29 @@ class TestLoadSuiteEntries:
         assert load_suite_entries("bad") == {}
 
 
+class TestTokenCounts:
+    def test_extracts_prompt_and_cached(self):
+        usage = {"total": 100, "prompt": 80, "completion": 20, "cached": 60}
+
+        assert token_counts(usage) == {"prompt": 80, "cached": 60}
+
+    def test_row_without_cached_field_counts_as_uncached(self):
+        # rows recorded before TokenUsage grew the cached field
+        assert token_counts({"total": 100, "prompt": 80})["cached"] == 0
+
+    def test_missing_or_malformed_is_all_zeros(self):
+        zeros = {"prompt": 0, "cached": 0}
+        assert token_counts(None) == zeros
+        assert token_counts("not a dict") == zeros
+        assert token_counts({"prompt": "NaN"}) == zeros
+
+
 class TestSummarize:
     def test_counts_and_averages(self):
         rows = [
             make_row(1, duration_s=2.0, total_tokens=100),
             make_row(2, ok=False, runtime_error="StepFailure", duration_s=6.0, total_tokens=300),
-            make_row(3, ok=None, duration_s=None, total_tokens=None),
+            make_row(3, ok=None, duration_s=None, total_tokens=None, token_usage=None),
         ]
 
         stats = summarize(rows)
@@ -87,14 +111,30 @@ class TestSummarize:
             "runtime_errors": 1,
             "total_tokens": 400,
             "avg_tokens": 200,
+            "cached_tokens": 0,
+            "cache_hit_rate": 0.0,
             "avg_duration_s": 4.0,
         }
+
+    def test_cache_hit_rate_from_summed_counts(self):
+        # per-run rates are 1.0 and 0.0 — the aggregate must come from the
+        # summed counts (0.5), not an average of rates
+        rows = [
+            make_row(1, token_usage={"prompt": 100, "cached": 100}),
+            make_row(2, token_usage={"prompt": 100, "cached": 0}),
+        ]
+
+        stats = summarize(rows)
+
+        assert stats["cached_tokens"] == 100
+        assert stats["cache_hit_rate"] == 0.5
 
     def test_empty_rows(self):
         stats = summarize([])
 
         assert stats["cases"] == 0
         assert stats["avg_tokens"] == 0
+        assert stats["cache_hit_rate"] == 0.0
         assert stats["avg_duration_s"] == 0.0
 
 
@@ -145,3 +185,17 @@ class TestBuildReport:
 
         assert "StepFailure" in out
         assert "❌" in out
+
+    def test_cached_tokens_and_hit_rate_shown(self, suites_dir):
+        out = self._build(
+            [make_row(1, token_usage={"total": 100, "prompt": 80, "cached": 60})]
+        )
+
+        assert "| 100 | 60 |" in out  # per-case tokens | cached cells
+        assert "75.0%" in out  # summary cache hit rate
+
+    def test_row_without_token_usage_renders_dash(self, suites_dir):
+        out = self._build([make_row(1, token_usage=None)])
+
+        assert "| 100 | — |" in out
+        assert "0.0%" in out

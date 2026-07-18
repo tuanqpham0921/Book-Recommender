@@ -5,7 +5,9 @@ chat_runs row it points at, pulls the goal types the run actually accepted
 (planner.output.parse_result.accepted_goals[].target_node_type), and diffs
 them against the case's expected_nodes in evals/suites/<suite_name>.json:
 matched / missing / extra, duplicates counted. Cases whose suite entry
-defines no expected_nodes are flagged rather than judged.
+defines no expected_nodes are flagged rather than judged. Each run's token
+usage (planner.token_usage, cached prompt tokens included) is reported
+per case, with per-suite and overall cache-hit-rate summaries.
 
 By default only the most recent run of each (suite_name, case_id) is
 evaluated — pass --all to include every recorded run. The markdown report is
@@ -131,6 +133,43 @@ def accepted_goal_types(planner: Any) -> list[str]:
     ]
 
 
+def planner_token_usage(planner: Any) -> dict[str, int]:
+    """total/prompt/cached token counts from a recorded planner envelope's
+    token_usage. Zeros for anything absent — rows recorded before the cached
+    field existed simply count as uncached."""
+    usage = planner.get("token_usage") if isinstance(planner, dict) else None
+    if not isinstance(usage, dict):
+        usage = {}
+    return {
+        "total": usage.get("total") if isinstance(usage.get("total"), int) else 0,
+        "prompt": usage.get("prompt") if isinstance(usage.get("prompt"), int) else 0,
+        "cached": usage.get("cached") if isinstance(usage.get("cached"), int) else 0,
+    }
+
+
+def summarize_tokens(usages: list[dict]) -> dict:
+    """Aggregate per-run token dicts (as returned by planner_token_usage)
+    into totals plus the cache hit rate — recomputed from the summed counts,
+    since per-run rates don't add."""
+    total = sum(u["total"] for u in usages)
+    prompt = sum(u["prompt"] for u in usages)
+    cached = sum(u["cached"] for u in usages)
+    return {
+        "total": total,
+        "prompt": prompt,
+        "cached": cached,
+        "cache_hit_rate": cached / prompt if prompt else 0.0,
+    }
+
+
+def _token_summary_line(token_stats: dict) -> str:
+    return (
+        f"{token_stats['total']:,} tokens total · "
+        f"{token_stats['cached']:,}/{token_stats['prompt']:,} prompt tokens cached "
+        f"({token_stats['cache_hit_rate']:.1%} cache hit rate)"
+    )
+
+
 def diff_node_types(
     expected: list[str] | None, actual: list[str]
 ) -> dict[str, list[str]] | None:
@@ -216,6 +255,7 @@ def build_eval_report(rows: list[dict], git_sha: str, generated_at: datetime) ->
         return "\n".join(lines) + "\n", summarize([])
 
     all_verdicts: list[dict] = []
+    all_usages: list[dict] = []
     suite_sections: list[str] = []
 
     for suite_name in sorted(suites):
@@ -223,22 +263,28 @@ def build_eval_report(rows: list[dict], git_sha: str, generated_at: datetime) ->
         entries = load_suite_entries(suite_name)
 
         verdicts = []
+        usages = []
         section = [
             f"### `{suite_name}`",
             "",
-            "| case | difficulty | query | result | missing | extra | run ok | chat_id |",
-            "|---|---|---|---|---|---|---|---|",
+            "| case | difficulty | query | result | missing | extra | run ok | tokens (cached) | chat_id |",
+            "|---|---|---|---|---|---|---|---|---|",
         ]
         for row in suite_rows:
             entry = entries.get(row["suite_case_id"], {})
             verdict = evaluate_row(row, entry)
             verdicts.append(verdict)
+            usage = planner_token_usage(row.get("planner"))
+            usages.append(usage)
 
             diff = verdict["diff"]
             query = entry.get("query") or row.get("user_message") or ""
             run_ok = {True: "✅", False: "❌"}.get(row["ok"], "❔")
             if row["runtime_error"]:
                 run_ok += f" {row['runtime_error']}"
+            tokens_cell = (
+                f"{usage['total']:,} ({usage['cached']:,})" if usage["total"] else "—"
+            )
             section.append(
                 f"| {row['suite_case_id']} "
                 f"| {entry.get('difficulty') or '—'} "
@@ -247,15 +293,26 @@ def build_eval_report(rows: list[dict], git_sha: str, generated_at: datetime) ->
                 f"| {', '.join(diff['missing']) if diff and diff['missing'] else '—'} "
                 f"| {', '.join(diff['extra']) if diff and diff['extra'] else '—'} "
                 f"| {run_ok} "
+                f"| {tokens_cell} "
                 f"| `{row['chat_id']}` |"
             )
-        section += ["", f"**{suite_name}:** {_summary_line(summarize(verdicts))}", ""]
+        section += [
+            "",
+            f"**{suite_name}:** {_summary_line(summarize(verdicts))}",
+            f"**{suite_name} tokens:** {_token_summary_line(summarize_tokens(usages))}",
+            "",
+        ]
 
         all_verdicts += verdicts
+        all_usages += usages
         suite_sections += section
 
     overall = summarize(all_verdicts)
-    lines += [f"**Overall:** {_summary_line(overall)}", ""]
+    lines += [
+        f"**Overall:** {_summary_line(overall)}",
+        f"**Tokens:** {_token_summary_line(summarize_tokens(all_usages))}",
+        "",
+    ]
     lines += suite_sections
 
     return "\n".join(lines) + "\n", overall

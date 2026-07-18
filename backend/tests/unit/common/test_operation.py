@@ -1,5 +1,5 @@
 import pytest
-from common.operation import task, OperationResult, RuntimeErrorInfo
+from common.operation import task, OperationResult, RuntimeErrorInfo, TokenUsage
 
 
 @task
@@ -72,6 +72,43 @@ class TestTask:
         result = await _returns_none()
         assert result.ok is True
         assert result.output is None
+
+
+class TestTokenUsage:
+    def test_defaults_to_zero(self):
+        usage = TokenUsage()
+        assert usage.total == 0
+        assert usage.prompt == 0
+        assert usage.completion == 0
+        assert usage.cached == 0
+
+    def test_iadd_sums_all_fields(self):
+        usage = TokenUsage(total=10, prompt=7, completion=3, cached=4)
+        usage += TokenUsage(total=20, prompt=15, completion=5, cached=10)
+
+        assert usage.total == 30
+        assert usage.prompt == 22
+        assert usage.completion == 8
+        assert usage.cached == 14
+
+    def test_cache_hit_rate(self):
+        usage = TokenUsage(total=10, prompt=8, completion=2, cached=6)
+        assert usage.cache_hit_rate == 6 / 8
+
+    def test_cache_hit_rate_zero_prompt_is_zero_not_error(self):
+        assert TokenUsage().cache_hit_rate == 0.0
+
+    def test_cache_hit_rate_recomputes_after_aggregation(self):
+        # rates don't add — the property must reflect the summed counts
+        usage = TokenUsage(prompt=100, cached=100)  # 1.0 alone
+        usage += TokenUsage(prompt=100, cached=0)  # 0.0 alone
+
+        assert usage.cache_hit_rate == 0.5
+
+    def test_cached_survives_model_dump(self):
+        # the serialized form is what lands in the chat_runs planner JSONB
+        dumped = TokenUsage(total=10, prompt=8, completion=2, cached=6).model_dump()
+        assert dumped["cached"] == 6
 
 
 class TestOperationResult:

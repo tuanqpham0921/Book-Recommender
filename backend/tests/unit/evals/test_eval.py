@@ -17,11 +17,13 @@ from evals.eval import (
     evaluate_row,
     latest_per_case,
     load_suite_entries,
+    planner_token_usage,
+    summarize_tokens,
 )
 
 
-def make_planner(*goal_types):
-    return {
+def make_planner(*goal_types, token_usage=None):
+    planner = {
         "output": {
             "parse_result": {
                 "accepted_goals": [
@@ -31,9 +33,20 @@ def make_planner(*goal_types):
             }
         }
     }
+    if token_usage is not None:
+        planner["token_usage"] = token_usage
+    return planner
 
 
-def make_row(case_id, *, suite_name="my_suite", chat_id=None, goal_types=(), **overrides):
+def make_row(
+    case_id,
+    *,
+    suite_name="my_suite",
+    chat_id=None,
+    goal_types=(),
+    token_usage=None,
+    **overrides,
+):
     row = {
         "suite_name": suite_name,
         "suite_case_id": case_id,
@@ -43,7 +56,7 @@ def make_row(case_id, *, suite_name="my_suite", chat_id=None, goal_types=(), **o
         "ok": True,
         "runtime_error": None,
         "user_message": "recorded message",
-        "planner": make_planner(*goal_types),
+        "planner": make_planner(*goal_types, token_usage=token_usage),
     }
     row.update(overrides)
     return row
@@ -77,6 +90,54 @@ class TestAcceptedGoalTypes:
         }
 
         assert accepted_goal_types(planner) == ["Retrieve_by_Title"]
+
+
+class TestPlannerTokenUsage:
+    def test_extracts_counts(self):
+        planner = make_planner(
+            token_usage={"total": 100, "prompt": 80, "completion": 20, "cached": 60}
+        )
+
+        assert planner_token_usage(planner) == {
+            "total": 100,
+            "prompt": 80,
+            "cached": 60,
+        }
+
+    def test_row_without_cached_field_counts_as_uncached(self):
+        # rows recorded before TokenUsage grew the cached field
+        planner = make_planner(token_usage={"total": 100, "prompt": 80, "completion": 20})
+
+        assert planner_token_usage(planner)["cached"] == 0
+
+    def test_missing_or_malformed_envelope_is_all_zeros(self):
+        zeros = {"total": 0, "prompt": 0, "cached": 0}
+        assert planner_token_usage(None) == zeros
+        assert planner_token_usage({}) == zeros
+        assert planner_token_usage({"token_usage": "not a dict"}) == zeros
+        assert planner_token_usage({"token_usage": {"total": "NaN"}}) == zeros
+
+
+class TestSummarizeTokens:
+    def test_sums_and_recomputes_hit_rate(self):
+        # per-run rates are 1.0 and 0.0 — the aggregate must come from the
+        # summed counts (0.5), not an average of rates
+        stats = summarize_tokens(
+            [
+                {"total": 110, "prompt": 100, "cached": 100},
+                {"total": 110, "prompt": 100, "cached": 0},
+            ]
+        )
+
+        assert stats == {
+            "total": 220,
+            "prompt": 200,
+            "cached": 100,
+            "cache_hit_rate": 0.5,
+        }
+
+    def test_empty_runs_hit_rate_is_zero_not_error(self):
+        assert summarize_tokens([])["cache_hit_rate"] == 0.0
 
 
 class TestDiffNodeTypes:
@@ -241,3 +302,30 @@ class TestBuildEvalReport:
 
         assert "No test runs found" in report
         assert overall["cases"] == 0
+
+    def test_token_usage_and_cache_hit_rate_reported(self, suites_dir):
+        rows = [
+            make_row(
+                1,
+                goal_types=("Retrieve_by_Title",),
+                token_usage={"total": 1100, "prompt": 1000, "completion": 100, "cached": 600},
+            ),
+            make_row(
+                2,
+                goal_types=("Analyze_Recommend",),
+                token_usage={"total": 1100, "prompt": 1000, "completion": 100, "cached": 200},
+            ),
+        ]
+
+        report, _ = self._build(rows)
+
+        assert "| 1,100 (600) " in report  # per-case tokens (cached) cell
+        assert "2,200 tokens total" in report
+        assert "800/2,000 prompt tokens cached" in report
+        assert "40.0% cache hit rate" in report
+
+    def test_rows_without_token_usage_render_dash_and_zero_rate(self, suites_dir):
+        report, _ = self._build([make_row(1, goal_types=("Retrieve_by_Title",))])
+
+        assert "| — " in report
+        assert "0.0% cache hit rate" in report

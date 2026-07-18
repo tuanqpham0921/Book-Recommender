@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 from common.workflow import Workflow, StepFailure
-from common.operation import OperationResult, task
+from common.operation import OperationResult, TokenUsage, task
 
 
 def _make_flaky_task(fail_times: int):
@@ -346,6 +346,28 @@ class TestAddStep:
         wf = _SuccessWorkflow()
         with pytest.raises(ValueError):
             wf.add_step("not a result")
+
+    def test_aggregates_token_usage_across_steps(self):
+        wf = _SuccessWorkflow()
+        wf.add_step(
+            OperationResult(
+                ok=True,
+                token_usage=TokenUsage(total=10, prompt=8, completion=2, cached=8),
+            )
+        )
+        wf.add_step(
+            OperationResult(
+                ok=True,
+                token_usage=TokenUsage(total=20, prompt=12, completion=8, cached=2),
+            )
+        )
+
+        usage = wf.result.token_usage
+        assert usage.total == 30
+        assert usage.prompt == 20
+        assert usage.completion == 10
+        assert usage.cached == 10
+        assert usage.cache_hit_rate == 0.5
 
 
 class TestCancellation:

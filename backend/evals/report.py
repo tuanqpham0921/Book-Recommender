@@ -5,7 +5,7 @@ each row with the case's details from its suite JSON (query, difficulty,
 note). By default only the most recent run of each (suite_name, case_id) is
 reported — pass --all to include every recorded run. No expectations are
 checked; this is a plain outcome report: ok/failed, runtime errors, duration
-and token stats.
+and token stats (cached prompt tokens and cache hit rate included).
 
 Usage (from backend/, or `make suite-report`):
     poetry run python evals/report.py
@@ -50,6 +50,10 @@ def fetch_rows(suite_names: list[str] | None) -> list[dict]:
             ChatRunModel.runtime_error,
             ChatRunModel.duration_s,
             ChatRunModel.total_tokens,
+            # just the token_usage object, not the whole planner envelope —
+            # cached-token counts live only in the JSONB, not in a column
+            # (explicit -> instead of subscript: works on any PG version)
+            ChatRunModel.planner.op("->")("token_usage").label("token_usage"),
             ChatRunModel.user_message,
         )
         .join(ChatRunModel, ChatRunModel.chat_id == TestRunModel.chat_id)
@@ -105,10 +109,27 @@ def load_suite_entries(suite_name: str) -> dict[int, dict]:
     }
 
 
+def token_counts(token_usage) -> dict[str, int]:
+    """prompt/cached counts from a row's token_usage (selected out of the
+    planner JSONB). Zeros for anything absent — rows recorded before the
+    cached field existed simply count as uncached."""
+    usage = token_usage if isinstance(token_usage, dict) else {}
+    prompt = usage.get("prompt")
+    cached = usage.get("cached")
+    return {
+        "prompt": prompt if isinstance(prompt, int) else 0,
+        "cached": cached if isinstance(cached, int) else 0,
+    }
+
+
 def summarize(rows: list[dict]) -> dict:
-    """Basic outcome stats over a set of reported runs."""
+    """Basic outcome stats over a set of reported runs. The cache hit rate
+    is recomputed from the summed counts — per-run rates don't add."""
     durations = [r["duration_s"] for r in rows if r["duration_s"] is not None]
     tokens = [r["total_tokens"] for r in rows if r["total_tokens"] is not None]
+    counts = [token_counts(r.get("token_usage")) for r in rows]
+    prompt = sum(c["prompt"] for c in counts)
+    cached = sum(c["cached"] for c in counts)
     return {
         "cases": len(rows),
         "ok": sum(1 for r in rows if r["ok"] is True),
@@ -116,6 +137,8 @@ def summarize(rows: list[dict]) -> dict:
         "runtime_errors": sum(1 for r in rows if r["runtime_error"]),
         "total_tokens": sum(tokens),
         "avg_tokens": round(sum(tokens) / len(tokens)) if tokens else 0,
+        "cached_tokens": cached,
+        "cache_hit_rate": cached / prompt if prompt else 0.0,
         "avg_duration_s": round(sum(durations) / len(durations), 2) if durations else 0.0,
     }
 
@@ -131,12 +154,13 @@ def _summary_table(title: str, stats: dict) -> list[str]:
     return [
         f"### {title}",
         "",
-        "| cases | ok | failed | runtime errors | total tokens | avg tokens | avg duration |",
-        "|---|---|---|---|---|---|---|",
+        "| cases | ok | failed | runtime errors | total tokens | avg tokens | cached tokens | cache hit | avg duration |",
+        "|---|---|---|---|---|---|---|---|---|",
         (
             f"| {stats['cases']} | {stats['ok']} | {stats['failed']} "
             f"| {stats['runtime_errors']} | {stats['total_tokens']} "
-            f"| {stats['avg_tokens']} | {stats['avg_duration_s']}s |"
+            f"| {stats['avg_tokens']} | {stats['cached_tokens']} "
+            f"| {stats['cache_hit_rate']:.1%} | {stats['avg_duration_s']}s |"
         ),
         "",
     ]
@@ -171,8 +195,8 @@ def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
 
         lines += _summary_table(f"`{suite_name}`", summarize(suite_rows))
         lines += [
-            "| case | difficulty | query | ok | error | duration | tokens | chat_id | session |",
-            "|---|---|---|---|---|---|---|---|---|",
+            "| case | difficulty | query | ok | error | duration | tokens | cached | chat_id | session |",
+            "|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in suite_rows:
             entry = entries.get(row["suite_case_id"], {})
@@ -180,6 +204,8 @@ def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
             note = entry.get("note")
             ok = {True: "✅", False: "❌"}.get(row["ok"], "❔")
             duration = f"{row['duration_s']:.1f}s" if row["duration_s"] is not None else "—"
+            counts = token_counts(row.get("token_usage"))
+            cached = f"{counts['cached']}" if counts["prompt"] else "—"
             lines.append(
                 f"| {row['suite_case_id']} "
                 f"| {entry.get('difficulty') or '—'} "
@@ -188,12 +214,13 @@ def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
                 f"| {row['runtime_error'] or '—'} "
                 f"| {duration} "
                 f"| {row['total_tokens'] if row['total_tokens'] is not None else '—'} "
+                f"| {cached} "
                 f"| `{row['chat_id']}` "
                 f"| `{row['session_id']}` |"
             )
             if note:
                 # notes ride along as a quiet extra row under their case
-                lines.append(f"| | | _{_truncate(note)}_ | | | | | | |")
+                lines.append(f"| | | _{_truncate(note)}_ | | | | | | | |")
         lines.append("")
 
     return "\n".join(lines) + "\n"

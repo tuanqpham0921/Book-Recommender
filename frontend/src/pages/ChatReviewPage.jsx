@@ -250,6 +250,12 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
     const diagram = run.planner?.output?.diagram
     const parseResult = run.planner?.output?.parse_result
     const errorDetail = run.planner?.runtime_error
+    // cached is a subset of prompt tokens; runs recorded before the cached
+    // field existed just show the plain total
+    const tokenUsage = run.planner?.token_usage
+    const cacheHitPct = tokenUsage?.prompt > 0 && tokenUsage?.cached != null
+        ? Math.round((tokenUsage.cached / tokenUsage.prompt) * 100)
+        : null
 
     // This session's own review, if it already filed one — the editor then
     // updates it in place instead of appending a new review.
@@ -305,7 +311,12 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                         <div><span className="font-semibold">chat_id:</span> {run.chat_id}</div>
                         <div><span className="font-semibold">session:</span> {run.session_id}</div>
                         <div><span className="font-semibold">duration:</span> {run.duration_s?.toFixed?.(2) ?? '—'}s</div>
-                        <div><span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}</div>
+                        <div>
+                            <span className="font-semibold">tokens:</span> {run.total_tokens ?? '—'}
+                            {cacheHitPct != null && (
+                                <span className="text-[var(--text-muted)]"> · {tokenUsage.cached} cached ({cacheHitPct}%)</span>
+                            )}
+                        </div>
                     </div>
 
                     {errorDetail && (

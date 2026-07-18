@@ -17,12 +17,23 @@ class TokenUsage(BaseModel):
     total: int = 0
     prompt: int = 0
     completion: int = 0
+    # prompt tokens served from the provider's prompt cache — a subset of
+    # `prompt`, never additional to it
+    cached: int = 0
 
     def __iadd__(self, other: "TokenUsage") -> "TokenUsage":
         self.total += other.total
         self.prompt += other.prompt
         self.completion += other.completion
+        self.cached += other.cached
         return self
+
+    @property
+    def cache_hit_rate(self) -> float:
+        """Fraction of prompt tokens served from cache; 0.0 when no prompt
+        tokens were counted. Recompute from sums after aggregating — rates
+        themselves don't add."""
+        return self.cached / self.prompt if self.prompt else 0.0
 
 
 class RuntimeErrorInfo(BaseModel):

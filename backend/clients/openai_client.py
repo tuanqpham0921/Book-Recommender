@@ -63,11 +63,7 @@ class OpenAIClient(BaseLLMClient):
             content=response_message.content,
             tool_calls=response_message.tool_calls,
             refusal=response_message.refusal,
-            token_usage=TokenUsage(
-                total=final_completion.usage.total_tokens,
-                prompt=final_completion.usage.prompt_tokens,
-                completion=final_completion.usage.completion_tokens,
-            ) if final_completion.usage else TokenUsage(),
+            token_usage=self._extract_token_usage(final_completion.usage),
         )
         
         if save_payload:
@@ -78,6 +74,22 @@ class OpenAIClient(BaseLLMClient):
             
         return assistant_msg
         
+    @staticmethod
+    def _extract_token_usage(usage) -> TokenUsage:
+        """Map a CompletionUsage onto TokenUsage. `prompt_tokens_details` and
+        its `cached_tokens` are both Optional on the OpenAI side — absent on
+        models/endpoints without prompt caching — so default them to 0."""
+        if usage is None:
+            return TokenUsage()
+
+        details = usage.prompt_tokens_details
+        return TokenUsage(
+            total=usage.total_tokens,
+            prompt=usage.prompt_tokens,
+            completion=usage.completion_tokens,
+            cached=(details.cached_tokens or 0) if details else 0,
+        )
+
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
         """Stream the chat completion."""
         async with self.client.beta.chat.completions.stream(**payload) as stream:

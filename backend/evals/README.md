@@ -37,11 +37,12 @@ Then post-process:
 
 ```bash
 make suite-eval    # eval.py: joins test_runs ⋈ chat_runs, diffs accepted goal types
-                   # vs expected_nodes (matched/missing/extra) →
-                   # results/eval_<timestamp>.md. ARGS="--all" for every run
-                   # (default: latest per case); ARGS="--output <path>" to name it
+                   # vs expected_nodes (matched/missing/extra) + per-suite token/
+                   # cache-hit-rate stats → results/eval_<timestamp>.md.
+                   # ARGS="--all" for every run (default: latest per case);
+                   # ARGS="--output <path>" to name it
 make suite-report  # report.py: plain outcomes (ok/failed, runtime_error, duration,
-                   # tokens) — no expectation checking
+                   # tokens incl. cached + cache hit rate) — no expectation checking
 ```
 
 ## Campaign convention (`results/`)
