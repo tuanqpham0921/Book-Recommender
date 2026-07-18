@@ -89,7 +89,7 @@ query-suite-all-tmux:
 	tmux select-layout -t query_suites tiled
 	tmux attach-session -t query_suites
 	poetry run python eval.py
-	poetry run python report.py
+	poetry run python report.py > stats.md
 
 # post-process suite runs: joins test_runs (written by the runner) with
 # chat_runs and diffs each run's accepted goal types against expected_nodes
