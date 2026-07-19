@@ -1,0 +1,663 @@
+
+## Retrieval — lookup or fetch data
+
+Retrieve_by_Title
+  Purpose: Retrieve a single known book by its title from the database.
+
+  Args:
+      title: Book title to search for.
+      authors: Optional author name(s), used only to disambiguate between
+          similarly titled books (e.g. "Dune" by Frank Herbert) — omit when the
+          author isn't a distinguishing detail.
+
+  Returns: A FindByTitleOutput — the searched title plus a list of matching
+  BookSummary records (isbn13, title, authors, categories, genre,
+  published_year, num_pages, average_rating, ratings_count, is_children).
+
+  Use when: a specific title is named — "find Dune", "do you have The Great
+  Gatsby". Also use for authorship-verification questions ("did Frank
+  Herbert write Dune", "is Dune by Frank Herbert") — the title is still the
+  lookup target, with the named author passed as a disambiguating hint to
+  confirm or deny.
+
+  Do not use: when the author is the actual subject of the search ("books by
+  Frank Herbert"), or when no specific title is named.
+
+  Constraints: one title per node — for multiple named titles, emit one node
+  per title.
+
+  Example queries:
+      - "find Dune"
+      - "do you have The Great Gatsby"
+      - "Dune by Frank Herbert"
+      - "did Frank Herbert write Dune"
+      - "is Dune by Frank Herbert"
+
+Retrieve_by_ISBN13
+  Purpose: Retrieve a single book by its exact ISBN13 from the database.
+
+  Args:
+      isbn13: ISBN13 to search for.
+
+  Returns: A FindByISBN13Output — the searched isbn13 plus the matching
+  BookSummary, or null if not found.
+
+  Use when: an ISBN13 is explicitly given by the user, or already known from
+  a prior step's result.
+
+  Do not use: when only a title, author, or genre is known — the ISBN13 must
+  be a literal identifier already in hand.
+
+  Constraints: exactly one ISBN13 per node.
+
+  Example queries:
+      - "look up ISBN 9780441172719"
+      - "what book is 978-0-14-303943-3"
+
+Retrieve_by_Author
+  Purpose: Retrieve books written by one or more named authors — an author's bibliography.
+
+  Args:
+      authors: Author name(s) whose books to retrieve (at least one).
+
+  Returns: A FindByAuthorOutput — the searched authors plus a list of matching
+  BookSummary records.
+
+  Use when: the author is the subject of the search — "books by Ursula K. Le
+  Guin", "what else has Brandon Sanderson written", "show me some Agatha
+  Christie".
+
+  Do not use: for a single named title where the author is only a
+  disambiguating hint ("Dune by Frank Herbert") — this includes
+  authorship-verification questions like "did Frank Herbert write Dune" or
+  "is Dune by Frank Herbert", which stay a single title lookup — or
+  taste-based suggestions.
+
+  Constraints: multiple authors in one node are treated as one combined
+  bibliography search, not separate per-author searches.
+
+  Example queries:
+      - "books by Ursula K. Le Guin"
+      - "what else has Brandon Sanderson written"
+      - "show me some Agatha Christie"
+
+Retrieve_by_Genre
+  Purpose: Retrieve books belonging to a named genre or category from the database.
+
+  Args:
+      genre: Genre or category to search for.
+
+  Returns: A FindByGenreOutput — the searched genre plus a list of matching
+  BookSummary records.
+
+  Use when: genre is the primary axis of the search — "fantasy books", "any
+  good mysteries", "nonfiction about space".
+
+  Do not use: for a themed or mood-based search that isn't a clean genre label
+  ("something cozy and hopeful"), or a single known title.
+
+  Constraints: single genre per node — no cross-column filtering (e.g. genre
+  plus a rating threshold isn't supported in this node).
+
+  Example queries:
+      - "fantasy books"
+      - "any good mysteries"
+      - "nonfiction about space"
+
+Retrieve_User_Info
+  Purpose: Retrieve information about the current user from the database.
+
+  Args:
+      field: One or more UserInfoEnum values to retrieve (name, age, bio,
+          token_usage, saved_memory, previous_conversation,
+          current_conversation).
+
+  Returns: The requested user profile/session fields.
+
+  Use when: the user asks about themselves — "what's my saved memory", "how
+  many tokens have I used", "what's in my profile".
+
+  Do not use: for questions about the developer/maintainer of the app, or
+  about the project itself.
+
+  Constraints: field values must come from UserInfoEnum.
+
+  Example queries:
+      - "what's my saved memory"
+      - "how many tokens have I used"
+      - "what's in my profile"
+
+Retrieve_Developer_Info
+  Purpose: Retrieve information about the developer/maintainer of this app.
+
+  Args:
+      field: One or more DeveloperInfoEnum values to retrieve (name, bio,
+          email, linkedin_url).
+
+  Returns: The requested developer profile fields.
+
+  Use when: the user asks about who built the app — "who made this", "what's
+  the developer's email", "link me their LinkedIn".
+
+  Do not use: for questions about the user themselves, or about the
+  project's tech/architecture.
+
+  Constraints: field values must come from DeveloperInfoEnum.
+
+  Example queries:
+      - "who made this"
+      - "what's the developer's email"
+      - "link me their LinkedIn"
+
+Retrieve_Project_Info
+  Purpose: Retrieve information about the app, tech stack, architecture, or project metadata.
+
+  Args:
+      fields: One or more ProjectInfoField values to retrieve (name,
+          description, technology_stack, project_url, project_github_url,
+          project_github_repo_name, project_github_repo_url, all).
+
+  Returns: The requested project metadata fields, rendered as a short
+  description of the project.
+
+  Use when: the user asks about the project itself — "what tech stack does
+  this use", "what is this app", "where's the GitHub repo", "tell me about
+  this project".
+
+  Do not use: when the user is commenting on or critiquing the app rather
+  than asking about it.
+
+  Constraints: fields must come from ProjectInfoField; use "all" for a
+  general "tell me about this project" ask.
+
+  Example queries:
+      - "what tech stack does this use"
+      - "what is this app"
+      - "where's the GitHub repo"
+      - "tell me about this project"
+
+Retrieve_Series
+  Purpose: Retrieve every book belonging to a named series or saga.
+
+  Args:
+      series_name: Name of the series or saga.
+      author: Optional author hint to disambiguate same-named series.
+
+  Returns: The named series plus its books (title, ISBN13, position in series).
+
+  Use when: the user refers to a series as a whole — "the Dune saga", "all
+  the Mistborn books", "the Narnia series". Often followed by a
+  reading-order request when the user also asks what order to read them in.
+
+  Do not use: for one specific entry of a series ("find Dune"), or an
+  author's unrelated works.
+
+  Constraints: one series per node.
+
+  Example queries:
+      - "the Dune saga"
+      - "all the Mistborn books"
+      - "the Narnia series"
+
+Retrieve_Author_Info
+  Purpose: Retrieve facts about an author as a person — bio, style, background.
+
+  Args:
+      author_name: Author to look up.
+      aspects: Specific angle when stated (biography, writing style,
+          influences, …).
+
+  Returns: A short profile of the author covering the requested aspects.
+
+  Use when: the author themself is the question — "who is Haruki Murakami",
+  "tell me about Toni Morrison's background", "what is Le Guin known for".
+
+  Do not use: for listing their books, or info about the person who built
+  this app.
+
+  Constraints: one author per node.
+
+  Example queries:
+      - "who is Haruki Murakami"
+      - "tell me about Toni Morrison's background"
+      - "what is Le Guin known for"
+
+Retrieve_New_Releases
+  Purpose: Retrieve recently published books, optionally scoped by genre or other filters.
+
+  Args:
+      since_year: Earliest publication year to include, when the user
+          implies one.
+      filters: Constraints on the returned books — BooksFilter (authors,
+          categories, keywords, genre, is_children, page/year/rating
+          ranges, sort_by, limit).
+
+  Returns: A list of matching books, most recent first (or per filters.sort_by).
+
+  Use when: recency-framed asks — "what's new", "recent sci-fi releases",
+  "books that came out in the last couple of years".
+
+  Do not use: for a year range on an otherwise trait-driven search ("fantasy
+  from the 90s"), or popularity framing.
+
+  Constraints: since_year narrows the recency window; leave filters empty
+  for an unscoped "what's new" ask.
+
+  Example queries:
+      - "what's new"
+      - "recent sci-fi releases"
+      - "books that came out in the last couple of years"
+
+Retrieve_Popular
+  Purpose: Retrieve widely read, highly rated books — what most people love.
+
+  Args:
+      filters: Constraints on the returned books — BooksFilter (authors,
+          categories, keywords, genre, is_children, page/year/rating
+          ranges, sort_by, limit).
+
+  Returns: A list of books ranked by rating and review count.
+
+  Use when: popularity/consensus framing — "what's popular", "bestsellers",
+  "most loved fantasy books", "what does everyone recommend".
+
+  Do not use: for personalized suggestions from the user's taste, a plain
+  sort-by-rating trait search, or recency framing.
+
+  Constraints: filters is optional — leave empty for an unscoped "what's
+  popular" ask.
+
+  Example queries:
+      - "what's popular"
+      - "bestsellers"
+      - "most loved fantasy books"
+      - "what does everyone recommend"
+
+Retrieve_Random
+  Purpose: Retrieve a random pick from the catalog — a surprise with no taste signal.
+
+  Args:
+      filters: Bounds for the random pick — BooksFilter (authors,
+          categories, keywords, genre, is_children, page/year/rating
+          ranges, limit).
+
+  Returns: A single randomly selected book within the given bounds.
+
+  Use when: the user explicitly cedes the choice — "surprise me", "pick
+  anything", "random book please". Optional filters keep the surprise inside
+  bounds the user set ("surprise me with a short sci-fi").
+
+  Do not use: for asks that carry taste or mood ("something spooky").
+
+  Constraints: filters is optional; sort_by/limit in filters are not
+  meaningful for a single random pick.
+
+  Example queries:
+      - "surprise me"
+      - "pick anything"
+      - "random book please"
+      - "surprise me with a short sci-fi"
+
+
+## Analyze — interpret, compare, or recommend using retrieved data
+
+Analyze_Recommend
+  Purpose: Suggest books that fit the user's ask — the analyze step for most recommendation queries.
+
+  Args:
+      semantic_input: Thematic/conceptual description from the query (theme,
+          tone, or mood) — not titles, authors, or genres.
+      reference_books: Book titles to base recommendations on (deduplicated
+          automatically).
+      depends_on: Task ids of prior retrieval steps this recommendation reasons
+          over (e.g. lookups for any named reference_books).
+
+  Returns: Markdown-formatted recommendation text, used directly as the assistant's reply.
+
+  Use when: the user wants new titles to read.
+      - Similarity: "books like X", "more like X or Y books" → reference_books
+      - Thematic / mood: "cozy mysteries", "epic sci-fi with strong world-building" → semantic_input
+      - Mixed: named anchor book(s) plus a twist ("like X but darker/shorter")
+        → reference_books plus semantic_input
+
+  Do not use: when they only want to look up a known book or an author's/genre's
+  full catalog instead of suggestions.
+
+  Constraints: does not carry its own database filters — it reasons over
+  retrieved books (depends_on) and/or stated taste; requires at least 1 task
+  id in depends_on, so a supporting retrieval step is still needed even for
+  purely thematic requests with no named book.
+
+  Example queries:
+      - "books like Dune"
+      - "more like Dune or Foundation"
+      - "cozy mysteries"
+      - "epic sci-fi with strong world-building"
+      - "like Dune but darker and shorter"
+
+Analyze_Compare
+  Purpose: Contrast two or more named books — the analyze step when the user asks how titles differ or relate.
+
+  Args:
+      comparison_criteria: The user's comparison lens (theme, tone, length,
+          style, etc.) when stated; omit when they only want a general comparison.
+      depends_on: Task ids of the prior retrieval steps, one per book being
+          compared (minimum 2).
+
+  Returns: Markdown-formatted comparison text, used directly as the assistant's reply.
+
+  Use when: the user wants a side-by-side read on specific named books.
+
+  Do not use: when they want new suggestions instead, or only want to find
+  a single title.
+
+  Constraints: requires at least 2 task ids in depends_on — refuses itself
+  otherwise. Three or more titles → one retrieval per book, depends_on lists
+  all of them.
+
+  Example queries:
+      - "Compare X and Y"
+      - "how are X and Y different"
+      - "compare their themes"
+      - "which is longer / darker / more literary"
+
+Analyze_Summarize
+  Purpose: Summarize retrieved book(s) — plot, premise, or a focused angle.
+
+  Args:
+      spoiler_free: Avoid plot spoilers unless the user asks for the full story.
+      focus: Specific angle to center the summary on, when stated.
+      depends_on: Task ids of the retrieval step(s) for the book(s) being
+          summarized.
+
+  Returns: A prose summary of the book(s), respecting spoiler_free and focus.
+
+  Use when: the user wants to know what a book is about — "summarize X",
+  "what happens in X", "give me the gist of X".
+
+  Do not use: for extracting themes/motifs, or side-by-side contrast of
+  several books.
+
+  Constraints: requires at least 1 task id in depends_on — refuses itself
+  otherwise.
+
+  Example queries:
+      - "summarize Dune"
+      - "what happens in Dune"
+      - "give me the gist of Dune"
+
+Analyze_Themes
+  Purpose: Extract the themes, motifs, or message of retrieved book(s).
+
+  Args:
+      aspect: Specific theme or motif the user asked about, when stated.
+      depends_on: Task ids of the retrieval step(s) for the book(s) analyzed.
+
+  Returns: A prose breakdown of the book(s)' themes, motifs, or message.
+
+  Use when: interpretive asks about meaning — "what are the themes of X",
+  "what is X really about", "what's the message of X".
+
+  Do not use: for plot recaps, or contrasting themes across several books.
+
+  Constraints: requires at least 1 task id in depends_on — refuses itself
+  otherwise.
+
+  Example queries:
+      - "what are the themes of Dune"
+      - "what is Dune really about"
+      - "what's the message of Dune"
+
+Analyze_Reading_Order
+  Purpose: Order a set of retrieved books into the sequence they should be read.
+
+  Args:
+      order_preference: Ordering convention the user asked for, when stated
+          (publication, chronological, recommended).
+      depends_on: Task ids of the series or title retrieval step(s)
+          providing the books to order.
+
+  Returns: The books in the resolved reading order, with the convention used.
+
+  Use when: "what order" asks — "in what order should I read the Dune
+  books", "where do I start with Discworld".
+
+  Do not use: for picking which books to read at all, or building a
+  schedule over time.
+
+  Constraints: requires at least 1 task id in depends_on — refuses itself
+  otherwise.
+
+  Example queries:
+      - "in what order should I read the Dune books"
+      - "where do I start with Discworld"
+
+Analyze_Reading_Level
+  Purpose: Assess age-appropriateness or difficulty of retrieved book(s).
+
+  Args:
+      reader_context: Who the book is for, in the user's words (age, grade,
+          sensitivities).
+      depends_on: Task ids of the retrieval step(s) for the book(s) assessed.
+
+  Returns: An assessment of the book(s)' suitability/difficulty for reader_context.
+
+  Use when: suitability asks — "is X okay for a 10-year-old", "how hard a
+  read is X", "is X appropriate for my class".
+
+  Do not use: for finding children's books in the first place.
+
+  Constraints: requires at least 1 task id in depends_on — refuses itself
+  otherwise.
+
+  Example queries:
+      - "is Dune okay for a 10-year-old"
+      - "how hard a read is Dune"
+      - "is this appropriate for my class"
+
+Analyze_Reading_Time
+  Purpose: Estimate how long retrieved book(s) will take to finish.
+
+  Args:
+      minutes_per_day: Daily reading time the user stated, in minutes.
+      reading_speed: Reading speed the user stated about themself (slow,
+          average, fast).
+      depends_on: Task ids of the retrieval step(s) for the book(s) estimated.
+
+  Returns: An estimated time-to-finish for the book(s), given the stated pace.
+
+  Use when: time asks — "how long will X take me", "can I finish X in a
+  weekend", "how many hours is X".
+
+  Do not use: for filtering by page count, or planning multiple books over
+  time.
+
+  Constraints: requires at least 1 task id in depends_on — refuses itself
+  otherwise.
+
+  Example queries:
+      - "how long will Dune take me"
+      - "can I finish Dune in a weekend"
+      - "how many hours is Dune"
+
+Analyze_Reading_Plan
+  Purpose: Build a multi-book reading plan toward a stated goal or timeframe.
+
+  Args:
+      plan_goal: What the plan should achieve, in the user's words.
+      timeframe: Duration or deadline the user stated (e.g. "3 months").
+      depends_on: Task ids of the retrieval/recommendation step(s) supplying
+          candidate books for the plan.
+
+  Returns: A sequenced, multi-book reading plan toward plan_goal within timeframe.
+
+  Use when: the user wants a sequenced program, not a one-off pick — "get me
+  into Russian classics over three months", "a plan to read more
+  non-fiction this year".
+
+  Do not use: for a single suggestion, or ordering an existing series.
+
+  Constraints: requires at least 1 task id in depends_on — refuses itself
+  otherwise.
+
+  Example queries:
+      - "get me into Russian classics over three months"
+      - "a plan to read more non-fiction this year"
+
+
+## Other supported actions
+
+Provide_Feedback
+  Purpose: Record the user's feedback, opinion, bug report, or suggestion about this app itself.
+
+  Args:
+      contact_info: Optional contact info (email, phone, etc.) — fill only when
+          the user volunteers it, for a possible follow-up.
+      feedback: The user's feedback text.
+
+  Returns: Confirmation that the feedback was recorded.
+
+  Use when: the user is commenting on the app/planner/experience — "this
+  recommendation tool is great", "the chat feels slow", "you should add X
+  feature", "found a bug when I asked about...".
+
+  Do not use: for reacting to a specific bad recommendation by wanting
+  different books (that's a new recommendation request, not feedback), or
+  asking questions about the project rather than commenting on it.
+
+  Constraints: feedback is required text; contact_info is optional and must
+  not be invented if the user didn't provide it.
+
+  Example queries:
+      - "this recommendation tool is great"
+      - "the chat feels slow"
+      - "you should add a dark mode"
+      - "found a bug when I asked about sci-fi books"
+
+Save_To_Reading_List
+  Purpose: Add named book(s) to the user's reading list.
+
+  Args:
+      titles: Book titles to add (deduplicated automatically).
+
+  Returns: Confirmation that the title(s) were added to the reading list.
+
+  Use when: save intents — "add X to my list", "save that for later", "I
+  want to read X eventually".
+
+  Do not use: for marking a book finished, or asking what is on the list.
+
+  Constraints: at least 1 title required.
+
+  Example queries:
+      - "add Dune to my list"
+      - "save that for later"
+      - "I want to read Dune eventually"
+
+Retrieve_Reading_List
+  Purpose: Show the user's reading list, optionally filtered by status.
+
+  Args:
+      status: Only show entries with this status, when the user asks
+          (want_to_read, reading, finished).
+
+  Returns: The user's reading list entries matching status (or all, if unset).
+
+  Use when: list reads — "what's on my reading list", "show my saved
+  books", "what am I currently reading".
+
+  Do not use: for reading statistics, or general account info.
+
+  Constraints: status must be one of the three listed values, when given.
+
+  Example queries:
+      - "what's on my reading list"
+      - "show my saved books"
+      - "what am I currently reading"
+
+Remove_From_Reading_List
+  Purpose: Remove named book(s) from the user's reading list.
+
+  Args:
+      titles: Book titles to remove (deduplicated automatically).
+
+  Returns: Confirmation that the title(s) were removed from the reading list.
+
+  Use when: removal intents — "take X off my list", "remove X", "I'm no
+  longer interested in X".
+
+  Do not use: for marking finished — finishing is not removal.
+
+  Constraints: at least 1 title required.
+
+  Example queries:
+      - "take Dune off my list"
+      - "remove Dune"
+      - "I'm no longer interested in Dune"
+
+Mark_Book_As_Read
+  Purpose: Record that the user finished a book, with an optional rating in the same breath.
+
+  Args:
+      title: Book the user finished.
+      rating: Star rating (1-5) when the user gives one alongside finishing.
+
+  Returns: Confirmation that the book was marked finished (and rated, if given).
+
+  Use when: completion statements — "I finished X", "just read X", "mark X
+  as read — loved it, 5 stars" (rating captured here in the same node).
+
+  Do not use: for a rating on a book without a completion signal, or saving
+  for later.
+
+  Constraints: rating, when given, must be between 1 and 5.
+
+  Example queries:
+      - "I finished Dune"
+      - "just read Dune"
+      - "mark Dune as read — loved it, 5 stars"
+
+Rate_Book
+  Purpose: Record the user's star rating for a book they already know.
+
+  Args:
+      title: Book being rated.
+      rating: Star rating from 1 to 5.
+
+  Returns: Confirmation that the rating was recorded.
+
+  Use when: standalone rating intents — "give X 4 stars", "rate X a 2", "X
+  was a 5/5 for me".
+
+  Do not use: for a rating stated while finishing a book ("just finished X,
+  5 stars" — that's a completion statement with a rating, not a standalone
+  rating).
+
+  Constraints: rating is required and must be between 1 and 5.
+
+  Example queries:
+      - "give Dune 4 stars"
+      - "rate Dune a 2"
+      - "Dune was a 5/5 for me"
+
+Retrieve_Reading_Stats
+  Purpose: Retrieve the user's reading statistics — counts, pages, genre breakdown.
+
+  Args:
+      aspects: Specific stats requested (books_read, pages_read,
+          genre_breakdown, average_rating, all); omit or use "all" for an
+          overview.
+
+  Returns: The requested reading statistics.
+
+  Use when: stats asks — "how many books have I read this year", "what
+  genres do I read most", "my reading stats".
+
+  Do not use: for the list itself, or general account info like token usage.
+
+  Constraints: aspects values must come from the listed literal set.
+
+  Example queries:
+      - "how many books have I read this year"
+      - "what genres do I read most"
+      - "my reading stats"
