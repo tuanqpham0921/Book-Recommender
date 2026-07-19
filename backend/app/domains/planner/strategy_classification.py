@@ -345,9 +345,9 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
     ) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(prompt_path=STRATEGY_CLASSIFICATION_PROMPT_PATH)
 
-        # strategy_request = self._build_strategy_request(system_goals)
+        strategy_request = self._build_strategy_request(system_goals)
         # NOTE: full model for eval
-        strategy_request = StrategyRequest
+        # strategy_request = StrategyRequest
         
         req = OpenAIParserRequest(
             prompt=system_prompt,
