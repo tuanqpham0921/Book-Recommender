@@ -1,6 +1,7 @@
 """Tests for StrategyClassificationWorkflow pure logic methods."""
 
 import json
+import typing
 from collections import defaultdict
 
 import pytest
@@ -10,6 +11,8 @@ from app.common.messages import ToolMessage
 from app.domains.base_request import AnalyzeBaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import (
+    FindByAuthorRetrieval,
+    FindByISBN13Retrieval,
     FindByTitleRetrieval,
     RecommendationStrategy,
 )
@@ -603,6 +606,20 @@ class TestMapDependencies:
         assert a._refusal is True
 
 
+def _strategy_union_member_names(model: type[StrategyRequest]) -> list[str]:
+    """Unwrap the built model's `strategies: list[Union[...]]` annotation
+    down to the Union members' class names, in declared order — this order
+    is exactly what ends up in the `anyOf` list of the JSON schema sent to
+    OpenAI, so it's what determines whether two calls with the same tool
+    set produce a byte-identical (cacheable) prompt."""
+    list_annotation = model.model_fields["strategies"].annotation
+    union_annotation = typing.get_args(list_annotation)[0]
+    members = typing.get_args(union_annotation)
+    if not members:
+        return [union_annotation.__name__]
+    return [member.__name__ for member in members]
+
+
 class TestBuildModel:
     def test_raises_on_empty_strategy_types(self):
         with pytest.raises(TypeError):
@@ -616,6 +633,31 @@ class TestBuildModel:
         model = StrategyRequest.build_model([FindByTitleRetrieval])
         instance = model(strategies=[_make_retrieval("task_1").model_dump()])
         assert len(instance.strategies) == 1
+
+    def test_strategy_types_are_sorted_by_name_regardless_of_input_order(self):
+        # deliberately out of alphabetical order
+        model = StrategyRequest.build_model(
+            [RecommendationStrategy, FindByTitleRetrieval, FindByAuthorRetrieval]
+        )
+
+        assert _strategy_union_member_names(model) == [
+            "FindByAuthorRetrieval",
+            "FindByTitleRetrieval",
+            "RecommendationStrategy",
+        ]
+
+    def test_same_types_different_input_order_produce_identical_schema(self):
+        # a Python set's iteration order over the same members can vary by
+        # insertion order/process — build_model must normalize regardless,
+        # so the same logical tool set always yields the same tool schema
+        forward = StrategyRequest.build_model(
+            [FindByAuthorRetrieval, FindByISBN13Retrieval, FindByTitleRetrieval]
+        )
+        reversed_input = StrategyRequest.build_model(
+            [FindByTitleRetrieval, FindByISBN13Retrieval, FindByAuthorRetrieval]
+        )
+
+        assert forward.model_json_schema() == reversed_input.model_json_schema()
 
 
 class TestStrategyRequestExtraFields:

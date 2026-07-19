@@ -163,6 +163,11 @@ class StrategyRequest(BaseModel):
         if not strategy_types:
             raise TypeError("No strategy types provided")
 
+        # sorted by name, not the caller's order (often a set's iteration
+        # order, which isn't guaranteed stable across calls/processes) — so
+        # the same set of tools always serializes to the same tool schema,
+        # letting OpenAI's prompt cache actually match on repeat requests
+        strategy_types = sorted(strategy_types, key=lambda t: t.__name__)
         strategy_union = reduce(or_, strategy_types)
 
         return create_model(
