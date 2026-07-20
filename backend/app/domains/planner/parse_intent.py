@@ -476,8 +476,8 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         ):
             logger.warning("Nothing was classified in the initial parse")
             self.result.ok = False
-            self.output.reasoning = "Nothing was classified in the initial parse"
-            return
+            self.result.add_details("Nothing was classified in the initial parse")
+            raise RuntimeError("Nothing was classified in the initial parse")
 
         self.output.small_talk = parse_result.small_talk
         self.output.out_of_scope = parse_result.out_of_scope
