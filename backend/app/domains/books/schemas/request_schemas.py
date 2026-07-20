@@ -44,13 +44,13 @@ class CompareStrategy(AnalyzeBaseRequest):
         None, json_schema_extra={"example": "tone"}
     )
 
-    def model_post_init(self, __context) -> None:
-        if len(self.depends_on) < 2:
-            logger.warning(
-                f"{self.__class__.__name__} ({self.id}) has less than 2 dependencies, refusing the request"
-            )
-            self.refuse("Less than 2 dependencies provided for a request with dependencies")
-        super().model_post_init(__context)
+    # def model_post_init(self, __context) -> None:
+    #     if len(self.depends_on) < 2:
+    #         logger.warning(
+    #             f"{self.__class__.__name__} ({self.id}) has less than 2 dependencies, refusing the request"
+    #         )
+    #         self.refuse("Less than 2 dependencies provided for a request with dependencies")
+    #     super().model_post_init(__context)
 
 
 class RecommendationStrategy(AnalyzeBaseRequest):
@@ -96,11 +96,11 @@ class RecommendationStrategy(AnalyzeBaseRequest):
         None, json_schema_extra={"example": ["The House in the Cerulean Sea"]}
     )
 
-    def model_post_init(self, __context) -> None:
-        if self.reference_books:
-            self.reference_books = list(set(self.reference_books))
+    # def model_post_init(self, __context) -> None:
+    #     if self.reference_books:
+    #         self.reference_books = list(set(self.reference_books))
 
-        super().model_post_init(__context)
+    #     super().model_post_init(__context)
 
 
 class FindByTitleRetrieval(DomainRequest):
