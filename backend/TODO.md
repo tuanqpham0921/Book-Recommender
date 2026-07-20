@@ -12,3 +12,13 @@ history (`git log -p -- backend/TODO.md`).
 ---
 
 (nothing in flight)
+
+* add a intent field in the initial parse litteral
+* add a prompt jection field (str or bool)
+    * just refuse (or this can be part of the intent)
+* add a complexity score or intent
+    * stress testing, trying to break the system?
+    * not reasonable query for a book recommender?
+* maybe you'll need an entity thing
+    * group them by books or reference books etc...
+

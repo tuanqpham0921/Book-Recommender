@@ -5,7 +5,7 @@ from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, ValidationError
 
 from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
-from app.common.prompt_loader import format_prompt
+from app.common.prompt_loader import format_prompt, load_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.node_types import NodeTypeEnum
@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
 INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
     "domains/planner/prompts/1_initial_parse_response.txt"
+)
+INTENT_PARSER_PROMPT_PATH = (
+    "domains/planner/prompts/00_intent_parser.txt"
 )
 
 MAX_SYSTEM_GOALS = 10
@@ -207,16 +210,6 @@ class InitialParseRequest(BaseModel):
 
     node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = PlannerNodeTypeEnum.PARSE_INTENT
 
-    small_talk: OptionalStr = Field(
-        default=None,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Hi!"},
-    )
-    out_of_scope: OptionalStr = Field(
-        default=None,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "What's the weather like today?"},
-    )
     system_goals: list[SystemGoal] = Field(
         default_factory=list,
         max_length=MAX_SYSTEM_GOALS,
@@ -225,6 +218,18 @@ class InitialParseRequest(BaseModel):
         ...,
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "Direct match to a supported capability"},
+    )
+    out_of_scope: OptionalStr = Field(
+        default=None,
+        max_length=MAX_STRING_LENGTH,
+        json_schema_extra={"example": "What's the weather like today?"},
+    )
+    
+    # TODO: remove this and move the parse_intent
+    small_talk: OptionalStr = Field(
+        default=None,
+        max_length=MAX_STRING_LENGTH,
+        json_schema_extra={"example": "Hi!"},
     )
     
     _overflow_system_goals: list[SystemGoal] = PrivateAttr(default_factory=list)
@@ -257,7 +262,36 @@ class InitialParseRequest(BaseModel):
         instance._overflow_system_goals = valid[MAX_SYSTEM_GOALS:]
         instance._invalid_system_goals = invalid
         return instance
-
+    
+class IntentParseRepquest(BaseModel):
+    intents: list[Literal[
+        "malicious",
+        "book_discovery_query",   # find_new_reads — mirrors Analyze_Recommend's job
+        "catalog_query",          # book_library_questions — "do you have X", "books by Y"
+        "app_info_query",         # book_project_related — drop "book", it's about the project/dev, not a book
+        "profile_query",          # unchanged — already clear
+        "conversation_continuation" # continue from previous convo
+        "unknown"
+    ]] = Field(
+        default_factory=["unknown"],
+        max_length=5,
+    )
+    
+    small_talk: OptionalStr = Field(
+        default=None,
+        max_length=MAX_STRING_LENGTH,
+        json_schema_extra={"example": "Hi!"},
+    )
+    confidence: ConfidenceFloat = Field(
+        ...,
+        ge=MIN_CONFIDENCE,
+        le=MAX_CONFIDENCE,
+        json_schema_extra={"example": 1.0},
+    )
+    
+    def model_post_init(self, context):
+        self.intents = list(set(self.intents))
+        return
 
 class InitialParseOutput(AppWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
@@ -321,6 +355,25 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
+        
+        tool_call = await self._run_llm_intent_request()
+        intent_result = cast(IntentParseRepquest, tool_call.function.parsed_arguments)
+        from common.utils import print_json
+        print_json(intent_result)
+        
+        if (intent_result.confidence < 0.5 
+            or "malicious" in intent_result.intents
+            or ["unknown"] == self.intent_result.intents):
+            await self.sse_stream.send_chars("Refuse this query")
+            self.result.ok = False
+            if intent_result.confidence < 0.5:
+                self.add_details("reject: intent parse low confidence")
+            if "malicious" in intent_result.intents:
+                self.add_details("reject: contain malicious intent")
+            if self.intent_result.intents == ['unknown']:
+                self.add_details("Reject: contain only unknown")
+            return
+        
         tool_call = await self._run_llm_args_parse()
         # parsed_arguments is typed `object | None` by the openai lib; the
         # parser validated it against InitialParseRequest, so the cast holds
@@ -330,6 +383,23 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         payload = self.output.to_llm_messages()
         await self.finalize_result(payload)
         await self.generate_user_response(payload)
+        
+    async def _run_llm_intent_request(self) -> ParsedFunctionToolCall:
+        system_prompt = load_prompt(
+            prompt_path=INTENT_PARSER_PROMPT_PATH
+        )
+        req = OpenAIParserRequest(
+            prompt=system_prompt,
+            messages=[self.user_message],
+            tool_models=[IntentParseRepquest]
+        )
+        assistant_msg = await self.run_llm_call(req)
+        tool_calls = assistant_msg.tool_calls
+        if not tool_calls:
+            # previously an unguarded [0] on None — same failure semantics
+            # (runtime error caught by the workflow), clearer message
+            raise ValueError("LLM response contained no tool calls")
+        return tool_calls[0]
         
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
@@ -341,7 +411,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             # NOTE: this should be a list of previous messages as well
             # but for now we can just do clear and direct instructions 
             messages=[self.user_message], 
-            tool_models=self.tool_models,
+            tool_models=[InitialParseRequest],
         )
         assistant_msg = await self.run_llm_call(req)
         tool_calls = assistant_msg.tool_calls
