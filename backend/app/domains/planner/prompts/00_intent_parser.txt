@@ -1,3 +1,0 @@
-you are an intent parser for a books recommender
-
-fill out the schema

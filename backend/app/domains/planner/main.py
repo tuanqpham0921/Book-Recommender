@@ -90,7 +90,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
                 self.result.runtime_error = parse_result.runtime_error
                 await self.sse_stream.send_error(self.initial_parse_failure_message)
                 return
-            await self.sse_stream.send_chars(self.initial_parse_failure_message)
+            # await self.sse_stream.send_chars(self.initial_parse_failure_message)
             return
 
         system_goals = parse_output.accepted_goals
@@ -118,9 +118,9 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
                     self.strategy_classification_failure_message
                 )
                 return
-            await self.sse_stream.send_chars(
-                self.strategy_classification_failure_message
-            )
+            # await self.sse_stream.send_chars(
+            #     self.strategy_classification_failure_message
+            # )
             return
 
         self.output.diagram = await self.send_mermaid(strategy_output)

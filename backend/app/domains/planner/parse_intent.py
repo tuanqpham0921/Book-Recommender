@@ -32,7 +32,7 @@ INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
     "domains/planner/prompts/1_initial_parse_response.txt"
 )
 INTENT_PARSER_PROMPT_PATH = (
-    "domains/planner/prompts/00_intent_parser.txt"
+    "domains/planner/prompts/0_intent_parser.txt"
 )
 
 MAX_SYSTEM_GOALS = 10
@@ -263,35 +263,35 @@ class InitialParseRequest(BaseModel):
         instance._invalid_system_goals = invalid
         return instance
     
-class IntentParseRepquest(BaseModel):
+class IntentParseRequest(BaseModel):
+    """Purpose: Coarse pre-filter before the full intent/goal parse — flags
+    malicious input and references to earlier turns (this app is
+    single-turn only) so the workflow can refuse them before any planning
+    work starts.
+
+    Args:
+        intents: Flags that apply to the message; empty when neither does.
+
+    Returns: The flags the workflow uses to decide whether to continue to
+    the full parse or refuse the message outright.
+
+    Constraints: `malicious` is exclusive — never paired with
+    `conversation_continuation`.
+    """
+
     intents: list[Literal[
         "malicious",
-        "book_discovery_query",   # find_new_reads — mirrors Analyze_Recommend's job
-        "catalog_query",          # book_library_questions — "do you have X", "books by Y"
-        "app_info_query",         # book_project_related — drop "book", it's about the project/dev, not a book
-        "profile_query",          # unchanged — already clear
-        "conversation_continuation" # continue from previous convo
-        "unknown"
+        "conversation_continuation",
     ]] = Field(
-        default_factory=["unknown"],
-        max_length=5,
+        default_factory=list,
+        max_length=2,
+        json_schema_extra={"example": []},
     )
-    
-    small_talk: OptionalStr = Field(
-        default=None,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Hi!"},
-    )
-    confidence: ConfidenceFloat = Field(
-        ...,
-        ge=MIN_CONFIDENCE,
-        le=MAX_CONFIDENCE,
-        json_schema_extra={"example": 1.0},
-    )
-    
-    def model_post_init(self, context):
-        self.intents = list(set(self.intents))
-        return
+
+    def model_post_init(self, context) -> None:
+        self.intents = list(dict.fromkeys(self.intents))
+        if "malicious" in self.intents:
+            self.intents = ["malicious"]
 
 class InitialParseOutput(AppWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
@@ -335,6 +335,8 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."
+    intent_reject_message = "I can't help with that request. Please try again with a book-related question."
+    continuation_reject_message = "I don't have memory of earlier messages yet — please restate your full request in one message."
 
     tool_models: list[type] = [InitialParseRequest]
 
@@ -355,25 +357,26 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-        
-        tool_call = await self._run_llm_intent_request()
-        intent_result = cast(IntentParseRepquest, tool_call.function.parsed_arguments)
-        from common.utils import print_json
-        print_json(intent_result)
-        
-        if (intent_result.confidence < 0.5 
-            or "malicious" in intent_result.intents
-            or ["unknown"] == self.intent_result.intents):
-            await self.sse_stream.send_chars("Refuse this query")
+
+        intent_tool_call = await self._run_llm_intent_request()
+        intent_result = cast(
+            IntentParseRequest, intent_tool_call.function.parsed_arguments
+        )
+
+        reject_reasons = self._get_intent_reject_reasons(intent_result)
+        if reject_reasons:
+            # TODO: these should raise errors so the caller can catch
+            message = (
+                self.continuation_reject_message
+                if intent_result.intents == ["conversation_continuation"]
+                else self.intent_reject_message
+            )
+            self.result.add_details(*reject_reasons)
             self.result.ok = False
-            if intent_result.confidence < 0.5:
-                self.add_details("reject: intent parse low confidence")
-            if "malicious" in intent_result.intents:
-                self.add_details("reject: contain malicious intent")
-            if self.intent_result.intents == ['unknown']:
-                self.add_details("Reject: contain only unknown")
+            self.result.message = message
+            await self.sse_stream.send_chars(message)
             return
-        
+
         tool_call = await self._run_llm_args_parse()
         # parsed_arguments is typed `object | None` by the openai lib; the
         # parser validated it against InitialParseRequest, so the cast holds
@@ -383,15 +386,21 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         payload = self.output.to_llm_messages()
         await self.finalize_result(payload)
         await self.generate_user_response(payload)
-        
+
+    def _get_intent_reject_reasons(self, intent_result: IntentParseRequest) -> list[str]:
+        reasons = []
+        if "malicious" in intent_result.intents:
+            reasons.append("Rejected: malicious intent detected")
+        if "conversation_continuation" in intent_result.intents:
+            reasons.append("Rejected: references an earlier turn (single-turn only)")
+        return reasons
+
     async def _run_llm_intent_request(self) -> ParsedFunctionToolCall:
-        system_prompt = load_prompt(
-            prompt_path=INTENT_PARSER_PROMPT_PATH
-        )
+        system_prompt = load_prompt(INTENT_PARSER_PROMPT_PATH)
         req = OpenAIParserRequest(
             prompt=system_prompt,
             messages=[self.user_message],
-            tool_models=[IntentParseRepquest]
+            tool_models=[IntentParseRequest],
         )
         assistant_msg = await self.run_llm_call(req)
         tool_calls = assistant_msg.tool_calls
