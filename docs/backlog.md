@@ -73,6 +73,15 @@ line numbers may drift, the file and symbol names are the stable part.
   error-kind field to key off of, or at minimum a distinct label/color derived from
   what's already in `errorDetail` (e.g. exception class parsed from the traceback).
 
+- **P2 — Undecided: how `Analyze_Compare` chains with single-book analyze nodes.**
+  `CompareStrategy` was re-registered 2026-07-18 for eval testing, which makes
+  `docs/design/node-taxonomy-v1.md`'s "Removed from V1" section and `roadmap.md`'s
+  Phase 1/deferred entries stale. Open design question (worked example: eval case
+  `chat_e35fc1e0`, "Compare the themes of Pride and Prejudice and Jane Eyre"):
+  retrieve→per-book-analyze→implicit synthesis in the final reply, vs.
+  retrieve→per-book-analyze→explicit `Analyze_Compare` node depending on the analyze
+  task ids. Full writeup in node-taxonomy-v1.md's "Future considerations" section.
+
 ## Performance (P2)
 
 - **book_store per-author N+1** (`db/stores/book_store.py`) — `search_by_book_filter`

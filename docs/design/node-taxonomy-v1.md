@@ -82,6 +82,14 @@ single book analyze node"). `Retrieve_by_Traits` (`FindByTraitsRetrieval`) was d
 outright — not parked, not narrowed — since the four dimension-specific nodes above
 replace what it was trying to do.
 
+> **Status update (2026-07-18):** `CompareStrategy`/`Analyze_Compare` was re-registered
+> (commit `9d0e402`, "registered compare for eval test") — it's back in
+> `BOOK_ANALYZE_CLASSES`/`BOOK_NODE_TYPE_TO_CLS`. The "removed from V1" paragraph above
+> is the historical decision, not the current registry state; [roadmap.md](../roadmap.md)'s
+> Phase 1 checklist and deferred-features table say the same "removed" thing and are
+> stale in the same way. Reconcile both whenever Compare's fate is finally settled — see
+> the open question below, surfaced by re-enabling it for eval testing.
+
 ## V1 conversation contract: clarify-only, single-turn
 
 - Every query stands alone. No history is loaded
@@ -144,7 +152,20 @@ else in the file needs to change when toggling. Two things follow:
   under `app/domains/`, a registry entry, an executor, and eval cases — the same "how
   to add a node" path documented in `backend/app/domains/README.md`.
 - **Compare returns** after single-book analysis exists (owner's note: "need a single
-  book analyze node").
+  book analyze node"). Re-registering it early for eval testing (see status update
+  above) surfaced the open question directly, via eval case `chat_e35fc1e0`
+  (`query_suite` #23, "Compare the themes of Pride and Prejudice and Jane Eyre"):
+  should the plan be
+  (a) `Retrieve_by_Title` ×2 → `Analyze_Themes` ×2, with the final response-generation
+      step doing the compare/synthesis implicitly, no dedicated compare node in the DAG; or
+  (b) `Retrieve_by_Title` ×2 → `Analyze_Themes` ×2 → `Analyze_Compare` depending on
+      both `Analyze_Themes` task ids, producing the comparison itself?
+  (b) matches this note's original intent and keeps "compare" a first-class,
+  eval-checkable node, but requires widening `CompareStrategy.depends_on`'s contract —
+  its docstring currently says depends_on is "Task ids of the prior retrieval steps,
+  one per book being compared," not analyze-tier ids — plus a 3-hop example in
+  `2_strategy_classification.txt` (today's only compare example is the 2-hop
+  retrieve→compare shown in that prompt). Not yet decided.
 - **Book-clamped recommendations** — always attach a recommendation to a successful
   lookup ("do you have Dune? — yes, and I think you'll like these"). Feels consumer-like;
   a candidate once execution is real.
