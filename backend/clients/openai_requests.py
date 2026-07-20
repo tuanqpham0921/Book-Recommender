@@ -12,7 +12,7 @@ from typing import Annotated
 
 logger = logging.getLogger(__name__)
 
-MAX_COMPLETION_TOKENS = 300
+MAX_COMPLETION_TOKENS = 1000
 TEMPERATURE = 0.3
 TOP_P = 0.8
 SEED = 42
@@ -23,6 +23,7 @@ class OpenAIBaseRequest(BaseLLMRequest):
     temperature: float = TEMPERATURE
     top_p: float = TOP_P
     seed: int = SEED
+    reasoning_effort: str = 'low'
 
     @model_validator(mode="after")
     def check_tool_message_linkage(self) -> "OpenAIBaseRequest":
@@ -54,14 +55,20 @@ class OpenAIBaseRequest(BaseLLMRequest):
         return messages
 
     def base_payload(self) -> dict[str, Any]:
-        return {
+        payload = {
             "model": self.model,
             "messages": self.to_messages_payload(),
-            "temperature": self.temperature,
-            "top_p": self.top_p,
-            "seed": self.seed,
             "stream_options": {"include_usage": True},
         }
+
+        if self.model.startswith("gpt-5"):
+            payload["reasoning_effort"] = self.reasoning_effort
+        else:
+            payload["temperature"] = self.temperature
+            payload["top_p"] = self.top_p
+            payload["seed"] = self.seed
+
+        return payload
 
     def to_payload(self) -> dict[str, Any]:
         return self.base_payload()
