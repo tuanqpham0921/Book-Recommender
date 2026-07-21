@@ -135,16 +135,29 @@ def find_by_isbn13(isbn13: str) -> dict:
     return MOCK_BOOKS[0]
 
 
-def find_by_author(authors: list[str]) -> list[dict]:
-    """Case-insensitive substring match against any of the given author
-    names; falls back to the first book so the mock always has something to
+def find_by_author(author: str) -> list[dict]:
+    """Case-insensitive substring match against the book's author credits;
+    falls back to the first book so the mock always has something to
     stream."""
-    queries = [a.strip().lower() for a in authors]
-    matches = [
-        book for book in MOCK_BOOKS
-        if any(query in book["authors"].lower() for query in queries)
-    ]
+    query = author.strip().lower()
+    matches = [book for book in MOCK_BOOKS if query in book["authors"].lower()]
     return matches or [MOCK_BOOKS[0]]
+
+
+def find_by_coauthors(authors: list[str]) -> list[dict]:
+    """Books credited to *every* named author — the co-authorship AND that
+    find_by_author's single-name OR can't express. `authors` is a
+    semicolon-delimited credit string ("Brian Herbert;Kevin J. Anderson"), so
+    each name is matched as a substring of the whole credit.
+
+    No fallback book, unlike the other finders: an empty list is the real
+    answer to "did these two ever write together?", and inventing a match
+    would make the mock lie about the one thing this node exists to check."""
+    queries = [a.strip().lower() for a in authors]
+    return [
+        book for book in MOCK_BOOKS
+        if all(query in book["authors"].lower() for query in queries)
+    ]
 
 
 def find_by_genre(genre: str) -> list[dict]:

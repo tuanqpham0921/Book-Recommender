@@ -33,6 +33,15 @@ class FindByISBN13Output(BaseModel):
 
 
 class FindByAuthorOutput(BaseModel):
+    author: str
+    books: list[BookSummary]
+
+
+class FindByCoAuthorsOutput(BaseModel):
+    """`authors` are the names that were searched for jointly; every book in
+    `books` is credited to all of them. An empty `books` is a real answer here
+    — it means the named authors never collaborated."""
+
     authors: list[str]
     books: list[BookSummary]
 

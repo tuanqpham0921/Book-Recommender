@@ -62,7 +62,11 @@ Recurring failure patterns, in priority order:
    clarification node).
 4. **`Retrieve_by_Author` over-triggers** whenever an author appears in the query
    (330, 331, 333, 353, 355) — extension-suite discrimination problem; docstring
-   examples are the lever.
+   examples are the lever. The 2026-07-21 author split
+   ([design/node-taxonomy-v1.md](design/node-taxonomy-v1.md)) adds a second axis to
+   this: a two-name query now has to pick between N `Retrieve_by_Author` nodes and one
+   `Retrieve_by_CoAuthors`. Base cases 53/54 are that pair — same shape, opposite
+   expected plan — and 55 covers the yes/no phrasing.
 
 ## Relabel plan (roadmap Phase 4)
 

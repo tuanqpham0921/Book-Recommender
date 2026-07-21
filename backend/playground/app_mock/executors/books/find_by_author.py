@@ -12,14 +12,14 @@ class FindByAuthorExecutor(MockRetrievalExecutorWorkflow):
     def select_books(
         self, task: FindByAuthorRetrieval, dependent_results: dict
     ) -> list[dict]:
-        return find_by_author(task.authors)
+        return find_by_author(task.author)
 
     def build_data(
         self, task: FindByAuthorRetrieval, dependent_results: dict
     ) -> dict[str, Any]:
         books = self.select_books(task, dependent_results)
         output = FindByAuthorOutput(
-            authors=task.authors,
+            author=task.author,
             books=[BookSummary.model_validate(b) for b in books],
         )
         return output.model_dump()

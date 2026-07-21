@@ -7,6 +7,7 @@ from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import (
     FindByISBN13Retrieval,
     FindByAuthorRetrieval,
+    FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
     FindByTitleRetrieval,
     RecommendationStrategy,
@@ -22,6 +23,7 @@ BOOK_RETRIEVAL_CLASSES = (
     FindByTitleRetrieval,
     FindByISBN13Retrieval,
     FindByAuthorRetrieval,
+    FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
 )
 BOOK_ANALYZE_CLASSES = (
@@ -35,6 +37,7 @@ BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.FIND_TITLE.value: FindByTitleRetrieval,
     BookNodeTypeEnum.FIND_ISBN13.value: FindByISBN13Retrieval,
     BookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
+    BookNodeTypeEnum.FIND_COAUTHORS.value: FindByCoAuthorsRetrieval,
     BookNodeTypeEnum.FIND_GENRE.value: FindByGenreRetrieval,
     BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
     BookNodeTypeEnum.COMPARE.value: CompareStrategy

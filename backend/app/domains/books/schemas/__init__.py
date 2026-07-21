@@ -4,6 +4,7 @@ from .request_schemas import (
     FindByTitleRetrieval,
     FindByISBN13Retrieval,
     FindByAuthorRetrieval,
+    FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
 )
 from .output_schemas import (
@@ -11,6 +12,7 @@ from .output_schemas import (
     FindByTitleOutput,
     FindByISBN13Output,
     FindByAuthorOutput,
+    FindByCoAuthorsOutput,
     FindByGenreOutput,
 )
 
@@ -20,10 +22,12 @@ __all__ = [
     "FindByTitleRetrieval",
     "FindByISBN13Retrieval",
     "FindByAuthorRetrieval",
+    "FindByCoAuthorsRetrieval",
     "FindByGenreRetrieval",
     "BookSummary",
     "FindByTitleOutput",
     "FindByISBN13Output",
     "FindByAuthorOutput",
+    "FindByCoAuthorsOutput",
     "FindByGenreOutput",
 ]

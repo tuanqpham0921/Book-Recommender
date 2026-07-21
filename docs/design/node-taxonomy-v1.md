@@ -46,7 +46,8 @@ response generation that always gets attached when the intent is to find books")
 |---|---|---|
 | `Retrieve_by_Title` | `FindByTitleRetrieval` | Core retrieval — `title` + optional `authors` hint |
 | `Retrieve_by_ISBN13` | `FindByISBN13Retrieval` | Core retrieval — exact `isbn13` |
-| `Retrieve_by_Author` | `FindByAuthorRetrieval` | Core retrieval — `authors: list[str]`, promoted out of `playground/app_mock/extended_request_schemas.py` |
+| `Retrieve_by_Author` | `FindByAuthorRetrieval` | Core retrieval — `author: str` (was `authors: list[str]`; see the 2026-07-21 split below), promoted out of `playground/app_mock/extended_request_schemas.py` |
+| `Retrieve_by_CoAuthors` | `FindByCoAuthorsRetrieval` | Core retrieval — `authors: list[str]` (min 2), joint works only. Added 2026-07-21 |
 | `Retrieve_by_Genre` | `FindByGenreRetrieval` | Core retrieval — `genre: str`, new |
 | `Analyze_Recommend` | `RecommendationStrategy` | LLM ranking/response step, **no filters field** |
 | *(new)* clarification/rejection | not yet built | Turns refused or ambiguous goals into a helpful reply — still open |
@@ -81,6 +82,43 @@ real executor exists, likely alongside single-book analysis (owner's note: "need
 single book analyze node"). `Retrieve_by_Traits` (`FindByTraitsRetrieval`) was deleted
 outright — not parked, not narrowed — since the four dimension-specific nodes above
 replace what it was trying to do.
+
+### Author split (2026-07-21)
+
+`FindByAuthorRetrieval` carried `authors: list[str]` and a docstring saying multiple
+names were "one combined bibliography search". That made it two nodes wearing one name,
+and it could only ever express the OR:
+
+- **union** — "books by Austen and books by Coelho", two independent bibliographies;
+- **intersection** — "what did Brian Herbert and Kevin J. Anderson write *together*",
+  one set of books credited to both.
+
+A single list field can't distinguish them, so the intersection was unreachable: the
+node had no way to say "and", and the executor's `any(...)` match would happily return
+Austen's solo novels for a collaboration query. Split accordingly:
+
+- `Retrieve_by_Author` takes `author: str` — exactly one author per node. The union case
+  becomes N nodes, one per author, which is the rule `Retrieve_by_Title` already follows
+  ("one title per node — for multiple named titles, emit one node per title"). Every
+  retrieval node is now single-**valued** as well as single-dimension.
+- `Retrieve_by_CoAuthors` takes `authors: list[str]` with `min_length=2` and ANDs them —
+  a book is returned only when every named author is credited on it.
+
+The data supports the AND directly: `books.authors` is a semicolon-delimited credit
+string (`"Brian Herbert;Kevin J. Anderson"`), so each name is matched as a substring of
+the whole credit.
+
+`FindByCoAuthorsOutput` may legitimately come back with an empty `books` — that *is* the
+answer to "did they ever write together?". The mock finder (`mock_books.find_by_coauthors`)
+therefore deliberately omits the fallback-to-first-book behaviour the other mock finders
+have, which would otherwise make the mock lie about the one thing this node exists to
+check.
+
+The discrimination risk this adds is the two-name query shape being read as the wrong
+one — base eval cases 53 (union → two `Retrieve_by_Author`) and 54 (joint →
+`Retrieve_by_CoAuthors`) are deliberately the same shape with opposite expected plans,
+so the pair is the actual test. Related: eval-strategy.md's known-failure #4,
+"`Retrieve_by_Author` over-triggers whenever an author appears in the query".
 
 > **Status update (2026-07-18):** `CompareStrategy`/`Analyze_Compare` was re-registered
 > (commit `9d0e402`, "registered compare for eval test") — it's back in

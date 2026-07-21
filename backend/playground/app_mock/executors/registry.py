@@ -2,6 +2,7 @@ from app.domains.books.schemas import (
     FindByTitleRetrieval,
     FindByISBN13Retrieval,
     FindByAuthorRetrieval,
+    FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
     RecommendationStrategy,
 )
@@ -15,6 +16,7 @@ from .books import (
     FindByTitleExecutor,
     FindByISBN13Executor,
     FindByAuthorExecutor,
+    FindByCoAuthorsExecutor,
     FindByGenreExecutor,
     RecommendBooksExecutor,
 )
@@ -25,6 +27,7 @@ MOCK_EXECUTORS_CLS_MAPPING = {
     FindByTitleRetrieval: FindByTitleExecutor,
     FindByISBN13Retrieval: FindByISBN13Executor,
     FindByAuthorRetrieval: FindByAuthorExecutor,
+    FindByCoAuthorsRetrieval: FindByCoAuthorsExecutor,
     FindByGenreRetrieval: FindByGenreExecutor,
     RecommendationStrategy: RecommendBooksExecutor,
     ProjectInfoRequest: ProjectInfoExecutor,

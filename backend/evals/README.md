@@ -8,7 +8,7 @@ a runner, and report generators. **Why it's built this way and where it's headed
 
 | Suite | Cases | Targets |
 |---|---|---|
-| `query_suite.json` | 50 | Core node set, easy→hard |
+| `query_suite.json` | 55 | Core node set, easy→hard |
 | `query_suite_adversarial.json` | 52 | Rejection behavior (12 cases intentionally expect no nodes) |
 | `query_suite_extended.json` | 48 | Catalog scaling — needs the registry PLAYGROUND EXTENSION block enabled |
 | `query_suite_stress.json` | 9 | Buffer/overflow, confusing chains |

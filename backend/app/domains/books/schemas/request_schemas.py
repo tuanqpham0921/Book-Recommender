@@ -170,26 +170,26 @@ class FindByISBN13Retrieval(DomainRequest):
 
 
 class FindByAuthorRetrieval(DomainRequest):
-    """Purpose: Retrieve books written by one or more named authors — an author's bibliography.
+    """Purpose: Retrieve the books written by one named author — that author's bibliography.
 
     Args:
-        authors: Author name(s) whose books to retrieve (at least one).
+        author: The single author whose books to retrieve.
 
-    Returns: A FindByAuthorOutput — the searched authors plus a list of matching
+    Returns: A FindByAuthorOutput — the searched author plus a list of matching
     BookSummary records.
 
-    Use when: the author is the subject of the search — "books by Ursula K. Le
-    Guin", "what else has Brandon Sanderson written", "show me some Agatha
-    Christie".
+    Use when: one author is the subject of the search.
 
     Do not use: for a single named title where the author is only a
     disambiguating hint ("Dune by Frank Herbert") — this includes
     authorship-verification questions like "did Frank Herbert write Dune" or
     "is Dune by Frank Herbert", which stay a single title lookup — or
-    taste-based suggestions.
+    taste-based suggestions. For books two or more authors wrote *together*,
+    use Retrieve_by_CoAuthors instead.
 
-    Constraints: multiple authors in one node are treated as one combined
-    bibliography search, not separate per-author searches.
+    Constraints: exactly one author per node — several authors' separate
+    bibliographies means one node per author ("books by Austen and by Coelho"
+    → two nodes), because each node returns one author's catalog.
 
     Example queries:
         - "books by Ursula K. Le Guin"
@@ -198,8 +198,46 @@ class FindByAuthorRetrieval(DomainRequest):
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_AUTHOR] = BookNodeTypeEnum.FIND_AUTHOR
+    author: str = Field(..., json_schema_extra={"example": "Ursula K. Le Guin"})
+
+
+class FindByCoAuthorsRetrieval(DomainRequest):
+    """Purpose: Retrieve books that two or more named authors wrote together — their collaborations.
+
+    Args:
+        authors: The authors who must all appear on the same book (at least two).
+
+    Returns: A FindByCoAuthorsOutput — the searched authors plus a list of
+    matching BookSummary records, each credited to all of them.
+
+    Use when: the query is about a collaboration — the named authors as
+    co-writers of the same title, signalled by words like "together", "with",
+    "co-wrote", "collaborated on", "as a duo".
+
+    Do not use: when the authors are named as separate bibliographies to fetch
+    side by side ("books by Austen and books by Coelho") — that is one
+    Retrieve_by_Author per author. A single author alone is always
+    Retrieve_by_Author, never this node.
+
+    Constraints: at least two authors, and they are combined as AND, not OR —
+    a book is only returned when every named author is credited on it, so this
+    returns nothing when they never actually collaborated (which is itself the
+    answer to "did they write anything together?").
+
+    Example queries:
+        - "what did Brian Herbert and Kevin J. Anderson write together"
+        - "books co-written by Neil Gaiman and Terry Pratchett"
+        - "did Charles Osborne and Agatha Christie collaborate on anything"
+        - "show me the Preston and Child novels"
+    """
+
+    node_type: Literal[BookNodeTypeEnum.FIND_COAUTHORS] = (
+        BookNodeTypeEnum.FIND_COAUTHORS
+    )
     authors: List[str] = Field(
-        ..., min_length=1, json_schema_extra={"example": ["Ursula K. Le Guin"]}
+        ...,
+        min_length=2,
+        json_schema_extra={"example": ["Brian Herbert", "Kevin J. Anderson"]},
     )
 
 

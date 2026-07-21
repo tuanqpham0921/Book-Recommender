@@ -355,5 +355,33 @@
     "query": "Did Jane Austen write Dune?",
     "note": "Single FindByTitle. Authorship-verification phrasing — the named author is a disambiguating hint on the title lookup, not a bibliography search, so this must stay one node (not FindByTitle + FindByAuthor).",
     "expected_nodes": ["Retrieve_by_Title"]
+  },
+  {
+    "id": 52,
+    "difficulty": "easy",
+    "query": "What books has Ursula K. Le Guin written?",
+    "note": "Single FindByAuthor. The plain one-author bibliography — the baseline case the node exists for, and the control for the multi-author cases below.",
+    "expected_nodes": ["Retrieve_by_Author"]
+  },
+  {
+    "id": 53,
+    "difficulty": "medium",
+    "query": "Show me books by Jane Austen and books by Paulo Coelho.",
+    "note": "Two separate bibliographies → one FindByAuthor per author, mirroring FindByTitle's one-node-per-title rule. The failure to catch is collapsing both names into a single node, which the old authors: list[str] schema allowed and the single-author split removed.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author"]
+  },
+  {
+    "id": 54,
+    "difficulty": "medium",
+    "query": "What did Brian Herbert and Kevin J. Anderson write together?",
+    "note": "Single FindByCoAuthors. 'together' is the collaboration signal: both names belong on ONE node as an AND, not two separate bibliographies. The mirror image of case 53 — same two-name shape, opposite plan — so the pair is what actually tests whether the planner reads the collaboration cue instead of just counting names.",
+    "expected_nodes": ["Retrieve_by_CoAuthors"]
+  },
+  {
+    "id": 55,
+    "difficulty": "medium",
+    "query": "Did Neil Gaiman and Terry Pratchett ever co-write anything?",
+    "note": "Single FindByCoAuthors, phrased as a yes/no. An empty result is the real answer to this one, so it checks the planner routes the question to the node rather than refusing it or fabricating a bibliography.",
+    "expected_nodes": ["Retrieve_by_CoAuthors"]
   }
 ]
