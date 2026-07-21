@@ -3,12 +3,19 @@ payload it sends, the chat_id it captures from the chat.id SSE event (used
 to write test_runs rows after the run), and that the default suite path
 survives repo restructures."""
 
+import argparse
 import json
 from contextlib import contextmanager
 
 import pytest
 
-from evals.run_suites import DEFAULT_SUITE_PATH, load_suite, send_query, should_sleep
+from evals.run_suites import (
+    DEFAULT_SUITE_PATH,
+    load_suite,
+    positive_int,
+    send_query,
+    should_sleep,
+)
 
 
 SUITE = [
@@ -28,29 +35,70 @@ def suite_path(tmp_path):
 
 class TestLoadSuite:
     def test_no_filters_returns_all(self, suite_path):
-        entries = load_suite(suite_path, difficulties=None, ids=None)
+        entries = load_suite(suite_path, difficulties=None, ids=None, limit=None)
 
         assert [e["id"] for e in entries] == [1, 2, 3, 4]
 
     def test_difficulty_filter(self, suite_path):
-        entries = load_suite(suite_path, difficulties=["easy"], ids=None)
+        entries = load_suite(suite_path, difficulties=["easy"], ids=None, limit=None)
 
         assert [e["id"] for e in entries] == [1, 2]
 
     def test_multiple_difficulties(self, suite_path):
-        entries = load_suite(suite_path, difficulties=["easy", "hard"], ids=None)
+        entries = load_suite(
+            suite_path, difficulties=["easy", "hard"], ids=None, limit=None
+        )
 
         assert [e["id"] for e in entries] == [1, 2, 4]
 
     def test_ids_filter(self, suite_path):
-        entries = load_suite(suite_path, difficulties=None, ids=[3, 1])
+        entries = load_suite(suite_path, difficulties=None, ids=[3, 1], limit=None)
 
         assert [e["id"] for e in entries] == [1, 3]
 
     def test_filters_combine(self, suite_path):
-        entries = load_suite(suite_path, difficulties=["easy"], ids=[2, 3])
+        entries = load_suite(suite_path, difficulties=["easy"], ids=[2, 3], limit=None)
 
         assert [e["id"] for e in entries] == [2]
+
+
+class TestLoadSuiteLimit:
+    """`--limit` / `make query-suite LIMIT=n` — the debug loop's cap."""
+
+    def test_takes_the_first_n(self, suite_path):
+        entries = load_suite(suite_path, difficulties=None, ids=None, limit=2)
+
+        assert [e["id"] for e in entries] == [1, 2]
+
+    def test_applies_after_the_other_filters(self, suite_path):
+        # not "first 1 of the file that also happens to be easy" — the cap
+        # lands on the filtered set, so ids 1 and 2 survive and 1 is kept
+        entries = load_suite(suite_path, difficulties=["easy"], ids=None, limit=1)
+
+        assert [e["id"] for e in entries] == [1]
+
+    def test_limit_larger_than_the_suite_returns_everything(self, suite_path):
+        entries = load_suite(suite_path, difficulties=None, ids=None, limit=99)
+
+        assert [e["id"] for e in entries] == [1, 2, 3, 4]
+
+    def test_none_means_no_cap(self, suite_path):
+        entries = load_suite(suite_path, difficulties=None, ids=None, limit=None)
+
+        assert len(entries) == len(SUITE)
+
+
+class TestPositiveInt:
+    """--limit's argparse type: the runner should reject a nonsense cap at
+    parse time rather than silently running zero queries."""
+
+    def test_accepts_positive(self):
+        assert positive_int("3") == 3
+
+    @pytest.mark.parametrize("value", ["0", "-1"])
+    def test_rejects_zero_and_negative(self, value):
+        with pytest.raises(argparse.ArgumentTypeError, match="at least 1"):
+            positive_int(value)
 
 
 class FakeClient:

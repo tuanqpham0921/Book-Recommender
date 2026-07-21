@@ -37,13 +37,19 @@ DEFAULT_SUITE_PATH = Path(__file__).parent / "suites" / "query_suite.json"
 STREAM_TIMEOUT_SECONDS = 300.0
 EVENT_PRINT_LIMIT = 200
 DEFAULT_SLEEP_SECONDS = 45.0
-
+DEFAULT_RUN_LIMIT = None
 
 def should_sleep(index: int, total: int, sleep_seconds: float) -> bool:
     """Whether to pause after the query at `index` (1-based) of `total` —
     never after the last one (nothing follows it), never when sleeping is
     disabled (sleep_seconds <= 0)."""
     return sleep_seconds > 0 and index < total
+
+def positive_int(value: str) -> int:
+    value = int(value)
+    if value < 1:
+        raise argparse.ArgumentTypeError("limit must be at least 1")
+    return value
 
 
 def truncate(text: str, limit: int = EVENT_PRINT_LIMIT) -> str:
@@ -56,6 +62,7 @@ def load_suite(
     suite_path: Path,
     difficulties: list[str] | None,
     ids: list[int] | None,
+    limit: int | None
 ) -> list[dict]:
     with suite_path.open() as f:
         entries = json.load(f)
@@ -64,6 +71,8 @@ def load_suite(
         entries = [e for e in entries if e["difficulty"] in difficulties]
     if ids:
         entries = [e for e in entries if e["id"] in ids]
+    if limit:
+        entries = entries[:limit]
     return entries
 
 
@@ -225,9 +234,16 @@ def main() -> int:
         help=f"Seconds to sleep between queries, to stay under the OpenAI "
         f"TPM rate limit (default: {DEFAULT_SLEEP_SECONDS:.0f}). 0 disables it.",
     )
+    parser.add_argument(
+        "--limit",
+        type=positive_int,
+        default=DEFAULT_RUN_LIMIT,
+        help="Number of queries to run. Must be at least 1. "
+            "If omitted, all queries will be run.",
+    )
     args = parser.parse_args()
 
-    entries = load_suite(args.suite, args.difficulty, args.ids)
+    entries = load_suite(args.suite, args.difficulty, args.ids, args.limit)
     if not entries:
         print("No queries matched the given filters.", file=sys.stderr)
         return 1

@@ -21,19 +21,38 @@ EVALS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 # Override the target or forward extra runner flags, e.g.
 #   make query-suite-all ARGS="--difficulty easy"
 #   make query-suite BASE_URL=http://localhost:9000
+#
+# LIMIT / SLEEP are the debug knobs, applied to every suite target:
+#   make query-suite LIMIT=3 SLEEP=0     # 3 queries, no rate-limit wait
+#   make query-suite-smoke               # the same thing, named
+# Both default to the runner's own defaults (all queries, 45s between them to
+# stay under the OpenAI TPM limit) — a full campaign needs that sleep, a debug
+# loop does not. ARGS is appended after them, so a flag there still wins.
+#
 # Each run is tee'd to a timestamped per-suite log under $(LOG_DIR); console
 # output still shows live (python -u keeps it unbuffered through the pipe).
 BASE_URL ?= http://localhost:8000
 ARGS ?=
+LIMIT ?=
+SLEEP ?=
+SMOKE_LIMIT ?= 3
 SUITES_DIR := $(EVALS_DIR)suites
 LOG_DIR ?= $(EVALS_DIR)logs/query_suites
-RUN_SUITE = poetry run python -u $(EVALS_DIR)run_suites.py --base-url $(BASE_URL) $(ARGS) --suite
+RUN_SUITE = poetry run python -u $(EVALS_DIR)run_suites.py --base-url $(BASE_URL) \
+	$(if $(LIMIT),--limit $(LIMIT)) $(if $(SLEEP),--sleep $(SLEEP)) $(ARGS) --suite
 
 # run the base query suite against a running backend (make dev first)
 .PHONY: query-suite
 query-suite:
 	@mkdir -p $(LOG_DIR)
 	$(RUN_SUITE) $(SUITES_DIR)/query_suite.json 2>&1 | tee $(LOG_DIR)/base_$$(date +%Y%m%d_%H%M%S).log
+
+# DEBUG LOOP — first $(SMOKE_LIMIT) queries of the base suite, no sleep between
+# them. Records to chat_runs/test_runs like any other run, so `make suite-goals`
+# and `make suite-stats` work on it; override with SMOKE_LIMIT=n.
+.PHONY: query-suite-smoke
+query-suite-smoke:
+	@$(MAKE) query-suite LIMIT=$(SMOKE_LIMIT) SLEEP=0
 
 # run the adversarial suite (edge cases, injections, overflow — ids 301+)
 .PHONY: query-suite-adversarial
