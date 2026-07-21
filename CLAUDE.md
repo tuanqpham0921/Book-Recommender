@@ -36,6 +36,7 @@ make postgres-restore           # restore data from data/backup.sql
 make postgres-cli               # open psql shell
 make query-suite                # POST the base eval suite at a running backend (make dev first)
 make query-suite-all            # fire all 4 eval suites concurrently
+make tools-catalog              # inventory the planner's tool catalog (no backend/DB needed)
 ```
 
 Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
@@ -43,9 +44,9 @@ Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (vers
 Two post-processors split correctness from spend, over shared plumbing in `evals/common.py` (the `test_runs ⋈ chat_runs` fetch, latest-per-case filtering, suite-JSON lookup, CLI):
 
 - **`evals/report_system_goals.py`** (`make suite-goals`) — diffs accepted goal types against each case's `expected_nodes`, saves to `evals/results/system_goals_<timestamp>.md`. **This diff is the project's golden-test mechanism**; it deliberately reports no token/cost/latency numbers.
-- **`evals/report.py`** (`make suite-report`) — ok/failed, runtime errors, duration, tokens, cache hit rate, dollars, and a per-model spend split.
+- **`evals/report.py`** (`make suite-stats`) — ok/failed, runtime errors, duration, tokens, cache hit rate, dollars, and a per-model spend split.
 
-`make suite-reports` runs both. Strategy and growth plan in [docs/eval-strategy.md](docs/eval-strategy.md).
+`make suite-reports` runs both. A third report, **`evals/tools_catalog.py`** (`make tools-catalog`), stands apart from those two: it reads the **live registry instead of the database**, so it needs no backend and no recorded run. It inventories the planner's tool catalog — tool count per tier, per-tool token cost and share, the per-request cost of shipping the catalog (uncached and cached), plus an audit for nodes with no executor and docstrings missing a canonical section. Run it after adding or editing a node. Strategy and growth plan in [docs/eval-strategy.md](docs/eval-strategy.md).
 
 Environment config lives at `config/.env` (see `config/README.md` for structure).
 
@@ -78,7 +79,7 @@ Instead of a fixed routing graph, this system uses **LLM-driven preplanning**: t
 2. **`strategy_classification.py` (`StrategyClassificationWorkflow`)** — takes those goals, loads the matching tools, and has the LLM select strategies via semantic understanding. The LLM can reject goals and resolves dependencies to produce an ordered execution plan (topological sort, cycle rejection).
 3. **`PlannerWorkflow`** (`planner/main.py`) — receives the plan, generates the Mermaid diagram, and streams it plus the goal list to the frontend. (Task execution happens in `TaskRunnerWorkflow`, currently disabled — see Request Flow below.)
 
-Node **request schemas** live in `app/domains/` keyed by `NodeTypeEnum`; `app/registry.py` maps type strings to classes. Schemas describe *what* to do; **executors** (the *how*) are looked up separately via `EXECUTORS_CLS_MAPPING` in the same file — currently pointing at the **mock executors** in `playground/app_mock/` until real ones are built. The "PLAYGROUND EXTENSION" block at the bottom of `registry.py` folds ~18 scaling-test node types into the live registry; it is a deliberate **manual comment-toggle** (currently *disabled*, as of commit `192998d`) — see `backend/playground/README.md`. Note `backend/catalog.txt` is a hand-run snapshot of `python -m app.registry` taken while the block was enabled, so it still lists the extended nodes; regenerate it deliberately, not as a side effect of an unrelated change.
+Node **request schemas** live in `app/domains/` keyed by `NodeTypeEnum`; `app/registry.py` maps type strings to classes. Schemas describe *what* to do; **executors** (the *how*) are looked up separately via `EXECUTORS_CLS_MAPPING` in the same file — currently pointing at the **mock executors** in `playground/app_mock/` until real ones are built. The "PLAYGROUND EXTENSION" block at the bottom of `registry.py` folds ~18 scaling-test node types into the live registry; it is a deliberate **manual comment-toggle** (currently *disabled*, as of commit `192998d`) — see `backend/playground/README.md`. To see what the planner is actually told it can do at any moment, run `make tools-catalog` rather than trusting a checked-in snapshot: it renders the live registry, so it reflects the toggle's current state.
 
 **Adding a new capability:** see the step-by-step recipe in `backend/app/domains/README.md` (enum entry → request schema with LLM-facing docstring → registry → executor mapping → eval cases). The planner picks it up automatically via the tool-loading step. The V1 node set is a settled decision: [docs/design/node-taxonomy-v1.md](docs/design/node-taxonomy-v1.md).
 

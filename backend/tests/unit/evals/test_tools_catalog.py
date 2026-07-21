@@ -1,0 +1,223 @@
+"""Tests for the tool-catalog report's pure parts.
+
+Unlike the other two reports, this one reads the live registry rather than the
+database, so `collect_tools`/`summarize` are tested against a small fake tier
+map instead of a fixture table — asserting on the real registry would make
+these tests fail every time a node is added, which is the opposite of useful.
+The registry-shaped assertions that *are* worth pinning live in
+tests/unit/app/domains/test_registry.py.
+"""
+
+from datetime import datetime, timezone
+
+import pytest
+
+import evals.tools_catalog as tools_catalog
+from evals.tools_catalog import (
+    build_audit,
+    build_report,
+    count_tokens,
+    get_encoder,
+    missing_sections,
+    prompt_costs,
+    render_catalog_entry,
+    summarize,
+)
+
+
+@pytest.fixture
+def encoder():
+    return get_encoder("gpt-4.1")
+
+
+def make_tool(node_type="Retrieve_by_Thing", **overrides):
+    tool = {
+        "node_type": node_type,
+        "tier": "Retrieval — lookup or fetch data",
+        "tier_short": "Retrieval",
+        "cls": "FindByThing",
+        "catalog_tokens": 100,
+        "schema_tokens": 400,
+        "chars": 500,
+        "has_executor": True,
+        "missing_sections": [],
+    }
+    tool.update(overrides)
+    return tool
+
+
+class TestGetEncoder:
+    def test_falls_back_for_models_tiktoken_does_not_know(self):
+        # tiktoken 0.9 raises KeyError for gpt-4.1/gpt-5 — the exact models
+        # this project runs, so the fallback is the normal path, not an edge
+        assert get_encoder("gpt-4.1").name == "o200k_base"
+
+    def test_unknown_model_name_still_returns_an_encoder(self):
+        assert get_encoder("not-a-real-model-9000").name == "o200k_base"
+
+
+class TestRenderCatalogEntry:
+    def test_matches_the_registry_renderer_shape(self):
+        # the name on its own line, description indented two spaces under it
+        out = render_catalog_entry("Retrieve_by_Thing", "Purpose: x.\nArgs: y.")
+
+        assert out == "Retrieve_by_Thing\n  Purpose: x.\n  Args: y."
+
+    def test_blank_lines_stay_blank_rather_than_becoming_indent(self):
+        # trailing whitespace on an otherwise empty line would be billed
+        out = render_catalog_entry("Node", "a\n\nb")
+
+        assert out.splitlines()[2] == ""
+
+    def test_the_real_renderer_still_produces_this_shape(self):
+        # guards the duplication: if format_node_type_catalog changes how it
+        # indents, per-tool token counts silently stop matching the prompt
+        from app.registry import NODE_TYPE_TO_CLS, class_docstring, format_node_type_catalog
+
+        name = next(iter(NODE_TYPE_TO_CLS))
+        entry = render_catalog_entry(name, class_docstring(NODE_TYPE_TO_CLS[name]))
+
+        assert entry in format_node_type_catalog()
+
+
+class TestMissingSections:
+    def test_complete_docstring_has_nothing_missing(self):
+        doc = "".join(f"{s} x\n" for s in tools_catalog.EXPECTED_SECTIONS)
+
+        assert missing_sections(doc) == []
+
+    def test_reports_each_absent_section(self):
+        assert missing_sections("Purpose: do a thing.") == [
+            "Args:",
+            "Returns:",
+            "Use when:",
+            "Do not use:",
+            "Constraints:",
+            "Example queries:",
+        ]
+
+
+class TestSummarize:
+    def test_counts_tools_per_tier(self, encoder):
+        tools = [
+            make_tool("A"),
+            make_tool("B"),
+            make_tool("C", tier_short="Analyze"),
+        ]
+
+        stats = summarize(tools, "some catalog text", encoder)
+
+        assert stats["tools"] == 3
+        assert stats["per_tier"] == {"Retrieval": 2, "Analyze": 1}
+
+    def test_block_tokens_come_from_the_rendered_text_not_the_sum(self, encoder):
+        # tier headings and blank lines are billed too, so the block is the
+        # honest figure and the per-tool sum is always the smaller one
+        tools = [make_tool("A", catalog_tokens=1)]
+
+        stats = summarize(tools, "## A tier heading\n\nand some body text", encoder)
+
+        assert stats["sum_tool_tokens"] == 1
+        assert stats["block_tokens"] > stats["sum_tool_tokens"]
+
+    def test_flags_tools_without_executors(self, encoder):
+        tools = [make_tool("A"), make_tool("B", has_executor=False)]
+
+        assert summarize(tools, "", encoder)["no_executor"] == ["B"]
+
+    def test_flags_incomplete_docstrings(self, encoder):
+        tools = [make_tool("A"), make_tool("B", missing_sections=["Do not use:"])]
+
+        assert summarize(tools, "", encoder)["undocumented"] == ["B"]
+
+    def test_unschemad_tool_does_not_break_the_total(self, encoder):
+        # schema_tokens is None when pydantic_function_tool refuses the class
+        tools = [make_tool("A", schema_tokens=None), make_tool("B", schema_tokens=10)]
+
+        assert summarize(tools, "", encoder)["schema_tokens_total"] == 10
+
+
+class TestPromptCosts:
+    def test_one_row_per_consuming_call_site(self):
+        costs = prompt_costs(1000)
+
+        assert len(costs) == len(tools_catalog.CATALOG_CONSUMERS)
+        assert {c["model"] for c in costs} == {
+            model for model, _, _ in tools_catalog.CATALOG_CONSUMERS
+        }
+
+    def test_cached_is_cheaper_than_uncached(self):
+        # the whole reason both are reported: the catalog is byte-identical
+        # every request, so the cached rate is the steady state
+        for cost in prompt_costs(1000):
+            assert cost["cached"] < cost["uncached"]
+
+    def test_cost_scales_with_catalog_size(self):
+        small = sum(c["uncached"] for c in prompt_costs(1000))
+        large = sum(c["uncached"] for c in prompt_costs(2000))
+
+        assert large == pytest.approx(small * 2)
+
+    def test_unpriced_model_yields_none_not_zero(self, monkeypatch):
+        # matches config/pricing.py: unknown spend must never render as free
+        monkeypatch.setattr(
+            tools_catalog, "CATALOG_CONSUMERS", (("gpt-9-omega", 1, "somewhere"),)
+        )
+
+        assert prompt_costs(1000)[0]["uncached"] is None
+
+
+class TestBuildAudit:
+    def test_clean_catalog_says_so(self):
+        stats = {"no_executor": [], "undocumented": []}
+
+        assert "Nothing to flag." in "\n".join(build_audit([make_tool()], stats))
+
+    def test_missing_executor_is_called_out(self):
+        stats = {"no_executor": ["Analyze_Compare"], "undocumented": []}
+
+        out = "\n".join(build_audit([make_tool()], stats))
+
+        assert "No executor" in out
+        assert "`Analyze_Compare`" in out
+
+    def test_incomplete_docstring_is_called_out(self):
+        tools = [make_tool("A", missing_sections=["Example queries:"])]
+        stats = {"no_executor": [], "undocumented": ["A"]}
+
+        out = "\n".join(build_audit(tools, stats))
+
+        assert "`Example queries:`" in out
+        assert "Nothing to flag." not in out
+
+
+class TestBuildReport:
+    """End-to-end against the real registry — asserting on structure and
+    invariants only, never on a node count or a token total, so adding a node
+    doesn't break the test."""
+
+    @pytest.fixture
+    def report(self):
+        return build_report(
+            "abc1234", datetime(2026, 7, 21, tzinfo=timezone.utc), "gpt-4.1"
+        )
+
+    def test_has_the_expected_sections(self, report):
+        for heading in ("# Planner Tool Catalog", "## Summary", "## Cost per request",
+                        "## Tools", "## Audit"):
+            assert heading in report
+
+    def test_stamps_provenance(self, report):
+        assert "abc1234" in report
+        assert "2026-07-21" in report
+        assert "o200k_base" in report
+
+    def test_lists_every_registered_node(self, report):
+        from app.registry import NODE_TYPE_TO_CLS
+
+        for name in NODE_TYPE_TO_CLS:
+            assert f"`{name}`" in report
+
+    def test_reports_a_nonzero_cost(self, report):
+        # a $0.000000 total would mean the pricing lookup silently missed
+        assert "$0.000000" not in report.split("## Tools")[0]

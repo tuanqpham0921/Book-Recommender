@@ -148,5 +148,14 @@ suite-stats:
 .PHONY: suite-reports
 suite-reports: suite-goals suite-stats
 
+# CATALOG — what the planner is told it can do, and what saying it costs in
+# prompt tokens per request. Reads the live registry, not the database, so it
+# needs no backend and no prior run: it describes the code as it stands. Run it
+# after adding or editing a node. Count with another model's tokenizer via
+# ARGS="--model gpt-5-nano".
+.PHONY: tools-catalog
+tools-catalog:
+	poetry run python $(EVALS_DIR)tools_catalog.py $(call campaign_out,tools_catalog.md) $(ARGS)
+
 # TODO: make the path to variable names
 # make a better run make, so it dumps and copy the logs over

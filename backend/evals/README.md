@@ -62,6 +62,36 @@ Both take `ARGS="--all"` for every run (default: latest run per case), `ARGS="--
 report is the pass/fail gate and mentions no numbers that change run to run, so its
 diffs stay readable; the cost report is where tokens, dollars and latency live.
 
+## Tool catalog (`tools_catalog.py`)
+
+```bash
+make tools-catalog                        # print
+make tools-catalog CAMPAIGN=v1_baseline   # -> results/v1_baseline/tools_catalog.md
+make tools-catalog ARGS="--model gpt-5-nano"
+```
+
+The odd one out: it reads the **live registry**, not the database, so it needs no
+backend, no prior run and no `chat_runs` rows — it describes the code at the current
+commit. Run it after adding or editing a node.
+
+Every registered node is a tool the planner is told about, and its class docstring *is*
+the tool description — so the catalog is prompt text billed on **every** request,
+whether or not any of those tools get used. The report gives the tool count per tier,
+per-tool token cost with its share of the block, and what the whole thing costs per
+request, uncached and cached (the catalog is byte-identical every time, so the cached
+column is the steady state — `make suite-stats`'s measured hit rate says how close you
+are to it). Two token figures, paid at different points:
+
+- **catalog tokens** — the whole `format_node_type_catalog()` block, rendered into both
+  the goal-generator and parse-response prompts, so it is paid twice per request;
+- **schema tokens** — one node's JSON function-tool schema, sent by
+  `strategy_classification.py` only for the nodes an accepted goal targets.
+
+It also audits: nodes registered with no executor (planned but unrunnable, still paying
+catalog tokens) and docstrings missing a canonical section — a missing `Do not use:` or
+`Example queries:` is a known misroute source, see
+[docs/eval-strategy.md](../../docs/eval-strategy.md).
+
 Dollar figures come from `cost_usd`, stamped onto each run's `token_usage` when it was
 recorded (rates in [config/pricing.py](../config/pricing.py)) — **frozen at record time**,
 so re-running a report never backfills or reprices history. Two distinct gaps get called
