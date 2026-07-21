@@ -77,8 +77,8 @@ commit. Run it after adding or editing a node.
 Every registered node is a tool the planner is told about, and its class docstring *is*
 the tool description — so the catalog is prompt text billed on **every** request,
 whether or not any of those tools get used. The report gives the tool count per tier,
-per-tool token cost with its share of the block, and what the whole thing costs per
-request, uncached and cached (the catalog is byte-identical every time, so the cached
+each tool's `Purpose:` line, per-tool token cost with its share of the block, and what
+the whole thing costs per request, uncached and cached (the catalog is byte-identical every time, so the cached
 column is the steady state — `make suite-stats`'s measured hit rate says how close you
 are to it). Two token figures, paid at different points:
 

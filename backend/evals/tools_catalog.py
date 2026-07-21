@@ -52,7 +52,11 @@ from app.registry import (  # noqa: E402
     format_node_type_catalog,
 )
 from config.pricing import PRICES_CHECKED_ON, cost_of  # noqa: E402
-from evals.common import current_git_sha  # noqa: E402
+from evals.common import current_git_sha, truncate  # noqa: E402
+
+# Long enough for a Purpose: line to survive mostly intact, short enough that
+# the numeric columns stay readable beside it (report.py caps queries at 80).
+DESCRIPTION_PRINT_LIMIT = 110
 
 # tiktoken 0.9 predates the gpt-4.1/gpt-5 families, so encoding_for_model
 # raises KeyError on exactly the models this project uses. o200k_base is the
@@ -120,6 +124,32 @@ def missing_sections(description: str) -> list[str]:
     return [s for s in EXPECTED_SECTIONS if s not in description]
 
 
+def purpose_line(description: str) -> str:
+    """The docstring's one-line summary — the `Purpose:` section's text, which
+    by convention is the first line and the sentence that most determines
+    whether the planner reaches for this tool.
+
+    Falls back to the first non-empty line for nodes that don't follow the
+    convention, so a malformed docstring still shows *something* here; the
+    audit section is what flags it as malformed.
+    """
+    for line in description.splitlines():
+        line = line.strip()
+        if line.startswith("Purpose:"):
+            return line[len("Purpose:"):].strip()
+    for line in description.splitlines():
+        if line.strip():
+            return line.strip()
+    return ""
+
+
+def table_cell(text: str, limit: int = DESCRIPTION_PRINT_LIMIT) -> str:
+    """Squash to one line and cap it. Pipes are escaped first: an unescaped
+    one in a docstring would silently split the row into extra columns and
+    shift every number after it."""
+    return truncate(text.replace("|", "\\|"), limit)
+
+
 def collect_tools(encoder) -> list[dict]:
     """One row per registered node, in catalog order (which is prompt order)."""
     tools = []
@@ -132,6 +162,7 @@ def collect_tools(encoder) -> list[dict]:
                     "tier": tier,
                     "cls": cls.__name__,
                     "tier_short": tier.split(" — ")[0],
+                    "purpose": purpose_line(description),
                     "catalog_tokens": count_tokens(
                         render_catalog_entry(name, description), encoder
                     ),
@@ -260,11 +291,13 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
     lines += [
         "## Tools",
         "",
-        "`catalog` = tokens this tool adds to every request. `schema` = tokens "
-        "its JSON tool definition costs when classification selects it.",
+        "`purpose` is the docstring's `Purpose:` line — the sentence that most "
+        "decides whether the planner reaches for this tool. `catalog` = tokens "
+        "this tool adds to every request. `schema` = tokens its JSON tool "
+        "definition costs when classification selects it.",
         "",
-        "| node type | class | tier | catalog | share | schema | executor |",
-        "|---|---|---|---:|---:|---:|:---:|",
+        "| node type | class | purpose | tier | catalog | share | schema | executor |",
+        "|---|---|---|---|---:|---:|---:|:---:|",
     ]
     for tool in sorted(tools, key=lambda t: -t["catalog_tokens"]):
         share = (
@@ -274,7 +307,8 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         )
         schema = f"{tool['schema_tokens']:,}" if tool["schema_tokens"] else "—"
         lines.append(
-            f"| `{tool['node_type']}` | {tool['cls']} | {tool['tier_short']} "
+            f"| `{tool['node_type']}` | {tool['cls']} "
+            f"| {table_cell(tool['purpose'])} | {tool['tier_short']} "
             f"| {tool['catalog_tokens']:,} | {share:.1f}% | {schema} "
             f"| {'✅' if tool['has_executor'] else '❌'} |"
         )

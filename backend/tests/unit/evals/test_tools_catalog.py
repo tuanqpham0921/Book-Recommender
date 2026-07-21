@@ -20,8 +20,10 @@ from evals.tools_catalog import (
     get_encoder,
     missing_sections,
     prompt_costs,
+    purpose_line,
     render_catalog_entry,
     summarize,
+    table_cell,
 )
 
 
@@ -36,6 +38,7 @@ def make_tool(node_type="Retrieve_by_Thing", **overrides):
         "tier": "Retrieval — lookup or fetch data",
         "tier_short": "Retrieval",
         "cls": "FindByThing",
+        "purpose": "Retrieve a thing.",
         "catalog_tokens": 100,
         "schema_tokens": 400,
         "chars": 500,
@@ -95,6 +98,41 @@ class TestMissingSections:
             "Constraints:",
             "Example queries:",
         ]
+
+
+class TestPurposeLine:
+    def test_extracts_the_purpose_section(self):
+        doc = "Purpose: Retrieve a book by title.\n\nArgs:\n    title: the title."
+
+        assert purpose_line(doc) == "Retrieve a book by title."
+
+    def test_falls_back_to_the_first_line_without_the_convention(self):
+        # a docstring that skips Purpose: still shows something in the column;
+        # flagging it as malformed is the audit section's job, not this one's
+        assert purpose_line("Does a thing.\n\nArgs: x") == "Does a thing."
+
+    def test_finds_purpose_even_when_it_is_not_first(self):
+        assert purpose_line("Some preamble.\nPurpose: The real one.") == "The real one."
+
+    def test_empty_docstring_yields_empty_string(self):
+        assert purpose_line("") == ""
+        assert purpose_line("\n\n  \n") == ""
+
+
+class TestTableCell:
+    def test_escapes_pipes(self):
+        # an unescaped pipe splits the row and silently shifts every numeric
+        # column after it — the failure looks like wrong data, not bad markup
+        assert table_cell("a | b") == "a \\| b"
+
+    def test_collapses_newlines(self):
+        assert "\n" not in table_cell("line one\nline two")
+
+    def test_truncates_long_text(self):
+        out = table_cell("x" * 500, limit=20)
+
+        assert len(out) <= 21  # 20 + the ellipsis
+        assert out.endswith("…")
 
 
 class TestSummarize:
@@ -221,3 +259,21 @@ class TestBuildReport:
     def test_reports_a_nonzero_cost(self, report):
         # a $0.000000 total would mean the pricing lookup silently missed
         assert "$0.000000" not in report.split("## Tools")[0]
+
+    def test_every_tool_row_carries_a_purpose(self, report):
+        from app.registry import NODE_TYPE_TO_CLS, class_docstring
+
+        for name, cls in NODE_TYPE_TO_CLS.items():
+            purpose = purpose_line(class_docstring(cls))
+            assert purpose, f"{name} has no purpose line"
+            # the head survives truncation even for the longest descriptions
+            assert purpose[:40] in report, f"{name}'s purpose is missing from the table"
+
+    def test_table_rows_have_a_consistent_column_count(self, report):
+        # guards the pipe escaping: one unescaped pipe in a docstring would
+        # give that row extra columns and misalign its numbers
+        table = report.split("## Tools")[1].split("## Audit")[0]
+        rows = [line for line in table.splitlines() if line.startswith("|")]
+        widths = {row.count("|") - row.count("\\|") for row in rows}
+
+        assert len(widths) == 1, f"ragged tool table: {widths}"
