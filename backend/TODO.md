@@ -12,13 +12,25 @@ history (`git log -p -- backend/TODO.md`).
 ---
 
 (nothing in flight)
-
-* add a intent field in the initial parse litteral
-* add a prompt jection field (str or bool)
-    * just refuse (or this can be part of the intent)
-* add a complexity score or intent
-    * stress testing, trying to break the system?
-    * not reasonable query for a book recommender?
 * maybe you'll need an entity thing
     * group them by books or reference books etc...
+* example mismatch for system goals
+    * might better to have the llm_id and id switch
+    * to internal id vs id
+    * or you can go in an enumerate them 
+
+decisions:
+1. models mini vs nano and effort
+    * or a bigger model (both cost more money and more tokens)
+    * or you can see that the mini is good enough
+        * and best effort inject them
+        * or resolve them after (i do like this)
+            * might be a good blend between intent and goals...
+            * because you need the intent to know which one to clamps
+
+    * or it's something with the parse intent
+        * this becomes a massive if statement
+        * I do like the system goals
+        * bc if you do book reference/entity
+            then you are also just linking the intent to reference/entity
 
