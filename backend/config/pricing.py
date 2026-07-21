@@ -36,6 +36,9 @@ class ModelPrice(NamedTuple):
 
 
 MODEL_PRICES: dict[str, ModelPrice] = {
+    # the planner's parse step pins this one (parse_intent.py) — 5x mini's
+    # input rate, so it dominates a run's cost despite fewer calls
+    "gpt-4.1": ModelPrice(input=2.00, cached_input=0.50, output=8.00),
     "gpt-4.1-mini": ModelPrice(input=0.40, cached_input=0.10, output=1.60),
     "gpt-4.1-nano": ModelPrice(input=0.10, cached_input=0.025, output=0.40),
     "gpt-5-mini": ModelPrice(input=0.25, cached_input=0.025, output=2.00),

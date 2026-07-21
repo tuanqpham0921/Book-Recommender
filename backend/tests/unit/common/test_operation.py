@@ -174,6 +174,16 @@ class TestCostAttribution:
         assert list(roll.by_model) == ["gpt-5-nano"]
         assert roll.by_model["gpt-5-nano"].total == 20
 
+    def test_longer_model_name_wins_over_a_prefix_of_it(self):
+        # "gpt-4.1" is a prefix of "gpt-4.1-mini" but 5x the rate — matching
+        # the shorter one would quintuple every mini run's reported cost
+        mini = TokenUsage(model="gpt-4.1-mini", prompt=1_000_000)
+        full = TokenUsage(model="gpt-4.1", prompt=1_000_000)
+
+        assert mini.cost_usd == MODEL_PRICES["gpt-4.1-mini"].input
+        assert full.cost_usd == MODEL_PRICES["gpt-4.1"].input
+        assert mini.cost_usd != full.cost_usd
+
     def test_dated_snapshot_model_resolves_to_base_rate(self):
         pinned = TokenUsage(model="gpt-4.1-mini-2025-04-14", prompt=1_000_000)
         assert pinned.cost_usd == MODEL_PRICES["gpt-4.1-mini"].input

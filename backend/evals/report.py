@@ -57,6 +57,23 @@ def token_counts(token_usage) -> dict:
     }
 
 
+def unpriced_models(rows: list[dict]) -> list[str]:
+    """Models that contributed tokens but had no rate when the run was
+    recorded, so their spend is missing from every cost figure here.
+
+    This is the failure mode a cost report must never hide: those runs still
+    carry a `cost_usd`, it is just too low, so counting priced-vs-unpriced
+    *runs* would not catch it.
+    """
+    found: set[str] = set()
+    for row in rows:
+        usage = row.get("token_usage")
+        models = usage.get("unpriced_models") if isinstance(usage, dict) else None
+        if isinstance(models, list):
+            found.update(m for m in models if isinstance(m, str))
+    return sorted(found)
+
+
 def spend_by_model(rows: list[dict]) -> dict[str, dict]:
     """{model: summed counts} across the given runs, from each token_usage's
     per-model split. Empty when no run carries one."""
@@ -158,6 +175,18 @@ def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
         return "\n".join(lines) + "\n"
 
     lines += _summary_table("Overall", summarize(rows))
+
+    missing = unpriced_models(rows)
+    if missing:
+        named = ", ".join(f"`{m}`" for m in missing)
+        lines += [
+            f"> ⚠️ **Costs below are understated.** No rate for {named} when these "
+            "runs were recorded, so their tokens are counted but their spend is "
+            "not. Add them to `config/pricing.py` — re-running this report will "
+            "not backfill it, since `cost_usd` is frozen at record time.",
+            "",
+        ]
+
     lines += _model_table(spend_by_model(rows))
 
     for suite_name, suite_rows in sorted(suites.items()):

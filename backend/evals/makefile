@@ -94,27 +94,40 @@ query-suite-all-tmux:
 	tmux split-window  -t query_suites  -c "$(CURDIR)" '$(RUN_SUITE) $(SUITES_DIR)/query_suite_extended.json 2>&1 | tee $(LOG_DIR)/extended_$$(date +%Y%m%d_%H%M%S).log; echo; echo "[ext] done — press Enter to close"; read _'
 	tmux select-layout -t query_suites tiled
 	tmux attach-session -t query_suites
-	$(MAKE) suite-reports
+
+# CAMPAIGN=<name> files both reports under results/<name>/ with fixed names,
+# per the campaign convention in the README (that directory also holds the SQL
+# dumps and the hand-written review). Each report keeps its own filename, so
+# suite-reports can't have one clobber the other:
+#
+#   make suite-reports CAMPAIGN=v1_baseline
+#     -> results/v1_baseline/system_goals.md + results/v1_baseline/report.md
+#
+# Without it, suite-goals falls back to results/system_goals_<timestamp>.md and
+# suite-stats just prints. ARGS is appended last, so an explicit --output in
+# there still wins. The scripts create the directory themselves.
+CAMPAIGN ?=
+CAMPAIGN_DIR = $(EVALS_DIR)results/$(CAMPAIGN)
+campaign_out = $(if $(CAMPAIGN),--output $(CAMPAIGN_DIR)/$(1))
 
 # CORRECTNESS — the golden test. Joins test_runs (written by the runner) with
 # chat_runs and diffs each run's accepted goal types against expected_nodes in
-# the suite JSONs (matched/missing/extra). Says nothing about spend. Saves to
-# results/system_goals_<timestamp>.md. Latest run per case by default; forward
-# flags via ARGS, e.g. make suite-goals ARGS="--all --output results/my_campaign/system_goals.md"
+# the suite JSONs (matched/missing/extra). Says nothing about spend. Latest run
+# per case by default; forward flags via ARGS, e.g. ARGS="--all".
 .PHONY: suite-goals
 suite-goals:
-	poetry run python $(EVALS_DIR)report_system_goals.py $(ARGS)
+	poetry run python $(EVALS_DIR)report_system_goals.py $(call campaign_out,system_goals.md) $(ARGS)
 
 # COST — tokens, dollars, latency and failures per run, plus a per-model spend
-# split. No expectation checking. Prints to stdout; pass --output to save.
-# e.g. make suite-report ARGS="--all --output results/my_campaign/report.md"
-.PHONY: suite-report
-suite-report:
-	poetry run python $(EVALS_DIR)report.py $(ARGS)
+# split. No expectation checking. Always prints to stdout; also saves when
+# CAMPAIGN (or an explicit --output) is given.
+.PHONY: suite-stats
+suite-stats:
+	poetry run python $(EVALS_DIR)report.py $(call campaign_out,report.md) $(ARGS)
 
 # both post-processors in one go — the usual move after a campaign
 .PHONY: suite-reports
-suite-reports: suite-goals suite-report
+suite-reports: suite-goals suite-stats
 
 # TODO: make the path to variable names
 # make a better run make, so it dumps and copy the logs over

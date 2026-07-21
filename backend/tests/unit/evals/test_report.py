@@ -13,7 +13,13 @@ import pytest
 
 import evals.common as common_module
 from evals.common import latest_per_case, load_suite_entries
-from evals.report import build_report, spend_by_model, summarize, token_counts
+from evals.report import (
+    build_report,
+    spend_by_model,
+    summarize,
+    token_counts,
+    unpriced_models,
+)
 
 
 def make_row(case_id, *, suite_name="my_suite", chat_id=None, created_at=None, **overrides):
@@ -99,6 +105,25 @@ class TestTokenCounts:
         assert token_counts(None) == zeros
         assert token_counts("not a dict") == zeros
         assert token_counts({"prompt": "NaN"}) == zeros
+
+
+class TestUnpricedModels:
+    def test_collects_names_across_runs(self):
+        rows = [
+            make_row(1, token_usage={"unpriced_models": ["gpt-4.1"]}),
+            make_row(2, token_usage={"unpriced_models": ["gpt-4.1", "gpt-9-omega"]}),
+        ]
+
+        assert unpriced_models(rows) == ["gpt-4.1", "gpt-9-omega"]
+
+    def test_none_when_everything_is_priced(self):
+        assert unpriced_models([make_row(1)]) == []
+        assert unpriced_models([make_row(1, token_usage={"unpriced_models": []})]) == []
+
+    def test_malformed_field_is_ignored(self):
+        rows = [make_row(1, token_usage={"unpriced_models": "gpt-4.1"})]
+
+        assert unpriced_models(rows) == []
 
 
 class TestSpendByModel:
@@ -328,3 +353,27 @@ class TestBuildReport:
         out = self._build([make_row(1)])
 
         assert "Spend by model" not in out
+
+    def test_understated_costs_are_called_out(self, suites_dir):
+        # the run has a cost_usd, it is just too low — counting priced-vs-
+        # unpriced runs would report nothing wrong here
+        out = self._build(
+            [
+                make_row(
+                    1,
+                    token_usage={
+                        "prompt": 80,
+                        "cost_usd": 0.0004,
+                        "unpriced_models": ["gpt-4.1"],
+                    },
+                )
+            ]
+        )
+
+        assert "understated" in out.lower()
+        assert "`gpt-4.1`" in out
+
+    def test_no_warning_when_everything_is_priced(self, suites_dir):
+        out = self._build([make_row(1, token_usage={"prompt": 80, "cost_usd": 0.0004})])
+
+        assert "understated" not in out.lower()
