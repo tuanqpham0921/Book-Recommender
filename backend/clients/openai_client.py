@@ -80,14 +80,21 @@ class OpenAIClient(BaseLLMClient):
         its `cached_tokens` are both Optional on the OpenAI side — absent on
         models/endpoints without prompt caching — so default them to 0."""
         if usage is None:
-            return TokenUsage()
+            return None
 
-        details = usage.prompt_tokens_details
+        prompt_details = usage.prompt_tokens_details
+        completion_details = usage.completion_tokens_details
+
         return TokenUsage(
             total=usage.total_tokens,
             prompt=usage.prompt_tokens,
             completion=usage.completion_tokens,
-            cached=(details.cached_tokens or 0) if details else 0,
+            cached=prompt_details.cached_tokens if prompt_details else 0,
+            reasoning_tokens=(
+                completion_details.reasoning_tokens
+                if completion_details
+                else 0
+            ),
         )
 
     async def _chat_stream(self, payload: dict, sse_stream: Optional[SSEStream]):
