@@ -83,7 +83,7 @@ removal and Provide_Feedback registration still pending.)
   stop getting dropped) lives as eval cases in `evals/suites/query_suite.json`
   (ids 37/41/45/47/50) — actual pass/fail verification is Phase 4's job.
 - [x] **Few-shot examples moved into schemas**: worked examples for both pipeline-stage
-  tool calls (`InitialParseRequest`, `StrategyRequest`) now live as
+  tool calls (`GoalParseRequest`, `StrategyRequest`) now live as
   `model_config` JSON-schema `examples` on the pydantic models themselves
   (`parse_intent.py`, `strategy_classification.py`) instead of free-text prompt blocks —
   this way they survive into the actual OpenAI tool schema sent to the LLM.

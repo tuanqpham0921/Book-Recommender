@@ -1,11 +1,11 @@
-"""Tests for InitialParseWorkflow.process_parse_result and InitialParseRequest validators."""
+"""Tests for InitialParseWorkflow.process_parse_result and GoalParseRequest validators."""
 
 from unittest.mock import AsyncMock, MagicMock
 
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planner.parse_intent import (
-    InitialParseRequest,
+    GoalParseRequest,
     SystemGoal,
     MAX_SYSTEM_GOALS,
 )
@@ -30,7 +30,7 @@ def _make_goal(
 def _make_parse_result(
     goals=None, small_talk=None, out_of_scope=None, reasoning="Parsed the user request"
 ):
-    return InitialParseRequest(
+    return GoalParseRequest(
         system_goals=goals or [],
         small_talk=small_talk,
         out_of_scope=out_of_scope,
@@ -56,28 +56,28 @@ class TestSystemGoalValidators:
         assert goal.confidence == MIN_CONFIDENCE
 
 
-class TestInitialParseRequestValidators:
+class TestGoalParseRequestValidators:
     def test_short_reasoning_passes_through_unchanged(self):
-        req = InitialParseRequest(system_goals=[], reasoning="short")
+        req = GoalParseRequest(system_goals=[], reasoning="short")
         assert req.reasoning == "short"
 
     def test_reasoning_non_string_is_stringified(self):
-        req = InitialParseRequest(system_goals=[], reasoning=42)
+        req = GoalParseRequest(system_goals=[], reasoning=42)
         assert req.reasoning == "42"
 
     def test_blank_reasoning_gets_fallback(self):
-        req = InitialParseRequest(system_goals=[], reasoning="  ")
+        req = GoalParseRequest(system_goals=[], reasoning="  ")
         assert req.reasoning == REASONING_FALLBACK
 
     def test_reasoning_truncated_when_over_max(self):
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=[], reasoning="x" * (MAX_STRING_LENGTH + 50)
         )
         assert len(req.reasoning) <= MAX_STRING_LENGTH
         assert req.reasoning.endswith("...")
 
     def test_small_talk_truncated_when_over_max(self):
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=[],
             reasoning="Parsed the request cleanly",
             small_talk="x" * (MAX_STRING_LENGTH + 50),
@@ -86,13 +86,11 @@ class TestInitialParseRequestValidators:
         assert req.small_talk.endswith("...")
 
     def test_small_talk_none_stays_none(self):
-        req = InitialParseRequest(
-            system_goals=[], reasoning="Parsed the request cleanly"
-        )
+        req = GoalParseRequest(system_goals=[], reasoning="Parsed the request cleanly")
         assert req.small_talk is None
 
     def test_small_talk_non_string_is_coerced(self):
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=[],
             reasoning="Parsed the request cleanly",
             small_talk=99,
@@ -100,7 +98,7 @@ class TestInitialParseRequestValidators:
         assert req.small_talk == "99"
 
     def test_out_of_scope_non_string_is_coerced(self):
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=[],
             reasoning="Parsed cleanly here",
             out_of_scope=12345,
@@ -108,7 +106,7 @@ class TestInitialParseRequestValidators:
         assert isinstance(req.out_of_scope, str)
 
     def test_out_of_scope_truncated_when_over_max(self):
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=[],
             reasoning="Parsed the request cleanly",
             out_of_scope="y" * (MAX_STRING_LENGTH + 50),
@@ -118,7 +116,7 @@ class TestInitialParseRequestValidators:
 
     def test_system_goals_non_list_is_wrapped_in_list(self):
         goal = _make_goal()
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=goal, reasoning="Parsed the request cleanly"
         )
         assert isinstance(req.system_goals, list)
@@ -126,7 +124,7 @@ class TestInitialParseRequestValidators:
 
     def test_system_goals_truncated_when_over_max(self):
         goals = [_make_goal() for _ in range(MAX_SYSTEM_GOALS + 3)]
-        req = InitialParseRequest(
+        req = GoalParseRequest(
             system_goals=goals, reasoning="Parsed the request cleanly"
         )
         assert len(req.system_goals) == MAX_SYSTEM_GOALS
@@ -155,17 +153,14 @@ class TestSystemGoalsOverflow:
         ]
         req = _make_parse_result(goals=goal_dicts)
         assert len(req._overflow_system_goals) == 2
-        assert all(
-            isinstance(g, SystemGoal) for g in req._overflow_system_goals
-        )
+        assert all(isinstance(g, SystemGoal) for g in req._overflow_system_goals)
 
     def test_invalid_goals_do_not_consume_capacity(self):
         # invalid items are filtered before the cut, so they never displace
         # valid goals into overflow
         garbage = [{"bad": "dict"}, 3, None]
         goals = [
-            _make_goal(description=f"Goal number {i}")
-            for i in range(MAX_SYSTEM_GOALS)
+            _make_goal(description=f"Goal number {i}") for i in range(MAX_SYSTEM_GOALS)
         ]
         req = _make_parse_result(goals=garbage + goals)
         assert req.system_goals == goals
@@ -393,7 +388,7 @@ def _mock_assistant_msg(parse_result=None):
         parse_result = _make_parse_result()
     tool_call = MagicMock()
     tool_call.id = "call_1"
-    tool_call.function.name = "InitialParseRequest"
+    tool_call.function.name = "GoalParseRequest"
     tool_call.function.parsed_arguments = parse_result
     msg = MagicMock()
     msg.tool_calls = [tool_call]

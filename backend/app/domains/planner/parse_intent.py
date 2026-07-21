@@ -2,7 +2,15 @@ import json
 import logging
 from typing import Any, Optional, Literal, cast
 from openai.types.chat import ParsedFunctionToolCall
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+    ValidationError,
+)
 
 from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt, load_prompt
@@ -22,18 +30,16 @@ from app.domains.field_types import (
     ConfidenceFloat,
     DescriptionStr,
     ReasoningStr,
-    OptionalStr
+    OptionalStr,
 )
 
 logger = logging.getLogger(__name__)
 
-INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
+GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
 INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
     "domains/planner/prompts/1_initial_parse_response.txt"
 )
-INTENT_PARSER_PROMPT_PATH = (
-    "domains/planner/prompts/0_intent_parser.txt"
-)
+INTENT_PARSER_PROMPT_PATH = "domains/planner/prompts/0_intent_parser.txt"
 
 MAX_SYSTEM_GOALS = 10
 
@@ -41,7 +47,7 @@ MAX_SYSTEM_GOALS = 10
 class SystemGoal(BaseModel):
     """Purpose: One parsed goal from the user's message — a capability the
     system should attempt, with the confidence that it maps cleanly to a
-    supported node type. One entry in InitialParseRequest.system_goals.
+    supported node type. One entry in GoalParseRequest.system_goals.
 
     Args:
         description: A concise, instructive description of the goal (10-100 characters).
@@ -56,7 +62,9 @@ class SystemGoal(BaseModel):
     request becomes separate goals, not one goal with multiple types.
     """
 
-    node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = PlannerNodeTypeEnum.SYSTEM_GOAL
+    node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = (
+        PlannerNodeTypeEnum.SYSTEM_GOAL
+    )
 
     description: DescriptionStr = Field(
         ...,
@@ -91,8 +99,9 @@ class SystemGoal(BaseModel):
         self._refusal = True
         self._refusal_reasons.extend(reasons)
 
-class InitialParseRequest(BaseModel):
-    """Purpose: Initial parse of the user's message — the tool call for the
+
+class GoalParseRequest(BaseModel):
+    """Purpose: Goals parse of the user's message — the tool call for the
     parse-intent LLM step. Splits the message into system_goals (mapped
     capabilities), small_talk, and out_of_scope content.
 
@@ -110,6 +119,7 @@ class InitialParseRequest(BaseModel):
     Constraints: at most MAX_SYSTEM_GOALS (10) goals per call; every
     in-domain part of the message should map to exactly one goal.
     """
+
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
@@ -208,7 +218,9 @@ class InitialParseRequest(BaseModel):
         }
     )
 
-    node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = PlannerNodeTypeEnum.PARSE_INTENT
+    node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = (
+        PlannerNodeTypeEnum.PARSE_INTENT
+    )
 
     system_goals: list[SystemGoal] = Field(
         default_factory=list,
@@ -224,14 +236,14 @@ class InitialParseRequest(BaseModel):
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "What's the weather like today?"},
     )
-    
+
     # TODO: remove this and move the parse_intent
     small_talk: OptionalStr = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "Hi!"},
     )
-    
+
     _overflow_system_goals: list[SystemGoal] = PrivateAttr(default_factory=list)
     _invalid_system_goals: list = PrivateAttr(default_factory=list)
 
@@ -262,7 +274,8 @@ class InitialParseRequest(BaseModel):
         instance._overflow_system_goals = valid[MAX_SYSTEM_GOALS:]
         instance._invalid_system_goals = invalid
         return instance
-    
+
+
 class IntentParseRequest(BaseModel):
     """Purpose: Coarse pre-filter before the full intent/goal parse — flags
     malicious input and references to earlier turns (this app is
@@ -279,10 +292,12 @@ class IntentParseRequest(BaseModel):
     `conversation_continuation`.
     """
 
-    intents: list[Literal[
-        "malicious",
-        "conversation_continuation",
-    ]] = Field(
+    intents: list[
+        Literal[
+            "malicious",
+            "conversation_continuation",
+        ]
+    ] = Field(
         default_factory=list,
         max_length=2,
         json_schema_extra={"example": []},
@@ -292,6 +307,7 @@ class IntentParseRequest(BaseModel):
         self.intents = list(dict.fromkeys(self.intents))
         if "malicious" in self.intents:
             self.intents = ["malicious"]
+
 
 class InitialParseOutput(AppWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
@@ -335,10 +351,12 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     success_message = "Initial parse completed successfully"
     failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."
-    intent_reject_message = "I can't help with that request. Please try again with a book-related question."
+    intent_reject_message = (
+        "I can't help with that request. Please try again with a book-related question."
+    )
     continuation_reject_message = "I don't have memory of earlier messages yet — please restate your full request in one message."
 
-    tool_models: list[type] = [InitialParseRequest]
+    tool_models: list[type] = [GoalParseRequest]
 
     def __init__(
         self,
@@ -379,15 +397,17 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
 
         tool_call = await self._run_llm_args_parse()
         # parsed_arguments is typed `object | None` by the openai lib; the
-        # parser validated it against InitialParseRequest, so the cast holds
-        parse_result = cast(InitialParseRequest, tool_call.function.parsed_arguments)
+        # parser validated it against GoalParseRequest, so the cast holds
+        parse_result = cast(GoalParseRequest, tool_call.function.parsed_arguments)
         self.process_parse_result(parse_result)
         self._record_tool_call(tool_call)
         payload = self.output.to_llm_messages()
         await self.finalize_result(payload)
         await self.generate_user_response(payload)
 
-    def _get_intent_reject_reasons(self, intent_result: IntentParseRequest) -> list[str]:
+    def _get_intent_reject_reasons(
+        self, intent_result: IntentParseRequest
+    ) -> list[str]:
         reasons = []
         if "malicious" in intent_result.intents:
             reasons.append("Rejected: malicious intent detected")
@@ -409,10 +429,10 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             # (runtime error caught by the workflow), clearer message
             raise ValueError("LLM response contained no tool calls")
         return tool_calls[0]
-        
+
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
-            prompt_path=INITIAL_SYSTEM_PROMPT_PATH,
+            prompt_path=GOAL_GENERATOR_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
         )
         # NOTE: using gpt4.1 because the system goals sees the whole catalog
@@ -421,11 +441,11 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # we can optimize and move out the small_talk and such
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            model='gpt-4.1',
+            model="gpt-4.1",
             # NOTE: this should be a list of previous messages as well
-            # but for now we can just do clear and direct instructions 
-            messages=[self.user_message], 
-            tool_models=[InitialParseRequest],
+            # but for now we can just do clear and direct instructions
+            messages=[self.user_message],
+            tool_models=[GoalParseRequest],
         )
         assistant_msg = await self.run_llm_call(req)
         tool_calls = assistant_msg.tool_calls
@@ -472,7 +492,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         await self.sse_stream.send_divider()
 
     def process_parse_result(
-        self, parse_result: InitialParseRequest, confident_tuning: float = 0.5
+        self, parse_result: GoalParseRequest, confident_tuning: float = 0.5
     ) -> None:
         if (
             len(parse_result.system_goals) == 0
