@@ -1,8 +1,8 @@
 poetry run python /home/tuani/Book-Recommender/backend/evals/tools_catalog.py  
 # Planner Tool Catalog
 
-- generated: 2026-07-21 17:45:24 UTC
-- commit: `8bb9060`
+- generated: 2026-07-21 17:47:55 UTC
+- commit: `3064dcb`
 - tokenizer: `o200k_base` (via `--model gpt-4.1`)
 - rates checked: 2026-07-21 (`config/pricing.py`)
 
