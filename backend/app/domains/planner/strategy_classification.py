@@ -351,6 +351,7 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         
         req = OpenAIParserRequest(
             prompt=system_prompt,
+            model="gpt-5-nano",
             messages=[self.user_message, self._format_system_goals(system_goals)],
             tool_models=[strategy_request],
         )

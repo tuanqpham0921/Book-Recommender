@@ -27,7 +27,7 @@ from app.domains.field_types import (
 
 logger = logging.getLogger(__name__)
 
-INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_initial_system.txt"
+INITIAL_SYSTEM_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
 INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
     "domains/planner/prompts/1_initial_parse_response.txt"
 )
@@ -415,8 +415,13 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             prompt_path=INITIAL_SYSTEM_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
         )
+        # NOTE: using gpt4.1 because the system goals sees the whole catalog
+        # it's very important that this part is done correctly
+        # cache hit rate is high, and output generation is lower
+        # we can optimize and move out the small_talk and such
         req = OpenAIParserRequest(
             prompt=system_prompt,
+            model='gpt-4.1',
             # NOTE: this should be a list of previous messages as well
             # but for now we can just do clear and direct instructions 
             messages=[self.user_message], 
