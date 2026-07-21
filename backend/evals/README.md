@@ -18,7 +18,10 @@ in adversarial/stress).
 
 ## Workflow
 
-Backend must be running (`make dev`). All targets from `backend/`:
+Backend must be running (`make dev`). Every path in `makefile` is anchored to the
+evals directory, so these run identically from `backend/` (via the root Makefile's
+include) or from `evals/` itself (`make -f makefile <target>`). Run logs land in
+`evals/logs/query_suites/` either way — override with `LOG_DIR=...`.
 
 ```bash
 make query-suite            # base suite
@@ -38,14 +41,23 @@ OpenAI TPM rate limit (`--sleep 0` to disable). Flags: `--suite`, `--difficulty`
 Then post-process:
 
 ```bash
-make suite-eval    # eval.py: joins test_runs ⋈ chat_runs, diffs accepted goal types
-                   # vs expected_nodes (matched/missing/extra) + per-suite token/
-                   # cache-hit-rate stats → results/eval_<timestamp>.md.
-                   # ARGS="--all" for every run (default: latest per case);
-                   # ARGS="--output <path>" to name it
-make suite-report  # report.py: plain outcomes (ok/failed, runtime_error, duration,
-                   # tokens incl. cached + cache hit rate) — no expectation checking
+make suite-goals   # report_system_goals.py — CORRECTNESS. Joins test_runs ⋈ chat_runs
+                   # and diffs accepted goal types vs expected_nodes
+                   # (matched/missing/extra) → results/system_goals_<timestamp>.md
+make suite-report  # report.py — COST. ok/failed, runtime_error, duration, tokens
+                   # incl. cached + cache hit rate, dollars, and a per-model split
+make suite-reports # both
 ```
+
+Both take `ARGS="--all"` for every run (default: latest run per case), `ARGS="--suite
+<stem>"` (repeatable) and `ARGS="--output <path>"`. The split is deliberate: the goals
+report is the pass/fail gate and mentions no numbers that change run to run, so its
+diffs stay readable; the cost report is where tokens, dollars and latency live.
+
+Dollar figures come from `cost_usd`, stamped onto each run's `token_usage` when it was
+recorded (rates in [config/pricing.py](../config/pricing.py)). Runs recorded before cost
+tracking landed have no `cost_usd` and are counted as **unpriced**, not free — the
+summary row says how many, so a total is never quietly understated.
 
 ## Campaign convention (`results/`)
 

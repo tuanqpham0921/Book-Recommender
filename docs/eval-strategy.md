@@ -9,9 +9,12 @@ with the app.
 
 The suite JSONs in `backend/evals/suites/` are versioned inputs with per-case
 `expected_nodes`. `run_suites.py` fires each query at a running backend and records one
-`test_runs` row per query (chat_id FK → `chat_runs` + suite name + case id). `eval.py`
-(`make suite-eval`) joins `test_runs ⋈ chat_runs` and multiset-diffs the planner's
-accepted goal node types against `expected_nodes` → matched/missing/extra per case.
+`test_runs` row per query (chat_id FK → `chat_runs` + suite name + case id).
+`report_system_goals.py` (`make suite-goals`) joins `test_runs ⋈ chat_runs` and
+multiset-diffs the planner's accepted goal node types against `expected_nodes` →
+matched/missing/extra per case. It reports correctness only — tokens, dollars and
+latency live in the separate cost report (`make suite-report`), so a gate diff never
+churns on numbers that move every run.
 
 Two properties make this the right foundation:
 
@@ -79,7 +82,7 @@ After the Phase 1 taxonomy lands:
   numeric chat ids already exist).
 
 **Thresholds:** set after the first post-taxonomy run (current numbers are a baseline
-polluted by known-structural issues). Then `make suite-eval` is the release gate: base
+polluted by known-structural issues). Then `make suite-goals` is the release gate: base
 + adversarial must clear their thresholds for V1 to ship.
 
 ## Observations from the 2026-07-17 review

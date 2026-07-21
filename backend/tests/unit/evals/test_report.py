@@ -1,20 +1,19 @@
-"""Tests for the eval report generator's pure parts: latest-per-case
-filtering, suite-JSON lookup, outcome stats, and the rendered markdown.
-The DB shim (fetch_rows) is deliberately thin and not covered here."""
+"""Tests for the cost report's pure parts: outcome/token/cost/latency stats,
+the per-model spend split, and the rendered markdown. The DB shim (fetch_rows)
+is deliberately thin and not covered here.
+
+Node-expectation checking lives in report_system_goals.py and is tested in
+test_report_system_goals.py.
+"""
 
 import json
 from datetime import datetime, timezone
 
 import pytest
 
-import evals.report as report
-from evals.report import (
-    build_report,
-    latest_per_case,
-    load_suite_entries,
-    summarize,
-    token_counts,
-)
+import evals.common as common_module
+from evals.common import latest_per_case, load_suite_entries
+from evals.report import build_report, spend_by_model, summarize, token_counts
 
 
 def make_row(case_id, *, suite_name="my_suite", chat_id=None, created_at=None, **overrides):
@@ -55,7 +54,7 @@ class TestLatestPerCase:
 class TestLoadSuiteEntries:
     @pytest.fixture
     def suites_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(report, "SUITES_DIR", tmp_path)
+        monkeypatch.setattr(common_module, "SUITES_DIR", tmp_path)
         return tmp_path
 
     def test_maps_entries_by_id(self, suites_dir):
@@ -78,20 +77,80 @@ class TestLoadSuiteEntries:
 
 
 class TestTokenCounts:
-    def test_extracts_prompt_and_cached(self):
-        usage = {"total": 100, "prompt": 80, "completion": 20, "cached": 60}
+    def test_extracts_prompt_cached_and_cost(self):
+        usage = {"prompt": 80, "cached": 60, "cost_usd": 0.00042}
 
-        assert token_counts(usage) == {"prompt": 80, "cached": 60}
+        assert token_counts(usage) == {
+            "prompt": 80,
+            "cached": 60,
+            "cost_usd": 0.00042,
+        }
 
     def test_row_without_cached_field_counts_as_uncached(self):
         # rows recorded before TokenUsage grew the cached field
         assert token_counts({"total": 100, "prompt": 80})["cached"] == 0
 
+    def test_run_without_cost_is_none_not_zero(self):
+        # predates cost tracking — unknown spend, not free spend
+        assert token_counts({"prompt": 80})["cost_usd"] is None
+
     def test_missing_or_malformed_is_all_zeros(self):
-        zeros = {"prompt": 0, "cached": 0}
+        zeros = {"prompt": 0, "cached": 0, "cost_usd": None}
         assert token_counts(None) == zeros
         assert token_counts("not a dict") == zeros
         assert token_counts({"prompt": "NaN"}) == zeros
+
+
+class TestSpendByModel:
+    def test_sums_each_model_across_runs(self):
+        rows = [
+            make_row(
+                1,
+                token_usage={
+                    "by_model": {
+                        "gpt-4.1-mini": {
+                            "total": 100,
+                            "prompt": 80,
+                            "cached": 40,
+                            "completion": 20,
+                        }
+                    }
+                },
+            ),
+            make_row(
+                2,
+                token_usage={
+                    "by_model": {
+                        "gpt-4.1-mini": {
+                            "total": 50,
+                            "prompt": 40,
+                            "cached": 0,
+                            "completion": 10,
+                        },
+                        "gpt-5-nano": {
+                            "total": 30,
+                            "prompt": 25,
+                            "cached": 5,
+                            "completion": 5,
+                        },
+                    }
+                },
+            ),
+        ]
+
+        totals = spend_by_model(rows)
+
+        assert totals["gpt-4.1-mini"] == {
+            "total": 150,
+            "prompt": 120,
+            "cached": 40,
+            "completion": 30,
+        }
+        assert totals["gpt-5-nano"]["total"] == 30
+
+    def test_runs_without_a_split_are_skipped(self):
+        assert spend_by_model([make_row(1, token_usage=None)]) == {}
+        assert spend_by_model([make_row(1, token_usage={"by_model": "nope"})]) == {}
 
 
 class TestSummarize:
@@ -113,6 +172,9 @@ class TestSummarize:
             "avg_tokens": 200,
             "cached_tokens": 0,
             "cache_hit_rate": 0.0,
+            "total_cost_usd": 0.0,
+            "avg_cost_usd": 0.0,
+            "unpriced": 3,
             "avg_duration_s": 4.0,
         }
 
@@ -129,19 +191,45 @@ class TestSummarize:
         assert stats["cached_tokens"] == 100
         assert stats["cache_hit_rate"] == 0.5
 
+    def test_cost_sums_across_runs(self):
+        rows = [
+            make_row(1, token_usage={"prompt": 100, "cost_usd": 0.001}),
+            make_row(2, token_usage={"prompt": 100, "cost_usd": 0.002}),
+        ]
+
+        stats = summarize(rows)
+
+        assert stats["total_cost_usd"] == 0.003
+        assert stats["avg_cost_usd"] == 0.0015
+        assert stats["unpriced"] == 0
+
+    def test_unpriced_runs_are_counted_not_averaged_as_free(self):
+        # averaging a missing cost as 0.0 would halve the real average
+        rows = [
+            make_row(1, token_usage={"prompt": 100, "cost_usd": 0.002}),
+            make_row(2, token_usage={"prompt": 100}),
+        ]
+
+        stats = summarize(rows)
+
+        assert stats["total_cost_usd"] == 0.002
+        assert stats["avg_cost_usd"] == 0.002
+        assert stats["unpriced"] == 1
+
     def test_empty_rows(self):
         stats = summarize([])
 
         assert stats["cases"] == 0
         assert stats["avg_tokens"] == 0
         assert stats["cache_hit_rate"] == 0.0
+        assert stats["total_cost_usd"] == 0.0
         assert stats["avg_duration_s"] == 0.0
 
 
 class TestBuildReport:
     @pytest.fixture
     def suites_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(report, "SUITES_DIR", tmp_path)
+        monkeypatch.setattr(common_module, "SUITES_DIR", tmp_path)
         (tmp_path / "my_suite.json").write_text(
             json.dumps(
                 [
@@ -191,11 +279,52 @@ class TestBuildReport:
             [make_row(1, token_usage={"total": 100, "prompt": 80, "cached": 60})]
         )
 
-        assert "| 100 | 60 |" in out  # per-case tokens | cached cells
+        assert "| 100 | 60 " in out  # per-case tokens | cached cells
         assert "75.0%" in out  # summary cache hit rate
 
     def test_row_without_token_usage_renders_dash(self, suites_dir):
         out = self._build([make_row(1, token_usage=None)])
 
-        assert "| 100 | — |" in out
+        assert "| 100 | — " in out
         assert "0.0%" in out
+
+    def test_cost_shown_per_case_and_in_summary(self, suites_dir):
+        out = self._build(
+            [make_row(1, token_usage={"total": 100, "prompt": 80, "cost_usd": 0.001234})]
+        )
+
+        assert "$0.001234" in out  # per-case cost cell
+        assert "$0.0012" in out  # summary total
+
+    def test_unpriced_runs_are_flagged_in_the_summary(self, suites_dir):
+        out = self._build([make_row(1, token_usage={"prompt": 80})])
+
+        assert "1 unpriced" in out
+
+    def test_spend_by_model_section(self, suites_dir):
+        out = self._build(
+            [
+                make_row(
+                    1,
+                    token_usage={
+                        "prompt": 80,
+                        "by_model": {
+                            "gpt-4.1-mini": {
+                                "total": 100,
+                                "prompt": 80,
+                                "cached": 40,
+                                "completion": 20,
+                            }
+                        },
+                    },
+                )
+            ]
+        )
+
+        assert "Spend by model" in out
+        assert "`gpt-4.1-mini`" in out
+
+    def test_no_model_split_omits_the_section(self, suites_dir):
+        out = self._build([make_row(1)])
+
+        assert "Spend by model" not in out

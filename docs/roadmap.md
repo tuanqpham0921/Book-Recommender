@@ -105,7 +105,7 @@ removal and Provide_Feedback registration still pending.)
 - Relabel every suite case's `expected_nodes` to the V1 taxonomy; add
   clarification-expected cases. Details in [eval-strategy.md](eval-strategy.md).
 - Extended suite runs only when the extension block is enabled.
-- Set pass thresholds after the first post-Phase-1 run; `make suite-eval` becomes the
+- Set pass thresholds after the first post-Phase-1 run; `make suite-goals` becomes the
   release gate.
 
 **Exit:** one command reports pass/fail against the V1 node set.
@@ -136,7 +136,7 @@ block, walk the release checklist below.
 - [ ] Every V1 node plans **and executes** end-to-end with real data streamed over SSE.
 - [ ] Ambiguous/unsupported input always gets a clarification or rejection reply.
 - [ ] Extension block commented out in the release build.
-- [ ] Relabeled suites pass their thresholds via `make suite-eval`.
+- [ ] Relabeled suites pass their thresholds via `make suite-goals`.
 - [ ] Phase 5 security blockers closed.
 - [ ] README, CLAUDE.md, and docs/ accurate against the code.
 - [ ] Feedback review flow works with ownership checks.

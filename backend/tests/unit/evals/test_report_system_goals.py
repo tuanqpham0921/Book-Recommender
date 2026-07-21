@@ -1,24 +1,24 @@
-"""Tests for the eval post-processor's pure parts: extracting accepted goal
+"""Tests for the system-goals report's pure parts: extracting accepted goal
 types from a recorded planner envelope, the expected-vs-accepted multiset
-diff, per-case verdicts, latest-per-case filtering, suite-JSON lookup, and
-the rendered markdown. The DB shim (fetch_rows) is deliberately thin and not
-covered here."""
+diff, per-case verdicts, and the rendered markdown. The DB shim (fetch_rows)
+is deliberately thin and not covered here.
+
+Token/cost/latency reporting lives in report.py and is tested in
+test_report.py — this report deliberately says nothing about them.
+"""
 
 import json
 from datetime import datetime, timezone
 
 import pytest
 
-import evals.eval as eval_module
-from evals.eval import (
+import evals.common as common_module
+from evals.common import latest_per_case, load_suite_entries
+from evals.report_system_goals import (
     accepted_goal_types,
-    build_eval_report,
+    build_goals_report,
     diff_node_types,
     evaluate_row,
-    latest_per_case,
-    load_suite_entries,
-    planner_token_usage,
-    summarize_tokens,
 )
 
 
@@ -90,54 +90,6 @@ class TestAcceptedGoalTypes:
         }
 
         assert accepted_goal_types(planner) == ["Retrieve_by_Title"]
-
-
-class TestPlannerTokenUsage:
-    def test_extracts_counts(self):
-        planner = make_planner(
-            token_usage={"total": 100, "prompt": 80, "completion": 20, "cached": 60}
-        )
-
-        assert planner_token_usage(planner) == {
-            "total": 100,
-            "prompt": 80,
-            "cached": 60,
-        }
-
-    def test_row_without_cached_field_counts_as_uncached(self):
-        # rows recorded before TokenUsage grew the cached field
-        planner = make_planner(token_usage={"total": 100, "prompt": 80, "completion": 20})
-
-        assert planner_token_usage(planner)["cached"] == 0
-
-    def test_missing_or_malformed_envelope_is_all_zeros(self):
-        zeros = {"total": 0, "prompt": 0, "cached": 0}
-        assert planner_token_usage(None) == zeros
-        assert planner_token_usage({}) == zeros
-        assert planner_token_usage({"token_usage": "not a dict"}) == zeros
-        assert planner_token_usage({"token_usage": {"total": "NaN"}}) == zeros
-
-
-class TestSummarizeTokens:
-    def test_sums_and_recomputes_hit_rate(self):
-        # per-run rates are 1.0 and 0.0 — the aggregate must come from the
-        # summed counts (0.5), not an average of rates
-        stats = summarize_tokens(
-            [
-                {"total": 110, "prompt": 100, "cached": 100},
-                {"total": 110, "prompt": 100, "cached": 0},
-            ]
-        )
-
-        assert stats == {
-            "total": 220,
-            "prompt": 200,
-            "cached": 100,
-            "cache_hit_rate": 0.5,
-        }
-
-    def test_empty_runs_hit_rate_is_zero_not_error(self):
-        assert summarize_tokens([])["cache_hit_rate"] == 0.0
 
 
 class TestDiffNodeTypes:
@@ -220,7 +172,7 @@ class TestLatestPerCase:
 class TestLoadSuiteEntries:
     @pytest.fixture
     def suites_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(eval_module, "SUITES_DIR", tmp_path)
+        monkeypatch.setattr(common_module, "SUITES_DIR", tmp_path)
         return tmp_path
 
     def test_maps_entries_by_id(self, suites_dir):
@@ -242,10 +194,10 @@ class TestLoadSuiteEntries:
         assert load_suite_entries("bad") == {}
 
 
-class TestBuildEvalReport:
+class TestBuildGoalsReport:
     @pytest.fixture
     def suites_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(eval_module, "SUITES_DIR", tmp_path)
+        monkeypatch.setattr(common_module, "SUITES_DIR", tmp_path)
         (tmp_path / "my_suite.json").write_text(
             json.dumps(
                 [
@@ -262,7 +214,7 @@ class TestBuildEvalReport:
         return tmp_path
 
     def _build(self, rows):
-        return build_eval_report(
+        return build_goals_report(
             rows, git_sha="abc1234", generated_at=datetime(2026, 7, 15, tzinfo=timezone.utc)
         )
 
@@ -303,29 +255,23 @@ class TestBuildEvalReport:
         assert "No test runs found" in report
         assert overall["cases"] == 0
 
-    def test_token_usage_and_cache_hit_rate_reported(self, suites_dir):
+    def test_says_nothing_about_tokens_or_cost(self, suites_dir):
+        # the split is the point: correctness here, spend in report.py
         rows = [
             make_row(
                 1,
                 goal_types=("Retrieve_by_Title",),
-                token_usage={"total": 1100, "prompt": 1000, "completion": 100, "cached": 600},
-            ),
-            make_row(
-                2,
-                goal_types=("Analyze_Recommend",),
-                token_usage={"total": 1100, "prompt": 1000, "completion": 100, "cached": 200},
-            ),
+                token_usage={
+                    "total": 1100,
+                    "prompt": 1000,
+                    "completion": 100,
+                    "cached": 600,
+                    "cost_usd": 0.00042,
+                },
+            )
         ]
 
         report, _ = self._build(rows)
 
-        assert "| 1,100 (600) " in report  # per-case tokens (cached) cell
-        assert "2,200 tokens total" in report
-        assert "800/2,000 prompt tokens cached" in report
-        assert "40.0% cache hit rate" in report
-
-    def test_rows_without_token_usage_render_dash_and_zero_rate(self, suites_dir):
-        report, _ = self._build([make_row(1, goal_types=("Retrieve_by_Title",))])
-
-        assert "| — " in report
-        assert "0.0% cache hit rate" in report
+        for spend_word in ("token", "cost", "cache", "$"):
+            assert spend_word not in report.lower()

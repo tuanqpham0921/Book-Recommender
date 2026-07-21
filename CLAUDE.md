@@ -38,7 +38,14 @@ make query-suite                # POST the base eval suite at a running backend 
 make query-suite-all            # fire all 4 eval suites concurrently
 ```
 
-Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), the post-processor `evals/eval.py` (`make suite-eval` — joins `test_runs ⋈ chat_runs`, diffs accepted goal types against each case's `expected_nodes`, saves a report to `evals/results/`), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`. **This suite/expected_nodes diff is the project's golden-test mechanism** — strategy and growth plan in [docs/eval-strategy.md](docs/eval-strategy.md).
+Evals live in `backend/evals/`: suite definitions in `evals/suites/*.json` (versioned inputs), the runner `evals/run_suites.py` (after a run it writes one `test_runs` row per query — chat_id FK to `chat_runs` plus the suite file stem and entry id), make targets in `evals/makefile`, and per-campaign reports/raw dumps in `evals/results/`.
+
+Two post-processors split correctness from spend, over shared plumbing in `evals/common.py` (the `test_runs ⋈ chat_runs` fetch, latest-per-case filtering, suite-JSON lookup, CLI):
+
+- **`evals/report_system_goals.py`** (`make suite-goals`) — diffs accepted goal types against each case's `expected_nodes`, saves to `evals/results/system_goals_<timestamp>.md`. **This diff is the project's golden-test mechanism**; it deliberately reports no token/cost/latency numbers.
+- **`evals/report.py`** (`make suite-report`) — ok/failed, runtime errors, duration, tokens, cache hit rate, dollars, and a per-model spend split.
+
+`make suite-reports` runs both. Strategy and growth plan in [docs/eval-strategy.md](docs/eval-strategy.md).
 
 Environment config lives at `config/.env` (see `config/README.md` for structure).
 
