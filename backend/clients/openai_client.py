@@ -63,7 +63,7 @@ class OpenAIClient(BaseLLMClient):
             content=response_message.content,
             tool_calls=response_message.tool_calls,
             refusal=response_message.refusal,
-            token_usage=self._extract_token_usage(final_completion.usage),
+            token_usage=self._extract_token_usage(final_completion.usage, payload['model']),
         )
         
         if save_payload:
@@ -75,7 +75,7 @@ class OpenAIClient(BaseLLMClient):
         return assistant_msg
         
     @staticmethod
-    def _extract_token_usage(usage) -> TokenUsage:
+    def _extract_token_usage(usage, model) -> TokenUsage:
         """Map a CompletionUsage onto TokenUsage. `prompt_tokens_details` and
         its `cached_tokens` are both Optional on the OpenAI side — absent on
         models/endpoints without prompt caching — so default them to 0."""
@@ -86,6 +86,7 @@ class OpenAIClient(BaseLLMClient):
         completion_details = usage.completion_tokens_details
 
         return TokenUsage(
+            model = model,
             total=usage.total_tokens,
             prompt=usage.prompt_tokens,
             completion=usage.completion_tokens,

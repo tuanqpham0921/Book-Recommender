@@ -5,6 +5,12 @@ from config.settings import OpenAISettings
 from common.operation import OperationResult
 from app.common.messages import AssistantMessage
 
+# Every real request payload carries a model (OpenAIBaseRequest.base_payload
+# always sets it) and execute() reads it back to attribute token spend, so the
+# fakes must carry one too. Priced in config.pricing, so cost is exercised.
+FAKE_MODEL = "gpt-4.1-mini"
+
+
 def async_iter(items):
     """Return an async iterable over items."""
     async def _gen():
@@ -113,7 +119,7 @@ class TestExecute:
         fake_completion = make_fake_completion()
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert isinstance(result, OperationResult)
@@ -123,7 +129,7 @@ class TestExecute:
         fake_completion = make_fake_completion(content="hello")
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert isinstance(result.output, AssistantMessage)
@@ -134,7 +140,7 @@ class TestExecute:
         fake_completion = make_fake_completion(total=10, prompt=7, completion=3)
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert result.token_usage.total == 10
@@ -146,7 +152,7 @@ class TestExecute:
         fake_completion = make_fake_completion(total=10, prompt=8, completion=2, cached=6)
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert result.token_usage.cached == 6
@@ -159,7 +165,7 @@ class TestExecute:
         fake_completion.usage.prompt_tokens_details = None
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert result.token_usage.cached == 0
@@ -171,7 +177,7 @@ class TestExecute:
         fake_completion.usage.prompt_tokens_details = MagicMock(cached_tokens=None)
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert result.token_usage.cached == 0
@@ -182,7 +188,7 @@ class TestExecute:
         fake_completion.usage = None
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
         assert result.token_usage.total == 0
@@ -193,7 +199,7 @@ class TestExecute:
         fake_completion = make_fake_completion()
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         with patch("clients.openai_client.save_file") as mock_save:
             await self.client.execute(req, save_payload=True)
 
@@ -204,7 +210,7 @@ class TestExecute:
         fake_completion = make_fake_completion()
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
-        req = MagicMock(sse_stream=None, to_payload=lambda: {})
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         with patch("clients.openai_client.save_file") as mock_save:
             await self.client.execute(req)
 

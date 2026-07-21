@@ -34,5 +34,18 @@ ignored (`extra="ignore"`).
 `constants.py` holds non-env constants: `FilesLocationConstants` (paths),
 `AppConfig`, and domain constants. Prefer these over hard-coded paths/values.
 
+## Pricing
+
+`pricing.py` holds `MODEL_PRICES` — USD per 1M tokens per OpenAI model — plus
+`price_for()` / `cost_of()`. `common.operation.TokenUsage` calls `cost_of()` to
+stamp `cost_usd` and a per-model `by_model` split onto every run, which lands in
+the `chat_runs.planner` JSONB (no dedicated column).
+
+**These rates go stale.** OpenAI reprices without notice and drops superseded
+generations off its pricing index, so the numbers come from the individual model
+pages. Re-verify and bump `PRICES_CHECKED_ON` when cost figures matter. A model
+with no entry is reported in `unpriced_models` and contributes nothing to
+`cost_usd` — unknown spend, deliberately not silent zero spend.
+
 Note: `.env` is gitignored — there is no Redis; the core variables are
 `OPENAI_API_KEY` plus the `POSTGRES_*` set.
