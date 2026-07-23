@@ -11,28 +11,66 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
-(nothing in flight)
-* maybe you'll need an entity thing
-    * group them by books or reference books etc...
-* example mismatch for system goals
-    * might better to have the llm_id and id switch
-    * to internal id vs id
-    * or you can go in an enumerate them 
+--
 
-decisions:
-1. models mini vs nano and effort
-    * or a bigger model (both cost more money and more tokens)
-    * or you can see that the mini is good enough
-        * and best effort inject them
-        * or resolve them after (i do like this)
-            * might be a good blend between intent and goals...
-            * because you need the intent to know which one to clamps
+current
+* use the current campain as the baseline
+    * reminder you can run the same suite for the tmux
+    * this way you can have different variations
+    * but after you get this golden/regression set in
 
-    * or it's something with the parse intent
-        * this becomes a massive if statement
-        * I do like the system goals
-        * bc if you do book reference/entity
-            then you are also just linking the intent to reference/entity
+* fill out the expected nodes.
+* remove small talks out of system goals
+* experiment with:
+    * using the system goals, as a dependency linker as well
+        * you can call the node_type enum validator
+        * see how the completition and cost (no need for parser right now)
+        * have a query normalization / args hints desscription better
+        
+        * potential downside:
+            * now your system goals is the planner and source of truth
+            * can be troublesome if even the frontier model misclassify often
+            * with the parser and linkage seperate you can best effort inject
+                * or double as a mistake catcher
+            * completition cost might increase on a bigger model
+                * might need reasoning or better query normalization/hints
+                * tho dependecy field is cheap since it's just goal_1, goal_2...
+    * experiment with vector embeddings
+        * single word for genere (author names)
+        * how closely related?
+        * what about embedding "title, page numner, description..."
+            * and the semantic is like "find books with 100 pages"
+            * will that catch it?
+
+* need an analyze book node
+    * for question and getting info
+
+* add in generation node
+    * i can imagine it having a a field like
+        * portion of the query: str portion
+        * all the retrieval and analyze just return an output data
+    * this is your frontend sections
+    * not sure if it should be in goals too or a seperate thing
+        * and how to link them
+
+Add in a filter or combine node
+* this is only for cte and apply the filters
+* i can imagine the retrieval and analyze steps
+    * retrieval - only getting the counts and meta data.
+        * so like find genre(horror) only execute count to get how many books
+        * this is where you can ask the user if there are no or too many books
+        * then you send that query and output to the next node to use an CTE
+            * so you can do filtering and ask the user at each steps.
+    * the analyze node will then execute the CTE with it's own step
+        * do some stuff and return an output to the generation node
+    * this might cost a lot of db calls but for v1, it's fine
+
+
+
+other things to do before pre-release
+* should the model infer contradictory things
+* number for system goals or multi steps?
+* pre-check for small_talks, gibberish, or reword the query for continuation
 
 
 ---------
