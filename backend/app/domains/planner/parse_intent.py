@@ -376,24 +376,24 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        intent_tool_call = await self._run_llm_intent_request()
-        intent_result = cast(
-            IntentParseRequest, intent_tool_call.function.parsed_arguments
-        )
+        # intent_tool_call = await self._run_llm_intent_request()
+        # intent_result = cast(
+        #     IntentParseRequest, intent_tool_call.function.parsed_arguments
+        # )
 
-        reject_reasons = self._get_intent_reject_reasons(intent_result)
-        if reject_reasons:
-            # TODO: these should raise errors so the caller can catch
-            message = (
-                self.continuation_reject_message
-                if intent_result.intents == ["conversation_continuation"]
-                else self.intent_reject_message
-            )
-            self.result.add_details(*reject_reasons)
-            self.result.ok = False
-            self.result.message = message
-            await self.sse_stream.send_chars(message)
-            return
+        # reject_reasons = self._get_intent_reject_reasons(intent_result)
+        # if reject_reasons:
+        #     # TODO: these should raise errors so the caller can catch
+        #     message = (
+        #         self.continuation_reject_message
+        #         if intent_result.intents == ["conversation_continuation"]
+        #         else self.intent_reject_message
+        #     )
+        #     self.result.add_details(*reject_reasons)
+        #     self.result.ok = False
+        #     self.result.message = message
+        #     await self.sse_stream.send_chars(message)
+        #     return
 
         tool_call = await self._run_llm_args_parse()
         # parsed_arguments is typed `object | None` by the openai lib; the
