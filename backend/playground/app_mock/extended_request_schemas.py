@@ -200,8 +200,6 @@ class SummarizeStrategy(AnalyzeBaseRequest):
     Args:
         spoiler_free: Avoid plot spoilers unless the user asks for the full story.
         focus: Specific angle to center the summary on, when stated.
-        depends_on: Task ids of the retrieval step(s) for the book(s) being
-            summarized.
 
     Returns: A prose summary of the book(s), respecting spoiler_free and focus.
 
@@ -211,7 +209,7 @@ class SummarizeStrategy(AnalyzeBaseRequest):
     Do not use: for extracting themes/motifs, or side-by-side contrast of
     several books.
 
-    Constraints: requires at least 1 task id in depends_on — refuses itself
+    Constraints: requires at least 1 task id in depends_on— refuses itself
     otherwise.
 
     Example queries:
@@ -230,7 +228,6 @@ class ThemesStrategy(AnalyzeBaseRequest):
 
     Args:
         aspect: Specific theme or motif the user asked about, when stated.
-        depends_on: Task ids of the retrieval step(s) for the book(s) analyzed.
 
     Returns: A prose breakdown of the book(s)' themes, motifs, or message.
 
@@ -260,8 +257,6 @@ class ReadingOrderStrategy(AnalyzeBaseRequest):
     Args:
         order_preference: Ordering convention the user asked for, when stated
             (publication, chronological, recommended).
-        depends_on: Task ids of the series or title retrieval step(s)
-            providing the books to order.
 
     Returns: The books in the resolved reading order, with the convention used.
 
@@ -291,7 +286,6 @@ class ReadingLevelStrategy(AnalyzeBaseRequest):
     Args:
         reader_context: Who the book is for, in the user's words (age, grade,
             sensitivities).
-        depends_on: Task ids of the retrieval step(s) for the book(s) assessed.
 
     Returns: An assessment of the book(s)' suitability/difficulty for reader_context.
 
@@ -322,7 +316,6 @@ class ReadingTimeStrategy(AnalyzeBaseRequest):
         minutes_per_day: Daily reading time the user stated, in minutes.
         reading_speed: Reading speed the user stated about themself (slow,
             average, fast).
-        depends_on: Task ids of the retrieval step(s) for the book(s) estimated.
 
     Returns: An estimated time-to-finish for the book(s), given the stated pace.
 
@@ -354,8 +347,6 @@ class ReadingPlanStrategy(AnalyzeBaseRequest):
     Args:
         plan_goal: What the plan should achieve, in the user's words.
         timeframe: Duration or deadline the user stated (e.g. "3 months").
-        depends_on: Task ids of the retrieval/recommendation step(s) supplying
-            candidate books for the plan.
 
     Returns: A sequenced, multi-book reading plan toward plan_goal within timeframe.
 
