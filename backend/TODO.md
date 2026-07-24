@@ -36,3 +36,7 @@ current added intersect and filter retrievals
         at the end? for recommend
         if there are none on the other ones, then you 
         can just stop the query?
+
+    * with this split i can do things like
+        * my database has 500 sci-fi, I have also 10 books by Jane Austen
+        * ui_loading: checking how many books have 200 pages or more
