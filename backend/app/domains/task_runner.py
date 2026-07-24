@@ -6,7 +6,6 @@ from pydantic import Field
 from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
-from app.domains.planner.strategy_classification import StrategyClassificationOutput
 from app.orchestration.request_context import RequestContext
 from app.registry import EXECUTORS_CLS_MAPPING
 from clients.openai_client import OpenAIClient
@@ -49,7 +48,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
     async def run(
         self,
         request_context: RequestContext,
-        strategy_result: StrategyClassificationOutput,
+        strategy_result: None,
     ) -> None:
         """Execute accepted tasks in dependency order, feeding each task the
         results of the tasks it depends on. Each task runs as its own

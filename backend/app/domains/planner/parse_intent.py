@@ -36,10 +36,6 @@ from app.domains.field_types import (
 logger = logging.getLogger(__name__)
 
 GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
-INITIAL_PARSE_RESPONSE_PROMPT_PATH = (
-    "domains/planner/prompts/1_initial_parse_response.txt"
-)
-INTENT_PARSER_PROMPT_PATH = "domains/planner/prompts/0_intent_parser.txt"
 
 MAX_SYSTEM_GOALS = 10
 
@@ -348,32 +344,13 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         self._record_tool_call(tool_call)
         payload = self.output.to_llm_messages()
         await self.finalize_result(payload)
-        await self.generate_user_response(payload)
-
-    def _get_intent_reject_reasons(
-        self, intent_result: IntentParseRequest
-    ) -> list[str]:
-        reasons = []
-        if "malicious" in intent_result.intents:
-            reasons.append("Rejected: malicious intent detected")
-        if "conversation_continuation" in intent_result.intents:
-            reasons.append("Rejected: references an earlier turn (single-turn only)")
-        return reasons
-
-    async def _run_llm_intent_request(self) -> ParsedFunctionToolCall:
-        system_prompt = load_prompt(INTENT_PARSER_PROMPT_PATH)
-        req = OpenAIParserRequest(
-            prompt=system_prompt,
-            messages=[self.user_message],
-            tool_models=[IntentParseRequest],
-        )
-        assistant_msg = await self.run_llm_call(req)
-        tool_calls = assistant_msg.tool_calls
-        if not tool_calls:
-            # previously an unguarded [0] on None — same failure semantics
-            # (runtime error caught by the workflow), clearer message
-            raise ValueError("LLM response contained no tool calls")
-        return tool_calls[0]
+        
+        # generate unable to help with
+        if self.result.output.out_of_scope:
+            await self.sse_stream.send_chars("\n\n I can't do:\n")
+            for unsupported in self.self.result.output.out_of_scope:
+                await self.sse_stream.send_chars(f"- {unsupported}\n")
+        
 
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
@@ -416,26 +393,6 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # accepted_goals, not from ok.
         super().finalize_result(ok=bool(self.output.accepted_goals or payload))
 
-    async def generate_user_response(self, payload) -> None:
-        if not payload:
-            return
-
-        messages: list[APIMessage] = [AssistantMessage(content=json.dumps(payload))]
-        response_prompt = format_prompt(
-            prompt_path=INITIAL_PARSE_RESPONSE_PROMPT_PATH,
-            TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
-        )
-        await self.run_llm_call(
-            req=OpenAIChatRequest(
-                prompt=response_prompt,
-                messages=messages,
-                sse_stream=self.sse_stream,
-                temperature=0.7,
-                top_p=1.0,
-            ),
-        )
-        await self.sse_stream.send_divider()
-
     def process_parse_result(
         self, parse_result: GoalParseRequest, confident_tuning: float = 0.5
     ) -> None:
@@ -454,7 +411,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # overflow goals are valid, just over the model's limit — run them
         # through the same checks so they can fill capacity freed by refusals,
         # or wait in buffer_goals
-        all_goals = parse_result.system_goals + parse_result._overflow_system_goals
+        all_goals = parse_result.system_goals
         for goal in all_goals:
             reasons = []
             if goal.confidence < confident_tuning:
