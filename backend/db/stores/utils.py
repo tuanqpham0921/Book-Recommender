@@ -148,6 +148,16 @@ def apply_book_filters(
     if filters.max_rating:
         conditions.append(model.average_rating <= filters.max_rating)
 
+    if filters.min_ratings_count:
+        conditions.append(model.ratings_count >= filters.min_ratings_count)
+
+    if filters.max_ratings_count:
+        conditions.append(model.ratings_count <= filters.max_ratings_count)
+
+    # False is meaningful here (exclude children's books), so test against None
+    if filters.is_children is not None:
+        conditions.append(model.is_children.is_(filters.is_children))
+
     # Apply all conditions
     if conditions:
         stmt = stmt.where(and_(*conditions))
