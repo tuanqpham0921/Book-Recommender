@@ -46,8 +46,9 @@ class SystemGoal(BaseModel):
     supported node type. One entry in GoalParseRequest.system_goals.
 
     Args:
-        description: A concise, instructive description of the goal (10-100 characters).
+        description: An query normalized and instructive message for the arguments parser (10 - 300 characters)
         confidence: How confident the system is that it can fulfill this goal
+        reasoning: provide a short reasoning for the system goals set (10-100 characters)
         target_node_type: The single capability name from the catalog that
             fulfills this goal.
 
@@ -57,15 +58,25 @@ class SystemGoal(BaseModel):
     Constraints: exactly one target_node_type per goal — a multi-part
     request becomes separate goals, not one goal with multiple types.
     """
-
+    
     node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = (
         PlannerNodeTypeEnum.SYSTEM_GOAL
     )
+    
+    id: str = Field(...,
+                description="assign an id for this goal",
+                json_schema_extra={"example": ["goal_1", "goal_2"]}
+                )
 
     description: DescriptionStr = Field(
         ...,
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "Find Dune by title"},
+    )
+    reasoning: ReasoningStr = Field(
+        ...,
+        max_length=MAX_STRING_LENGTH,
+        json_schema_extra={"example": "Direct match to a supported capability"},
     )
     confidence: ConfidenceFloat = Field(
         ...,
@@ -78,14 +89,19 @@ class SystemGoal(BaseModel):
         ...,
         json_schema_extra={"example": "Retrieve_by_Title"},
     )
+    depends_on: list[str] = Field(
+        ...,
+        description="List of goals_id must be completed before this",
+        json_schema_extra={"example": ["1", "2"]}
+    )
 
     _refusal: bool = PrivateAttr(default=False)
     _refusal_reasons: list[str] = PrivateAttr(default_factory=list)
     _id: str = PrivateAttr(default_factory=lambda: f"goal_{uuid_8()}")
 
-    @property
-    def id(self) -> str:
-        return self._id
+    # @property
+    # def id(self) -> str:
+    #     return self._id
 
     @property
     def refusal_reasons(self) -> list[str]:
@@ -105,7 +121,6 @@ class GoalParseRequest(BaseModel):
         out_of_scope: The out-of-domain portion of the message, when present.
         system_goals: One SystemGoal per capability the message maps to;
             empty when nothing in-domain was found.
-        reasoning: Short explanation of how the message was classified.
 
     Returns: The parsed breakdown that strategy classification
     (system_goals) and the response step (out_of_scope/reasoning)
@@ -133,15 +148,6 @@ class GoalParseRequest(BaseModel):
                                 "target_node_type": "Analyze_Recommend",
                             },
                         ],
-                        "reasoning": "Greeting plus a direct match to two supported capabilities",
-                    },
-                },
-                {
-                    "query": "What's the weather like today?",
-                    "request": {
-                        "system_goals": [],
-                        "out_of_scope": "What's the weather like today?",
-                        "reasoning": "No supported capability covers weather",
                     },
                 },
                 {
@@ -154,7 +160,6 @@ class GoalParseRequest(BaseModel):
                                 "target_node_type": "Retrieve_by_Genre",
                             }
                         ],
-                        "reasoning": "Direct match to a supported capability",
                     },
                 },
                 {
@@ -177,7 +182,6 @@ class GoalParseRequest(BaseModel):
                                 "target_node_type": "Analyze_Compare",
                             },
                         ],
-                        "reasoning": "Comparison requires retrieving both titles before comparing them",
                     },
                 },
                 {
@@ -200,7 +204,6 @@ class GoalParseRequest(BaseModel):
                                 "target_node_type": "Combine_Intersect",
                             },
                         ],
-                        "reasoning": "Genre and author are both search subjects, so each is its own retrieval goal; they must hold on the same book, which is a third goal — without it the two retrievals would simply be pooled",
                     },
                 },
                 {
@@ -218,7 +221,6 @@ class GoalParseRequest(BaseModel):
                                 "target_node_type": "Filter_Retrieval",
                             },
                         ],
-                        "reasoning": "The author is the subject of the search; publication year can only narrow it and cannot be searched for on its own, so it becomes a separate narrowing goal rather than a retrieval",
                     },
                 },
                 {
@@ -231,22 +233,6 @@ class GoalParseRequest(BaseModel):
                                 "target_node_type": "Retrieve_User_Info",
                             }
                         ],
-                        "reasoning": "Direct match to a supported capability",
-                    },
-                },
-                {
-                    "query": "Can you help me with calculus homework?",
-                    "request": {
-                        "system_goals": [],
-                        "out_of_scope": "Can you help me with calculus homework?",
-                        "reasoning": "No supported capability covers homework help",
-                    },
-                },
-                {
-                    "query": "that one",
-                    "request": {
-                        "system_goals": [],
-                        "reasoning": "Ambiguous — no mappable capability",
                     },
                 },
             ]
@@ -261,11 +247,7 @@ class GoalParseRequest(BaseModel):
         default_factory=list,
         max_length=MAX_SYSTEM_GOALS,
     )
-    reasoning: ReasoningStr = Field(
-        ...,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Direct match to a supported capability"},
-    )
+    
     out_of_scope: list[str] = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
@@ -279,7 +261,6 @@ class InitialParseOutput(AppWorkflowOutput):
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
 
     out_of_scope: list[str] = None
-    reasoning: Optional[str] = None
 
     def to_summary(self) -> dict[str, Any]:
         return {
@@ -287,7 +268,6 @@ class InitialParseOutput(AppWorkflowOutput):
             "num_rejected_system": len(self.refused_goals),
             "num_accepted_system": len(self.accepted_goals),
             "out_of_scope": self.out_of_scope,
-            "reasoning": self.reasoning,
         }
 
     def accepted_goals_ids(self) -> list[str]:
@@ -301,8 +281,6 @@ class InitialParseOutput(AppWorkflowOutput):
             payload["refused_goals"] = [
                 (g.description, g.refusal_reasons) for g in self.refused_goals
             ]
-        if len(payload) > 0 and self.reasoning:
-            payload["reasoning"] = self.reasoning
 
         return payload
 
@@ -406,7 +384,6 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             raise RuntimeError("Nothing was classified in the initial parse")
 
         self.output.out_of_scope = parse_result.out_of_scope
-        self.output.reasoning = parse_result.reasoning
 
         # overflow goals are valid, just over the model's limit — run them
         # through the same checks so they can fill capacity freed by refusals,

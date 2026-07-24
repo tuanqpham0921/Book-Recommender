@@ -102,6 +102,8 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             if system_goal.description in seen_description:
                 continue
             await self.sse_stream.send_chars(f"- {system_goal.description}\n")
+            await self.sse_stream.send_chars(f"\t- {system_goal.reasoning}\n")
+            await self.sse_stream.send_chars(f"\t- {system_goal.depends_on}\n")
             
             seen_description.add(system_goal.description)
 
