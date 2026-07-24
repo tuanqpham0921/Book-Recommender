@@ -96,7 +96,7 @@ class BooksFilter(BookMetadataFilter):
     sort_by: Optional[Literal["rating", "page_count", "published_year"]] = None
     sort_order: Literal["asc", "desc"] = "desc"
 
-    limit: int = Field(default=BookConstraints.default_limit)
+    # limit: int = Field(default=BookConstraints.default_limit)
     exclusion: Optional[ExclusionBookFilter] = None
 
     def model_post_init(self, __context) -> None:
