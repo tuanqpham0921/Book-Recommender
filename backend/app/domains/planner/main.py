@@ -92,18 +92,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.result.message = "Conversation handled without planning"
             return
 
-        seen_description = set()
-        await self.sse_stream.send_chars("\n\n## System Goals:\n")
-        for system_goal in parse_output.accepted_goals:
-            if system_goal.description in seen_description:
-                continue
-            await self.sse_stream.send_chars(f"- {system_goal.description}\n")
-            await self.sse_stream.send_chars(f"\t- {system_goal.reasoning}\n")
-            await self.sse_stream.send_chars(f"\t- {system_goal.depends_on}\n")
-            
-            seen_description.add(system_goal.description)
-
-        await self.sse_stream.send_divider()
+        await self.send_mermaid(system_goals)
         # ------------------------------------------------------------------------------------------------
         # Final response
 
@@ -112,30 +101,26 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
-        self.result.output.diagram = " None for now"
         
 
-    # async def send_mermaid(
-    #     self, strategy_result: StrategyClassificationOutput
-    # ) -> str | None:
-    #     # NOTE: change this the system goals
-    #     from app.common.mermaid import get_mermaid_diagram
+    async def send_mermaid(self, system_goals: list) -> str | None:
+        """Render the accepted system goals as a Mermaid flowchart and stream
+        it to the client. Returns the diagram string, or None when there is
+        nothing to draw or generation failed (never raises into the request)."""
+        from app.common.mermaid import get_goals_mermaid_diagram
 
-    #     diagram = None
-    #     try:
-    #         diagram = get_mermaid_diagram(
-    #             strategy_result.execution_order,
-    #             strategy_result.get_accepted_id_to_node(),
-    #             strategy_result.get_execution_levels(),
-    #         )
-    #     except Exception as e:
-    #         logger.warning(f"Error generating Mermaid diagram: {e}")
-    #         return None
+        diagram = None
+        try:
+            diagram = get_goals_mermaid_diagram(system_goals)
+        except Exception as e:
+            logger.warning(f"Error generating Mermaid diagram: {e}")
+            return None
 
-    #     if not diagram:
-    #         logger.info("No Mermaid diagram generated (empty or invalid)")
-    #         return None
+        if not diagram:
+            logger.info("No Mermaid diagram generated (empty or invalid)")
+            return None
 
-    #     await self.sse_stream.send_chars("## My Plan for Your Request")
-    #     await self.sse_stream.send_mermaid(diagram)
-    #     return diagram
+        await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
+        await self.sse_stream.send_mermaid(diagram)
+        self.output.diagram = diagram
+        return diagram

@@ -81,7 +81,79 @@ def get_mermaid_diagram(
         # get_depends_on returns [] for nodes without dependencies
         for dep in node.get_depends_on():
             lines.append(f"\t{mermaid_id(dep)} --> {mermaid_id(task)}")
-            
+
+    if len(lines) == 1:
+        return None
+
+    return "\n".join(lines) + "\n"
+
+
+def _goal_levels(id_to_goal: Mapping[str, "object"]) -> dict[str, int]:
+    """Longest-path depth per goal id, used only to orient the diagram.
+
+    A goal's level is one past its deepest in-plan dependency; deps that point
+    outside the plan count as roots. A visit guard breaks any cycle (invalid
+    plans that the planner should already reject) so this never recurses forever.
+    """
+    levels: dict[str, int] = {}
+
+    def depth(gid: str, seen: frozenset[str]) -> int:
+        if gid in levels:
+            return levels[gid]
+        goal = id_to_goal.get(gid)
+        deps = [
+            d
+            for d in (getattr(goal, "depends_on", []) or [])
+            if d in id_to_goal and d not in seen
+        ]
+        lvl = 1 + max((depth(d, seen | {gid}) for d in deps), default=-1)
+        levels[gid] = lvl
+        return lvl
+
+    for gid in id_to_goal:
+        depth(gid, frozenset())
+    return levels
+
+
+def _format_goal_label(goal: "object") -> str:
+    """Box label for one system goal: the capability it targets as the header,
+    then the goal id and its normalized description."""
+    data = remove_empty_values(to_serializable(goal))
+    capability = clean_string_mermaid(str(data.get("target_node_type") or "Goal"))
+    rows = [
+        f"<div style='{WRAPPER_STYLE}'>",
+        f"<div style='{HEADER_STYLE}'>{capability}</div>",
+        _format_label_row("Goal", str(data.get("id", ""))),
+    ]
+    description = data.get("description")
+    if description:
+        rows.append(_format_label_row("Description", str(description)))
+    reasoning = data.get("reasoning")
+    if description:
+        rows.append(_format_label_row("Reasoning", str(reasoning)))
+    rows.append("</div>")
+    return "".join(rows)
+
+
+def get_goals_mermaid_diagram(goals: list) -> str | None:
+    """Flowchart of the planner's system goals — one box per goal headed by the
+    capability it targets, with edges drawn from each goal's depends_on.
+
+    This is the goal-level counterpart to get_mermaid_diagram (which renders
+    typed task requests). Goals carry id/depends_on/target_node_type directly,
+    so no execution order or node lookup is needed from the caller.
+    """
+    id_to_goal = {goal.id: goal for goal in goals}
+    levels = _goal_levels(id_to_goal)
+    lines = [f"flowchart {choose_orientation(levels)}"]
+
+    for gid, goal in id_to_goal.items():
+        lines.append(f'\t{mermaid_id(gid)}["{_format_goal_label(goal)}"]')
+
+    for gid, goal in id_to_goal.items():
+        for dep in getattr(goal, "depends_on", []) or []:
+            lines.append(f"\t{mermaid_id(dep)} --> {mermaid_id(gid)}")
+
     if len(lines) == 1:
         return None
 
