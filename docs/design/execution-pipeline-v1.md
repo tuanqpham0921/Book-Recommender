@@ -62,18 +62,35 @@ plus the analyze execution). Fine for V1 — the demo is the planner, not throug
 
 ### Filter / combine nodes — **registered 2026-07-24**
 
-Built as **three** nodes rather than the one this record originally sketched, because
+Built as **two** nodes rather than the one this record originally sketched, because
 "combine" turned out to be two different operations that must not be confused:
 
 | node type | class | operation | `depends_on` | carries `filters` |
 |---|---|---|---|---|
-| `Combine_Union` | `UnionRetrieval` | OR — pool inputs, dedup | ≥ 2 | no |
 | `Combine_Intersect` | `IntersectRetrievals` | AND — keep books in *every* input | ≥ 2 | no |
 | `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 | **yes, required** |
 
-All three live in `app/domains/books/schemas/request_schemas.py`, sit in their own
-`CATALOG_TIERS` section, and consume prior task output only — none of them queries the
+Both live in `app/domains/books/schemas/request_schemas.py`, sit in their own
+`CATALOG_TIERS` section, and consume prior task output only — neither queries the
 database.
+
+**Union is implicit, not a node.** A `Combine_Union` / `UnionRetrieval` node was
+registered and then removed the same day. Listing several task ids in *any* node's
+`depends_on` already means "pool what all of these found" — that is what the base suite's
+two-bibliography cases (53, 60) and the compare cases have always relied on, with no union
+node in the plan and the right answer. A union node was therefore a second spelling of
+something the edge set already said, and gave every pooling request two defensible plans,
+the same ambiguity the "one operation per node" rule below exists to prevent. Only AND
+needs a node, because AND is the one thing the edges cannot express.
+
+**This makes the pooling rule load-bearing for executors.** A step with two or more
+`depends_on` entries must union its inputs (dedup by ISBN13) before doing its own work.
+Nothing in the schema enforces this — it is stated in the strategy-classification prompt's
+rules block and in `IntersectRetrievals`' docstring, and the executors have to honor it.
+The cost of the removal is that a plan can no longer distinguish "meant to pool" from
+"forgot to intersect": both look like two edges into one node, so `expected_nodes` diffing
+in `report_system_goals.py` cannot catch a dropped intersect. That is a known blind spot,
+not an oversight.
 
 The open question above ("one node with a filter object, or a family of single-dimension
 filter nodes?") resolved to **one node with a filter object**, but a deliberately narrow
@@ -84,14 +101,14 @@ categories, and critically **no `keywords` free-text field**: that field is what
 the old `Retrieve_by_Traits` into `Analyze_Recommend`, and leaving it out is what keeps
 this node a narrowing operator instead of a second recommender.
 
-**One operation per node.** The set operators carry no filters — an earlier cut gave
-`Combine_Union` and `Combine_Intersect` an optional `BookMetadataFilter` applied after the
-set operation, and that was removed. Two reasons: every constraint then had two legal
-homes (inline on the combine node, or a downstream `Filter_Retrieval`), which is precisely
-the kind of "either parse is defensible" ambiguity the taxonomy decision was meant to
-eliminate; and it made the combine nodes' catalog entries carry filter documentation that
-`Filter_Retrieval` already owns. The cost is longer plans — "fantasy books by Sanderson
-over 400 pages" is now four nodes — traded for one unambiguous home per operation.
+**One operation per node.** `Combine_Intersect` carries no filters — an earlier cut gave
+the set operators an optional `BookMetadataFilter` applied after the set operation, and
+that was removed. Two reasons: every constraint then had two legal homes (inline on the
+combine node, or a downstream `Filter_Retrieval`), which is precisely the kind of "either
+parse is defensible" ambiguity the taxonomy decision was meant to eliminate; and it made
+the combine nodes' catalog entries carry filter documentation that `Filter_Retrieval`
+already owns. The cost is longer plans — "fantasy books by Sanderson over 400 pages" is
+now four nodes — traded for one unambiguous home per operation.
 
 `depends_on` moved from `AnalyzeBaseRequest` up to a new `DependentRequest` base, since
 these nodes consume task output without analyzing it. The planner's dependency remapping

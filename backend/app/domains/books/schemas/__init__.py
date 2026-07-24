@@ -6,7 +6,6 @@ from .request_schemas import (
     FindByAuthorRetrieval,
     FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
-    UnionRetrieval,
     IntersectRetrievals,
     FilterRetrieval,
 )
@@ -27,7 +26,6 @@ __all__ = [
     "FindByAuthorRetrieval",
     "FindByCoAuthorsRetrieval",
     "FindByGenreRetrieval",
-    "UnionRetrieval",
     "IntersectRetrievals",
     "FilterRetrieval",
     "BookSummary",

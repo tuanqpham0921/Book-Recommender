@@ -19,7 +19,6 @@ from app.domains.books.registry import (
     FindByGenreRetrieval,
     FindByTitleRetrieval,
     RecommendationStrategy,
-    UnionRetrieval,
     IntersectRetrievals,
     FilterRetrieval,
 )
@@ -72,7 +71,6 @@ AnyStrategyRequest = Annotated[
         FindByAuthorRetrieval,
         FindByCoAuthorsRetrieval,
         FindByGenreRetrieval,
-        UnionRetrieval,
         IntersectRetrievals,
         FilterRetrieval,
         UserInfoRequest,
@@ -109,7 +107,7 @@ def class_docstring(cls: type) -> str:
 
 CATALOG_TIERS: dict[str, tuple[type, ...]] = {
     "Retrieval — lookup or fetch data": RETRIEVAL_CLASSES,
-    "Combine — pool, intersect, or narrow what retrieval steps already returned": COMBINE_CLASSES,
+    "Combine — intersect or narrow what retrieval steps already returned": COMBINE_CLASSES,
     "Analyze — interpret, compare, or recommend using retrieved data": ANALYZE_CLASSES,
 }
 

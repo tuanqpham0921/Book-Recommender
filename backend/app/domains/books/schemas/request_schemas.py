@@ -299,50 +299,6 @@ class FindByGenreRetrieval(DomainRequest):
     genre: str = Field(..., json_schema_extra={"example": "fantasy"})
 
 
-class UnionRetrieval(DependentRequest):
-    """Purpose: Pool two or more prior retrieval results into one combined set — OR, not AND.
-
-    Args:
-        depends_on: Task ids of the retrieval steps to pool (at least two).
-
-    Returns: A UnionRetrievalOutput — one deduplicated list of BookSummary
-    records containing every book found by any of the depended-on steps.
-
-    Use when: separate result sets have to become one list before the next step
-    can work on them — a later analyze step that reasons over all of them at
-    once, or a single ranked/sorted answer drawn from several sources.
-
-    Do not use: merely because the query names two things. Two bibliographies
-    presented side by side need two retrieval nodes and nothing else; the
-    pooling is only justified when something downstream consumes one set. Never
-    use to intersect — books matching ALL the inputs is Combine_Intersect.
-
-    Constraints: at least two task ids in depends_on, and they are combined as
-    OR — a book is kept when any input found it. Duplicates across inputs
-    collapse to one record. This node does nothing but pool: it carries no
-    filters of its own, so narrowing the pooled set by page count, year or
-    rating is a separate Filter_Retrieval step that depends on this one. It
-    reads prior results only and never queries the database, so it cannot widen
-    what the retrievals already returned.
-
-    Example queries:
-        - "recommend something based on Austen's and Coelho's books"
-        - "the longest book by either Sanderson or Jordan"
-        - "put everything by these two authors in one list"
-    """
-
-    node_type: Literal[BookNodeTypeEnum.UNION_RETRIEVAL] = (
-        BookNodeTypeEnum.UNION_RETRIEVAL
-    )
-    depends_on: list[str] = Field(
-        ...,
-        min_length=2,
-        max_length=MAX_LIST_LENGTH,
-        description="Task ids of the retrieval steps to pool together (at least two)",
-        json_schema_extra={"example": ["task_1", "task_2"]},
-    )
-
-
 class IntersectRetrievals(DependentRequest):
     """Purpose: Keep only the books found by ALL of two or more prior retrievals — AND, not OR.
 
@@ -355,14 +311,20 @@ class IntersectRetrievals(DependentRequest):
     Use when: the request names two or more search dimensions that must hold on
     the same book, and each dimension has its own retrieval node — most often
     an author plus a genre ("fantasy books by Sanderson" → Retrieve_by_Author
-    plus Retrieve_by_Genre, intersected here).
+    plus Retrieve_by_Genre, intersected here). This node is the only way a plan
+    says AND: a step that simply lists several task ids in its depends_on gets
+    them pooled (OR), so leaving this node out of a both-must-hold request
+    quietly answers a different question.
 
-    Do not use: when the second dimension is a metadata constraint rather than a
-    search subject. Page count, year, rating, ratings count and child-friendly
-    can only narrow, so they belong in a Filter_Retrieval, never in a retrieval
-    node that then gets intersected. Also do not use for books two authors wrote
-    together — that is Retrieve_by_CoAuthors, which does the AND inside one
-    query.
+    Do not use: when the inputs are alternatives rather than joint requirements.
+    Two authors' books gathered into one answer, or one ranked list drawn from
+    several searches, is a pool — have the next step depend on both retrievals
+    directly and add no node here. Also do not use when the second dimension is a
+    metadata constraint rather than a search subject: page count, year, rating,
+    ratings count and child-friendly can only narrow, so they belong in a
+    Filter_Retrieval, never in a retrieval node that then gets intersected. And
+    not for books two authors wrote together — that is Retrieve_by_CoAuthors,
+    which does the AND inside one query.
 
     Constraints: at least two task ids in depends_on, combined as AND — a book
     is kept only when every input found it, so an empty result is a real answer
@@ -394,9 +356,10 @@ class FilterRetrieval(DependentRequest):
 
     Args:
         depends_on: Task ids of the steps whose books to narrow (at least one).
-            May be retrieval steps, or a Combine_Union / Combine_Intersect step —
-            those carry no filters of their own, so this is where their result
-            gets narrowed.
+            May be retrieval steps, or a Combine_Intersect step — that node
+            carries no filters of its own, so this is where its result gets
+            narrowed. Listing several task ids pools their books first and
+            applies the bounds to the pool.
         filters: The metadata bounds to apply. Every field is inclusive and
             independent — supply only the ones the user actually stated.
 

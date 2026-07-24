@@ -32,6 +32,9 @@ text into a strategy.
 - Capabilities that reason over prior results (retrieval, analyze)
   list the task id(s) of their prerequisite lookups in `depends_on`.
 - `depends_on` and `target_goal` hold ids only — never description text.
+- Several task ids in one `depends_on` are pooled: the step sees everything any
+  of them found (OR). There is no capability for pooling and none is needed. Use
+  `Combine_Intersect` only when the inputs must all hold on the *same* item.
 - Assign confidence (0.0-1.0) reflecting how well the capability fits the goal:
     - 1.0 -> direct, unambiguous match
     - 0.7-0.9 -> a reasonable fit but some judgment involved

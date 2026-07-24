@@ -12,7 +12,6 @@ from app.domains.books.schemas.request_schemas import (
     FindByTitleRetrieval,
     RecommendationStrategy,
     CompareStrategy,
-    UnionRetrieval,
     IntersectRetrievals,
     FilterRetrieval,
 )
@@ -37,7 +36,6 @@ BOOK_ANALYZE_CLASSES = (
 # database, so they are neither a retrieval nor an analyze step. See
 # docs/design/execution-pipeline-v1.md.
 BOOK_COMBINE_CLASSES = (
-    UnionRetrieval,
     IntersectRetrievals,
     FilterRetrieval,
 )
@@ -52,7 +50,6 @@ BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
     BookNodeTypeEnum.FIND_COAUTHORS.value: FindByCoAuthorsRetrieval,
     BookNodeTypeEnum.FIND_GENRE.value: FindByGenreRetrieval,
-    BookNodeTypeEnum.UNION_RETRIEVAL.value: UnionRetrieval,
     BookNodeTypeEnum.INTERSECT_RETRIEVALS.value: IntersectRetrievals,
     BookNodeTypeEnum.FILTER_RETRIEVAL.value: FilterRetrieval,
     BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
