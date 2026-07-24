@@ -19,10 +19,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-CONVERSATION_SUMMARY_PROMPT_PATH = (
-    "domains/planner/prompts/3_conversation_orchestration_summary.txt"
-)
-
 
 # NOTE: this is okay for now
 # we don't need parse_result, and strategy_result or diagram
