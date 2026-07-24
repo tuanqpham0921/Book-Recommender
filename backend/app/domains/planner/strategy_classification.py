@@ -90,7 +90,6 @@ class StrategyRequest(BaseModel):
                                 "confidence": 1.0,
                                 "target_goal": ["goal_1"],
                                 "depends_on": ["task_1"],
-                                "reference_books": ["Pride and Prejudice"],
                             },
                         ]
                     },
@@ -133,6 +132,60 @@ class StrategyRequest(BaseModel):
                                 "confidence": 1.0,
                                 "target_goal": ["goal_3"],
                                 "depends_on": ["task_1", "task_2"],
+                            },
+                        ]
+                    },
+                },
+                {
+                    "query": "What fantasy books has Neil Gaiman written? and recommend me some books from that list with 300 pages or more",
+                    "system_goals": [
+                        {
+                            "id": "goal_1",
+                            "description": "Find fantasy books written by Neil Gaiman",
+                        },
+                        {
+                            "id": "goal_2",
+                            "description": "Recommend books from that list with 300 pages or more",
+                        },
+                    ],
+                    "request": {
+                        "strategies": [
+                            {
+                                "node_type": "Retrieve_by_Genre",
+                                "id": "task_1",
+                                "description": "Retrieve fantasy books",
+                                "reasoning": "Genre is one of the two dimensions in the request; retrieval nodes resolve a single dimension each, so fantasy gets its own step",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_1"],
+                                "genre": "fantasy",
+                            },
+                            {
+                                "node_type": "Retrieve_by_Author",
+                                "id": "task_2",
+                                "description": "Retrieve books by Neil Gaiman",
+                                "reasoning": "Author is the other dimension, resolved in its own step rather than combined into the genre step",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_1"],
+                                "author": "Neil Gaiman",
+                            },
+                            {
+                                "node_type": "Combine_Intersect",
+                                "id": "task_3",
+                                "description": "Keep only the books that are both fantasy and by Neil Gaiman",
+                                "reasoning": "The user asked for books satisfying both dimensions at once, so the two retrievals are ANDed here instead of being widened into one node",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_1"],
+                                "depends_on": ["task_1", "task_2"],
+                            },
+                            {
+                                "node_type": "Analyze_Recommend",
+                                "id": "task_4",
+                                "description": "Recommend books of 300 pages or more, similar to the intersected list",
+                                "reasoning": "The recommendation is anchored on the intersected books, and the page limit belongs in this node's filters so the similarity search is bounded rather than trimmed afterwards",
+                                "confidence": 1.0,
+                                "target_goal": ["goal_2"],
+                                "depends_on": ["task_3"],
+                                "filters": {"min_pages": 300},
                             },
                         ]
                     },

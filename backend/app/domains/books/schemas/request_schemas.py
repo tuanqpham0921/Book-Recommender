@@ -65,26 +65,43 @@ class RecommendationStrategy(AnalyzeBaseRequest):
     Args:
         semantic_input: Thematic/conceptual description from the query (theme,
             tone, or mood) — not titles, authors, or genres.
-        reference_books: Book titles to base recommendations on (deduplicated
-            automatically).
-        depends_on: Task ids of prior retrieval steps this recommendation reasons
-            over (e.g. lookups for any named reference_books).
+        filters: Optional metadata bounds — pages, year, rating, ratings count,
+            child-friendly — that the SEARCH ITSELF must respect. These are not
+            applied to the depended-on books; they bound which candidates the
+            similarity search is allowed to return.
+        depends_on: Task ids of prior retrieval steps whose books anchor the
+            similarity search — the lookups for any book the user named as a
+            reference point.
 
     Returns: Markdown-formatted recommendation text, used directly as the assistant's reply.
 
     Use when: the user wants new titles to read.
-        - Similarity: "books like X", "more like X or Y books" → reference_books
-        - Thematic / mood: "cozy mysteries", "epic sci-fi with strong world-building" → semantic_input
-        - Mixed: named anchor book(s) plus a twist ("like X but darker/shorter")
-          → reference_books plus semantic_input
+        - Similarity: "books like X", "more like X or Y" → retrieve X (and Y)
+          and point depends_on at those steps
+        - Thematic / mood: "cozy mysteries", "epic sci-fi with strong
+          world-building" → semantic_input
+        - Mixed: named anchor book(s) plus a twist ("like X but darker") →
+          depends_on plus semantic_input
+        - Any of the above with a measurable limit ("like X but under 300
+          pages", "cozy mysteries rated 4+") → add filters
 
     Do not use: when they only want to look up a known book or an author's/genre's
     full catalog instead of suggestions.
 
-    Constraints: does not carry its own database filters — it reasons over
-    retrieved books (depends_on) and/or stated taste; requires at least 1 task
-    id in depends_on, so a supporting retrieval step is still needed even for
-    purely thematic requests with no named book.
+    Constraints: requires at least 1 task id in depends_on, so a supporting
+    retrieval step is still needed even for purely thematic requests with no
+    named book.
+
+    How this node's filters differ from Filter_Retrieval: this node SEARCHES
+    within the bounds; Filter_Retrieval DELETES from a finished result. The
+    bounds here go into the similarity query, so what comes back is the closest
+    books that already satisfy them — including books no prior step retrieved.
+    Filter_Retrieval can only remove books from a set that already exists and can
+    never surface a new one. So "something like Dune, 100-200 pages" belongs
+    here, in filters: putting it in a Filter_Retrieval afterwards would rank the
+    nearest books to Dune first — mostly long ones — and then throw nearly all of
+    them away, answering with a few poor matches or nothing at all. Narrow a
+    plain retrieval with Filter_Retrieval; narrow a recommendation with filters.
 
     Example queries:
         - "books like Dune"
@@ -92,14 +109,21 @@ class RecommendationStrategy(AnalyzeBaseRequest):
         - "cozy mysteries"
         - "epic sci-fi with strong world-building"
         - "like Dune but darker and shorter"
+        - "something like Dune between 100 and 200 pages"
+        - "recommend a well-reviewed cozy mystery from the last decade"
     """
 
     node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION
     semantic_input: Optional[str] = Field(
         None, json_schema_extra={"example": "cozy and hopeful"}
     )
-    reference_books: Optional[List[str]] = Field(
-        None, json_schema_extra={"example": ["The House in the Cerulean Sea"]}
+    filters: Optional[BookMetadataFilter] = Field(
+        default=None,
+        description=(
+            "Metadata bounds the similarity search must satisfy — applied inside "
+            "the search, not to the depended-on books. Omit unless the user "
+            "stated a measurable limit."
+        ),
     )
 
     # def model_post_init(self, __context) -> None:
@@ -387,7 +411,11 @@ class FilterRetrieval(DependentRequest):
     rating can narrow a search but cannot BE one, so a request made only of them
     has no subject and should be sent back for clarification rather than given
     an invented anchor. Do not use for genre, author, title or theme either —
-    those are search subjects with their own retrieval nodes.
+    those are search subjects with their own retrieval nodes. And do not use to
+    bound a recommendation: Analyze_Recommend carries its own filters, which the
+    similarity search applies while ranking, so it returns the closest books that
+    already fit. This node runs after the fact and can only delete, which on a
+    recommendation throws away the ranking and often leaves nothing.
 
     Constraints: at least one task id in depends_on, and at least one filter
     bound — an empty filter is a no-op and will be refused. Bounds are combined
