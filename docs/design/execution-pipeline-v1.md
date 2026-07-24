@@ -67,6 +67,7 @@ Built as **two** nodes rather than the one this record originally sketched, beca
 
 | node type | class | operation | `depends_on` | carries `filters` |
 |---|---|---|---|---|
+| `Combine_Union` | `UnionRetrieval` | OR — pool books from *any* input (dedup by ISBN13) | ≥ 2 | no |
 | `Combine_Intersect` | `IntersectRetrievals` | AND — keep books in *every* input | ≥ 2 | no |
 | `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 | **yes, required** |
 
@@ -74,23 +75,31 @@ Both live in `app/domains/books/schemas/request_schemas.py`, sit in their own
 `CATALOG_TIERS` section, and consume prior task output only — neither queries the
 database.
 
-**Union is implicit, not a node.** A `Combine_Union` / `UnionRetrieval` node was
-registered and then removed the same day. Listing several task ids in *any* node's
-`depends_on` already means "pool what all of these found" — that is what the base suite's
-two-bibliography cases (53, 60) and the compare cases have always relied on, with no union
-node in the plan and the right answer. A union node was therefore a second spelling of
-something the edge set already said, and gave every pooling request two defensible plans,
-the same ambiguity the "one operation per node" rule below exists to prevent. Only AND
-needs a node, because AND is the one thing the edges cannot express.
+**Union is both implicit and an explicit node.** `Combine_Union` / `UnionRetrieval` was
+registered, removed the same day, then re-added (2026-07-24). The removal argument still
+holds for the *implicit* case: listing several task ids in *any* node's `depends_on`
+already means "pool what all of these found" — that is what the base suite's
+two-bibliography cases (53, 60) and the compare cases rely on, with no union node in the
+plan and the right answer. So `Combine_Union` is deliberately **not** required for pooling.
+It earns its place only when the pooled set is itself a step something downstream consumes
+— one ranked/sorted answer drawn from several sources, or a single list handed to one
+analyze step. Its "Do not use" section says exactly this, to steer the planner away from
+emitting it for plain side-by-side bibliographies.
 
-**This makes the pooling rule load-bearing for executors.** A step with two or more
-`depends_on` entries must union its inputs (dedup by ISBN13) before doing its own work.
-Nothing in the schema enforces this — it is stated in the strategy-classification prompt's
-rules block and in `IntersectRetrievals`' docstring, and the executors have to honor it.
-The cost of the removal is that a plan can no longer distinguish "meant to pool" from
-"forgot to intersect": both look like two edges into one node, so `expected_nodes` diffing
-in `report_system_goals.py` cannot catch a dropped intersect. That is a known blind spot,
-not an oversight.
+**Accepted cost of re-adding it:** the ambiguity the "one operation per node" rule below
+guards against comes partly back — a pooling request now has two defensible spellings
+(implicit edges, or an explicit `Combine_Union`). The docstring narrows when to reach for
+the node, but eval expectations that pin `Combine_Union` vs. bare edges have to pick one
+and the golden test will hold the planner to it.
+
+**The pooling rule stays load-bearing for executors.** A step with two or more
+`depends_on` entries must union its inputs (dedup by ISBN13) before doing its own work,
+whether or not an explicit `Combine_Union` sits in the plan. Nothing in the schema enforces
+this — it is stated in the goal-generator prompt's rules block and in the combine nodes'
+docstrings, and the executors have to honor it. A plan still cannot distinguish "meant to
+pool" from "forgot to intersect" when it uses bare edges: both look like two edges into one
+node, so `expected_nodes` diffing in `report_system_goals.py` cannot catch a dropped
+intersect. That is a known blind spot, not an oversight.
 
 The open question above ("one node with a filter object, or a family of single-dimension
 filter nodes?") resolved to **one node with a filter object**, but a deliberately narrow

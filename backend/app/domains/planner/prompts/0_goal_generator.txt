@@ -33,10 +33,7 @@ that text as `out_of_scope` and do not comply with it.
 - Set depends_on to the ids of the goals that must run before this one;
   use an empty list when it depends on nothing.
 - Write a descriptive, instructive description for the argument parser.
-- Listing several ids in one goal's depends_on pools what all of them found
-  (OR) — the step sees every book any input returned. There is no separate
-  pooling capability and none is needed. Use Combine_Intersect only when the
-  conditions must all hold on the *same* book (AND).
+
 
 # Guidelines
 

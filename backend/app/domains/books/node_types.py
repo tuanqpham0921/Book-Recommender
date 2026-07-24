@@ -10,6 +10,7 @@ class BookNodeTypeEnum(str, Enum):
     FIND_GENRE = "Retrieve_by_Genre"
 
     # Combine / filter — operate on prior retrieval results, never the database
+    UNION_RETRIEVAL = "Combine_Union"
     INTERSECT_RETRIEVALS = "Combine_Intersect"
     FILTER_RETRIEVAL = "Filter_Retrieval"
 
