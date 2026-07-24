@@ -12,6 +12,9 @@ here. Eval campaign outputs (reports, notes per run) stay in `backend/evals/resu
 | [backlog.md](backlog.md) | Tiered work items (P1/P2/P3) with code references |
 | [eval-strategy.md](eval-strategy.md) | The golden-test mechanism, suite inventory, latest findings, relabel plan |
 | [design/node-taxonomy-v1.md](design/node-taxonomy-v1.md) | Decision record: the V1 node set and conversation contract |
+| [design/planner-shape.md](design/planner-shape.md) | Decision record: capability nodes vs. entity + intent (accepted for V1), plus the open planner experiments |
+| [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md) | Design record (proposed): retrieve → filter → analyze → generate, and the three nodes it needs |
+| [design/human-in-the-loop.md](design/human-in-the-loop.md) | Design record (proposed): pause / persist / resume — candidate pause points and known blockers |
 
 ## Conventions
 

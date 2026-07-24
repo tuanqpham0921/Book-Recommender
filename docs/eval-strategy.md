@@ -1,6 +1,6 @@
 # Evaluation Strategy
 
-**Updated:** 2026-07-17 · Operational how-to lives in
+**Updated:** 2026-07-24 · Operational how-to lives in
 [../backend/evals/README.md](../backend/evals/README.md); this doc is the strategy:
 what the suites are for, what the latest campaign found, and how the framework grows
 with the app.
@@ -31,7 +31,7 @@ cases around them → set thresholds (golden tests) → expand nodes and coverag
 
 | Suite | Cases | Purpose |
 |---|---|---|
-| `query_suite.json` (base) | 50 | Core node set, easy→hard, single lookups to 7-node cross-domain chains |
+| `query_suite.json` (base) | 55 | Core node set, easy→hard, single lookups to 7-node cross-domain chains |
 | `query_suite_adversarial.json` | 52 | Rejection behavior: prompt injection, impossible facts, degenerate input, sounds-supported-but-unimplemented (12 cases intentionally expect no nodes) |
 | `query_suite_extended.json` | 48 | Node-*scaling* test — only meaningful with the registry extension block enabled (~26 node types); heavy on near-miss discrimination |
 | `query_suite_stress.json` | 9 | Buffer/overflow past `MAX_SYSTEM_GOALS`/`MAX_STRATEGIES`, confusing multi-hop chains |
@@ -68,13 +68,31 @@ Recurring failure patterns, in priority order:
    `Retrieve_by_CoAuthors`. Base cases 53/54 are that pair — same shape, opposite
    expected plan — and 55 covers the yes/no phrasing.
 
-## Relabel plan (roadmap Phase 4)
+## Baseline established (2026-07-24)
 
-After the Phase 1 taxonomy lands:
+`expected_nodes` is now a **recorded baseline, not a wish list**. Every case's expectation
+was rewritten from what the `v1_baseline` campaign's planner actually accepted
+(`backend/evals/results/v1_baseline/`), with two guards: never adopt a run that failed,
+and never adopt a run where the reviewer contested the *plan* — those keep the reviewer's
+answer or the prior expectation instead. 56 of 164 cases changed; the gate moved
+**104/164 → 157/164**.
 
-- Re-map every case's `expected_nodes` to the V1 set — mostly
-  `Retrieve_by_Traits`/`Analyze_Recommend` splits, plus removing `Analyze_Compare`
-  expectations from base cases.
+The single biggest source of the old failures was structural: 29 cases expected
+`Retrieve_by_Traits`, a node deleted by the taxonomy decision and absent from the live
+registry, so they could never pass at any planner quality.
+
+Read a red as "behavior changed since the baseline" — either a regression, or an
+improvement that should be re-baselined deliberately.
+
+### Known-failing by design (7 cases)
+
+`query_suite` 14 · `adversarial` 311, 314, 315, 336 · `stress` 423, 424. All seven need
+the clarification/rejection node ([roadmap.md](roadmap.md) Phase 1) — over-budget requests,
+contradictory queries, and duplicate-node plans that should collapse into one refusal.
+They are the acceptance test for that node, not noise; leave them red until it lands.
+
+## Remaining relabel work (roadmap Phase 4)
+
 - Add **clarification-expected cases**: ambiguous queries, prior-turn references
   ("that one from earlier"), over-budget requests — expecting the new
   clarification/rejection node.
@@ -85,8 +103,8 @@ After the Phase 1 taxonomy lands:
 - Improve case labeling for automatic testing (descriptions/notes surfaced in reports;
   numeric chat ids already exist).
 
-**Thresholds:** set after the first post-taxonomy run (current numbers are a baseline
-polluted by known-structural issues). Then `make suite-goals` is the release gate: base
+**Thresholds:** now settable — the 2026-07-24 rebaseline removed the structural pollution
+that made the old numbers meaningless. `make suite-goals` becomes the release gate: base
 + adversarial must clear their thresholds for V1 to ship.
 
 ## Observations from the 2026-07-17 review

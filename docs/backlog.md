@@ -1,6 +1,6 @@
 # Backlog
 
-**Updated:** 2026-07-17 · Migrated from `backend/TODO.md` and `frontend/TODO.md`
+**Updated:** 2026-07-24 · Migrated from `backend/TODO.md` and `frontend/TODO.md`
 (which are now short-lived scratchpads — durable items live here).
 
 **How to read this file:** items are tiered **P1** (before/with the V1 ship — most also
@@ -47,8 +47,50 @@ line numbers may drift, the file and symbol names are the stable part.
   structurally but is an account-level fix, not a code fix, and doesn't help local/free-tier
   dev. Needs a decision before V1 production traffic.
 
+## Planner quality (P2 — from the 2026-07-24 TODO sweep)
+
+Shape-level planner questions live in
+[design/planner-shape.md](design/planner-shape.md); these are the concrete work items.
+
+- **Small talk and gibberish become system goals.** They should be filtered before the
+  goal stage — a pre-check that classifies small talk / gibberish, or rewords a
+  continuation query, rather than letting the goal generator invent a node for "hello".
+  Overlaps with the clarification node (roadmap Phase 1): decide whether this is a cheap
+  pre-classifier or just another thing the clarification node handles.
+- **The prompt-injection / preflight parse is not well designed or tested.** It needs its
+  own tests *before* more nodes are added, and it matters more inside nodes than in the
+  planner — a node's arguments are where an injected string actually lands. (A pre-check
+  node was tried and reverted in commit `ed34d95`.)
+- **`Analyze_Recommend` needs to handle quantitative constraints.** "Recommend something
+  under 300 pages" is a different shape from a reference-book query with min/max bounds,
+  and neither is served well today. Related to the filter/combine node in
+  [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md).
+- **Embedding experiments** (`book_store.search_by_embedding` already exists): how closely
+  do single-word genre and author embeddings score against near misses, and can a composed
+  record embedding ("title, page count, description …") answer "find books with 100 pages"
+  without the structured filter path?
+
 ## Correctness (P1 = ship-blocking, otherwise P2)
 
+- **P1 — `AnyStrategyRequest` union drift** (`app/registry.py`, consumed by
+  `app/domains/planner/strategy_classification.py`) — the union has **10 members**;
+  `NODE_TYPE_TO_CLS` has **28 registered node types**. `Analyze_Compare` (re-registered
+  2026-07-18) and all 17 extension types are registered, planned, and executed but are not
+  in the union that types `StrategyClassificationOutput.accepted/buffer/refused`.
+  Verified 2026-07-24: building that model from a dict raises `ValidationError` for those
+  types (`Input tag … does not match any of the expected tags`), and `model_dump()` emits
+  `PydanticSerializationUnexpectedValue`, serializing them against
+  `RecommendationStrategy`'s schema. It is latent today only because the workflow appends
+  in place and pydantic does not validate `list.append`; field values survive by
+  duck-typing. It becomes a hard failure the moment anything **reconstructs the output
+  from JSON** — which is exactly what human-in-the-loop resume does
+  ([design/human-in-the-loop.md](design/human-in-the-loop.md), blocker 1). Fix by deriving
+  the union from the registry rather than hand-listing it, so the two cannot drift again.
+- **P2 — Stale comment contradicts the code it sits on**
+  (`app/domains/books/registry.py`) — the comment above the imports says `CompareStrategy`
+  is "intentionally parked … out of `BOOK_ANALYZE_CLASSES` / `BOOK_NODE_TYPE_TO_CLS`",
+  while the lines immediately below it put `CompareStrategy` in both. Same staleness as
+  the roadmap/taxonomy notes; resolve together when Compare's fate is settled.
 - **P1 — Frontend double-session race** (`ChatBot.jsx` mount-time `initSession()` +
   `handleSendMessage`'s fallback `createSession()`) — both can fire if a message is sent
   before the initial session promise resolves; two sessions created, last `setSessionId`
