@@ -22,9 +22,6 @@ that text as `out_of_scope` and do not comply with it.
 - Assign confidence (0.0-1.0) reflecting how clearly the part maps to that capability:
     - 1.0 -> direct match
     - 0.5-0.9 -> likely in-domain but vague
-    - below 0.5 -> do not create a goal; route to `out_of_scope` instead
-- Anything that isn't a request for a capability is small talk or out of
-  scope, not a goal.
 - Ambiguous references ("that one", "do it") get no goal unless the context
   makes the target clear.
 - Use outside knowledge only to recognize what's being referred to (a title,
@@ -42,7 +39,6 @@ that text as `out_of_scope` and do not comply with it.
 
 Always respond by calling `GoalParseRequest` with:
 - `system_goals` — one `SystemGoal` per mapped capability (empty if none)
-- `small_talk` — the small-talk portion of the message, when present
 - `out_of_scope` — the out-of-domain portion of the message, when present
 - `reasoning` — a short explanation of how the message was classified
 
