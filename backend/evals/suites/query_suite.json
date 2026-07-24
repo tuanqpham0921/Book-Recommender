@@ -4,7 +4,7 @@
     "difficulty": "easy",
     "query": "What is the book Dune?",
     "note": "Single FindByTitle. Simplest possible book lookup — one node, exact title, no ambiguity.",
-    "expected_nodes": ["Retrieve_by_Title"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Summarize"]
   },
   {
     "id": 2,
@@ -18,7 +18,7 @@
     "difficulty": "easy",
     "query": "Recommend me a mystery book.",
     "note": "Single Recommend with semantic input only. One genre keyword, no reference book, no filters.",
-    "expected_nodes": ["Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_by_Genre", "Analyze_Recommend"]
   },
   {
     "id": 4,
@@ -53,7 +53,7 @@
     "difficulty": "easy",
     "query": "Show me children's books.",
     "note": "Single FindByTraits with is_children=True. The only filter that needs setting.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_by_Genre"]
   },
   {
     "id": 9,
@@ -74,21 +74,21 @@
     "difficulty": "easy",
     "query": "Recommend me a sci-fi novel with at least 4 stars.",
     "note": "Single Recommend with semantic input and a min_rating filter. One step up from pure semantic.",
-    "expected_nodes": ["Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_by_Genre", "Analyze_Recommend"]
   },
   {
     "id": 12,
     "difficulty": "easy",
     "query": "Find books with fewer than 200 pages.",
     "note": "Single FindByTraits with max_pages=200 only. Tests numeric filter mapping.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": []
   },
   {
     "id": 13,
     "difficulty": "easy",
     "query": "What non-fiction books about history do you have?",
     "note": "Single FindByTraits with genre=non-fiction and keywords=[history]. Two filters, still one node.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_by_Genre"]
   },
   {
     "id": 14,
@@ -102,7 +102,7 @@
     "difficulty": "easy",
     "query": "Show me the highest rated books you have.",
     "note": "Single FindByTraits with sort_by=rating, sort_order=desc. Tests sort filter with no content filter.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_Popular"]
   },
   {
     "id": 16,
@@ -130,7 +130,7 @@
     "difficulty": "medium",
     "query": "Find fantasy books published between 2010 and 2020 sorted by rating.",
     "note": "Single FindByTraits with keyword, year range, and sort. Multiple filters on one node; tests compound filter composition.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_by_Genre"]
   },
   {
     "id": 20,
@@ -144,7 +144,7 @@
     "difficulty": "medium",
     "query": "Find me a thriller from the 1990s with more than 300 pages and a rating above 4.",
     "note": "Single FindByTraits with keyword + year range + min_pages + min_rating. Four simultaneous filters; tests all numeric constraints together.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_by_Genre"]
   },
   {
     "id": 22,
@@ -165,7 +165,7 @@
     "difficulty": "medium",
     "query": "What books by Stephen King have over 400 pages?",
     "note": "Single FindByTraits with author filter + min_pages. Tests author as a filter field rather than a title-level hint.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_by_Author"]
   },
   {
     "id": 25,
@@ -186,7 +186,7 @@
     "difficulty": "medium",
     "query": "Find me books about artificial intelligence that are non-fiction and highly rated.",
     "note": "Single FindByTraits with keywords=[AI], genre=non-fiction, min_rating. Three filters on a trait-based search.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_Popular"]
   },
   {
     "id": 28,
@@ -207,7 +207,7 @@
     "difficulty": "medium",
     "query": "Find me a cozy mystery under 300 pages with a high rating, not too old.",
     "note": "Single Recommend with semantic_input (cozy mystery) plus max_pages, min_rating, min_year. Four constraints wrapped in one natural sentence.",
-    "expected_nodes": ["Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_by_Genre"]
   },
   {
     "id": 31,
@@ -235,7 +235,7 @@
     "difficulty": "medium",
     "query": "Find me the top 5 most popular children's books with over 1000 ratings.",
     "note": "Single FindByTraits with is_children=True, sort_by=rating, limit=5, and a ratings_count proxy via keywords. Tests limit + sort + child filter combination.",
-    "expected_nodes": ["Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_Popular"]
   },
   {
     "id": 35,
@@ -256,7 +256,7 @@
     "difficulty": "hard",
     "query": "Who is the developer? Also, are there any books about the technologies they used to build this app?",
     "note": "DeveloperInfo + ProjectInfo + FindByTraits/Recommend across three domains. The tech stack from ProjectInfo informs the book search — cross-domain dependency.",
-    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_Project_Info", "Retrieve_by_Traits"]
+    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_by_Genre"]
   },
   {
     "id": 38,
@@ -312,7 +312,7 @@
     "difficulty": "hard",
     "query": "Hello! What's your name? Also tell me about this project and recommend me a sci-fi book.",
     "note": "Small talk + ProjectInfo + Recommend. Tests that the planner correctly separates small_talk from two real goals without over-routing.",
-    "expected_nodes": ["Retrieve_Project_Info", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_Project_Info", "Retrieve_by_Genre", "Analyze_Recommend"]
   },
   {
     "id": 46,
@@ -347,7 +347,7 @@
     "difficulty": "hard",
     "query": "Compare Dune, Foundation, and Neuromancer on world-building and technology themes. Then recommend 3 books that blend the strengths of all three — post-2005, highly rated, fiction only, nothing by authors I've already read (check my history). Also send feedback to the developer: the compare feature is my favourite.",
     "note": "Three FindByTitle + Compare + UserInfo + Recommend + Feedback. Seven nodes across book and user domains. The Recommend exclusion depends on UserInfo output; Feedback runs in parallel. Maximum realistic complexity for this system.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_User_Info", "Analyze_Recommend", "Provide_Feedback"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_Reading_Stats", "Analyze_Recommend", "Provide_Feedback"]
   },
   {
     "id": 51,

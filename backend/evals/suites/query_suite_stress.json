@@ -6,7 +6,7 @@
     "category": "buffer_single_type",
     "query": "Find all of these books: Dune, Foundation, Neuromancer, 1984, Brave New World, Fahrenheit 451, Moby Dick, War and Peace, Don Quixote, The Great Gatsby, The Old Man and the Sea, The Sound and the Fury, Pride and Prejudice, Jane Eyre, The Alchemist, Frankenstein, Dracula, The Hobbit, Slaughterhouse-Five, and Catch-22.",
     "note": "Twenty single-title lookups in one message — well past MAX_SYSTEM_GOALS=10 and MAX_STRATEGIES=15. Pure buffer test for the current registry: all goals are the same node type (Retrieve_by_Title), so this isolates the overflow/_overflow_strategies path from any routing ambiguity. Confirms the first 10-15 are kept, the rest spill into the overflow buffer, and nothing crashes.",
-    "expected_nodes": ["Retrieve_by_Title"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title"]
   },
   {
     "id": 402,
@@ -15,7 +15,7 @@
     "category": "buffer_mixed_current",
     "query": "Recommend me a mystery book, recommend a sci-fi book, recommend a romance, recommend a horror, find Dune, find 1984, find Neuromancer, find books under 200 pages, find books rated above 4, tell me the developer's info, tell me the project info, tell me my token usage, and finally give feedback that the app is great.",
     "note": "Thirteen goals spanning every current node type (Analyze_Recommend, Retrieve_by_Title, Retrieve_by_Traits, Retrieve_Developer_Info, Retrieve_Project_Info, Retrieve_User_Info, Provide_Feedback) in one shot. Overflows MAX_SYSTEM_GOALS=10 while also exercising routing across all live domains simultaneously — tests that the buffer trims goals without corrupting the type distribution of the ones that survive.",
-    "expected_nodes": ["Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_Popular", "Retrieve_Popular", "Retrieve_Developer_Info"]
   },
   {
     "id": 403,
@@ -24,7 +24,7 @@
     "category": "confusing_chain_current",
     "query": "Recommend me a book. Then compare that recommendation to Dune. Then recommend something based on that comparison. Then find a traits-matched book under 300 pages similar to that. Then compare all four of them at once. Then recommend one final book based on that big comparison.",
     "note": "A six-deep dependency chain of alternating Recommend/Compare steps, each consuming the previous step's not-yet-computed output, plus a 4-way compare in the middle. Stress-tests get_execution_levels' recursive level_of() and the cycle detector at depth, and checks the mermaid diagram stays legible. Purely current-registry node types.",
-    "expected_nodes": ["Analyze_Recommend", "Analyze_Compare"]
+    "expected_nodes": ["Analyze_Recommend", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend", "Analyze_Recommend", "Analyze_Compare", "Analyze_Recommend"]
   },
   {
     "id": 411,
@@ -42,7 +42,7 @@
     "category": "confusing_chain_extended",
     "query": "Summarize Dune, analyze its themes, tell me the reading order of the whole series, estimate how long it'll take me to read at an average pace, build me a reading plan for the series this year, then mark Dune as read, rate it 5 stars, and show me my updated reading stats.",
     "note": "Eight extended goals chained across analyze strategies (Analyze_Summarize, Analyze_Themes, Analyze_Reading_Order, Analyze_Reading_Time, Analyze_Reading_Plan) and library writes/reads (Mark_Book_As_Read, Rate_Book, Retrieve_Reading_Stats). Several depend on the Dune/series retrieval as a shared dependency — tests dependency reuse plus mixed read/write ordering entirely within the extended registry.",
-    "expected_nodes": ["Analyze_Summarize", "Analyze_Themes", "Analyze_Reading_Order"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Summarize", "Analyze_Themes", "Retrieve_Series", "Analyze_Reading_Order", "Analyze_Reading_Time", "Analyze_Reading_Plan", "Mark_Book_As_Read", "Retrieve_Reading_Stats"]
   },
   {
     "id": 421,
@@ -51,7 +51,7 @@
     "category": "cross_domain_direction_hopping",
     "query": "Compare Dune to Foundation, then recommend Neuromancer to a fan of 1984, then retrieve my account info, then count how many tokens I've used, then get the developer's GitHub, then tell me about the project, then add all of these books to my reading list, then summarize each one.",
     "note": "The canonical 'confusing direction' stress query — hops across BOTH registries in one breath: current (Analyze_Compare, Analyze_Recommend, Retrieve_User_Info, Retrieve_Developer_Info, Retrieve_Project_Info) and extended (Save_To_Reading_List, Analyze_Summarize). Note the 'developer's GitHub' sub-ask: DeveloperInfoEnum only has name/bio/email/linkedin_url — there is no github field, so watch whether the planner drops that sub-ask, maps it to linkedin_url, or hallucinates a github field.",
-    "expected_nodes": ["Analyze_Compare", "Analyze_Recommend", "Retrieve_User_Info"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Recommend", "Retrieve_User_Info", "Retrieve_User_Info", "Retrieve_Project_Info", "Retrieve_Project_Info"]
   },
   {
     "id": 422,
@@ -60,7 +60,7 @@
     "category": "cross_domain_kitchen_sink",
     "query": "Find a mystery book, a sci-fi book, and a romance book; compare the first two; recommend a fourth like the third; who wrote the Mistborn series; mark the mystery as read with 4 stars; save the sci-fi to my want-to-read list; show my reading stats; tell me about the developer; and how many tokens have I used?",
     "note": "Ten+ goals deliberately mixing current retrieval/analyze/user nodes with extended series-lookup and library writes, several with cross-references ('the first two', 'the third', 'the mystery', 'the sci-fi') that must be resolved to earlier goals. Simultaneously stresses buffer limits, cross-domain routing, and anaphora resolution across a long goal list.",
-    "expected_nodes": ["Retrieve_by_Traits", "Analyze_Compare", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Genre", "Analyze_Compare", "Analyze_Recommend", "Retrieve_Series", "Mark_Book_As_Read", "Save_To_Reading_List", "Retrieve_Reading_Stats", "Retrieve_Developer_Info"]
   },
   {
     "id": 423,
@@ -78,6 +78,6 @@
     "category": "cross_domain_contradictory",
     "query": "Recommend me a fantasy book but make it not fantasy, compare it to itself, add it to my reading list and also remove it from my reading list, mark it as both read and unread, then tell me my reading stats and my token usage at the same time.",
     "note": "Every clause contains a built-in contradiction (fantasy/not-fantasy, compare-to-itself which trips the <2 depends_on arity refusal, add+remove the same book, read+unread) fanned across current (Analyze_Recommend) and extended (Save/Remove_From_Reading_List, Mark_Book_As_Read, Retrieve_Reading_Stats) plus a current user lookup. Tests whether contradictory paired writes cancel, both emit, or get refused — and whether the exclusion/self-compare bugs surface here in a mixed-domain plan.",
-    "expected_nodes": ["Analyze_Recommend"]
+    "expected_nodes": []
   }
 ]

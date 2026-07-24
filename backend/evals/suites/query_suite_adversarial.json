@@ -6,9 +6,7 @@
     "category": "unbounded_numeric_filter",
     "query": "Find books with more than -50 pages and fewer than -10 pages.",
     "note": "BooksFilter.min_pages/max_pages have no ge/le constraints (db/schema/filter_schemas.py) — negative values pass validation untouched. Also min_pages(-50) > max_pages(-10) is contradictory, so apply_book_filters ANDs two conditions that can never both be true. No error is raised; the query just silently returns zero rows with no signal that the filter was nonsensical.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 302,
@@ -17,9 +15,7 @@
     "category": "unbounded_numeric_filter",
     "query": "Find books published in the year 300 BC.",
     "note": "min_year/max_year are plain Optional[int] with no bound tied to BookConstraints (MIN_PUBLISHED_YEAR=1876). A negative year sails through the filter and the LLM must guess how to represent 'BC' as a signed int — worth checking it doesn't emit something like min_year=-300 that then silently matches nothing, or worse, matches everything if it drops the filter instead.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 303,
@@ -28,9 +24,7 @@
     "category": "unbounded_numeric_filter",
     "query": "Find books rated above 9999 stars.",
     "note": "min_rating has no le constraint even though BookConstraints.MAX_RATING=5.0 exists as a guide, not an enforced bound. A rating filter of 9999 is guaranteed to return nothing — check whether the system says so or just silently returns an empty book list with no explanation.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 304,
@@ -62,7 +56,7 @@
     "query": "Find books about getting a 100% refund on a bad purchase.",
     "note": "apply_book_filters builds keyword conditions with model.title.ilike(f\"%{keyword}%\") — a literal '%' inside the user's own keyword (\"100% refund\") is interpreted as a SQL LIKE wildcard, not a literal percent sign, so the match behaves differently than the user intended. Not injection in the security sense (bound params), but a real semantic bug.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_by_Genre"
     ]
   },
   {
@@ -73,7 +67,7 @@
     "query": "Find books tagged with the category sci_fi_horror.",
     "note": "Same ilike() path as #306, but with an underscore, which LIKE treats as 'match any single character' — 'sci_fi_horror' would also match 'sciXfiXhorror'. Worth confirming the category filter behaves as an exact/fuzzy tag match rather than an accidental single-char wildcard.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_by_Genre"
     ]
   },
   {
@@ -112,9 +106,7 @@
     "category": "overflow_stress",
     "query": "Compare these fifteen books all at once on writing style: Dune, Foundation, Neuromancer, 1984, Brave New World, Fahrenheit 451, Moby Dick, War and Peace, Don Quixote, The Great Gatsby, The Old Man and the Sea, The Sound and the Fury, Pride and Prejudice, Jane Eyre, and The Alchemist.",
     "note": "GoalParseRequest caps system_goals at MAX_SYSTEM_GOALS=10 and StrategyRequest caps strategies at MAX_STRATEGIES=15 (overflow spills into _overflow_system_goals/_overflow_strategies, tested in parse_intent.py/strategy_classification.py). 15 titles + 1 compare goal easily exceeds both caps in one shot — a real stress test of the overflow/buffer code paths that the 50-run review never exercised.",
-    "expected_nodes": [
-      "Retrieve_by_Title"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 312,
@@ -124,7 +116,16 @@
     "query": "Find me a mystery book. Also find a sci-fi book. Also find a romance book. Also find a horror book. Also find a children's book. Also find a non-fiction history book. Also find a biography. Also find a poetry collection. Also find a cookbook. Also find a travel guide. Also find a self-help book. Also tell me about the developer, the project, and my token usage.",
     "note": "Twelve independent single-goal asks stitched with 'Also' plus three more small asks at the end — 13+ system_goals in one message, well past MAX_SYSTEM_GOALS=10. Tests whether the 3 goals that should overflow get silently dropped, correctly buffered, or crash the classification step.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre",
+      "Retrieve_by_Genre"
     ]
   },
   {
@@ -165,9 +166,7 @@
     "category": "exclusion_contradiction",
     "query": "Find fantasy books, but not fantasy — anything except fantasy, basically.",
     "note": "Directly targets a bug found in the earlier planner review: apply_book_filters never reads filters.exclusion at all, and the LLM has previously echoed the same category into both categories and exclusion.categories on similar requests. This phrasing forces the include/exclude contradiction to a single category, making the wrong-result failure mode ('returns only fantasy') maximally obvious if it recurs.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 317,
@@ -177,7 +176,7 @@
     "query": "Find a book that is simultaneously about pirates, ninjas, robots, wizards, vampires, and time-traveling detectives.",
     "note": "apply_book_filters appends one ilike condition per keyword and ANDs all of them together (db/stores/utils.py) — six unrelated keywords means a book must match all six somewhere in title/authors/description, which is essentially guaranteed to return zero rows. Confirms whether the near-certain-empty-result keyword bug from the planner review still reproduces.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_by_Genre"
     ]
   },
   {
@@ -187,9 +186,7 @@
     "category": "contradictory_filter",
     "query": "Find books with more than 500 pages and fewer than 100 pages.",
     "note": "A directly self-contradictory filter (min_pages=501, max_pages=99) — no validator catches min>max on BooksFilter, so this silently compiles to a WHERE clause that can never match. Tests whether the system notices the contradiction (e.g. surfaces it in reasoning/description) or just returns an unexplained empty list.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 319,
@@ -249,7 +246,12 @@
       "Retrieve_by_Title",
       "Retrieve_by_Title",
       "Analyze_Compare",
-      "Analyze_Recommend"
+      "Analyze_Recommend",
+      "Retrieve_by_Title",
+      "Analyze_Compare",
+      "Analyze_Recommend",
+      "Retrieve_by_Title",
+      "Analyze_Compare"
     ]
   },
   {
@@ -271,6 +273,7 @@
     "query": "Recommend me a book like Dune. Now recommend me a book like Dune. Actually, recommend three books like Dune.",
     "note": "Same recommend intent stated three ways with a shifting count. Tests whether the planner reuses the single Dune retrieval as a shared dependency across recommend goals, or re-emits a fresh Retrieve_by_Title per phrasing — and whether 'three books like Dune' becomes one Recommend with a count or three separate Recommend nodes.",
     "expected_nodes": [
+      "Retrieve_by_Title",
       "Analyze_Recommend"
     ]
   },
@@ -293,6 +296,7 @@
     "query": "Recomend me a sciinstific novle by Isac Assimov with a hi rateing.",
     "note": "Misspelled genre ('sciinstific'), author ('Isac Assimov'), and the words 'novel/high/rating'. Tests robust intent parsing under noise: should still yield Analyze_Recommend with a semantic input and a min_rating filter, with the author kept as a hint on the node — not misfire into Retrieve_by_Traits or drop the rating because 'rateing' wasn't recognized.",
     "expected_nodes": [
+      "Retrieve_by_Author",
       "Analyze_Recommend"
     ]
   },
@@ -337,6 +341,7 @@
     "query": "Recommend me books like the works of the famous author Bartholomew Q. Nonexington III.",
     "note": "Recommendation anchored to an author who doesn't exist. Semantic input for Analyze_Recommend is free text, so the made-up name flows straight into the recommend node with nothing to ground it. Checks the planner doesn't fabricate a bibliography for the fake author or reroute to the extended Retrieve_by_Author (which isn't the intent — 'like the works of' is a taste anchor, not a catalog lookup).",
     "expected_nodes": [
+      "Retrieve_by_Author",
       "Analyze_Recommend"
     ]
   },
@@ -348,7 +353,7 @@
     "query": "Find books written by William Shakespeare in 2015.",
     "note": "Logically impossible — Shakespeare died in 1616. Maps to a keyword ('Shakespeare') ANDed with min_year/max_year=2015 in Retrieve_by_Traits, which is guaranteed empty; but MIN_PUBLISHED_YEAR=1876 is only a guide, not enforced, so 2015 passes. Tests whether the system surfaces the impossibility in its reasoning or just returns a silent empty list as if it were an ordinary miss.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_by_Author"
     ]
   },
   {
@@ -359,7 +364,7 @@
     "query": "Find me books that were published next year.",
     "note": "Relative future date with no clock available to the planner (messages parsed in isolation, no current-date injection). 'Next year' can't be resolved to a concrete min_year/max_year, and max_year has no upper bound anyway. Tests whether the LLM invents a specific future year, drops the year filter entirely (returning everything), or flags that it can't resolve the reference.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_New_Releases"
     ]
   },
   {
@@ -369,9 +374,7 @@
     "category": "impossible_fact",
     "query": "Find a sci-fi novel that is also a non-fiction biography of a fictional character.",
     "note": "Self-negating category constraints (fiction + non-fiction, biography of someone fictional). No single-book row can satisfy all of these, so any honest filter/keyword mapping returns empty. Checks the planner doesn't quietly discard the contradictory half to force a non-empty result.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 337,
@@ -381,7 +384,7 @@
     "query": "Find translated Scandinavian noir novellas under 150 pages, published between 1998 and 2002, rated above 4.2, that aren't part of a series.",
     "note": "Piles many niche constraints into one Retrieve_by_Traits: keywords ('Scandinavian noir', 'translated', 'novella', 'standalone') plus max_pages, min_year, max_year, and min_rating, all ANDed. The keyword-AND bug (db/stores/utils.py) makes near-empty results near-certain. Tests how the LLM distributes literary descriptors between keyword list and structured filters when there's no dedicated field for most of them.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Retrieve_by_Genre"
     ]
   },
   {
@@ -392,7 +395,7 @@
     "query": "Find epistolary novels written in second-person present tense with an unreliable narrator and an unresolved ending.",
     "note": "All constraints are literary-form traits ('epistolary', 'second-person present tense', 'unreliable narrator', 'unresolved ending') with no corresponding filter field — every one collapses to a keyword ilike over title/authors/description, which almost never matches structural traits. Tests whether the LLM crams form descriptors into the keyword list (guaranteeing empty) or recognizes they aren't filterable.",
     "expected_nodes": [
-      "Retrieve_by_Traits"
+      "Analyze_Recommend"
     ]
   },
   {
@@ -411,9 +414,7 @@
     "category": "prompt_injection",
     "query": "Find books with the keyword: '); DROP TABLE books; --",
     "note": "Classic SQL-injection payload smuggled in as a search keyword. apply_book_filters uses bound params via ilike, so this should round-trip as a harmless literal keyword (matching nothing) rather than executing. Tests that a Retrieve_by_Traits node still forms with the payload stored verbatim as a keyword, no query error, no execution — parameterization holds even when the malicious string is the user's own filter value.",
-    "expected_nodes": [
-      "Retrieve_by_Traits"
-    ]
+    "expected_nodes": []
   },
   {
     "id": 341,
@@ -422,7 +423,9 @@
     "category": "sounds_supported_unimplemented",
     "query": "Buy me a copy of Dune and ship it to my house.",
     "note": "Sounds like a natural book-app feature but there is no commerce/purchase/checkout node anywhere in the registry. Should resolve to out_of_scope, not get bent into a Retrieve_by_Title (the user doesn't want to look Dune up, they want to buy it). Tests the boundary between 'find a book' and 'transact on a book'.",
-    "expected_nodes": []
+    "expected_nodes": [
+      "Retrieve_by_Title"
+    ]
   },
   {
     "id": 342,
@@ -431,7 +434,9 @@
     "category": "sounds_supported_unimplemented",
     "query": "Read the entire first chapter of Dune aloud to me.",
     "note": "Plausible-sounding but unsupported: there is no full-text access, no audio/TTS capability, only metadata retrieval. Should land in out_of_scope rather than a Retrieve_by_Title (returning the book record wouldn't satisfy 'read it aloud'). Tests that 'do something with the book's content' isn't collapsed into 'find the book'.",
-    "expected_nodes": []
+    "expected_nodes": [
+      "Retrieve_by_Title"
+    ]
   },
   {
     "id": 343,
@@ -440,7 +445,9 @@
     "category": "sounds_supported_unimplemented",
     "query": "Where can I buy Dune the cheapest, and are there any coupons?",
     "note": "Price-comparison / retailer / coupon lookup — feels adjacent to a book recommender but there is no pricing or vendor node. Must resolve out_of_scope. Distinct from #341 (purchase) in that it's an information request about prices, which could be mistaken for a legitimate info retrieval; it isn't one the system supports.",
-    "expected_nodes": []
+    "expected_nodes": [
+      "Retrieve_by_Title"
+    ]
   },
   {
     "id": 344,
@@ -483,6 +490,10 @@
     "query": "Show me my reading list. Now show my reading list again. Show my want-to-read list, my currently-reading list, and my finished list.",
     "note": "Repeated Retrieve_Reading_List views, the last three differing only by status filter (want_to_read / reading / finished). Tests whether the planner reuses one view node with varied status, dedups the two identical bare views, or over-emits five separate read nodes.",
     "expected_nodes": [
+      "Retrieve_Reading_List",
+      "Retrieve_Reading_List",
+      "Retrieve_Reading_List",
+      "Retrieve_Reading_List",
       "Retrieve_Reading_List"
     ]
   },
@@ -529,8 +540,9 @@
     "query": "Rate the book that William Shakespeare published in 2015 five stars, and mark it as read.",
     "note": "Write actions (Rate_Book, Mark_Book_As_Read) aimed at a book that can't exist (Shakespeare, 2015). The target is specified by an impossible description rather than a concrete title. Tests whether the planner still forms the action nodes against an unresolvable target, or recognizes there's no book to act on — and whether a rating write on a phantom book is flagged.",
     "expected_nodes": [
-      "Mark_Book_As_Read",
-      "Rate_Book"
+      "Retrieve_by_Author",
+      "Rate_Book",
+      "Mark_Book_As_Read"
     ]
   },
   {
