@@ -35,7 +35,6 @@ CONVERSATION_SUMMARY_PROMPT_PATH = (
 class PlannerOutput(AppWorkflowOutput):
     session_id: str | None = None
     parse_result: InitialParseOutput | None = None
-    strategy_result: StrategyClassificationOutput | None = None
     diagram: str | None = None
 
     # TODO: implement this
@@ -101,29 +100,6 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.result.message = "Conversation handled without planning"
             return
 
-        strategy_workflow = StrategyClassificationWorkflow(
-            self.sse_stream, self.user_message, self.llm_client, messages=self.messages
-        )
-        strategy_result = await self.run_async_step(
-            strategy_workflow(system_goals), raise_on_failure=False
-        )
-        strategy_output = strategy_workflow.output
-        self.output.strategy_result = strategy_output
-        if not strategy_result.ok:
-            self.result.ok = False
-            self.result.message = self.strategy_classification_failure_message
-            if strategy_result.runtime_error:
-                self.result.runtime_error = strategy_result.runtime_error
-                await self.sse_stream.send_error(
-                    self.strategy_classification_failure_message
-                )
-                return
-            # await self.sse_stream.send_chars(
-            #     self.strategy_classification_failure_message
-            # )
-            return
-
-        self.output.diagram = await self.send_mermaid(strategy_output)
         seen_description = set()
         await self.sse_stream.send_chars("\n\n## System Goals:\n")
         for system_goal in parse_output.accepted_goals:
@@ -147,6 +123,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
     async def send_mermaid(
         self, strategy_result: StrategyClassificationOutput
     ) -> str | None:
+        # NOTE: change this the system goals
         from app.common.mermaid import get_mermaid_diagram
 
         diagram = None

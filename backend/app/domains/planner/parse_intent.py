@@ -103,17 +103,16 @@ class SystemGoal(BaseModel):
 class GoalParseRequest(BaseModel):
     """Purpose: Goals parse of the user's message — the tool call for the
     parse-intent LLM step. Splits the message into system_goals (mapped
-    capabilities), small_talk, and out_of_scope content.
+    capabilities), and out_of_scope content.
 
     Args:
-        small_talk: The small-talk portion of the message, when present.
         out_of_scope: The out-of-domain portion of the message, when present.
         system_goals: One SystemGoal per capability the message maps to;
             empty when nothing in-domain was found.
         reasoning: Short explanation of how the message was classified.
 
     Returns: The parsed breakdown that strategy classification
-    (system_goals) and the response step (small_talk/out_of_scope/reasoning)
+    (system_goals) and the response step (out_of_scope/reasoning)
     consume next.
 
     Constraints: at most MAX_SYSTEM_GOALS (10) goals per call; every
@@ -126,7 +125,6 @@ class GoalParseRequest(BaseModel):
                 {
                     "query": "Hi! Can you recommend books like Dune?",
                     "request": {
-                        "small_talk": "Hi!",
                         "system_goals": [
                             {
                                 "description": "Find Dune by title",
@@ -272,82 +270,11 @@ class GoalParseRequest(BaseModel):
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "Direct match to a supported capability"},
     )
-    out_of_scope: OptionalStr = Field(
+    out_of_scope: list[str] = Field(
         default=None,
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "What's the weather like today?"},
     )
-
-    # TODO: remove this and move the parse_intent
-    small_talk: OptionalStr = Field(
-        default=None,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Hi!"},
-    )
-
-    _overflow_system_goals: list[SystemGoal] = PrivateAttr(default_factory=list)
-    _invalid_system_goals: list = PrivateAttr(default_factory=list)
-
-    @model_validator(mode="wrap")
-    @classmethod
-    def capture_system_goals(cls, data, handler):
-        raw = data.get("system_goals", []) if isinstance(data, dict) else []
-        if not isinstance(raw, list):
-            raw = [raw]
-
-        valid, invalid = [], []
-        for item in raw:
-            if isinstance(item, SystemGoal):
-                valid.append(item)
-                continue
-
-            try:
-                goal_instance = SystemGoal.model_validate(item)
-                valid.append(goal_instance)
-            except ValidationError as e:
-                logger.exception(e)
-                invalid.append(item)
-
-        if isinstance(data, dict):
-            data["system_goals"] = valid[:MAX_SYSTEM_GOALS]
-
-        instance = handler(data)  # Pydantic builds the instance
-        instance._overflow_system_goals = valid[MAX_SYSTEM_GOALS:]
-        instance._invalid_system_goals = invalid
-        return instance
-
-
-class IntentParseRequest(BaseModel):
-    """Purpose: Coarse pre-filter before the full intent/goal parse — flags
-    malicious input and references to earlier turns (this app is
-    single-turn only) so the workflow can refuse them before any planning
-    work starts.
-
-    Args:
-        intents: Flags that apply to the message; empty when neither does.
-
-    Returns: The flags the workflow uses to decide whether to continue to
-    the full parse or refuse the message outright.
-
-    Constraints: `malicious` is exclusive — never paired with
-    `conversation_continuation`.
-    """
-
-    intents: list[
-        Literal[
-            "malicious",
-            "conversation_continuation",
-        ]
-    ] = Field(
-        default_factory=list,
-        max_length=2,
-        json_schema_extra={"example": []},
-    )
-
-    def model_post_init(self, context) -> None:
-        self.intents = list(dict.fromkeys(self.intents))
-        if "malicious" in self.intents:
-            self.intents = ["malicious"]
 
 
 class InitialParseOutput(AppWorkflowOutput):
@@ -355,8 +282,7 @@ class InitialParseOutput(AppWorkflowOutput):
     refused_goals: list[SystemGoal] = Field(default_factory=list)
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
 
-    small_talk: Optional[str] = None
-    out_of_scope: Optional[str] = None
+    out_of_scope: list[str] = None
     reasoning: Optional[str] = None
 
     def to_summary(self) -> dict[str, Any]:
@@ -364,7 +290,6 @@ class InitialParseOutput(AppWorkflowOutput):
             "total_system_goals": len(self.accepted_goals) + len(self.refused_goals),
             "num_rejected_system": len(self.refused_goals),
             "num_accepted_system": len(self.accepted_goals),
-            "small_talk": self.small_talk,
             "out_of_scope": self.out_of_scope,
             "reasoning": self.reasoning,
         }
@@ -374,8 +299,6 @@ class InitialParseOutput(AppWorkflowOutput):
 
     def to_llm_messages(self) -> dict[str, Any]:
         payload: dict[str, Any] = {}
-        if self.small_talk:
-            payload["small_talk"] = self.small_talk
         if self.out_of_scope:
             payload["out_of_scope"] = self.out_of_scope
         if self.refused_goals:
@@ -416,25 +339,6 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
 
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-
-        # intent_tool_call = await self._run_llm_intent_request()
-        # intent_result = cast(
-        #     IntentParseRequest, intent_tool_call.function.parsed_arguments
-        # )
-
-        # reject_reasons = self._get_intent_reject_reasons(intent_result)
-        # if reject_reasons:
-        #     # TODO: these should raise errors so the caller can catch
-        #     message = (
-        #         self.continuation_reject_message
-        #         if intent_result.intents == ["conversation_continuation"]
-        #         else self.intent_reject_message
-        #     )
-        #     self.result.add_details(*reject_reasons)
-        #     self.result.ok = False
-        #     self.result.message = message
-        #     await self.sse_stream.send_chars(message)
-        #     return
 
         tool_call = await self._run_llm_args_parse()
         # parsed_arguments is typed `object | None` by the openai lib; the
@@ -479,7 +383,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # NOTE: using gpt4.1 because the system goals sees the whole catalog
         # it's very important that this part is done correctly
         # cache hit rate is high, and output generation is lower
-        # we can optimize and move out the small_talk and such
+        # we can optimize
         req = OpenAIParserRequest(
             prompt=system_prompt,
             model="gpt-4.1",
@@ -507,7 +411,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
 
     async def finalize_result(self, payload) -> None:
         # ok = the conversation was handled: either there are goals to plan,
-        # or a substantive reply (small talk / out-of-scope / refusals) was
+        # or a substantive reply (out-of-scope / refusals) was
         # streamed to the user. The orchestrator decides continuation from
         # accepted_goals, not from ok.
         super().finalize_result(ok=bool(self.output.accepted_goals or payload))
@@ -537,7 +441,6 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     ) -> None:
         if (
             len(parse_result.system_goals) == 0
-            and not parse_result.small_talk
             and not parse_result.out_of_scope
         ):
             logger.warning("Nothing was classified in the initial parse")
@@ -545,7 +448,6 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             self.result.add_details("Nothing was classified in the initial parse")
             raise RuntimeError("Nothing was classified in the initial parse")
 
-        self.output.small_talk = parse_result.small_talk
         self.output.out_of_scope = parse_result.out_of_scope
         self.output.reasoning = parse_result.reasoning
 
