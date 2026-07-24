@@ -46,6 +46,7 @@ class SystemGoal(BaseModel):
     supported node type. One entry in GoalParseRequest.system_goals.
 
     Args:
+        id: Give an id to the node in form of '1', '2'
         description: An query normalized and instructive message for the arguments parser (10 - 300 characters)
         confidence: How confident the system is that it can fulfill this goal
         reasoning: provide a short reasoning for the system goals set (10-100 characters)
@@ -65,7 +66,7 @@ class SystemGoal(BaseModel):
     
     id: str = Field(...,
                 description="assign an id for this goal",
-                json_schema_extra={"example": ["goal_1", "goal_2"]}
+                json_schema_extra={"example": ["1", "2"]}
                 )
 
     description: DescriptionStr = Field(
