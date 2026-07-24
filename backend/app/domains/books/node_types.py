@@ -11,7 +11,7 @@ class BookNodeTypeEnum(str, Enum):
 
     # Combine / filter — operate on prior retrieval results, never the database
     UNION_RETRIEVAL = "Combine_Union"
-    JOIN_RETRIEVALS = "Combine_Join"
+    INTERSECT_RETRIEVALS = "Combine_Intersect"
     FILTER_RETRIEVAL = "Filter_Retrieval"
 
     # Strategies

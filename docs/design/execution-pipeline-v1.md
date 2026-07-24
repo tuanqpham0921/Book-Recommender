@@ -65,11 +65,11 @@ plus the analyze execution). Fine for V1 — the demo is the planner, not throug
 Built as **three** nodes rather than the one this record originally sketched, because
 "combine" turned out to be two different operations that must not be confused:
 
-| node type | class | operation | `depends_on` |
-|---|---|---|---|
-| `Combine_Union` | `UnionRetrieval` | OR — pool inputs, dedup | ≥ 2 |
-| `Combine_Join` | `JoinRetrievals` | AND — keep books in *every* input | ≥ 2 |
-| `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 |
+| node type | class | operation | `depends_on` | carries `filters` |
+|---|---|---|---|---|
+| `Combine_Union` | `UnionRetrieval` | OR — pool inputs, dedup | ≥ 2 | no |
+| `Combine_Intersect` | `IntersectRetrievals` | AND — keep books in *every* input | ≥ 2 | no |
+| `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 | **yes, required** |
 
 All three live in `app/domains/books/schemas/request_schemas.py`, sit in their own
 `CATALOG_TIERS` section, and consume prior task output only — none of them queries the
@@ -82,20 +82,28 @@ one. `Filter_Retrieval` carries `BookMetadataFilter`
 is `BooksFilter` minus every field that could serve as a search subject. No authors, no
 categories, and critically **no `keywords` free-text field**: that field is what blurred
 the old `Retrieve_by_Traits` into `Analyze_Recommend`, and leaving it out is what keeps
-this node a narrowing operator instead of a second recommender. `Combine_Union` and
-`Combine_Join` carry the same filter object optionally, applied after the set operation.
+this node a narrowing operator instead of a second recommender.
+
+**One operation per node.** The set operators carry no filters — an earlier cut gave
+`Combine_Union` and `Combine_Intersect` an optional `BookMetadataFilter` applied after the
+set operation, and that was removed. Two reasons: every constraint then had two legal
+homes (inline on the combine node, or a downstream `Filter_Retrieval`), which is precisely
+the kind of "either parse is defensible" ambiguity the taxonomy decision was meant to
+eliminate; and it made the combine nodes' catalog entries carry filter documentation that
+`Filter_Retrieval` already owns. The cost is longer plans — "fantasy books by Sanderson
+over 400 pages" is now four nodes — traded for one unambiguous home per operation.
 
 `depends_on` moved from `AnalyzeBaseRequest` up to a new `DependentRequest` base, since
 these nodes consume task output without analyzing it. The planner's dependency remapping
 and topological sort gate on `DependentRequest`.
 
-**Known limitation, unresolved:** `Combine_Join` intersects *materialized* result sets,
+**Known limitation, unresolved:** `Combine_Intersect` intersects *materialized* result sets,
 and retrieval today returns a `limit`-capped list (default 3). Intersecting two capped
-lists is usually empty — "fantasy books by Sanderson" would join a 3-book author page
+lists is usually empty — "fantasy books by Sanderson" would intersect a 3-book author page
 against a 3-book genre page and return nothing. The node is semantically right and
 operationally wrong until retrieval returns counts/queries rather than rows, which is
-exactly the counts-only change described above. Whoever writes the join executor has to
-push the predicate into the upstream query rather than intersect two result lists.
+exactly the counts-only change described above. Whoever writes the intersect executor has
+to push the predicate into the upstream query rather than intersect two result lists.
 
 ### Analyze-book node
 
@@ -125,8 +133,8 @@ costs no catalog tokens. If it is a goal, how goals link to sections needs its o
   Resolved 2026-07-24 — one node, one narrow filter object; see above.
 - **Do the base suite's multi-anchor expectations still hold?** Cases 56, 57 and 59 were
   written on 2026-07-24 expecting a *single* `Retrieve_by_Author` with the genre silently
-  dropped, because no combine operator existed. `Combine_Join` now gives that shape a
-  correct plan (`Retrieve_by_Author` + `Retrieve_by_Genre` + `Combine_Join`), so those
+  dropped, because no combine operator existed. `Combine_Intersect` now gives that shape a
+  correct plan (`Retrieve_by_Author` + `Retrieve_by_Genre` + `Combine_Intersect`), so those
   expectations describe the old world. They need re-deciding, not just re-running.
 - Is generation a planner goal or a fixed terminal stage? If a goal — one per answer
   section, or one per request?

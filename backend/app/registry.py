@@ -20,7 +20,7 @@ from app.domains.books.registry import (
     FindByTitleRetrieval,
     RecommendationStrategy,
     UnionRetrieval,
-    JoinRetrievals,
+    IntersectRetrievals,
     FilterRetrieval,
 )
 from app.domains.project.registry import (
@@ -73,7 +73,7 @@ AnyStrategyRequest = Annotated[
         FindByCoAuthorsRetrieval,
         FindByGenreRetrieval,
         UnionRetrieval,
-        JoinRetrievals,
+        IntersectRetrievals,
         FilterRetrieval,
         UserInfoRequest,
         DeveloperInfoRequest,
