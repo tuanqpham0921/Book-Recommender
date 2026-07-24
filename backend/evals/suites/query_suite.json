@@ -383,5 +383,33 @@
     "query": "Did Neil Gaiman and Terry Pratchett ever co-write anything?",
     "note": "Single FindByCoAuthors, phrased as a yes/no. An empty result is the real answer to this one, so it checks the planner routes the question to the node rather than refusing it or fabricating a bibliography.",
     "expected_nodes": ["Retrieve_by_CoAuthors"]
+  },
+  {
+    "id": 56,
+    "difficulty": "medium",
+    "query": "Show me fantasy books by Brandon Sanderson.",
+    "note": "MULTI-ANCHOR CONTROL (design-intent expectation, not yet a recorded baseline — added 2026-07-24). Two anchor dimensions in one request: author AND genre. Single-dimension retrieval nodes cannot express the intersection, so the intended plan picks the more selective anchor (author) and treats genre as a constraint. The failure to catch is emitting Retrieve_by_Author AND Retrieve_by_Genre as siblings: with no combine operator between them that is a UNION — every Sanderson book plus every fantasy book — which is not what was asked. Genre is near-redundant here (Sanderson writes almost only fantasy), which is what makes this the control for case 57.",
+    "expected_nodes": ["Retrieve_by_Author"]
+  },
+  {
+    "id": 57,
+    "difficulty": "medium",
+    "query": "What children's books has Neil Gaiman written?",
+    "note": "MULTI-ANCHOR, LOAD-BEARING GENRE (design-intent expectation, added 2026-07-24). Same shape as case 56, opposite stakes: Gaiman writes across adult and children's fiction, so dropping the genre returns a materially wrong bibliography rather than a slightly wide one. The pair 56/57 is the actual test — identical query shape, and only 57 makes the dropped constraint visible in the answer. NOTE: the goals report compares node TYPES only, so it cannot see whether the genre constraint was captured; this case is the argument for argument-level checking (or for the multi-anchor Traits node).",
+    "expected_nodes": ["Retrieve_by_Author"]
+  },
+  {
+    "id": 58,
+    "difficulty": "medium",
+    "query": "Find books between 300 and 500 pages published after 2015.",
+    "note": "ANCHORLESS CONSTRAINTS (design-intent expectation, added 2026-07-24). Page count and publication year can narrow a search but cannot be what a search is ABOUT — there is no subject here. Expected behavior is a clarification/rejection rather than an invented anchor, so the expectation is no nodes; it will stay red until the clarification node lands, like the other known-failing cases. Mirrors case 12 ('books with fewer than 200 pages'), which baselines to no nodes for the same reason. The failure to catch is fabricating a Retrieve_by_Genre or Analyze_Recommend to have somewhere to put the filters.",
+    "expected_nodes": []
+  },
+  {
+    "id": 59,
+    "difficulty": "hard",
+    "query": "Show me romance books by Nora Roberts and mystery books by Agatha Christie.",
+    "note": "MULTI-ANCHOR × 2 (design-intent expectation, added 2026-07-24). Extends case 53's one-node-per-author rule into multi-anchor territory: two authors, each with their own genre, so the intended plan is two Retrieve_by_Author nodes — not four nodes (an author and a genre node per half), and not one collapsed node. Tests that added dimensions narrow the existing nodes instead of multiplying them.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author"]
   }
 ]
