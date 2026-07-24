@@ -411,5 +411,12 @@
     "query": "Show me romance books by Nora Roberts and mystery books by Agatha Christie.",
     "note": "MULTI-ANCHOR × 2 (design-intent expectation, added 2026-07-24). Extends case 53's one-node-per-author rule into multi-anchor territory: two authors, each with their own genre, so the intended plan is two Retrieve_by_Author nodes — not four nodes (an author and a genre node per half), and not one collapsed node. Tests that added dimensions narrow the existing nodes instead of multiplying them.",
     "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author"]
+  },
+  {
+    "id": 60,
+    "difficulty": "hard",
+    "query": "Find me some books by Jane Austen and Neil Gaiman with 200 pages or more, in thriller, before 2020. And recommend me some books like them with rating 4.0+ and at least 1000 ratings.",
+    "note": "CONSTRAINT-DENSE TWO-STAGE (design-intent expectation, added 2026-07-24). The heaviest case in the suite: two authors and five constraints split across two stages. Stage 1 is case 53's shape (two separate bibliographies, one Retrieve_by_Author each) with three constraints hung on each node — pages >= 200, thriller, before 2020 — none of which is an anchor. Stage 2 is 'like them' plus two more constraints (rating >= 4.0, ratings_count >= 1000), which is Analyze_Recommend depending on both retrievals. So three nodes, not five: no Retrieve_by_Genre for thriller, no separate node for the page or year filters. Two distinct failures to catch: (a) promoting a constraint to an anchor node, which unions instead of narrowing, and (b) losing the dependency link so the recommendation runs off the raw query rather than the retrieved books. Also a live example of the argument-level blind spot — the goals report can confirm the three node types and still miss every one of the five constraints.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author", "Analyze_Recommend"]
   }
 ]
