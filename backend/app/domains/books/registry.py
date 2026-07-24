@@ -11,7 +11,10 @@ from app.domains.books.schemas.request_schemas import (
     FindByGenreRetrieval,
     FindByTitleRetrieval,
     RecommendationStrategy,
-    CompareStrategy
+    CompareStrategy,
+    UnionRetrieval,
+    JoinRetrievals,
+    FilterRetrieval,
 )
 
 # CompareStrategy (Analyze_Compare) is intentionally parked: the class still
@@ -30,7 +33,17 @@ BOOK_ANALYZE_CLASSES = (
     RecommendationStrategy,
     CompareStrategy
 )
-BOOK_REQUEST_CLASSES = BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES
+# Combine/filter tier — these consume prior retrieval output and never touch the
+# database, so they are neither a retrieval nor an analyze step. See
+# docs/design/execution-pipeline-v1.md.
+BOOK_COMBINE_CLASSES = (
+    UnionRetrieval,
+    JoinRetrievals,
+    FilterRetrieval,
+)
+BOOK_REQUEST_CLASSES = (
+    BOOK_RETRIEVAL_CLASSES + BOOK_COMBINE_CLASSES + BOOK_ANALYZE_CLASSES
+)
 
 # Manual node_type -> class lookup — add new mappings here
 BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
@@ -39,6 +52,9 @@ BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
     BookNodeTypeEnum.FIND_COAUTHORS.value: FindByCoAuthorsRetrieval,
     BookNodeTypeEnum.FIND_GENRE.value: FindByGenreRetrieval,
+    BookNodeTypeEnum.UNION_RETRIEVAL.value: UnionRetrieval,
+    BookNodeTypeEnum.JOIN_RETRIEVALS.value: JoinRetrievals,
+    BookNodeTypeEnum.FILTER_RETRIEVAL.value: FilterRetrieval,
     BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
     BookNodeTypeEnum.COMPARE.value: CompareStrategy
 }

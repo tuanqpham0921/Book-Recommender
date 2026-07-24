@@ -133,7 +133,17 @@ class DomainRequest(BaseRequest):
     #     super().model_post_init(__context)
 
 
-class AnalyzeBaseRequest(DomainRequest):
+class DependentRequest(DomainRequest):
+    """Any request that consumes another task's output, analyze or not.
+
+    `depends_on` used to live directly on AnalyzeBaseRequest, back when analyze
+    nodes were the only consumers. The combine/filter nodes consume retrieval
+    output without analyzing it, so the field moved up here. Anything that
+    gates on "does this node have dependencies" must check *this* class —
+    AnalyzeBaseRequest now means "is an analyze node", which is a narrower
+    question.
+    """
+
     depends_on: list[str] = Field(
         ...,
         min_length=MIN_LIST_LENGTH,
@@ -141,10 +151,19 @@ class AnalyzeBaseRequest(DomainRequest):
         description="Task ids from the previous steps must complete first",
         json_schema_extra={"example": ["task_1", "task_2"]}
     )
-    
+
     _llm_depends_on: list[str] = PrivateAttr(default_factory=list)
     _overflow_depends_on: list[str] = PrivateAttr(default_factory=list)
-    
+
+
+class AnalyzeBaseRequest(DependentRequest):
+    """A node that interprets retrieved data — compare, recommend, summarize.
+
+    Adds nothing to DependentRequest today; it stays a distinct class because
+    it is the tier marker used by the catalog and by anything that needs
+    "analyze" specifically rather than "has dependencies".
+    """
+
     # # Keep off-format ids (e.g. a hallucinated "1") so they can still be
     # # matched against node ids at plan level; stringify non-strings and drop
     # # blanks — those carry nothing to recover.

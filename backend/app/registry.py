@@ -11,6 +11,7 @@ from app.domains.books.registry import (
     BOOK_NODE_TYPE_TO_CLS,
     BOOK_RETRIEVAL_CLASSES,
     BOOK_ANALYZE_CLASSES,
+    BOOK_COMBINE_CLASSES,
     BOOK_REQUEST_CLASSES,
     FindByISBN13Retrieval,
     FindByAuthorRetrieval,
@@ -18,6 +19,9 @@ from app.domains.books.registry import (
     FindByGenreRetrieval,
     FindByTitleRetrieval,
     RecommendationStrategy,
+    UnionRetrieval,
+    JoinRetrievals,
+    FilterRetrieval,
 )
 from app.domains.project.registry import (
     PROJECT_NODE_TYPE_TO_CLS,
@@ -56,9 +60,10 @@ USER_REQUEST_CLASSES = USER_RETRIEVAL_CLASSES
 # All request schema classes — add new ones here
 
 RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES + USER_RETRIEVAL_CLASSES + PROJECT_RETRIEVAL_CLASSES
+COMBINE_CLASSES = BOOK_COMBINE_CLASSES
 ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
 
-REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES
+REQUEST_CLASSES = RETRIEVAL_CLASSES + COMBINE_CLASSES + ANALYZE_CLASSES
 AnyStrategyRequest = Annotated[
     Union[
         RecommendationStrategy,
@@ -67,6 +72,9 @@ AnyStrategyRequest = Annotated[
         FindByAuthorRetrieval,
         FindByCoAuthorsRetrieval,
         FindByGenreRetrieval,
+        UnionRetrieval,
+        JoinRetrievals,
+        FilterRetrieval,
         UserInfoRequest,
         DeveloperInfoRequest,
         FeedbackRequest,
@@ -101,6 +109,7 @@ def class_docstring(cls: type) -> str:
 
 CATALOG_TIERS: dict[str, tuple[type, ...]] = {
     "Retrieval — lookup or fetch data": RETRIEVAL_CLASSES,
+    "Combine — pool, intersect, or narrow what retrieval steps already returned": COMBINE_CLASSES,
     "Analyze — interpret, compare, or recommend using retrieved data": ANALYZE_CLASSES,
 }
 

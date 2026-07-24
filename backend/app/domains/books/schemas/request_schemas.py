@@ -5,8 +5,14 @@ These are the specific schemas that the LLM should generate during classificatio
 
 from typing import Optional, Literal, List
 from pydantic import Field
-from app.domains.base_request import DomainRequest, AnalyzeBaseRequest
+from app.domains.base_request import (
+    DomainRequest,
+    AnalyzeBaseRequest,
+    DependentRequest,
+    MAX_LIST_LENGTH,
+)
 from app.domains.books.node_types import BookNodeTypeEnum
+from db.schema import BookMetadataFilter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -267,3 +273,148 @@ class FindByGenreRetrieval(DomainRequest):
 
     node_type: Literal[BookNodeTypeEnum.FIND_GENRE] = BookNodeTypeEnum.FIND_GENRE
     genre: str = Field(..., json_schema_extra={"example": "fantasy"})
+
+
+class UnionRetrieval(DependentRequest):
+    """Purpose: Pool two or more prior retrieval results into one combined set — OR, not AND.
+
+    Args:
+        depends_on: Task ids of the retrieval steps to pool (at least two).
+        filters: Optional book metadata narrowing applied AFTER the pooling —
+            page count, publication year, rating, ratings count, child-friendly.
+
+    Returns: A UnionRetrievalOutput — one deduplicated list of BookSummary
+    records containing every book found by any of the depended-on steps.
+
+    Use when: separate result sets have to become one list before the next step
+    can work on them — a later analyze step that reasons over all of them at
+    once, or a single ranked/sorted answer drawn from several sources.
+
+    Do not use: merely because the query names two things. Two bibliographies
+    presented side by side need two retrieval nodes and nothing else; the
+    pooling is only justified when something downstream consumes one set. Never
+    use to intersect — books matching ALL the inputs is Combine_Join.
+
+    Constraints: at least two task ids in depends_on, and they are combined as
+    OR — a book is kept when any input found it. Duplicates across inputs
+    collapse to one record. This node reads prior results only; it never queries
+    the database, so it cannot widen what the retrievals already returned.
+
+    Example queries:
+        - "recommend something based on Austen's and Coelho's books"
+        - "the longest book by either Sanderson or Jordan"
+        - "put everything by these two authors in one list"
+    """
+
+    node_type: Literal[BookNodeTypeEnum.UNION_RETRIEVAL] = (
+        BookNodeTypeEnum.UNION_RETRIEVAL
+    )
+    depends_on: list[str] = Field(
+        ...,
+        min_length=2,
+        max_length=MAX_LIST_LENGTH,
+        description="Task ids of the retrieval steps to pool together (at least two)",
+        json_schema_extra={"example": ["task_1", "task_2"]},
+    )
+    filters: Optional[BookMetadataFilter] = Field(
+        default=None,
+        description="Optional metadata narrowing applied after the pooling.",
+    )
+
+
+class JoinRetrievals(DependentRequest):
+    """Purpose: Keep only the books found by ALL of two or more prior retrievals — AND, not OR.
+
+    Args:
+        depends_on: Task ids of the retrieval steps to intersect (at least two).
+        filters: Optional book metadata narrowing applied AFTER the intersection —
+            page count, publication year, rating, ratings count, child-friendly.
+
+    Returns: A JoinRetrievalsOutput — one list of BookSummary records, each of
+    which appeared in every depended-on step's result.
+
+    Use when: the request names two or more search dimensions that must hold on
+    the same book, and each dimension has its own retrieval node — most often
+    an author plus a genre ("fantasy books by Sanderson" → Retrieve_by_Author
+    plus Retrieve_by_Genre, joined here).
+
+    Do not use: when the second dimension is a metadata constraint rather than a
+    search subject. Page count, year, rating, ratings count and child-friendly
+    can only narrow, so they belong in a Filter_Retrieval (or this node's own
+    filters), never in a retrieval node that then gets joined. Also do not use
+    for books two authors wrote together — that is Retrieve_by_CoAuthors, which
+    does the AND inside one query.
+
+    Constraints: at least two task ids in depends_on, combined as AND — a book
+    is kept only when every input found it, so an empty result is a real answer
+    and not an error. This node reads prior results only; it never queries the
+    database, so it can only intersect what those steps already returned.
+
+    Example queries:
+        - "fantasy books by Brandon Sanderson"
+        - "what children's books has Neil Gaiman written"
+        - "mysteries by Agatha Christie"
+    """
+
+    node_type: Literal[BookNodeTypeEnum.JOIN_RETRIEVALS] = (
+        BookNodeTypeEnum.JOIN_RETRIEVALS
+    )
+    depends_on: list[str] = Field(
+        ...,
+        min_length=2,
+        max_length=MAX_LIST_LENGTH,
+        description="Task ids of the retrieval steps to intersect (at least two)",
+        json_schema_extra={"example": ["task_1", "task_2"]},
+    )
+    filters: Optional[BookMetadataFilter] = Field(
+        default=None,
+        description="Optional metadata narrowing applied after the intersection.",
+    )
+
+
+class FilterRetrieval(DependentRequest):
+    """Purpose: Narrow a prior retrieval's books by metadata — pages, year, rating, ratings count, child-friendly.
+
+    Args:
+        depends_on: Task ids of the steps whose books to narrow (at least one).
+        filters: The metadata bounds to apply. Every field is inclusive and
+            independent — supply only the ones the user actually stated.
+
+    Returns: A FilterRetrievalOutput — the subset of the depended-on books that
+    satisfy every supplied bound.
+
+    Use when: the request adds a measurable limit to a search that already has a
+    subject — "by Sanderson, over 400 pages", "fantasy published after 2015",
+    "highly rated with lots of reviews".
+
+    Do not use: when the limits are all the request has. Page count, year and
+    rating can narrow a search but cannot BE one, so a request made only of them
+    has no subject and should be sent back for clarification rather than given
+    an invented anchor. Do not use for genre, author, title or theme either —
+    those are search subjects with their own retrieval nodes.
+
+    Constraints: at least one task id in depends_on, and at least one filter
+    bound — an empty filter is a no-op and will be refused. Bounds are combined
+    as AND. This node reads prior results only; it never queries the database,
+    so it can only shrink what the depended-on steps already returned.
+
+    Example queries:
+        - "books by Brandon Sanderson over 400 pages"
+        - "fantasy published after 2015"
+        - "Agatha Christie, but only the well-reviewed ones"
+    """
+
+    node_type: Literal[BookNodeTypeEnum.FILTER_RETRIEVAL] = (
+        BookNodeTypeEnum.FILTER_RETRIEVAL
+    )
+    filters: BookMetadataFilter = Field(
+        ...,
+        description="Metadata bounds to narrow the depended-on books by.",
+    )
+
+    def model_post_init(self, __context) -> None:
+        # A filter node with no bounds set would pass its input through
+        # unchanged — that is a planning mistake, not a valid plan.
+        if not self.filters.model_dump(exclude_none=True):
+            self.refuse("No filter bounds provided")
+        super().model_post_init(__context)

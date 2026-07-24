@@ -9,6 +9,11 @@ class BookNodeTypeEnum(str, Enum):
     FIND_COAUTHORS = "Retrieve_by_CoAuthors"
     FIND_GENRE = "Retrieve_by_Genre"
 
+    # Combine / filter — operate on prior retrieval results, never the database
+    UNION_RETRIEVAL = "Combine_Union"
+    JOIN_RETRIEVALS = "Combine_Join"
+    FILTER_RETRIEVAL = "Filter_Retrieval"
+
     # Strategies
     COMPARE = "Analyze_Compare"
     RECOMMENDATION = "Analyze_Recommend"

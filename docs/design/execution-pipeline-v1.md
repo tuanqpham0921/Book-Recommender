@@ -1,6 +1,7 @@
 # Execution pipeline: retrieve → filter → analyze → generate (design record)
 
-**Date:** 2026-07-24 · **Status:** proposed — nothing implemented yet
+**Date:** 2026-07-24 · **Status:** partly implemented — the combine tier's *schemas* are
+registered; no executors, no counts-only retrieval, no generation node.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
 [roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
@@ -59,12 +60,42 @@ plus the analyze execution). Fine for V1 — the demo is the planner, not throug
 
 ## The new nodes
 
-### Filter / combine node
+### Filter / combine nodes — **registered 2026-07-24**
 
-Only composes and applies constraints; it never does lookup. Inputs are upstream task ids
-plus the constraints that have no dimension node of their own. Open: whether it is one
-node with a filter object, or a small family (`Filter_by_Pages`, `Filter_by_Year`, …) that
-keeps the single-dimension rule intact at the cost of catalog size.
+Built as **three** nodes rather than the one this record originally sketched, because
+"combine" turned out to be two different operations that must not be confused:
+
+| node type | class | operation | `depends_on` |
+|---|---|---|---|
+| `Combine_Union` | `UnionRetrieval` | OR — pool inputs, dedup | ≥ 2 |
+| `Combine_Join` | `JoinRetrievals` | AND — keep books in *every* input | ≥ 2 |
+| `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 |
+
+All three live in `app/domains/books/schemas/request_schemas.py`, sit in their own
+`CATALOG_TIERS` section, and consume prior task output only — none of them queries the
+database.
+
+The open question above ("one node with a filter object, or a family of single-dimension
+filter nodes?") resolved to **one node with a filter object**, but a deliberately narrow
+one. `Filter_Retrieval` carries `BookMetadataFilter`
+(`db/schema/filter_schemas.py`) — pages, year, rating, ratings count, is_children — which
+is `BooksFilter` minus every field that could serve as a search subject. No authors, no
+categories, and critically **no `keywords` free-text field**: that field is what blurred
+the old `Retrieve_by_Traits` into `Analyze_Recommend`, and leaving it out is what keeps
+this node a narrowing operator instead of a second recommender. `Combine_Union` and
+`Combine_Join` carry the same filter object optionally, applied after the set operation.
+
+`depends_on` moved from `AnalyzeBaseRequest` up to a new `DependentRequest` base, since
+these nodes consume task output without analyzing it. The planner's dependency remapping
+and topological sort gate on `DependentRequest`.
+
+**Known limitation, unresolved:** `Combine_Join` intersects *materialized* result sets,
+and retrieval today returns a `limit`-capped list (default 3). Intersecting two capped
+lists is usually empty — "fantasy books by Sanderson" would join a 3-book author page
+against a 3-book genre page and return nothing. The node is semantically right and
+operationally wrong until retrieval returns counts/queries rather than rows, which is
+exactly the counts-only change described above. Whoever writes the join executor has to
+push the predicate into the upstream query rather than intersect two result lists.
 
 ### Analyze-book node
 
@@ -90,7 +121,13 @@ costs no catalog tokens. If it is a goal, how goals link to sections needs its o
 
 ## Open questions
 
-- One filter node with a filter object, or several single-dimension filter nodes?
+- ~~One filter node with a filter object, or several single-dimension filter nodes?~~
+  Resolved 2026-07-24 — one node, one narrow filter object; see above.
+- **Do the base suite's multi-anchor expectations still hold?** Cases 56, 57 and 59 were
+  written on 2026-07-24 expecting a *single* `Retrieve_by_Author` with the genre silently
+  dropped, because no combine operator existed. `Combine_Join` now gives that shape a
+  correct plan (`Retrieve_by_Author` + `Retrieve_by_Genre` + `Combine_Join`), so those
+  expectations describe the old world. They need re-deciding, not just re-running.
 - Is generation a planner goal or a fixed terminal stage? If a goal — one per answer
   section, or one per request?
 - Does the CTE composition live in the executors or in `db/stores/book_store.py`? The

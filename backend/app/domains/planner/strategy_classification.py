@@ -19,7 +19,7 @@ from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
-from app.domains.base_request import AnalyzeBaseRequest, BaseRequest
+from app.domains.base_request import BaseRequest, DependentRequest
 from app.registry import (
     BOOK_ANALYZE_CLASSES,
     BOOK_RETRIEVAL_CLASSES,
@@ -479,9 +479,10 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         self, strategies: list[AnyStrategyRequest], llm_to_internal_id: dict[str, str]
     ) -> None:
         for strategy in strategies:
-            # only analyze-type requests carry depends_on (same runtime
-            # behavior as the old hasattr check, but narrows the type)
-            if not isinstance(strategy, AnalyzeBaseRequest):
+            # only dependent requests carry depends_on — analyze nodes plus the
+            # combine/filter tier (same runtime behavior as the old hasattr
+            # check, but narrows the type)
+            if not isinstance(strategy, DependentRequest):
                 continue
             if strategy.depends_on is None or not len(strategy.depends_on):
                 strategy.refuse("No dependencies provided")
@@ -550,9 +551,10 @@ class StrategyClassificationWorkflow(AppBaseWorkflow[StrategyClassificationOutpu
         indegree: defaultdict[str, int] = defaultdict(int)
         for strat in candidates:
             task_id = strat.id
-            # only analyze-type requests carry depends_on (same runtime
-            # behavior as the old hasattr check, but narrows the type)
-            if not isinstance(strat, AnalyzeBaseRequest):
+            # only dependent requests carry depends_on — analyze nodes plus the
+            # combine/filter tier (same runtime behavior as the old hasattr
+            # check, but narrows the type)
+            if not isinstance(strat, DependentRequest):
                 indegree[task_id] = 0
                 continue
 
