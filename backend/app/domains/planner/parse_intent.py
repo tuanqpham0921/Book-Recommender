@@ -46,15 +46,21 @@ class SystemGoal(BaseModel):
     supported node type. One entry in GoalParseRequest.system_goals.
 
     Args:
-        id: Give an id to the node in form of '1', '2'
-        description: An query normalized and instructive message for the arguments parser (10 - 300 characters)
-        confidence: How confident the system is that it can fulfill this goal
-        reasoning: provide a short reasoning for the system goals set (10-100 characters)
+        id: A short id for this goal, in the form '1', '2', ... — other
+            goals reference it through their depends_on.
+        description: A query-normalized, instructive message for the
+            argument parser: the portion of the user's request this goal
+            covers, stripped of noise (up to 500 characters).
+        confidence: How confident the system is that it can fulfill this goal.
+        reasoning: A short justification for choosing this goal (up to 500
+            characters).
         target_node_type: The single capability name from the catalog that
             fulfills this goal.
+        depends_on: Ids of the goals that must complete before this one;
+            an empty list when it depends on nothing.
 
-    Returns: One candidate goal that strategy classification later turns
-    into a request strategy, or refuses.
+    Returns: One candidate goal that the argument parser later fills in with
+    typed arguments, or refuses.
 
     Constraints: exactly one target_node_type per goal — a multi-part
     request becomes separate goals, not one goal with multiple types.
@@ -123,9 +129,8 @@ class GoalParseRequest(BaseModel):
         system_goals: One SystemGoal per capability the message maps to;
             empty when nothing in-domain was found.
 
-    Returns: The parsed breakdown that strategy classification
-    (system_goals) and the response step (out_of_scope/reasoning)
-    consume next.
+    Returns: The parsed breakdown — system_goals feed the argument parser
+    and execution; out_of_scope feeds the response step.
 
     Constraints: at most MAX_SYSTEM_GOALS (10) goals per call; every
     in-domain part of the message should map to exactly one goal.
@@ -139,14 +144,20 @@ class GoalParseRequest(BaseModel):
                     "request": {
                         "system_goals": [
                             {
-                                "description": "Find Dune by title",
+                                "id": "1",
+                                "description": "Find the book Dune by title",
+                                "reasoning": "Recommendation needs the anchor book first",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Title",
+                                "depends_on": [],
                             },
                             {
+                                "id": "2",
                                 "description": "Recommend books similar to Dune",
+                                "reasoning": "Similarity search seeded by the retrieved title",
                                 "confidence": 1.0,
                                 "target_node_type": "Analyze_Recommend",
+                                "depends_on": ["1"],
                             },
                         ],
                     },
@@ -156,9 +167,12 @@ class GoalParseRequest(BaseModel):
                     "request": {
                         "system_goals": [
                             {
+                                "id": "1",
                                 "description": "Find sci-fi books",
+                                "reasoning": "Single-dimension genre lookup",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Genre",
+                                "depends_on": [],
                             }
                         ],
                     },
@@ -168,19 +182,28 @@ class GoalParseRequest(BaseModel):
                     "request": {
                         "system_goals": [
                             {
-                                "description": "Find Flights",
+                                "id": "1",
+                                "description": "Find the book Flights by title",
+                                "reasoning": "One anchor book for the comparison",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Title",
+                                "depends_on": [],
                             },
                             {
-                                "description": "Find Satantango",
+                                "id": "2",
+                                "description": "Find the book Satantango by title",
+                                "reasoning": "The other anchor book for the comparison",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Title",
+                                "depends_on": [],
                             },
                             {
+                                "id": "3",
                                 "description": "Compare Flights and Satantango",
+                                "reasoning": "Compare needs both books retrieved first",
                                 "confidence": 1.0,
                                 "target_node_type": "Analyze_Compare",
+                                "depends_on": ["1", "2"],
                             },
                         ],
                     },
@@ -190,19 +213,28 @@ class GoalParseRequest(BaseModel):
                     "request": {
                         "system_goals": [
                             {
+                                "id": "1",
                                 "description": "Find thriller books",
+                                "reasoning": "Genre is one retrieval dimension",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Genre",
+                                "depends_on": [],
                             },
                             {
+                                "id": "2",
                                 "description": "Find books by Gillian Flynn",
+                                "reasoning": "Author is a separate retrieval dimension",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Author",
+                                "depends_on": [],
                             },
                             {
+                                "id": "3",
                                 "description": "Keep only the books that are both thrillers and by Gillian Flynn",
+                                "reasoning": "Both conditions must hold on the same book, so AND the two retrievals",
                                 "confidence": 1.0,
                                 "target_node_type": "Combine_Intersect",
+                                "depends_on": ["1", "2"],
                             },
                         ],
                     },
@@ -212,14 +244,20 @@ class GoalParseRequest(BaseModel):
                     "request": {
                         "system_goals": [
                             {
+                                "id": "1",
                                 "description": "Find books by Kazuo Ishiguro",
+                                "reasoning": "Author is the search subject",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_by_Author",
+                                "depends_on": [],
                             },
                             {
+                                "id": "2",
                                 "description": "Keep only the ones published before 2000",
+                                "reasoning": "Year can only narrow the retrieved set, so it is a separate filter goal",
                                 "confidence": 1.0,
                                 "target_node_type": "Filter_Retrieval",
+                                "depends_on": ["1"],
                             },
                         ],
                     },
@@ -229,9 +267,12 @@ class GoalParseRequest(BaseModel):
                     "request": {
                         "system_goals": [
                             {
+                                "id": "1",
                                 "description": "Retrieve user saved memory",
+                                "reasoning": "Direct user-info lookup",
                                 "confidence": 1.0,
                                 "target_node_type": "Retrieve_User_Info",
+                                "depends_on": [],
                             }
                         ],
                     },
@@ -327,7 +368,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # generate unable to help with
         if self.result.output.out_of_scope:
             await self.sse_stream.send_chars("\n\n I can't do:\n")
-            for unsupported in self.self.result.output.out_of_scope:
+            for unsupported in self.result.output.out_of_scope:
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
         
 
