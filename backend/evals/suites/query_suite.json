@@ -418,5 +418,40 @@
     "query": "Find me some books by Jane Austen and Neil Gaiman with 200 pages or more, in thriller, before 2020. And recommend me some books like them with rating 4.0+ and at least 1000 ratings.",
     "note": "CONSTRAINT-DENSE TWO-STAGE (design-intent expectation, added 2026-07-24). The heaviest case in the suite: two authors and five constraints split across two stages. Stage 1 is case 53's shape (two separate bibliographies, one Retrieve_by_Author each) with three constraints hung on each node — pages >= 200, thriller, before 2020 — none of which is an anchor. Stage 2 is 'like them' plus two more constraints (rating >= 4.0, ratings_count >= 1000), which is Analyze_Recommend depending on both retrievals. So three nodes, not five: no Retrieve_by_Genre for thriller, no separate node for the page or year filters. Two distinct failures to catch: (a) promoting a constraint to an anchor node, which unions instead of narrowing, and (b) losing the dependency link so the recommendation runs off the raw query rather than the retrieved books. Also a live example of the argument-level blind spot — the goals report can confirm the three node types and still miss every one of the five constraints.",
     "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author", "Analyze_Recommend"]
+  },
+  {
+    "id": 61,
+    "difficulty": "medium",
+    "query": "Show me Haruki Murakami books published after 2005.",
+    "note": "RETRIEVAL CONSTRAINT (design-intent expectation, added 2026-07-24). The plain half of the recommend-vs-filter pair, and the control for case 62. A known subject narrowed by a metadata bound, with no similarity ask anywhere in the query: the bibliography is retrieved, then Filter_Retrieval deletes everything published in 2005 or earlier. Retrieval nodes carry no filters of their own, so the year has exactly one legal home. Two failures to catch: routing to Analyze_Recommend because a metadata bound appeared (nothing here asks for anything *like* anything), and dropping the year entirely and returning the whole bibliography — which the node-type diff DOES see here, since the missing Filter_Retrieval is a missing node rather than a missing argument.",
+    "expected_nodes": ["Retrieve_by_Author", "Filter_Retrieval"]
+  },
+  {
+    "id": 62,
+    "difficulty": "medium",
+    "query": "Recommend me something like Neuromancer but under 300 pages.",
+    "note": "RECOMMENDATION CONSTRAINT (design-intent expectation, added 2026-07-24). Case 61 mirrored: same kind of metadata bound, opposite home. The bound belongs in Analyze_Recommend.filters, where it goes INTO the similarity search, so what comes back is the closest books that are already under 300 pages. The failure to catch is a trailing Filter_Retrieval, which is wrong for a reason worth stating: it would rank the nearest books to Neuromancer first — mostly long ones — and then delete nearly all of them, throwing away the ranking and often returning nothing. 61 and 62 are the actual test, and both are visible to the node-type diff: the discriminator is whether Filter_Retrieval appears, not what arguments it carries.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 63,
+    "difficulty": "hard",
+    "query": "Show me Octavia Butler books over 300 pages, and recommend similar books rated 4.0 or higher.",
+    "note": "BOTH FILTERS, ONE QUERY (design-intent expectation, added 2026-07-24). Combines 61 and 62 so the two filter homes must be told apart within a single plan: the page bound narrows the retrieved bibliography (Filter_Retrieval), the rating bound bounds the similarity search (Analyze_Recommend.filters), and the recommend node depends on the filter node so it recommends from the narrowed list. Three failures to catch: collapsing both bounds into one node, hanging the recommendation off the raw Retrieve_by_Author so the page bound never reaches it, and adding a second Filter_Retrieval after the recommendation for the rating. Note the bounds are deliberately different fields — a plan that swaps them produces the right node types and the wrong answer, which this suite cannot see.",
+    "expected_nodes": ["Retrieve_by_Author", "Filter_Retrieval", "Analyze_Recommend"]
+  },
+  {
+    "id": 64,
+    "difficulty": "hard",
+    "query": "Recommend books like The Road, then only keep the ones with at least 1000 ratings.",
+    "note": "POST-FILTER PHRASING TRAP (design-intent expectation, added 2026-07-24). The hardest of the filter-placement cases: the user's wording explicitly describes a post-filter — recommend first, THEN keep some — and the correct plan ignores that wording. Filtering a ranked similarity list after the fact is exactly what Filter_Retrieval's docstring forbids, so the ratings_count bound goes in Analyze_Recommend.filters and no filter node is emitted. Tests whether the planner routes on semantics or on surface syntax; 'then only keep' is close to an instruction to emit the wrong node. The failure to catch is the literal reading, Retrieve_by_Title + Analyze_Recommend + Filter_Retrieval.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend"]
+  },
+  {
+    "id": 65,
+    "difficulty": "hard",
+    "query": "What horror books has Stephen King written that are over 500 pages?",
+    "note": "FULL COMBINE TIER (design-intent expectation, added 2026-07-24). The longest correct plan in the suite: two anchors that must hold on the same book (author AND genre) plus a metadata bound, which is four nodes — retrieve each anchor, Combine_Intersect them, then Filter_Retrieval the result. Exercises the whole tier and the anchor-vs-constraint line in one query: horror is a search subject and gets a retrieval node, 500 pages is a constraint and cannot. Two failures to catch: emitting the two retrievals as bare siblings, which pools them (every King book OR every horror book) instead of intersecting; and promoting the page bound to its own retrieval node. COLLIDES WITH CASES 56/57/59: those expect a single Retrieve_by_Author with the genre silently dropped, an expectation written before Combine_Intersect existed. This case encodes the post-combine-tier answer; they still encode the pre-combine-tier one. They need re-deciding together — see docs/design/execution-pipeline-v1.md open questions.",
+    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Author", "Combine_Intersect", "Filter_Retrieval"]
   }
 ]
