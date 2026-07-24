@@ -187,6 +187,47 @@ class GoalParseRequest(BaseModel):
                     },
                 },
                 {
+                    "query": "Show me thrillers by Gillian Flynn",
+                    "request": {
+                        "system_goals": [
+                            {
+                                "description": "Find thriller books",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Genre",
+                            },
+                            {
+                                "description": "Find books by Gillian Flynn",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Author",
+                            },
+                            {
+                                "description": "Keep only the books that are both thrillers and by Gillian Flynn",
+                                "confidence": 1.0,
+                                "target_node_type": "Combine_Intersect",
+                            },
+                        ],
+                        "reasoning": "Genre and author are both search subjects, so each is its own retrieval goal; they must hold on the same book, which is a third goal — without it the two retrievals would simply be pooled",
+                    },
+                },
+                {
+                    "query": "Books by Kazuo Ishiguro published before 2000",
+                    "request": {
+                        "system_goals": [
+                            {
+                                "description": "Find books by Kazuo Ishiguro",
+                                "confidence": 1.0,
+                                "target_node_type": "Retrieve_by_Author",
+                            },
+                            {
+                                "description": "Keep only the ones published before 2000",
+                                "confidence": 1.0,
+                                "target_node_type": "Filter_Retrieval",
+                            },
+                        ],
+                        "reasoning": "The author is the subject of the search; publication year can only narrow it and cannot be searched for on its own, so it becomes a separate narrowing goal rather than a retrieval",
+                    },
+                },
+                {
                     "query": "What's my saved memory?",
                     "request": {
                         "system_goals": [
