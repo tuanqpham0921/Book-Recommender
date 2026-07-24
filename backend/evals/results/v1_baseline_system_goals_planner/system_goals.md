@@ -1,7 +1,7 @@
 # Eval suite system-goals report
 
-- generated: 2026-07-24 23:19:12 UTC
-- commit: `aef5dce`
+- generated: 2026-07-24 23:29:49 UTC
+- commit: `e41bec5`
 - suites: query_suite, query_suite_adversarial, query_suite_extended, query_suite_stress
 
 **Overall:** 126/174 matched (48 mismatched, 0 without expectations, 174 cases total)

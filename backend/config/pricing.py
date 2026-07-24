@@ -17,7 +17,7 @@ Billing shape (mirrors the fields on common.operation.ModelUsage):
 
 from typing import NamedTuple
 
-PRICES_CHECKED_ON = "2026-07-21"
+PRICES_CHECKED_ON = "2026-07-24"
 
 PER_MILLION = 1_000_000
 
@@ -36,8 +36,11 @@ class ModelPrice(NamedTuple):
 
 
 MODEL_PRICES: dict[str, ModelPrice] = {
-    # the planner's parse step pins this one (parse_intent.py) — 5x mini's
-    # input rate, so it dominates a run's cost despite fewer calls
+    # the planner's system-goals parse step pins this one (parse_intent.py) —
+    # it sees the whole tool catalog every request, so it dominates a run's cost
+    "gpt-5.6-luna": ModelPrice(input=1.00, cached_input=0.10, output=6.00),
+    # former parse-step model (now gpt-5.6-luna); still referenced as the
+    # default in evals/tools_catalog.py and priced here for older recorded runs
     "gpt-4.1": ModelPrice(input=2.00, cached_input=0.50, output=8.00),
     "gpt-4.1-mini": ModelPrice(input=0.40, cached_input=0.10, output=1.60),
     "gpt-4.1-nano": ModelPrice(input=0.10, cached_input=0.025, output=0.40),

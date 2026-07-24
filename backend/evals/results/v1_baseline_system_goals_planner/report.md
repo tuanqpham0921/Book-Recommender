@@ -1,7 +1,7 @@
 # Eval suite cost report
 
-- generated: 2026-07-24 23:19:14 UTC
-- commit: `aef5dce`
+- generated: 2026-07-24 23:29:50 UTC
+- commit: `e41bec5`
 - suites: query_suite, query_suite_adversarial, query_suite_extended, query_suite_stress
 
 ### Overall
