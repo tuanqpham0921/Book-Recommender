@@ -57,6 +57,26 @@ def save_file(
     logger.info(f"📋 log written to {filepath}")
 
 
+def save_text(
+    text: str,
+    file_name: str = "log.txt",
+    path: Path | str = FilesLocationConstants.EXPORT_DIR,
+):
+    """Save a raw string to a text file, with real newlines (no JSON escaping).
+
+    Unlike save_file, this writes the string verbatim and keeps whatever
+    extension file_name carries (defaulting to .txt)."""
+    path = Path(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+    if "." not in Path(file_name).name:
+        file_name = f"{file_name}.txt"
+    filepath = path / file_name
+    filepath.write_text(text)
+
+    logger.info(f"📋 text written to {filepath}")
+
+
 def load_json(
     file_name: str,
     path: Path | str = FilesLocationConstants.EXPORT_DIR,
