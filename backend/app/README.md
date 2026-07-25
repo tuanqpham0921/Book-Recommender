@@ -40,6 +40,6 @@ There is no auth yet — a known pre-deploy blocker (docs/backlog.md, Security P
    is implemented but commented out in `Orchestrator.run`; executors are mocks from
    `playground/app_mock/` (`registry.py`, `EXECUTORS_CLS_MAPPING`). Re-enabling it with
    real executors is roadmap Phase 3.
-4. Every turn is recorded to the `chat_runs` table (planner/tasks/sse_events JSONB) —
+4. Every turn is recorded to the `chat_runs` table (planner/tasks JSONB) —
    that's what the review page and eval reports read. Requests are stateless: nothing
    reads prior turns back (single-turn by design for V1).

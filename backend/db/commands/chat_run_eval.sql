@@ -45,8 +45,7 @@ SELECT
     chat_id,
     pg_column_size(t.*)              AS row_bytes,
     pg_column_size(planner)          AS planner_bytes,
-    pg_column_size(tasks)            AS tasks_bytes,
-    pg_column_size(sse_events)       AS sse_events_bytes
+    pg_column_size(tasks)            AS tasks_bytes
 FROM chat_runs t
 ORDER BY row_bytes DESC
 LIMIT 20;

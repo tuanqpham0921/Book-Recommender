@@ -32,8 +32,7 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     total_tokens INTEGER,
     mermaid TEXT,
     planner JSONB,
-    tasks JSONB,
-    sse_events JSONB
+    tasks JSONB
 );
 
 -- Links an eval-suite case to the chat run it produced. Written by

@@ -13,7 +13,7 @@ line numbers may drift, the file and symbol names are the stable part.
 - **`GET /chat_runs` has no auth** (`app/api/routes/chat_run.py`) — no auth dependency,
   and no auth middleware anywhere in `app/main.py`. Returns `ChatRunModel.to_dict()`
   for every row unscoped: full user_message/assistant_message/session_id plus the
-  planner/tasks/sse_events JSONB traces, paginated via limit/offset. Anyone can page
+  planner/tasks JSONB traces, paginated via limit/offset. Anyone can page
   through the entire chat history of every user with a plain GET. Gate it as an
   internal/admin route at minimum before it's reachable from the internet. (For dev,
   fetching all chat_runs is fine; prod likely wants it limited to test suites.)

@@ -253,11 +253,10 @@ class TestChatStream:
         event = MagicMock(type="content.delta", delta="hello")
         self.make_stream_mock([event], fake_completion)
 
-        sse = AsyncMock(flush_chars=MagicMock())
+        sse = AsyncMock()
         await self.client._chat_stream({}, sse_stream=sse)
 
         sse.send_chars.assert_called_once_with(data="hello")
-        sse.flush_chars.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_non_delta_event_skipped(self):
@@ -265,7 +264,7 @@ class TestChatStream:
         event = MagicMock(type="chunk", delta="ignored")
         self.make_stream_mock([event], fake_completion)
 
-        sse = AsyncMock(flush_chars=MagicMock())
+        sse = AsyncMock()
         await self.client._chat_stream({}, sse_stream=sse)
 
         sse.send_chars.assert_not_called()

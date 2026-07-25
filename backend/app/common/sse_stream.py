@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import time
 from typing import Any
 
 from sse_starlette import ServerSentEvent
@@ -20,48 +19,6 @@ class SSEStream:
         # queue when close() fires get silently dropped.
         self._closed = False
         self._finished = False
-
-        # transcript of what was sent, for replay (persisted per turn as
-        # chat_runs.sse_events). Consecutive content.delta chars coalesce
-        # into _char_buffer instead of one entry per char — the buffer is
-        # flushed into events as a single section when a different-typed
-        # event arrives, on an explicit flush_chars() (the LLM client calls
-        # it after its delta loop, since LLM chunk boundaries aren't
-        # deterministic), and on close(). t/t_end are seconds since stream
-        # creation so a replay can reproduce the original pacing.
-        self._t0 = time.monotonic()
-        self.events: list[dict] = []
-        self._char_buffer: list[str] = []
-        self._char_t_start: float | None = None
-        self._char_t_end: float | None = None
-
-    def _elapsed(self) -> float:
-        return round(time.monotonic() - self._t0, 3)
-
-    def flush_chars(self) -> None:
-        """Close out the current coalesced content.delta section, if any."""
-        if not self._char_buffer:
-            return
-        self.events.append({
-            "type": "content.delta",
-            "data": "".join(self._char_buffer),
-            "t": self._char_t_start,
-            "t_end": self._char_t_end,
-        })
-        self._char_buffer.clear()
-        self._char_t_start = None
-        self._char_t_end = None
-
-    def _record(self, payload: dict) -> None:
-        """Record an outgoing event payload into the transcript."""
-        if payload.get("type") == "content.delta" and isinstance(payload.get("data"), str):
-            if not self._char_buffer:
-                self._char_t_start = self._elapsed()
-            self._char_t_end = self._elapsed()
-            self._char_buffer.append(payload["data"])
-            return
-        self.flush_chars()
-        self.events.append({**payload, "t": self._elapsed()})
 
     def __aiter__(self):
         return self
@@ -111,15 +68,12 @@ class SSEStream:
     
     async def send(self, event_type: str, data: dict[str, Any] | str):
         """Send an SSE event with structured data."""
-        # guard here (not just in put) so events dropped after close/timeout
-        # never enter the transcript — it should hold only what was delivered
         if self._closed or self._finished:
             return
         if not event_type or not data:
             return
-        
+
         payload = {"type": event_type, "data": data}
-        self._record(payload)
         await self.put(json.dumps(payload))
 
     async def send_book_card(self, position: int, data: dict):
@@ -128,7 +82,6 @@ class SSEStream:
         if self._closed or self._finished or not data:
             return
         payload = {"type": "book_card", "position": position, "data": data}
-        self._record(payload)
         await self.put(json.dumps(payload))
 
     async def send_chars(self, data: str, delay: float = 0.01):
@@ -161,9 +114,6 @@ class SSEStream:
     
     async def close(self):
         """Close the stream."""
-        # even when already closed/finished: trailing chars were enqueued
-        # before the stream ended, so they belong in the transcript
-        self.flush_chars()
         if self._closed or self._finished:
             return
 

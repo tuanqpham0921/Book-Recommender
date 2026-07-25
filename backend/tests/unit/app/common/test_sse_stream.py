@@ -12,6 +12,14 @@ async def _collect(stream: SSEStream) -> list:
     return [event async for event in stream]
 
 
+async def _last_payload(stream: SSEStream) -> dict:
+    """Drain the most recently enqueued item and parse it as a JSON payload."""
+    raw = stream._queue.get_nowait()
+    while not stream._queue.empty():
+        raw = stream._queue.get_nowait()
+    return json.loads(raw)
+
+
 class TestSend:
     async def test_send_enqueues_json_payload(self):
         stream = SSEStream()
@@ -19,97 +27,86 @@ class TestSend:
         raw = await stream._queue.get()
         assert json.loads(raw) == {"type": "ui.loading", "data": "Thinking..."}
 
-    async def test_send_records_transcript_with_elapsed_time(self):
-        stream = SSEStream()
-        await stream.send("ui.loading", "Thinking...")
-        assert len(stream.events) == 1
-        event = stream.events[0]
-        assert event["type"] == "ui.loading"
-        assert event["data"] == "Thinking..."
-        assert isinstance(event["t"], float)
-
     async def test_send_is_noop_after_close(self):
         stream = SSEStream()
         await stream.close()
+        await stream._queue.get()  # drain the sentinel close() enqueued
         await stream.send("ui.loading", "too late")
-        assert stream.events == []
+        assert stream._queue.empty()
 
     async def test_send_chat_id_wraps_in_dict(self):
         stream = SSEStream()
         await stream.send_chat_id("chat_123")
-        assert stream.events[-1]["type"] == "chat.id"
-        assert stream.events[-1]["data"] == {"chat_id": "chat_123"}
+        payload = await _last_payload(stream)
+        assert payload["type"] == "chat.id"
+        assert payload["data"] == {"chat_id": "chat_123"}
 
     async def test_send_error(self):
         stream = SSEStream()
         await stream.send_error("boom")
-        assert stream.events[-1]["type"] == "error"
-        assert stream.events[-1]["data"] == "boom"
+        payload = await _last_payload(stream)
+        assert payload["type"] == "error"
+        assert payload["data"] == "boom"
 
     async def test_send_mermaid(self):
         stream = SSEStream()
         await stream.send_mermaid("graph TD; A-->B")
-        assert stream.events[-1]["type"] == "mermaid.diagram"
-        assert stream.events[-1]["data"] == "graph TD; A-->B"
+        payload = await _last_payload(stream)
+        assert payload["type"] == "mermaid.diagram"
+        assert payload["data"] == "graph TD; A-->B"
 
     async def test_send_noop_when_event_type_empty(self):
         stream = SSEStream()
         await stream.send("", "some data")
-        assert stream.events == []
         assert stream._queue.empty()
 
     async def test_send_noop_when_event_type_none(self):
         stream = SSEStream()
         await stream.send(None, "some data")
-        assert stream.events == []
         assert stream._queue.empty()
 
     async def test_send_noop_when_data_empty_string(self):
         stream = SSEStream()
         await stream.send("ui.loading", "")
-        assert stream.events == []
         assert stream._queue.empty()
 
     async def test_send_noop_when_data_none(self):
         stream = SSEStream()
         await stream.send("ui.loading", None)
-        assert stream.events == []
         assert stream._queue.empty()
 
     async def test_send_noop_when_data_empty_dict(self):
         stream = SSEStream()
         await stream.send("ui.loading", {})
-        assert stream.events == []
         assert stream._queue.empty()
 
 
 class TestSendBookCard:
-    async def test_send_book_card_records_position(self):
+    async def test_send_book_card_enqueues_position(self):
         stream = SSEStream()
         await stream.send_book_card(0, {"title": "Dune"})
-        assert stream.events[-1] == {
+        payload = await _last_payload(stream)
+        assert payload == {
             "type": "book_card",
             "position": 0,
             "data": {"title": "Dune"},
-            "t": stream.events[-1]["t"],
         }
 
     async def test_send_book_card_is_noop_after_close(self):
         stream = SSEStream()
         await stream.close()
+        await stream._queue.get()  # drain the sentinel close() enqueued
         await stream.send_book_card(0, {"title": "Dune"})
-        assert stream.events == []
+        assert stream._queue.empty()
 
     async def test_send_book_card_noop_when_data_empty_dict(self):
         stream = SSEStream()
         await stream.send_book_card(0, {})
-        assert stream.events == []
         assert stream._queue.empty()
 
     async def test_send_book_card_noop_when_data_none(self):
         stream = SSEStream()
         await stream.send_book_card(0, None)
-        assert stream.events == []
         assert stream._queue.empty()
 
 
@@ -134,57 +131,11 @@ class TestPut:
         assert stream._queue.empty()
 
 
-class TestCharBuffering:
-    async def test_send_chars_does_not_flush_until_asked(self):
-        stream = SSEStream()
-        await stream.send_chars("hi", delay=0)
-        assert stream.events == []
-
+class TestSendChars:
     async def test_send_chars_enqueues_one_item_per_char(self):
         stream = SSEStream()
         await stream.send_chars("hi", delay=0)
         assert stream._queue.qsize() == 2
-
-    async def test_flush_chars_coalesces_into_one_event(self):
-        stream = SSEStream()
-        await stream.send_chars("hi", delay=0)
-        stream.flush_chars()
-        assert len(stream.events) == 1
-        assert stream.events[0]["type"] == "content.delta"
-        assert stream.events[0]["data"] == "hi"
-        assert stream.events[0]["t"] is not None
-        assert stream.events[0]["t_end"] is not None
-
-    async def test_flush_chars_is_noop_when_buffer_empty(self):
-        stream = SSEStream()
-        stream.flush_chars()
-        assert stream.events == []
-
-    async def test_flush_chars_resets_buffer_for_next_section(self):
-        stream = SSEStream()
-        await stream.send_chars("hi", delay=0)
-        stream.flush_chars()
-        await stream.send_chars("bye", delay=0)
-        stream.flush_chars()
-        assert len(stream.events) == 2
-        assert stream.events[0]["data"] == "hi"
-        assert stream.events[1]["data"] == "bye"
-
-    async def test_different_event_type_flushes_char_buffer(self):
-        stream = SSEStream()
-        await stream.send_chars("hi", delay=0)
-        await stream.send_ui_loading("loading...")
-        assert len(stream.events) == 2
-        assert stream.events[0]["type"] == "content.delta"
-        assert stream.events[0]["data"] == "hi"
-        assert stream.events[1]["type"] == "ui.loading"
-
-    async def test_close_flushes_pending_chars(self):
-        stream = SSEStream()
-        await stream.send_chars("hi", delay=0)
-        await stream.close()
-        assert stream.events[-1]["type"] == "content.delta"
-        assert stream.events[-1]["data"] == "hi"
 
 
 class TestClose:
@@ -244,8 +195,8 @@ class TestAsyncIteration:
 
         await asyncio.wait_for(consumer, timeout=2)
         assert stream._finished is True
-        # "hi" is sent char-by-char onto the wire (only the transcript
-        # coalesces), so the consumer sees 2 raw ServerSentEvents
+        # "hi" is sent char-by-char onto the wire, so the consumer sees 2
+        # raw ServerSentEvents
         assert len(received) == 2
 
     async def test_anext_times_out_and_finishes(self, monkeypatch):

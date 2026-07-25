@@ -27,7 +27,6 @@ def build_chat_run_row(
     result: OperationResult[PlannerOutput],
     output: PlannerOutput,
     tasks: OperationResult[TaskRunnerOutput] | None = None,
-    sse_events: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Map a finished conversation (+ optional task run) onto ChatRunModel
     columns. Promoted stats (ok, duration, tokens, mermaid) up front for
@@ -44,7 +43,6 @@ def build_chat_run_row(
         "mermaid": output.diagram,
         "planner": to_serializable(result),
         "tasks": to_serializable(tasks) if tasks is not None else None,
-        "sse_events": sse_events,
     }
 
 
@@ -68,12 +66,6 @@ async def record_chat_run(
         return
 
     try:
-        # runs before sse_stream.close() (see Orchestrator.run's finally),
-        # so error/complete events are already in the transcript — flush any
-        # trailing chars, then snapshot what the user saw this turn
-        sse_stream = request_context.sse_stream
-        sse_stream.flush_chars()
-
         row = build_chat_run_row(
             session_id=request_context.session_id,
             user_chat_id=request_context.user_message.id,
@@ -81,7 +73,6 @@ async def record_chat_run(
             result=workflow.result,
             output=workflow.output,
             tasks=task_runner.result if task_runner is not None else None,
-            sse_events=sse_stream.events,
         )
 
         if app_env == "development":

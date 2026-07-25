@@ -88,12 +88,6 @@ class ChatRunModel(Base):
     planner = Column(JSONB, nullable=True)
     tasks = Column(JSONB, nullable=True)
 
-    # SSE transcript: exactly what the user saw this turn, in order, with
-    # t/t_end second-offsets for replay pacing. Consecutive content.delta
-    # chars are coalesced into sections (see SSEStream.flush_chars), so this
-    # stays compact. Own column so replay reads skip the planner/tasks blobs.
-    sse_events = Column(JSONB, nullable=True)
-
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"
 
