@@ -256,7 +256,7 @@
     "difficulty": "hard",
     "query": "Who is the developer? Also, are there any books about the technologies they used to build this app?",
     "note": "DeveloperInfo + ProjectInfo + FindByTraits/Recommend across three domains. The tech stack from ProjectInfo informs the book search — cross-domain dependency.",
-    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_by_Genre"]
+    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_by_Genre", "Analyze_Recommend"]
   },
   {
     "id": 38,
@@ -326,7 +326,7 @@
     "difficulty": "hard",
     "query": "I'm a developer who uses this app. Show me my token usage, tell me about the project's tech stack, and recommend sci-fi books about distributed systems.",
     "note": "UserInfo + ProjectInfo + Recommend across all three domains simultaneously. Three parallel nodes before Recommend — tests multi-domain fan-in.",
-    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Retrieve_by_Genre", "Analyze_Recommend"]
   },
   {
     "id": 48,
