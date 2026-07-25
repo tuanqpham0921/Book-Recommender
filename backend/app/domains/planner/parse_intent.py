@@ -35,7 +35,8 @@ from app.domains.field_types import (
 
 logger = logging.getLogger(__name__)
 
-GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
+# GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
+GOAL_GENERATOR_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
 
 MAX_SYSTEM_GOALS = 10
 
@@ -373,10 +374,12 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         
 
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
-        system_prompt = format_prompt(
-            prompt_path=GOAL_GENERATOR_PROMPT_PATH,
-            TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
-        )
+        # system_prompt = format_prompt(
+        #     prompt_path=GOAL_GENERATOR_PROMPT_PATH,
+        #     TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
+        # )
+        system_prompt = load_prompt(
+                    prompt_path=GOAL_GENERATOR_PROMPT_PATH                )
         # NOTE: using gpt4.1 because the system goals sees the whole catalog
         # it's very important that this part is done correctly
         # cache hit rate is high, and output generation is lower
@@ -390,7 +393,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             messages=[self.user_message],
             tool_models=[GoalParseRequest],
         )
-        assistant_msg = await self.run_llm_call(req)
+        assistant_msg = await self.run_llm_call(req, save_payload=True)
         tool_calls = assistant_msg.tool_calls
         if not tool_calls:
             # previously an unguarded [0] on None — same failure semantics
