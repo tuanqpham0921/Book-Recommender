@@ -75,10 +75,6 @@ Retrieve_by_Title
           similarly titled books (e.g. "Dune" by Frank Herbert) — omit when the
           author isn't a distinguishing detail.
 
-  Returns: A FindByTitleOutput — the searched title plus a list of matching
-  BookSummary records (isbn13, title, authors, categories, genre,
-  published_year, num_pages, average_rating, ratings_count, is_children).
-
   Use when: a specific title is named — "find Dune", "do you have The Great
   Gatsby". Also use for authorship-verification questions ("did Frank
   Herbert write Dune", "is Dune by Frank Herbert") — the title is still the
@@ -91,21 +87,11 @@ Retrieve_by_Title
   Constraints: one title per node — for multiple named titles, emit one node
   per title.
 
-  Example queries:
-      - "find Dune"
-      - "do you have The Great Gatsby"
-      - "Dune by Frank Herbert"
-      - "did Frank Herbert write Dune"
-      - "is Dune by Frank Herbert"
-
 Retrieve_by_ISBN13
   Purpose: Retrieve a single book by its exact ISBN13 from the database.
 
   Args:
       isbn13: ISBN13 to search for.
-
-  Returns: A FindByISBN13Output — the searched isbn13 plus the matching
-  BookSummary, or null if not found.
 
   Use when: an ISBN13 is explicitly given by the user, or already known from
   a prior step's result.
@@ -115,18 +101,11 @@ Retrieve_by_ISBN13
 
   Constraints: exactly one ISBN13 per node.
 
-  Example queries:
-      - "look up ISBN 9780441172719"
-      - "what book is 978-0-14-303943-3"
-
 Retrieve_by_Author
   Purpose: Retrieve the books written by one named author — that author's bibliography.
 
   Args:
       author: The single author whose books to retrieve.
-
-  Returns: A FindByAuthorOutput — the searched author plus a list of matching
-  BookSummary records.
 
   Use when: one author is the subject of the search.
 
@@ -141,19 +120,11 @@ Retrieve_by_Author
   bibliographies means one node per author ("books by Austen and by Coelho"
   → two nodes), because each node returns one author's catalog.
 
-  Example queries:
-      - "books by Ursula K. Le Guin"
-      - "what else has Brandon Sanderson written"
-      - "show me some Agatha Christie"
-
 Retrieve_by_CoAuthors
   Purpose: Retrieve books that two or more named authors wrote together — their collaborations.
 
   Args:
       authors: The authors who must all appear on the same book (at least two).
-
-  Returns: A FindByCoAuthorsOutput — the searched authors plus a list of
-  matching BookSummary records, each credited to all of them.
 
   Use when: the query is about a collaboration — the named authors as
   co-writers of the same title, signalled by words like "together", "with",
@@ -169,20 +140,11 @@ Retrieve_by_CoAuthors
   returns nothing when they never actually collaborated (which is itself the
   answer to "did they write anything together?").
 
-  Example queries:
-      - "what did Brian Herbert and Kevin J. Anderson write together"
-      - "books co-written by Neil Gaiman and Terry Pratchett"
-      - "did Charles Osborne and Agatha Christie collaborate on anything"
-      - "show me the Preston and Child novels"
-
 Retrieve_by_Genre
   Purpose: Retrieve books belonging to a named genre or category from the database.
 
   Args:
       genre: Genre or category to search for.
-
-  Returns: A FindByGenreOutput — the searched genre plus a list of matching
-  BookSummary records.
 
   Use when: genre is the primary axis of the search — "fantasy books", "any
   good mysteries", "nonfiction about space".
@@ -193,11 +155,6 @@ Retrieve_by_Genre
   Constraints: single genre per node — no cross-column filtering (e.g. genre
   plus a rating threshold isn't supported in this node).
 
-  Example queries:
-      - "fantasy books"
-      - "any good mysteries"
-      - "nonfiction about space"
-
 Retrieve_User_Info
   Purpose: Retrieve information about the current user from the database.
 
@@ -205,8 +162,6 @@ Retrieve_User_Info
       field: One or more UserInfoEnum values to retrieve (name, age, bio,
           token_usage, saved_memory, previous_conversation,
           current_conversation).
-
-  Returns: The requested user profile/session fields.
 
   Use when: the user asks about themselves — "what's my saved memory", "how
   many tokens have I used", "what's in my profile".
@@ -216,19 +171,12 @@ Retrieve_User_Info
 
   Constraints: field values must come from UserInfoEnum.
 
-  Example queries:
-      - "what's my saved memory"
-      - "how many tokens have I used"
-      - "what's in my profile"
-
 Retrieve_Developer_Info
   Purpose: Retrieve information about the developer/maintainer of this app.
 
   Args:
       field: One or more DeveloperInfoEnum values to retrieve (name, bio,
           email, linkedin_url).
-
-  Returns: The requested developer profile fields.
 
   Use when: the user asks about who built the app — "who made this", "what's
   the developer's email", "link me their LinkedIn".
@@ -238,11 +186,6 @@ Retrieve_Developer_Info
 
   Constraints: field values must come from DeveloperInfoEnum.
 
-  Example queries:
-      - "who made this"
-      - "what's the developer's email"
-      - "link me their LinkedIn"
-
 Retrieve_Project_Info
   Purpose: Retrieve information about the app, tech stack, architecture, or project metadata.
 
@@ -250,9 +193,6 @@ Retrieve_Project_Info
       fields: One or more ProjectInfoField values to retrieve (name,
           description, technology_stack, project_url, project_github_url,
           project_github_repo_name, project_github_repo_url, all).
-
-  Returns: The requested project metadata fields, rendered as a short
-  description of the project.
 
   Use when: the user asks about the project itself — "what tech stack does
   this use", "what is this app", "where's the GitHub repo", "tell me about
@@ -264,20 +204,11 @@ Retrieve_Project_Info
   Constraints: fields must come from ProjectInfoField; use "all" for a
   general "tell me about this project" ask.
 
-  Example queries:
-      - "what tech stack does this use"
-      - "what is this app"
-      - "where's the GitHub repo"
-      - "tell me about this project"
-
 
 ## Combine — intersect or narrow what retrieval steps already returned
 
 Combine_Union
   Purpose: Pool two or more prior retrieval results into one combined set — OR, not AND.
-
-  Returns: A UnionRetrievalOutput — one deduplicated list of BookSummary
-  records containing every book found by any of the depended-on steps.
 
   Use when: separate result sets have to become one explicit list before the
   next step can work on them — a later analyze step that reasons over all of
@@ -298,16 +229,8 @@ Combine_Union
   queries the database, so it cannot widen what the retrievals already
   returned.
 
-  Example queries:
-      - "recommend something based on Austen's and Coelho's books"
-      - "the longest book by either Sanderson or Jordan"
-      - "put everything by these two authors in one list"
-
 Combine_Intersect
   Purpose: Keep only the books found by ALL of two or more prior retrievals — AND, not OR.
-
-  Returns: An IntersectRetrievalsOutput — one list of BookSummary records,
-  each of which appeared in every depended-on step's result.
 
   Use when: the request names two or more search dimensions that must hold on
   the same book, and each dimension has its own retrieval node — most often
@@ -333,20 +256,12 @@ Combine_Intersect
   a separate Filter_Retrieval step after this one. It reads prior results only
   and never queries the database.
 
-  Example queries:
-      - "fantasy books by Brandon Sanderson"
-      - "what children's books has Neil Gaiman written"
-      - "mysteries by Agatha Christie"
-
 Filter_Retrieval
   Purpose: Narrow a prior retrieval's books by metadata — pages, year, rating, ratings count, child-friendly.
 
   Args:
       filters: The metadata bounds to apply. Every field is inclusive and
           independent — supply only the ones the user actually stated.
-
-  Returns: A FilterRetrievalOutput — the subset of the depended-on books that
-  satisfy every supplied bound.
 
   Use when: the request adds a measurable limit to a search that already has a
   subject — "by Sanderson, over 400 pages", "fantasy published after 2015",
@@ -367,11 +282,6 @@ Filter_Retrieval
   only; it never queries the database, so it can only shrink what the prior
   steps already returned.
 
-  Example queries:
-      - "books by Brandon Sanderson over 400 pages"
-      - "fantasy published after 2015"
-      - "Agatha Christie, but only the well-reviewed ones"
-
 
 ## Analyze — interpret, compare, or recommend using retrieved data
 
@@ -385,8 +295,6 @@ Analyze_Recommend
           child-friendly — that the SEARCH ITSELF must respect. These are not
           applied to the depended-on books; they bound which candidates the
           similarity search is allowed to return.
-
-  Returns: Markdown-formatted recommendation text, used directly as the assistant's reply.
 
   Use when: the user wants new titles to read.
       - Similarity: "books like X", "more like X or Y" → retrieve X (and Y)
@@ -415,23 +323,12 @@ Analyze_Recommend
   them away, answering with a few poor matches or nothing at all. Narrow a
   plain retrieval with Filter_Retrieval; narrow a recommendation with filters.
 
-  Example queries:
-      - "books like Dune"
-      - "more like Dune or Foundation"
-      - "cozy mysteries"
-      - "epic sci-fi with strong world-building"
-      - "like Dune but darker and shorter"
-      - "something like Dune between 100 and 200 pages"
-      - "recommend a well-reviewed cozy mystery from the last decade"
-
 Analyze_Compare
   Purpose: Contrast two or more named books — the analyze step when the user asks how titles differ or relate.
 
   Args:
       comparison_criteria: The user's comparison lens (theme, tone, length,
           style, etc.) when stated; omit when they only want a general comparison.
-
-  Returns: Markdown-formatted comparison text, used directly as the assistant's reply.
 
   Use when: the user wants a side-by-side read on specific named books.
 
@@ -440,12 +337,6 @@ Analyze_Compare
 
   Constraints: needs two or more books retrieved first — a comparison of
   fewer is meaningless. Three or more titles → one retrieval per book.
-
-  Example queries:
-      - "Compare X and Y"
-      - "how are X and Y different"
-      - "compare their themes"
-      - "which is longer / darker / more literary"
 
 
 ## Other supported actions
@@ -458,8 +349,6 @@ Provide_Feedback
           the user volunteers it, for a possible follow-up.
       feedback: The user's feedback text.
 
-  Returns: Confirmation that the feedback was recorded.
-
   Use when: the user is commenting on the app/planner/experience — "this
   recommendation tool is great", "the chat feels slow", "you should add X
   feature", "found a bug when I asked about...".
@@ -470,9 +359,3 @@ Provide_Feedback
 
   Constraints: feedback is required text; contact_info is optional and must
   not be invented if the user didn't provide it.
-
-  Example queries:
-      - "this recommendation tool is great"
-      - "the chat feels slow"
-      - "you should add a dark mode"
-      - "found a bug when I asked about sci-fi books"
