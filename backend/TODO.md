@@ -11,6 +11,24 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+current
+* add a parse arguments of the normalized query fields
+    * see how it does first
+        * in one request or as seperate in task_runner
+        * parsing seperate means less chance of hallucination
+            * and better agentic feel (since you can do pending)
+            * but it means more api calls
+            * seems like the cap is at 500rpm (if you have 15 requests)
+                * that's 15 parsers, so you can have around 33 users at most in one
+                * tho it varies due to the step nature
+                * the next tier is 5,000rpm so you should be fine
+            * you also save tokens if a previous step fail before
+                * you get here and parse or just not parse
+
+polishing/nice to have:
+* have the reasoning answer in first person ("I need to find this title first...")
+    * tho if you use the reasoning for reparse it could be a problem
+
 current added intersect and filter retrievals
     * why this way is that at each step
     * i can do a cte to ensure that there are books (candidates)
