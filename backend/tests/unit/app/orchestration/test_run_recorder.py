@@ -1,5 +1,5 @@
 """Tests for run_recorder: column mapping and serialization fidelity of
-build_chat_run_row (private attrs like _llm_id must survive), and the
+build_chat_run_row (private attrs like _refusal must survive), and the
 env-dependent sink selection in record_chat_run (test → nothing,
 development → file + DB, prod → DB only, DB failures swallowed)."""
 
@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.common.messages import UserMessage
 from app.common.sse_stream import SSEStream
-from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
+from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.planner.main import PlannerOutput
-from app.domains.planner.strategy_classification import StrategyClassificationOutput
+from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.orchestration.request_context import RequestContext
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
 from clients import OpenAIClient
@@ -20,33 +20,27 @@ from common.operation import OperationResult, TokenUsage
 from db.stores.book_store import BookStore
 
 
-def _make_strategy(
-    llm_id="task_1", internal_id="task_abcd1234", goal_id="goal_a1b2c3d4"
-):
-    """Build a BaseRequest subclass the way StrategyClassificationWorkflow would
-    leave it after `_set_llm_id`: original LLM id stashed on `_llm_id`, a fresh
-    internal id on `id`, and a note recorded via `_details`."""
-    strategy = FindByTitleRetrieval(
-        id=llm_id,
-        title="Test Book",
-        target_goal=[goal_id],
-        description="A sufficiently long description for the test",
+def _make_goal():
+    """A SystemGoal with a refusal recorded, so its private attrs (_refusal,
+    _refusal_reasons) carry content to assert survives serialization."""
+    goal = SystemGoal(
+        id="1",
+        description="Find a book about machine learning topics",
         reasoning="A sufficiently long reasoning for the test",
         confidence=0.9,
+        target_node_type=BookNodeTypeEnum.FIND_TITLE,
+        depends_on=[],
     )
-    strategy._llm_id = llm_id
-    strategy.id = internal_id
-    strategy.add_details("duplicate llm_id, created a new one")
-    return strategy
+    goal.refuse("just to populate a private attr")
+    return goal
 
 
 def _make_result_and_output() -> tuple[OperationResult, PlannerOutput]:
-    strategy = _make_strategy()
-    strategy_result = StrategyClassificationOutput(
-        accepted=[strategy], execution_order=[strategy.id]
-    )
+    goal = _make_goal()
     output = PlannerOutput(
-        session_id="sess_1", strategy_result=strategy_result, diagram="graph TD;"
+        session_id="sess_1",
+        parse_result=InitialParseOutput(accepted_goals=[goal]),
+        diagram="graph TD;",
     )
     result = OperationResult(
         ok=True,
@@ -98,9 +92,10 @@ class TestBuildChatRunRow:
         assert row["mermaid"] == "graph TD;"
         assert row["tasks"] is None
         assert row["planner"]["ok"] is True
-        assert row["planner"]["output"]["strategy_result"]["execution_order"] == [
-            "task_abcd1234"
-        ]
+        assert (
+            row["planner"]["output"]["parse_result"]["accepted_goals"][0]["description"]
+            == "Find a book about machine learning topics"
+        )
 
     def test_serialization_preserves_private_attrs(self):
         result, output = _make_result_and_output()
@@ -113,11 +108,10 @@ class TestBuildChatRunRow:
             output=output,
         )
 
-        accepted = row["planner"]["output"]["strategy_result"]["accepted"][0]
-        assert accepted["_llm_id"] == "task_1"
-        assert accepted["_details"] == ["duplicate llm_id, created a new one"]
-        assert accepted["_refusal"] is False
-        assert accepted["id"] == "task_abcd1234"
+        goal = row["planner"]["output"]["parse_result"]["accepted_goals"][0]
+        assert goal["_refusal"] is True
+        assert goal["_refusal_reasons"] == ["just to populate a private attr"]
+        assert goal["_id"].startswith("goal_")
 
 
 class TestRecordChatRun:

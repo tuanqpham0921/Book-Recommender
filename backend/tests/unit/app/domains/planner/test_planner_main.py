@@ -7,10 +7,8 @@ import pytest
 from app.common.messages import AssistantMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from app.domains.books.node_types import BookNodeTypeEnum
-from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
-from app.domains.planner.strategy_classification import StrategyClassificationOutput
 from common.operation import OperationResult, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
@@ -34,36 +32,17 @@ def _make_goal():
     return goal
 
 
-def _make_strategy():
-    strategy = FindByTitleRetrieval(
-        id="task_1",
-        title="Pride and Prejudice",
-        target_goal=["goal_a1b2c3d4"],
-        description="A sufficiently long description for the test",
-        reasoning="A sufficiently long reasoning for the test",
-        confidence=0.9,
-    )
-    strategy._llm_id = "task_1"
-    strategy.id = "task_abcd1234"
-    strategy.add_details("duplicate llm_id, created a new one")
-    return strategy
-
-
 def _make_orchestration_output() -> PlannerOutput:
     goal = _make_goal()
-    strategy = _make_strategy()
     return PlannerOutput(
         session_id="sess_1",
         parse_result=InitialParseOutput(accepted_goals=[goal]),
-        strategy_result=StrategyClassificationOutput(
-            accepted=[strategy], execution_order=[strategy.id]
-        ),
         diagram="graph TD;\nA-->B;",
     )
 
 
 class TestPlannerWorkflowAddStep:
-    # storing parse/strategy outputs moved from an add_step override into
+    # storing the parse output moved from an add_step override into
     # run() itself — see PlannerWorkflow.run
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
@@ -97,9 +76,9 @@ def _make_runtime_error(message: str) -> RuntimeErrorInfo:
 
 
 def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
-    """A stand-in for an InitialParseWorkflow/StrategyClassificationWorkflow
-    instance: calling it (as run_async_step does) awaits to step_result,
-    while .output (accessed directly by PlannerWorkflow.run) returns output."""
+    """A stand-in for an InitialParseWorkflow instance: calling it (as
+    run_async_step does) awaits to step_result, while .output (accessed
+    directly by PlannerWorkflow.run) returns output."""
     workflow = AsyncMock(return_value=step_result)
     workflow.output = output
     return workflow
@@ -107,11 +86,7 @@ def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
 
 class TestPlannerWorkflowRuntimeErrorPropagation:
     """self.result.runtime_error must come from whichever child step
-    actually crashed — a copy-paste bug once had the strategy-classification
-    branch pulling from parse_result instead of strategy_result, which
-    silently discarded the real error (parse_result.runtime_error is always
-    None by the time that branch runs, since both of parse's own failure
-    paths return early)."""
+    actually crashed."""
 
     async def test_parse_failure_runtime_error_propagates(self, orchestrator):
         parse_error = _make_runtime_error("parse crashed")
@@ -128,40 +103,13 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
 
         assert orchestrator.result.runtime_error is parse_error
 
-    async def test_strategy_failure_runtime_error_propagates(self, orchestrator):
-        parse_output = InitialParseOutput(accepted_goals=[_make_goal()])
-        parse_workflow = _mock_child_workflow(
-            OperationResult(ok=True, output=parse_output), parse_output
-        )
-
-        strategy_error = _make_runtime_error("strategy crashed")
-        strategy_workflow = _mock_child_workflow(
-            OperationResult(ok=False, runtime_error=strategy_error),
-            StrategyClassificationOutput(),
-        )
-
-        with patch(
-            "app.domains.planner.main.InitialParseWorkflow",
-            return_value=parse_workflow,
-        ), patch(
-            "app.domains.planner.main.StrategyClassificationWorkflow",
-            return_value=strategy_workflow,
-        ):
-            await orchestrator.run(request_context=MagicMock(session_id="sess_1"))
-
-        # the bug: this used to be parse_result.runtime_error (always None
-        # here, since parse succeeded), silently swallowing strategy_error
-        assert orchestrator.result.runtime_error is strategy_error
-
 
 class TestPlannerOutputJsonRoundTrip:
     """model_dump_json / model_validate_json round-trip of PlannerOutput.
 
-    Public fields (including which concrete BaseRequest subclass a strategy
-    is) survive because `node_type` discriminates the union on reload.
-    Private attrs (PrivateAttr, e.g. `_llm_id`, `_details`, `_refusal`) are
-    NOT part of the pydantic schema, so `model_dump_json` never emits them -
-    they always come back reset to their field defaults.
+    Public fields survive reload. Private attrs (PrivateAttr, e.g. `_refusal`)
+    are NOT part of the pydantic schema, so `model_dump_json` never emits them
+    - they always come back reset to their field defaults.
     """
 
     def test_top_level_fields_survive(self):
@@ -170,23 +118,6 @@ class TestPlannerOutputJsonRoundTrip:
 
         assert restored.session_id == output.session_id
         assert restored.diagram == output.diagram
-
-    def test_accepted_strategy_public_fields_survive(self):
-        output = _make_orchestration_output()
-        original_strategy = output.strategy_result.accepted[0]
-
-        restored = PlannerOutput.model_validate_json(output.model_dump_json())
-        restored_strategy = restored.strategy_result.accepted[0]
-
-        assert isinstance(restored_strategy, FindByTitleRetrieval)
-        assert restored_strategy.id == original_strategy.id
-        assert restored_strategy.title == original_strategy.title
-        assert restored_strategy.target_goal == original_strategy.target_goal
-        assert restored_strategy.confidence == original_strategy.confidence
-        assert (
-            restored.strategy_result.execution_order
-            == output.strategy_result.execution_order
-        )
 
     def test_accepted_goal_public_fields_survive(self):
         output = _make_orchestration_output()
@@ -201,19 +132,6 @@ class TestPlannerOutputJsonRoundTrip:
 
     # NOTE: these tests require update
     # currently we are not sure about the private attributes
-    def test_strategy_private_attrs_do_not_survive_round_trip(self):
-        output = _make_orchestration_output()
-        original_strategy = output.strategy_result.accepted[0]
-        assert original_strategy._llm_id == "task_1"
-        assert original_strategy._details == ["duplicate llm_id, created a new one"]
-
-        restored = PlannerOutput.model_validate_json(output.model_dump_json())
-        restored_strategy = restored.strategy_result.accepted[0]
-
-        assert restored_strategy._llm_id is None
-        assert restored_strategy._details == []
-        assert restored_strategy._refusal is False
-
     def test_goal_private_attrs_do_not_survive_round_trip(self):
         output = _make_orchestration_output()
         original_goal = output.parse_result.accepted_goals[0]
@@ -231,23 +149,10 @@ class TestPlannerOutputJsonRoundTrip:
 class TestPlannerOutputSaveFileRoundTrip:
     """save_file/load_json (common.utils) go through to_serializable, which
     walks __pydantic_private__ - so unlike model_dump_json/model_validate_json,
-    private attrs (_llm_id, _details, _refusal, ...) do survive this round
+    private attrs (_refusal, _refusal_reasons, ...) do survive this round
     trip. The catch: load_json hands back plain dicts, not reconstructed
-    BaseRequest/SystemGoal instances.
+    SystemGoal instances.
     """
-
-    def test_accepted_strategy_private_attrs_survive(self, tmp_path):
-        output = _make_orchestration_output()
-        original_strategy = output.strategy_result.accepted[0]
-
-        save_file(output, file_name="orchestration_output_strategy", path=tmp_path)
-        loaded = load_json("orchestration_output_strategy", path=tmp_path)
-        loaded_strategy = loaded["strategy_result"]["accepted"][0]
-
-        assert loaded_strategy["id"] == original_strategy.id
-        assert loaded_strategy["_llm_id"] == original_strategy._llm_id
-        assert loaded_strategy["_details"] == original_strategy._details
-        assert loaded_strategy["_refusal"] == original_strategy._refusal
 
     def test_goal_private_attrs_survive(self, tmp_path):
         output = _make_orchestration_output()

@@ -6,21 +6,11 @@ import pytest
 from app.common.messages import UserMessage
 from app.common.sse_stream import SSEStream
 from app.domains.planner.parse_intent import InitialParseWorkflow
-from app.domains.planner.strategy_classification import StrategyClassificationWorkflow
 
 
 @pytest.fixture
 def parse_wf():
     return InitialParseWorkflow(
-        sse_stream=SSEStream(),
-        user_message=UserMessage(content="test message"),
-        llm_client=MagicMock(),
-    )
-
-
-@pytest.fixture
-def strategy_wf():
-    return StrategyClassificationWorkflow(
         sse_stream=SSEStream(),
         user_message=UserMessage(content="test message"),
         llm_client=MagicMock(),
