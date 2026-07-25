@@ -8,7 +8,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from app.common.messages import ToolMessage
-from app.domains.base_request import AnalyzeBaseRequest
+from app.domains.base_request import BaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import (
     FindByAuthorRetrieval,
@@ -22,7 +22,7 @@ from app.domains.planner.strategy_classification import MAX_STRATEGIES, Strategy
 from app.registry import BOOK_RETRIEVAL_CLASSES
 
 
-class _FakeAnalyze(AnalyzeBaseRequest):
+class _FakeAnalyze(BaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
 
 

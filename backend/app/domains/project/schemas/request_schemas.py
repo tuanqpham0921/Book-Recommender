@@ -1,11 +1,11 @@
 from typing import Optional, Literal
 from pydantic import Field
-from app.domains.base_request import DomainRequest
+from app.domains.base_request import BaseRequest
 from app.domains.project.schemas.filter_schemas import ProjectInfoField
 from app.domains.project.node_types import ProjectNodeTypeEnum
 
 
-class FeedbackRequest(DomainRequest):
+class FeedbackRequest(BaseRequest):
     """Purpose: Record the user's feedback, opinion, bug report, or suggestion about this app itself.
 
     Args:
@@ -45,7 +45,7 @@ class FeedbackRequest(DomainRequest):
     )
 
 
-class ProjectInfoRequest(DomainRequest):
+class ProjectInfoRequest(BaseRequest):
     """Purpose: Retrieve information about the app, tech stack, architecture, or project metadata.
 
     Args:

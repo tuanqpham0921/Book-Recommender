@@ -1,4 +1,4 @@
-"""Tests for BaseRequest / DomainRequest / AnalyzeBaseRequest validators."""
+"""Tests for BaseRequest validators."""
 from pydantic import model_validator
 
 from app.domains.base_request import (
@@ -6,18 +6,17 @@ from app.domains.base_request import (
     MAX_LIST_LENGTH,
     MAX_STRING_LENGTH,
     GOAL_PLACEHOLDER,
-    DomainRequest,
-    AnalyzeBaseRequest,
+    BaseRequest,
 )
 from app.domains.field_types import DESCRIPTION_FALLBACK, REASONING_FALLBACK
 from app.domains.node_types import UnknownNodeTypeEnum
 
 
-class _FakeDomain(DomainRequest):
+class _FakeDomain(BaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
 
 
-class _FakeAnalyze(AnalyzeBaseRequest):
+class _FakeAnalyze(BaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
 
 
@@ -173,7 +172,7 @@ class TestDependsOnValidator:
 
 class TestAnalyzeTargetGoalValidator:
     """Regression tests: the target_goal wrap validator must also run on
-    AnalyzeBaseRequest (it was previously shadowed by a same-named validator)."""
+    BaseRequest (it was previously shadowed by a same-named validator)."""
 
     def test_excess_valid_goals_are_truncated_not_rejected(self):
         goals = [f"goal_{i:08d}" for i in range(MAX_LIST_LENGTH + 2)]

@@ -13,7 +13,7 @@ type, so each docstring stays readable standalone.
 
 from typing import Optional, Literal, List
 from pydantic import Field
-from app.domains.base_request import DomainRequest, AnalyzeBaseRequest
+from app.domains.base_request import BaseRequest
 from playground.app_mock.extended_node_types import ExtendedBookNodeTypeEnum as BookNodeTypeEnum
 from db.schema import BooksFilter
 import logging
@@ -28,7 +28,7 @@ MAX_RATING = 5.0
 # Retrievals — catalog lookups
 
 
-class FindSeriesRetrieval(DomainRequest):
+class FindSeriesRetrieval(BaseRequest):
     """Purpose: Retrieve every book belonging to a named series or saga.
 
     Args:
@@ -59,7 +59,7 @@ class FindSeriesRetrieval(DomainRequest):
     )
 
 
-class AuthorInfoRetrieval(DomainRequest):
+class AuthorInfoRetrieval(BaseRequest):
     """Purpose: Retrieve facts about an author as a person — bio, style, background.
 
     Args:
@@ -91,7 +91,7 @@ class AuthorInfoRetrieval(DomainRequest):
     )
 
 
-class NewReleasesRetrieval(DomainRequest):
+class NewReleasesRetrieval(BaseRequest):
     """Purpose: Retrieve recently published books, optionally scoped by genre or other filters.
 
     Args:
@@ -125,7 +125,7 @@ class NewReleasesRetrieval(DomainRequest):
     )
 
 
-class PopularBooksRetrieval(DomainRequest):
+class PopularBooksRetrieval(BaseRequest):
     """Purpose: Retrieve widely read, highly rated books — what most people love.
 
     Args:
@@ -157,7 +157,7 @@ class PopularBooksRetrieval(DomainRequest):
     )
 
 
-class RandomBookRetrieval(DomainRequest):
+class RandomBookRetrieval(BaseRequest):
     """Purpose: Retrieve a random pick from the catalog — a surprise with no taste signal.
 
     Args:
@@ -194,7 +194,7 @@ class RandomBookRetrieval(DomainRequest):
 # Strategies (Analyze) — interpret retrieved data
 
 
-class SummarizeStrategy(AnalyzeBaseRequest):
+class SummarizeStrategy(BaseRequest):
     """Purpose: Summarize retrieved book(s) — plot, premise, or a focused angle.
 
     Args:
@@ -223,7 +223,7 @@ class SummarizeStrategy(AnalyzeBaseRequest):
     focus: Optional[str] = Field(None)
 
 
-class ThemesStrategy(AnalyzeBaseRequest):
+class ThemesStrategy(BaseRequest):
     """Purpose: Extract the themes, motifs, or message of retrieved book(s).
 
     Args:
@@ -251,7 +251,7 @@ class ThemesStrategy(AnalyzeBaseRequest):
     )
 
 
-class ReadingOrderStrategy(AnalyzeBaseRequest):
+class ReadingOrderStrategy(BaseRequest):
     """Purpose: Order a set of retrieved books into the sequence they should be read.
 
     Args:
@@ -280,7 +280,7 @@ class ReadingOrderStrategy(AnalyzeBaseRequest):
     )
 
 
-class ReadingLevelStrategy(AnalyzeBaseRequest):
+class ReadingLevelStrategy(BaseRequest):
     """Purpose: Assess age-appropriateness or difficulty of retrieved book(s).
 
     Args:
@@ -309,7 +309,7 @@ class ReadingLevelStrategy(AnalyzeBaseRequest):
     )
 
 
-class ReadingTimeStrategy(AnalyzeBaseRequest):
+class ReadingTimeStrategy(BaseRequest):
     """Purpose: Estimate how long retrieved book(s) will take to finish.
 
     Args:
@@ -341,7 +341,7 @@ class ReadingTimeStrategy(AnalyzeBaseRequest):
     )
 
 
-class ReadingPlanStrategy(AnalyzeBaseRequest):
+class ReadingPlanStrategy(BaseRequest):
     """Purpose: Build a multi-book reading plan toward a stated goal or timeframe.
 
     Args:
@@ -375,7 +375,7 @@ class ReadingPlanStrategy(AnalyzeBaseRequest):
 # Library — the user's personal shelf (reads and writes)
 
 
-class SaveToReadingListAction(DomainRequest):
+class SaveToReadingListAction(BaseRequest):
     """Purpose: Add named book(s) to the user's reading list.
 
     Args:
@@ -406,7 +406,7 @@ class SaveToReadingListAction(DomainRequest):
         super().model_post_init(__context)
 
 
-class ViewReadingListRetrieval(DomainRequest):
+class ViewReadingListRetrieval(BaseRequest):
     """Purpose: Show the user's reading list, optionally filtered by status.
 
     Args:
@@ -434,7 +434,7 @@ class ViewReadingListRetrieval(DomainRequest):
     )
 
 
-class RemoveFromReadingListAction(DomainRequest):
+class RemoveFromReadingListAction(BaseRequest):
     """Purpose: Remove named book(s) from the user's reading list.
 
     Args:
@@ -465,7 +465,7 @@ class RemoveFromReadingListAction(DomainRequest):
         super().model_post_init(__context)
 
 
-class MarkBookAsReadAction(DomainRequest):
+class MarkBookAsReadAction(BaseRequest):
     """Purpose: Record that the user finished a book, with an optional rating in the same breath.
 
     Args:
@@ -496,7 +496,7 @@ class MarkBookAsReadAction(DomainRequest):
     )
 
 
-class RateBookAction(DomainRequest):
+class RateBookAction(BaseRequest):
     """Purpose: Record the user's star rating for a book they already know.
 
     Args:
@@ -527,7 +527,7 @@ class RateBookAction(DomainRequest):
     )
 
 
-class ReadingStatsRetrieval(DomainRequest):
+class ReadingStatsRetrieval(BaseRequest):
     """Purpose: Retrieve the user's reading statistics — counts, pages, genre breakdown.
 
     Args:

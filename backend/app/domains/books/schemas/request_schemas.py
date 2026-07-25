@@ -5,11 +5,7 @@ These are the specific schemas that the LLM should generate during classificatio
 
 from typing import Optional, Literal, List
 from pydantic import Field
-from app.domains.base_request import (
-    DomainRequest,
-    AnalyzeBaseRequest,
-    DependentRequest,
-)
+from app.domains.base_request import BaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
 from db.schema import BookMetadataFilter
 import logging
@@ -17,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class CompareStrategy(AnalyzeBaseRequest):
+class CompareStrategy(BaseRequest):
     """Purpose: Contrast two or more named books — the analyze step when the user asks how titles differ or relate.
 
     Args:
@@ -46,7 +42,7 @@ class CompareStrategy(AnalyzeBaseRequest):
         None, json_schema_extra={"example": "tone"}
     )
 
-class RecommendationStrategy(AnalyzeBaseRequest):
+class RecommendationStrategy(BaseRequest):
     """Purpose: Suggest books that fit the user's ask — the analyze step for most recommendation queries.
 
     Args:
@@ -110,7 +106,7 @@ class RecommendationStrategy(AnalyzeBaseRequest):
     )
 
 
-class FindByTitleRetrieval(DomainRequest):
+class FindByTitleRetrieval(BaseRequest):
     """Purpose: Retrieve a single known book by its title from the database.
 
     Args:
@@ -150,7 +146,7 @@ class FindByTitleRetrieval(DomainRequest):
     )
 
 
-class FindByISBN13Retrieval(DomainRequest):
+class FindByISBN13Retrieval(BaseRequest):
     """Purpose: Retrieve a single book by its exact ISBN13 from the database.
 
     Args:
@@ -176,7 +172,7 @@ class FindByISBN13Retrieval(DomainRequest):
     isbn13: str = Field(..., json_schema_extra={"example": "9780441172719"})
 
 
-class FindByAuthorRetrieval(DomainRequest):
+class FindByAuthorRetrieval(BaseRequest):
     """Purpose: Retrieve the books written by one named author — that author's bibliography.
 
     Args:
@@ -208,7 +204,7 @@ class FindByAuthorRetrieval(DomainRequest):
     author: str = Field(..., json_schema_extra={"example": "Ursula K. Le Guin"})
 
 
-class FindByCoAuthorsRetrieval(DomainRequest):
+class FindByCoAuthorsRetrieval(BaseRequest):
     """Purpose: Retrieve books that two or more named authors wrote together — their collaborations.
 
     Args:
@@ -248,7 +244,7 @@ class FindByCoAuthorsRetrieval(DomainRequest):
     )
 
 
-class FindByGenreRetrieval(DomainRequest):
+class FindByGenreRetrieval(BaseRequest):
     """Purpose: Retrieve books belonging to a named genre or category from the database.
 
     Args:
@@ -276,7 +272,7 @@ class FindByGenreRetrieval(DomainRequest):
     genre: str = Field(..., json_schema_extra={"example": "fantasy"})
 
 
-class UnionRetrieval(DependentRequest):
+class UnionRetrieval(BaseRequest):
     """Purpose: Pool two or more prior retrieval results into one combined set — OR, not AND.
 
     Returns: A UnionRetrievalOutput — one deduplicated list of BookSummary
@@ -312,7 +308,7 @@ class UnionRetrieval(DependentRequest):
     )
 
 
-class IntersectRetrievals(DependentRequest):
+class IntersectRetrievals(BaseRequest):
     """Purpose: Keep only the books found by ALL of two or more prior retrievals — AND, not OR.
 
     Returns: An IntersectRetrievalsOutput — one list of BookSummary records,
@@ -353,7 +349,7 @@ class IntersectRetrievals(DependentRequest):
     )
 
 
-class FilterRetrieval(DependentRequest):
+class FilterRetrieval(BaseRequest):
     """Purpose: Narrow a prior retrieval's books by metadata — pages, year, rating, ratings count, child-friendly.
 
     Args:

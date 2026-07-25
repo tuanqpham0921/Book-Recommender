@@ -1,11 +1,11 @@
 from typing import Literal
 from pydantic import Field
-from app.domains.base_request import DomainRequest
+from app.domains.base_request import BaseRequest
 from app.domains.users.schemas.filter_schema import DeveloperInfoEnum, UserInfoEnum
 from app.domains.users.node_types import UserNodeTypeEnum
 
 
-class UserInfoRequest(DomainRequest):
+class UserInfoRequest(BaseRequest):
     """Purpose: Retrieve information about the current user from the database.
 
     Args:
@@ -35,7 +35,7 @@ class UserInfoRequest(DomainRequest):
     )
 
 
-class DeveloperInfoRequest(DomainRequest):
+class DeveloperInfoRequest(BaseRequest):
     """Purpose: Retrieve information about the developer/maintainer of this app.
 
     Args:

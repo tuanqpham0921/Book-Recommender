@@ -20,7 +20,7 @@ from app.domains.books.schemas import (
 )
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 
-# the DomainRequest fields every node carries, so each test only states the
+# the BaseRequest fields every node carries, so each test only states the
 # author fields it actually cares about
 BASE = {
     "id": "task_1",

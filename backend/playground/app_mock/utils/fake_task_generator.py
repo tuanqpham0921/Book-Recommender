@@ -1,10 +1,9 @@
-from app.domains.base_request import AnalyzeBaseRequest
 from app.domains.node_types import UnknownNodeTypeEnum
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 import random
 
-class FakeTask(AnalyzeBaseRequest):
+class FakeTask(BaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
     description: str = Field(default="Fake task", description="Description of the fake task")
 

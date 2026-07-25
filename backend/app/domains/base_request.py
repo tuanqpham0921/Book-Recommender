@@ -54,12 +54,3 @@ class BaseRequest(BaseModel):
         
     def add_details(self, message: str) -> None:
         self._details.append(message)
-
-class DomainRequest(BaseRequest):
-    """Any node that's within the system domain/capability"""
-
-class DependentRequest(DomainRequest):
-    """Any request that consumes another task's output, analyze or not."""
-
-class AnalyzeBaseRequest(DependentRequest):
-    """A node that interprets retrieved data — compare, recommend, summarize."""

@@ -13,7 +13,7 @@ itself. The V1 node set and its rationale live in
     `registry.catalog_entries()`), so docstrings here are prompt engineering, not
     comments.
 - `node_types.py` (this folder) folds the domain enums into `NodeTypeEnum`.
-- `base_request.py` — `DomainRequest`/`AnalyzeBaseRequest`, shared fields + validation.
+- `base_request.py` — `BaseRequest`, shared fields + validation.
 - `planner/` — the pipeline: `parse_intent.py` (message → goals),
   `strategy_classification.py` (goals → typed strategies + dependency-ordered plan),
   `main.py` (`PlannerWorkflow`: runs both, renders the Mermaid diagram, streams it).

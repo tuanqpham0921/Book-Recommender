@@ -7,7 +7,7 @@ from app.common.mermaid import (
     get_mermaid_diagram,
     get_goals_mermaid_diagram,
 )
-from app.domains.base_request import AnalyzeBaseRequest
+from app.domains.base_request import BaseRequest
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planner.parse_intent import SystemGoal
@@ -24,7 +24,7 @@ def _make_goal(id_str, target_node_type, depends_on=None, description="A goal de
     )
 
 
-class _FakeAnalyze(AnalyzeBaseRequest):
+class _FakeAnalyze(BaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
 
 
