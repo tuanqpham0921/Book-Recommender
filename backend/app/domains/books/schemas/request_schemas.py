@@ -173,7 +173,7 @@ class FindByISBN13Retrieval(BaseRequest):
 
 
 class FindByAuthorRetrieval(BaseRequest):
-    """Purpose: Retrieve the books written by one named author — that author's bibliography.
+    """Purpose: Retrieve the books written by one named author.
 
     Args:
         author: The single author whose books to retrieve.
@@ -190,8 +190,8 @@ class FindByAuthorRetrieval(BaseRequest):
     taste-based suggestions. For books two or more authors wrote *together*,
     use Retrieve_by_CoAuthors instead.
 
-    Constraints: exactly one author per node — several authors' separate
-    bibliographies means one node per author ("books by Austen and by Coelho"
+    Constraints: exactly one author per node — several authors
+    mean one node per author ("books by Austen and by Coelho"
     → two nodes), because each node returns one author's catalog.
 
     Example queries:

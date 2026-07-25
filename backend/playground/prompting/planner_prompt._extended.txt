@@ -96,13 +96,10 @@ Retrieve_by_ISBN13
   Use when: an ISBN13 is explicitly given by the user, or already known from
   a prior step's result.
 
-  Do not use: when only a title, author, or genre is known — the ISBN13 must
-  be a literal identifier already in hand.
-
   Constraints: exactly one ISBN13 per node.
 
 Retrieve_by_Author
-  Purpose: Retrieve the books written by one named author — that author's bibliography.
+  Purpose: Retrieve the books written by one named author.
 
   Args:
       author: The single author whose books to retrieve.
@@ -116,8 +113,8 @@ Retrieve_by_Author
   taste-based suggestions. For books two or more authors wrote *together*,
   use Retrieve_by_CoAuthors instead.
 
-  Constraints: exactly one author per node — several authors' separate
-  bibliographies means one node per author ("books by Austen and by Coelho"
+  Constraints: exactly one author per node — several authors'
+  means one node per author ("books by Austen and by Coelho"
   → two nodes), because each node returns one author's catalog.
 
 Retrieve_by_CoAuthors
@@ -130,7 +127,7 @@ Retrieve_by_CoAuthors
   co-writers of the same title, signalled by words like "together", "with",
   "co-wrote", "collaborated on", "as a duo".
 
-  Do not use: when the authors are named as separate bibliographies to fetch
+  Do not use: when the authors are named as separate to fetch
   side by side ("books by Austen and books by Coelho") — that is one
   Retrieve_by_Author per author. A single author alone is always
   Retrieve_by_Author, never this node.

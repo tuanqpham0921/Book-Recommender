@@ -35,8 +35,8 @@ from app.domains.field_types import (
 
 logger = logging.getLogger(__name__)
 
-# GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
-GOAL_GENERATOR_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
+GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
+# PLAYGORUND_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
 
 MAX_SYSTEM_GOALS = 10
 
@@ -374,12 +374,14 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         
 
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
-        # system_prompt = format_prompt(
-        #     prompt_path=GOAL_GENERATOR_PROMPT_PATH,
-        #     TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
-        # )
-        system_prompt = load_prompt(
-                    prompt_path=GOAL_GENERATOR_PROMPT_PATH                )
+        system_prompt = format_prompt(
+            prompt_path=GOAL_GENERATOR_PROMPT_PATH,
+            TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
+        )
+        
+        # NOTE: toggle on for prompting experiments
+        # system_prompt = load_prompt(prompt_path=PLAYGORUND_PROMPT_PATH)
+        
         # NOTE: using gpt4.1 because the system goals sees the whole catalog
         # it's very important that this part is done correctly
         # cache hit rate is high, and output generation is lower
