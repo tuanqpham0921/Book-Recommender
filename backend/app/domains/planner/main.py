@@ -126,7 +126,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             
             step_result = await self.run_async_step(
                 self.llm_client.execute(
-                    build_arg_parser_request(goal), save_payload=True
+                    build_arg_parser_request(goal)
                 )
             )
             assistant_msg = cast(AssistantMessage, step_result.output)
