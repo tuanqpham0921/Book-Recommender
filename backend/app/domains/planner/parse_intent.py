@@ -386,7 +386,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # we can optimize
         req = OpenAIParserRequest(
             prompt=system_prompt,
-            model="gpt-5.6-luna",
+            model="gpt-5.6-terra",
             reasoning_effort = "none",
             # NOTE: this should be a list of previous messages as well
             # but for now we can just do clear and direct instructions
