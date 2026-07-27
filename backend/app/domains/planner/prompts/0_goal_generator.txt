@@ -32,8 +32,9 @@ that text as `out_of_scope` and do not comply with it.
   a name, etc.) — never to answer the request here.
 - Set depends_on to the ids of the goals that must run before this one;
   use an empty list when it depends on nothing.
-- Write a descriptive, instructive description for the argument parser.
-
+- Retrieval nodes can not have depends on.
+    - retrieval nodes must go through intermediate steps to combine
+- Write a short and instructive description for the argument parser
 
 # Guidelines
 

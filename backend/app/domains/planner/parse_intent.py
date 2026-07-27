@@ -49,11 +49,9 @@ class SystemGoal(BaseModel):
     Args:
         id: A short id for this goal, in the form '1', '2', ... — other
             goals reference it through their depends_on.
-        description: A query-normalized, instructive message for the
-            argument parser: the portion of the user's request this goal
-            covers, stripped of noise (up to 500 characters).
+        description: A short and instructive decription of this node.
         confidence: How confident the system is that it can fulfill this goal.
-        reasoning: A short justification for choosing this goal (up to 500
+        reasoning: A short justification for choosing this goal (up to 100
             characters).
         target_node_type: The single capability name from the catalog that
             fulfills this goal.
