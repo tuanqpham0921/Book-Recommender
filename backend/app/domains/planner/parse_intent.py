@@ -395,7 +395,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             messages=[self.user_message],
             tool_models=[GoalParseRequest],
         )
-        assistant_msg = await self.run_llm_call(req, save_payload=True)
+        assistant_msg = await self.run_llm_call(req)
         tool_calls = assistant_msg.tool_calls
         if not tool_calls:
             # previously an unguarded [0] on None — same failure semantics
