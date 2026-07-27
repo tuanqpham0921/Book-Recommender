@@ -105,7 +105,7 @@ class SystemGoal(BaseModel):
 
     _refusal: bool = PrivateAttr(default=False)
     _refusal_reasons: list[str] = PrivateAttr(default_factory=list)
-    _id: str = PrivateAttr(default_factory=lambda: f"goal_{uuid_8()}")
+    # _id: str = PrivateAttr(default_factory=lambda: f"goal_{uuid_8()}")
 
     # @property
     # def id(self) -> str:

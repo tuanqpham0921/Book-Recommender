@@ -25,10 +25,10 @@ GOAL_PLACEHOLDER = "goal_placeholder"
 
 class BaseRequest(BaseModel):
     node_type: NodeTypeEnum
-    id: str = Field(...,
-                    description="assign a task id to the node request",
-                    json_schema_extra={"example": ["task_1", "task_2"]}
-                    )
+    # id: str = Field(...,
+    #                 description="assign a task id to the node request",
+    #                 json_schema_extra={"example": ["task_1", "task_2"]}
+    #                 )
     confidence: ConfidenceFloat = Field(
         ..., 
         ge=MIN_CONFIDENCE, 
@@ -43,10 +43,27 @@ class BaseRequest(BaseModel):
     )
     _refusal: bool = PrivateAttr(default=False)
     _details: list[str] = PrivateAttr(default_factory=list)
+    _id: str = PrivateAttr(default=None)
+    _depends_on: list[str] = PrivateAttr(default=[])
     
     @property
     def refusal(self) -> bool:
         return self._refusal
+
+    @property
+    def id(self) -> str | None:
+        """Plan id for this request, copied from the system goal that produced
+        it. Read-only on purpose: the planner assigns `_id`, the LLM never
+        sees it, so it stays out of the generated tool schema."""
+        return self._id
+
+    @property
+    def depends_on(self) -> list[str]:
+        return self._depends_on
+
+    def get_depends_on(self) -> list[str]:
+        """[] for requests with no dependencies."""
+        return self._depends_on
 
     def refuse(self, reason: str) -> None:
         self._refusal = True

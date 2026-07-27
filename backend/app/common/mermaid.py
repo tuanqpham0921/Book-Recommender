@@ -88,10 +88,10 @@ def get_mermaid_diagram(
     return "\n".join(lines) + "\n"
 
 
-def _goal_levels(id_to_goal: Mapping[str, "object"]) -> dict[str, int]:
-    """Longest-path depth per goal id, used only to orient the diagram.
+def _dependency_levels(id_to_node: Mapping[str, "object"]) -> dict[str, int]:
+    """Longest-path depth per node id, used only to orient the diagram.
 
-    A goal's level is one past its deepest in-plan dependency; deps that point
+    A node's level is one past its deepest in-plan dependency; deps that point
     outside the plan count as roots. A visit guard breaks any cycle (invalid
     plans that the planner should already reject) so this never recurses forever.
     """
@@ -100,17 +100,17 @@ def _goal_levels(id_to_goal: Mapping[str, "object"]) -> dict[str, int]:
     def depth(gid: str, seen: frozenset[str]) -> int:
         if gid in levels:
             return levels[gid]
-        goal = id_to_goal.get(gid)
+        node = id_to_node.get(gid)
         deps = [
             d
-            for d in (getattr(goal, "depends_on", []) or [])
-            if d in id_to_goal and d not in seen
+            for d in (getattr(node, "depends_on", []) or [])
+            if d in id_to_node and d not in seen
         ]
         lvl = 1 + max((depth(d, seen | {gid}) for d in deps), default=-1)
         levels[gid] = lvl
         return lvl
 
-    for gid in id_to_goal:
+    for gid in id_to_node:
         depth(gid, frozenset())
     return levels
 
@@ -135,6 +135,28 @@ def _format_goal_label(goal: "object") -> str:
     return "".join(rows)
 
 
+def _render_flowchart(id_to_node: Mapping[str, "object"], label_for) -> str | None:
+    """Node + edge emission shared by the goal- and argument-level diagrams.
+
+    Both key their nodes by id and draw edges from depends_on, so they differ
+    only in how a single box is labelled — which is what label_for supplies.
+    """
+    levels = _dependency_levels(id_to_node)
+    lines = [f"flowchart {choose_orientation(levels)}"]
+
+    for node_id, node in id_to_node.items():
+        lines.append(f'\t{mermaid_id(node_id)}["{label_for(node_id, node)}"]')
+
+    for node_id, node in id_to_node.items():
+        for dep in getattr(node, "depends_on", []) or []:
+            lines.append(f"\t{mermaid_id(dep)} --> {mermaid_id(node_id)}")
+
+    if len(lines) == 1:
+        return None
+
+    return "\n".join(lines) + "\n"
+
+
 def get_goals_mermaid_diagram(goals: list) -> str | None:
     """Flowchart of the planner's system goals — one box per goal headed by the
     capability it targets, with edges drawn from each goal's depends_on.
@@ -143,18 +165,22 @@ def get_goals_mermaid_diagram(goals: list) -> str | None:
     typed task requests). Goals carry id/depends_on/target_node_type directly,
     so no execution order or node lookup is needed from the caller.
     """
-    id_to_goal = {goal.id: goal for goal in goals}
-    levels = _goal_levels(id_to_goal)
-    lines = [f"flowchart {choose_orientation(levels)}"]
+    return _render_flowchart(
+        {goal.id: goal for goal in goals},
+        lambda _gid, goal: _format_goal_label(goal),
+    )
 
-    for gid, goal in id_to_goal.items():
-        lines.append(f'\t{mermaid_id(gid)}["{_format_goal_label(goal)}"]')
 
-    for gid, goal in id_to_goal.items():
-        for dep in getattr(goal, "depends_on", []) or []:
-            lines.append(f"\t{mermaid_id(dep)} --> {mermaid_id(gid)}")
+def get_parsed_mermaid_diagram(requests: list) -> str | None:
+    """Flowchart of the argument parser's output — the same shape as
+    get_goals_mermaid_diagram, because each request inherits its goal's id and
+    depends_on, but each box shows the typed arguments the parser filled in
+    instead of the goal's description.
 
-    if len(lines) == 1:
-        return None
-
-    return "\n".join(lines) + "\n"
+    Requests the parser never stamped with an id are dropped: without one they
+    have no place in the graph and would collide under a shared None key.
+    """
+    return _render_flowchart(
+        {req.id: req for req in requests if req.id},
+        lambda req_id, req: format_node_label(req_id, to_serializable(req)),
+    )

@@ -6,6 +6,7 @@ from app.common.mermaid import (
     mermaid_id,
     get_mermaid_diagram,
     get_goals_mermaid_diagram,
+    get_parsed_mermaid_diagram,
 )
 from app.domains.base_request import BaseRequest
 from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
@@ -28,25 +29,33 @@ class _FakeAnalyze(BaseRequest):
     node_type: UnknownNodeTypeEnum = UnknownNodeTypeEnum.UNKNOWN
 
 
-def _make_retrieval(id_str="task_1", title="Test Book", goal_id="goal_a1b2c3d4"):
-    return FindByTitleRetrieval(
-        id=id_str,
-        title=title,
-        target_goal=[goal_id],
-        description="A sufficiently long description for the test",
-        reasoning="A sufficiently long reasoning for the test",
-        confidence=0.9,
+def _stamp(request, id_str, depends_on_ids=None):
+    """Apply the plan id / dependencies the way the planner does — they are
+    private attrs, not fields, so they cannot be passed to the constructor."""
+    request._id = id_str
+    request._depends_on = list(depends_on_ids or [])
+    return request
+
+
+def _make_retrieval(id_str="task_1", title="Test Book"):
+    return _stamp(
+        FindByTitleRetrieval(
+            title=title,
+            reasoning="A sufficiently long reasoning for the test",
+            confidence=0.9,
+        ),
+        id_str,
     )
 
 
-def _make_analyze(id_str, depends_on_ids, goal_id="goal_a1b2c3d4"):
-    return _FakeAnalyze(
-        id=id_str,
-        depends_on=depends_on_ids,
-        target_goal=[goal_id],
-        description="A sufficiently long description for the test",
-        reasoning="A sufficiently long reasoning for the test",
-        confidence=0.9,
+def _make_analyze(id_str, depends_on_ids):
+    return _stamp(
+        _FakeAnalyze(
+            reasoning="A sufficiently long reasoning for the test",
+            confidence=0.9,
+        ),
+        id_str,
+        depends_on_ids,
     )
 
 
@@ -158,6 +167,70 @@ class TestGetGoalsMermaidDiagram:
         ]
         diagram = get_goals_mermaid_diagram(goals)
         assert diagram.startswith("flowchart")
+
+
+class TestGetParsedMermaidDiagram:
+    def test_empty_requests_returns_none(self):
+        assert get_parsed_mermaid_diagram([]) is None
+
+    def test_unstamped_requests_are_dropped(self):
+        # no _id means no place in the graph
+        r = FindByTitleRetrieval(
+            title="Dune",
+            reasoning="A sufficiently long reasoning for the test",
+            confidence=0.9,
+        )
+        assert get_parsed_mermaid_diagram([r]) is None
+
+    def test_box_shows_parsed_arguments(self):
+        r = _make_retrieval("1", title="Dune")
+        diagram = get_parsed_mermaid_diagram([r])
+        assert "Retrieve_by_Title" in diagram
+        assert "Dune" in diagram
+
+    def test_private_attrs_not_leaked_into_label(self):
+        diagram = get_parsed_mermaid_diagram([_make_retrieval("1")])
+        assert "_refusal" not in diagram
+        assert "_depends_on" not in diagram
+
+    def test_edges_drawn_from_depends_on(self):
+        requests = [
+            _make_retrieval("1", title="Book A"),
+            _make_retrieval("2", title="Book B"),
+            _make_analyze("3", depends_on_ids=["1", "2"]),
+        ]
+        diagram = get_parsed_mermaid_diagram(requests)
+        assert f"{mermaid_id('1')} --> {mermaid_id('3')}" in diagram
+        assert f"{mermaid_id('2')} --> {mermaid_id('3')}" in diagram
+
+    def test_same_shape_as_goal_diagram(self):
+        # the whole point: parsed requests inherit their goal's id/depends_on,
+        # so the two diagrams differ in box contents but never in topology
+        goals = [
+            _make_goal("1", "Retrieve_by_Title"),
+            _make_goal("2", "Analyze_Recommend", depends_on=["1"]),
+        ]
+        requests = [
+            _make_retrieval("1"),
+            _make_analyze("2", depends_on_ids=["1"]),
+        ]
+
+        def _edges(diagram):
+            return sorted(
+                line.strip() for line in diagram.splitlines() if "-->" in line
+            )
+
+        goal_diagram = get_goals_mermaid_diagram(goals)
+        parsed_diagram = get_parsed_mermaid_diagram(requests)
+        assert _edges(parsed_diagram) == _edges(goal_diagram)
+        assert parsed_diagram.splitlines()[0] == goal_diagram.splitlines()[0]
+
+    def test_cycle_does_not_recurse_forever(self):
+        requests = [
+            _make_analyze("1", depends_on_ids=["2"]),
+            _make_analyze("2", depends_on_ids=["1"]),
+        ]
+        assert get_parsed_mermaid_diagram(requests).startswith("flowchart")
 
 
 class TestChooseOrientation:
