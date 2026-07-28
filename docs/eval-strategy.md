@@ -31,8 +31,8 @@ cases around them → set thresholds (golden tests) → expand nodes and coverag
 
 | Suite | Cases | Purpose |
 |---|---|---|
-| `query_suite.json` (base) | 55 | Core node set, easy→hard, single lookups to 7-node cross-domain chains |
-| `query_suite_adversarial.json` | 52 | Rejection behavior: prompt injection, impossible facts, degenerate input, sounds-supported-but-unimplemented (12 cases intentionally expect no nodes) |
+| `query_suite.json` (base) | 70 | Core node set, easy→hard, single lookups to 7-node cross-domain chains |
+| `query_suite_adversarial.json` | 54 | Rejection behavior: prompt injection, impossible facts, degenerate input, sounds-supported-but-unimplemented (17 cases intentionally expect no nodes) |
 | `query_suite_extended.json` | 48 | Node-*scaling* test — only meaningful with the registry extension block enabled (~26 node types); heavy on near-miss discrimination |
 | `query_suite_stress.json` | 9 | Buffer/overflow past `MAX_SYSTEM_GOALS`/`MAX_STRATEGIES`, confusing multi-hop chains |
 
@@ -90,6 +90,28 @@ improvement that should be re-baselined deliberately.
 the clarification/rejection node ([roadmap.md](roadmap.md) Phase 1) — over-budget requests,
 contradictory queries, and duplicate-node plans that should collapse into one refusal.
 They are the acceptance test for that node, not noise; leave them red until it lands.
+
+### Design-intent cases added 2026-07-28
+
+Written from the taxonomy, not from a recorded run, so they are unbaselined — read a red
+here as "not implemented yet", not as a regression:
+
+- `query_suite` **66, 67** — `Retrieve_Random`'s promotion to V1 core: the bare recommend
+  and the bounded surprise ([design/node-taxonomy-v1.md](design/node-taxonomy-v1.md)).
+- `query_suite` **68** — author-anchored recommend, the last corner of the recommend
+  triangle (title / genre / author). Pairs with 66: same phrasing, one anchor apart.
+- `query_suite` **69** — compare scoped to one attribute, recommend pivoting on another.
+  Same node types as case 36 by design; it exists for the argument-level split, which the
+  goals report cannot see.
+- `query_suite` **70** — `Analyze_Compare` over an `Analyze_Recommend` result. **Expected
+  red until a decision lands**: Compare's docstring says "depends_on: at least 2 nodes",
+  but the arity a comparison actually needs is two *books*, and here one node carries
+  both. Also the first case to need a `limit` on `Analyze_Recommend`, which has no such
+  field — the "2" is unexpressible today.
+- `adversarial` **358, 359** — "recommend authors like X". No node returns authors, but
+  the ask is answerable in substance as books; both expect the books plan, and both are
+  invisible to the node-type diff (identical types to 68). The argument for
+  argument/answer-level checking, alongside cases 57 and 60.
 
 ## Remaining relabel work (roadmap Phase 4)
 
