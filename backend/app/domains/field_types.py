@@ -4,7 +4,7 @@ from typing import Annotated
 MIN_CONFIDENCE = 0.0
 MAX_CONFIDENCE = 1.0
 
-MAX_STRING_LENGTH = 500
+MAX_STRING_LENGTH = 100
 REASONING_FALLBACK = "(no reasoning provided)"
 DESCRIPTION_FALLBACK = "(no description provided)"
 
