@@ -36,6 +36,10 @@ def build_arg_parser_request(goal: SystemGoal) -> OpenAIParserRequest:
         # but for now we can just do clear and direct instructions
         messages=[message],
         tool_models=[tool],
+        # The goal already picked the node type and tool_choice pins it, so the
+        # class docstring — which is there to help the planner choose between
+        # tools — would only be noise here. Field descriptions still ship.
+        include_tool_description=False,
     )
 
 

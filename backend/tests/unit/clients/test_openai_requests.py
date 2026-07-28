@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
+from openai.lib._parsing._completions import is_parseable_tool
 from pydantic import BaseModel
 
 from app.common.messages import AssistantMessage, ToolMessage, UserMessage
@@ -29,6 +30,12 @@ class ToolA(BaseModel):
 
 class ToolB(BaseModel):
     isbn: str
+
+
+class DocumentedTool(BaseModel):
+    """Purpose: pick this tool when the user names a title."""
+
+    query: str
 
 
 class TestOpenAIBaseRequest:
@@ -99,6 +106,27 @@ class TestOpenAIParserRequest:
         payload = req.to_payload()
         assert "tools" in payload
         assert payload["tool_choice"]["function"]["name"] == "ToolA"
+
+    def test_docstring_is_sent_as_description_by_default(self):
+        req = OpenAIParserRequest(
+            prompt="p", messages=[USER_MSG], tool_models=[DocumentedTool]
+        )
+        tool = req.to_function_tools()
+        assert tool["function"]["description"] == DocumentedTool.__doc__
+
+    def test_description_dropped_when_disabled(self):
+        req = OpenAIParserRequest(
+            prompt="p",
+            messages=[USER_MSG],
+            tool_models=[DocumentedTool],
+            include_tool_description=False,
+        )
+        tool = req.to_function_tools()
+        assert "description" not in tool["function"]
+        # dropping it must not cost us auto-parsing: the openai lib keys that off
+        # tool["function"] still being a PydanticFunctionTool carrying .model
+        assert is_parseable_tool(tool)
+        assert tool["function"].model is DocumentedTool
 
     def test_to_payload_uses_tool_override(self):
         override = {"type": "function", "function": {"name": "custom"}}

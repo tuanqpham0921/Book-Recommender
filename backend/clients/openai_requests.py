@@ -79,6 +79,11 @@ class OpenAIParserRequest(OpenAIBaseRequest):
 
     tool_models: Annotated[list[type], Field(min_length=1, max_length=1)]
     tool_override: dict | None = None
+    # A node class docstring is *selection* prose — it exists so the planner can
+    # choose between tools. When tool_choice already pins the one tool, sending
+    # it is noise. Field descriptions are unaffected: those are what actually
+    # guide the argument fill.
+    include_tool_description: bool = True
 
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
@@ -100,6 +105,12 @@ class OpenAIParserRequest(OpenAIBaseRequest):
             self.tool_models[0],
             name=tool_name,
         )
+        if not self.include_tool_description:
+            # Mutate in place: tool["function"] is a PydanticFunctionTool (a dict
+            # subclass carrying .model) and the openai lib keys auto-parsing off
+            # that type. Replacing the dict would silently downgrade
+            # parsed_arguments to a raw dict.
+            tool["function"].pop("description", None)
         return tool
 
 
