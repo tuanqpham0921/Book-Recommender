@@ -11,6 +11,31 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+continue with the generation node
+    * you need to get all the analyze nodes too?
+    * or just the last node hold all the information needed to send to generation
+        * probably just the last node
+        * because if you have compare -> recommend -> generation
+            * then it can have the reasoning in the output
+            * but if you have recommend -> compare then you do want 
+              the recommend output...
+              maybe something like
+
+        find -> recommend -> output
+                  |         ^
+                  V         |
+                compare -----
+    * you might need the parser
+        * you don't have to pre-compute it (or you should)
+        * because you do want a title and what is it answering
+            * like Did Jane Austen write Dune?
+            * if you return empty from combine interect
+            * then it's not going to be able to capture the reason for
+                find Dune
+                            combine -> answer
+                Jane Austen
+
+-------------------------------------------------------------------
 seems like split up system goals as planner works
     * tho there are some blurry issues
     * the findings is that recommend analyze semantic and find by genre is blurry

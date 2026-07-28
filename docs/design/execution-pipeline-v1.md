@@ -154,11 +154,25 @@ Owns the final answer. Sketched fields: the **portion of the query** it is answe
 returns output data; generation is what the user reads, and it maps to the sections the
 frontend already renders.
 
-**Open question, and the main reason this is not yet decided:** is generation a *goal*
-the planner emits (visible in the diagram, one per answer section, dependencies like any
-other node), or a fixed terminal stage the orchestrator always appends? As a goal it is
-eval-checkable and can fan out per section; as a fixed stage it never gets misrouted and
-costs no catalog tokens. If it is a goal, how goals link to sections needs its own answer.
+**Resolved 2026-07-28 — a fixed stage, not a planner goal.** `PlannerWorkflow` attaches
+the answer stage itself (`app/domains/planner/generation_node.py`), so the LLM never
+selects it: no catalog tokens, no misroute, and no plan can come back without an answer.
+It is still drawn in both Mermaid diagrams, so the visibility a goal would have bought is
+kept for free. The decider was the eval suites — as a goal, all 160 non-empty
+`expected_nodes` would need it appended, for a check that cannot fail. Promoting a fixed
+stage to a goal later is easy; demoting one after 160 goldens carry it is not.
+
+**Attachment point: every sink** — a goal nothing else depends on. Not the deepest goal
+and not the one with the most dependencies: a Compare fed by four retrievals is terminal
+only when no Recommend consumes it, and an independent goal in a compound message is its
+own sink at depth 0.
+
+**Still open:** one generation node per sink (today's default, one answer per independent
+branch) or one per turn owning ordering and framing across all of them
+(`create_generation_nodes(..., single_answer=True)`). Per-sink means no one writes the
+cross-section framing or reports a failure that spans branches; one-per-turn means a
+compound message's unrelated answers get merged by a single writer. Most plans have
+exactly one sink, so the two agree except on compound messages.
 
 ## Open questions
 
@@ -169,8 +183,8 @@ costs no catalog tokens. If it is a goal, how goals link to sections needs its o
   dropped, because no combine operator existed. `Combine_Intersect` now gives that shape a
   correct plan (`Retrieve_by_Author` + `Retrieve_by_Genre` + `Combine_Intersect`), so those
   expectations describe the old world. They need re-deciding, not just re-running.
-- Is generation a planner goal or a fixed terminal stage? If a goal — one per answer
-  section, or one per request?
+- ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
+  stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.
 - Does the CTE composition live in the executors or in `db/stores/book_store.py`? The
   store currently exposes `search_by_filters` / `search_by_book_filter` / `search_by_title`
   / `search_by_embedding`, all of which materialize rows.

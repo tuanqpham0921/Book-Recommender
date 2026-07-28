@@ -18,6 +18,7 @@ from app.common.prompt_loader import format_prompt
 from app.domains.base_request import BaseRequest
 
 from .args_parser import build_arg_parser_request, extract_parsed_request
+from .generation_node import GenerationNode, create_generation_nodes
 
 import logging
 
@@ -35,6 +36,10 @@ class PlannerOutput(AppWorkflowOutput):
     
     parsed_results: list[BaseRequest] | None = None
     parsed_diagram: str | None = None
+
+    # The terminal answer stage, appended by the planner rather than chosen by
+    # the LLM — one per sink in the goal graph. See generation_node.py.
+    generation_nodes: list[GenerationNode] = Field(default_factory=list)
 
     # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
@@ -99,14 +104,18 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.result.message = "Conversation handled without planning"
             return
 
-        await self.send_mermaid(system_goals)
+        # Attach the answer stage before anything is drawn, so both diagrams
+        # show the plan the user actually gets — ending in an answer, not in a
+        # retrieval. Depends only on goal ids, so it needs no parsed arguments.
+        generation_nodes = create_generation_nodes(system_goals)
+        self.output.generation_nodes = generation_nodes
+
+        await self.send_mermaid(system_goals, generation_nodes)
         # ------------------------------------------------------------------------------------------------
-                
+
         parsed_system_goals = await self.parse_goals_arguments(system_goals)
         self.result.output.parsed_results = parsed_system_goals
-        await self.send_mermaid_parsed(parsed_system_goals)
-        
-        # ------------------------------------------------------------------------------------------------
+        await self.send_mermaid_parsed(parsed_system_goals, generation_nodes)
 
         self.result.ok = True
         self.result.message = "Conversation orchestration completed successfully"
@@ -137,7 +146,9 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
         return parsed_system_goals
     
     async def send_mermaid_parsed(
-        self, parsed_system_goals: list[BaseRequest]
+        self,
+        parsed_system_goals: list[BaseRequest],
+        generation_nodes: list[GenerationNode] | None = None,
     ) -> str | None:
         """Render the parsed task requests as a Mermaid flowchart and stream it
         to the client. Same contract as send_mermaid — returns the diagram, or
@@ -151,7 +162,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
         diagram = None
         try:
-            diagram = get_parsed_mermaid_diagram(parsed_system_goals)
+            diagram = get_parsed_mermaid_diagram(parsed_system_goals, generation_nodes)
         except Exception as e:
             logger.warning(f"Error generating parsed Mermaid diagram: {e}")
             return None
@@ -166,7 +177,9 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
         return diagram
 
 
-    async def send_mermaid(self, system_goals: list) -> str | None:
+    async def send_mermaid(
+        self, system_goals: list, generation_nodes: list[GenerationNode] | None = None
+    ) -> str | None:
         """Render the accepted system goals as a Mermaid flowchart and stream
         it to the client. Returns the diagram string, or None when there is
         nothing to draw or generation failed (never raises into the request)."""
@@ -174,7 +187,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
         diagram = None
         try:
-            diagram = get_goals_mermaid_diagram(system_goals)
+            diagram = get_goals_mermaid_diagram(system_goals, generation_nodes)
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")
             return None

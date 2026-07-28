@@ -119,7 +119,11 @@ def _format_goal_label(goal: "object") -> str:
     """Box label for one system goal: the capability it targets as the header,
     then the goal id and its normalized description."""
     data = remove_empty_values(to_serializable(goal))
-    capability = clean_string_mermaid(str(data.get("target_node_type") or "Goal"))
+    # Generation nodes carry node_type instead of target_node_type — they are
+    # appended by the planner, not chosen from the catalog.
+    capability = clean_string_mermaid(
+        str(data.get("target_node_type") or data.get("node_type") or "Goal")
+    )
     rows = [
         f"<div style='{WRAPPER_STYLE}'>",
         f"<div style='{HEADER_STYLE}'>{capability}</div>",
@@ -157,7 +161,20 @@ def _render_flowchart(id_to_node: Mapping[str, "object"], label_for) -> str | No
     return "\n".join(lines) + "\n"
 
 
-def get_goals_mermaid_diagram(goals: list) -> str | None:
+def _with_extra_nodes(
+    nodes: dict[str, "object"], extra_nodes: list | None
+) -> dict[str, "object"]:
+    """Append planner-attached nodes (today: the generation stage) to a graph.
+
+    They key and draw exactly like goals — id plus depends_on — so they need no
+    special handling beyond landing in the mapping.
+    """
+    for node in extra_nodes or []:
+        nodes[node.id] = node
+    return nodes
+
+
+def get_goals_mermaid_diagram(goals: list, extra_nodes: list | None = None) -> str | None:
     """Flowchart of the planner's system goals — one box per goal headed by the
     capability it targets, with edges drawn from each goal's depends_on.
 
@@ -166,12 +183,14 @@ def get_goals_mermaid_diagram(goals: list) -> str | None:
     so no execution order or node lookup is needed from the caller.
     """
     return _render_flowchart(
-        {goal.id: goal for goal in goals},
+        _with_extra_nodes({goal.id: goal for goal in goals}, extra_nodes),
         lambda _gid, goal: _format_goal_label(goal),
     )
 
 
-def get_parsed_mermaid_diagram(requests: list) -> str | None:
+def get_parsed_mermaid_diagram(
+    requests: list, extra_nodes: list | None = None
+) -> str | None:
     """Flowchart of the argument parser's output — the same shape as
     get_goals_mermaid_diagram, because each request inherits its goal's id and
     depends_on, but each box shows the typed arguments the parser filled in
@@ -181,6 +200,6 @@ def get_parsed_mermaid_diagram(requests: list) -> str | None:
     have no place in the graph and would collide under a shared None key.
     """
     return _render_flowchart(
-        {req.id: req for req in requests if req.id},
+        _with_extra_nodes({req.id: req for req in requests if req.id}, extra_nodes),
         lambda req_id, req: format_node_label(req_id, to_serializable(req)),
     )
