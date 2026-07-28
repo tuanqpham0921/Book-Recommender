@@ -258,6 +258,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             # but for now we can just do clear and direct instructions
             messages=[self.user_message],
             tool_models=[GoalParseRequest],
+            max_completion_tokens = 1000,
         )
         assistant_msg = await self.run_llm_call(req)
         tool_calls = assistant_msg.tool_calls
