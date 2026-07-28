@@ -7,7 +7,7 @@ from typing import Optional, Literal, List
 from pydantic import Field
 from app.domains.base_request import BaseRequest
 from app.domains.books.node_types import BookNodeTypeEnum
-from db.schema import BookMetadataFilter
+from db.schema import BookMetadataFilter, BooksFilter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class RecommendationStrategy(BaseRequest):
         semantic_input: What the books should be LIKE — theme, tone, mood or
             premise. Never a title, author, or shelf label; shelf words go to
             Retrieve_by_Genre.
-        filters: Optional metadata bounds — pages, year, rating, ratings count,
+        filters: Optional BooksFilter — pages, year, rating, ratings count,
             child-friendly — that the SEARCH ITSELF must respect. These are not
             applied to the depended-on books; they bound which candidates the
             similarity search is allowed to return.
@@ -93,7 +93,7 @@ class RecommendationStrategy(BaseRequest):
     semantic_input: Optional[str] = Field(
         None, json_schema_extra={"example": "cozy and hopeful"}
     )
-    filters: Optional[BookMetadataFilter] = Field(
+    filters: Optional[BooksFilter] = Field(
         default=None,
         description=(
             "Metadata bounds the similarity search must satisfy — applied inside "

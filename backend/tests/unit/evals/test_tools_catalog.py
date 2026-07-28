@@ -87,7 +87,13 @@ class TestMissingSections:
     def test_complete_docstring_has_nothing_missing(self):
         doc = "".join(f"{s} x\n" for s in tools_catalog.EXPECTED_SECTIONS)
 
-        assert missing_sections(doc) == []
+        assert missing_sections(doc + "Example queries: x\n") == []
+
+    def test_example_values_satisfy_the_examples_requirement(self):
+        doc = "".join(f"{s} x\n" for s in tools_catalog.EXPECTED_SECTIONS)
+
+        assert missing_sections(doc + "Example genres: fiction, mystery\n") == []
+        assert missing_sections(doc + "Example semantic_input: cozy\n") == []
 
     def test_reports_each_absent_section(self):
         assert missing_sections("Purpose: do a thing.") == [

@@ -256,7 +256,7 @@
     "difficulty": "hard",
     "query": "Who is the developer? Also, are there any books about the technologies they used to build this app?",
     "note": "DeveloperInfo + ProjectInfo + FindByTraits/Recommend across three domains. The tech stack from ProjectInfo informs the book search — cross-domain dependency.",
-    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_by_Genre", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_Project_Info", "Analyze_Recommend"]
   },
   {
     "id": 38,
