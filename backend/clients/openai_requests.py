@@ -24,8 +24,8 @@ class OpenAIBaseRequest(BaseLLMRequest):
     top_p: float = TOP_P
     seed: int = SEED
     reasoning_effort: str = 'low'
-    
-    max_completion_tokens = 1000
+
+    max_completion_tokens: int = 1000
 
     @model_validator(mode="after")
     def check_tool_message_linkage(self) -> "OpenAIBaseRequest":
@@ -61,7 +61,7 @@ class OpenAIBaseRequest(BaseLLMRequest):
             "model": self.model,
             "messages": self.to_messages_payload(),
             "stream_options": {"include_usage": True},
-            "max_completion_tokens": self.max_completion_tokens
+            # "max_completion_tokens": self.max_completion_tokens
         }
 
         if self.model.startswith("gpt-5"):
