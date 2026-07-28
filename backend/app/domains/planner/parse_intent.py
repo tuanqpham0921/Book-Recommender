@@ -32,6 +32,7 @@ from app.domains.field_types import (
     ReasoningStr,
     OptionalStr,
 )
+from .prompts.example import planner_example
 
 logger = logging.getLogger(__name__)
 
@@ -136,148 +137,7 @@ class GoalParseRequest(BaseModel):
     """
 
     model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "query": "Hi! Can you recommend books like Dune?",
-                    "request": {
-                        "system_goals": [
-                            {
-                                "id": "1",
-                                "description": "Find the book Dune by title",
-                                "reasoning": "Recommendation needs the anchor book first",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Title",
-                                "depends_on": [],
-                            },
-                            {
-                                "id": "2",
-                                "description": "Recommend books similar to Dune",
-                                "reasoning": "Similarity search seeded by the retrieved title",
-                                "confidence": 1.0,
-                                "target_node_type": "Analyze_Recommend",
-                                "depends_on": ["1"],
-                            },
-                        ],
-                    },
-                },
-                {
-                    "query": "Find some sci-fi books",
-                    "request": {
-                        "system_goals": [
-                            {
-                                "id": "1",
-                                "description": "Find sci-fi books",
-                                "reasoning": "Single-dimension genre lookup",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Genre",
-                                "depends_on": [],
-                            }
-                        ],
-                    },
-                },
-                {
-                    "query": "Compare Flights and Satantango",
-                    "request": {
-                        "system_goals": [
-                            {
-                                "id": "1",
-                                "description": "Find the book Flights by title",
-                                "reasoning": "One anchor book for the comparison",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Title",
-                                "depends_on": [],
-                            },
-                            {
-                                "id": "2",
-                                "description": "Find the book Satantango by title",
-                                "reasoning": "The other anchor book for the comparison",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Title",
-                                "depends_on": [],
-                            },
-                            {
-                                "id": "3",
-                                "description": "Compare Flights and Satantango",
-                                "reasoning": "Compare needs both books retrieved first",
-                                "confidence": 1.0,
-                                "target_node_type": "Analyze_Compare",
-                                "depends_on": ["1", "2"],
-                            },
-                        ],
-                    },
-                },
-                {
-                    "query": "Show me thrillers by Gillian Flynn",
-                    "request": {
-                        "system_goals": [
-                            {
-                                "id": "1",
-                                "description": "Find thriller books",
-                                "reasoning": "Genre is one retrieval dimension",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Genre",
-                                "depends_on": [],
-                            },
-                            {
-                                "id": "2",
-                                "description": "Find books by Gillian Flynn",
-                                "reasoning": "Author is a separate retrieval dimension",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Author",
-                                "depends_on": [],
-                            },
-                            {
-                                "id": "3",
-                                "description": "Keep only the books that are both thrillers and by Gillian Flynn",
-                                "reasoning": "Both conditions must hold on the same book, so AND the two retrievals",
-                                "confidence": 1.0,
-                                "target_node_type": "Combine_Intersect",
-                                "depends_on": ["1", "2"],
-                            },
-                        ],
-                    },
-                },
-                {
-                    "query": "Books by Kazuo Ishiguro published before 2000",
-                    "request": {
-                        "system_goals": [
-                            {
-                                "id": "1",
-                                "description": "Find books by Kazuo Ishiguro",
-                                "reasoning": "Author is the search subject",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_by_Author",
-                                "depends_on": [],
-                            },
-                            {
-                                "id": "2",
-                                "description": "Keep only the ones published before 2000",
-                                "reasoning": "Year can only narrow the retrieved set, so it is a separate filter goal",
-                                "confidence": 1.0,
-                                "target_node_type": "Filter_Retrieval",
-                                "depends_on": ["1"],
-                            },
-                        ],
-                    },
-                },
-                {
-                    "query": "What's my saved memory?",
-                    "request": {
-                        "system_goals": [
-                            {
-                                "id": "1",
-                                "description": "Retrieve user saved memory",
-                                "reasoning": "Direct user-info lookup",
-                                "confidence": 1.0,
-                                "target_node_type": "Retrieve_User_Info",
-                                "depends_on": [],
-                            }
-                        ],
-                    },
-                },
-            ]
-        }
+        json_schema_extra=planner_example
     )
 
     node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = (
@@ -287,6 +147,12 @@ class GoalParseRequest(BaseModel):
     system_goals: list[SystemGoal] = Field(
         default_factory=list,
         max_length=MAX_SYSTEM_GOALS,
+    )
+    
+    reasoning: ReasoningStr = Field(
+        ...,
+        max_length=MAX_STRING_LENGTH,
+        json_schema_extra={"example": "Direct match to a supported capability"},
     )
     
     out_of_scope: list[str] = Field(

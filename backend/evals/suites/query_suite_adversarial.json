@@ -306,9 +306,11 @@
     "domain": "current",
     "category": "mismatched_author_title",
     "query": "Find 1984, written by J.K. Rowling.",
-    "note": "Real title (1984, actually Orwell) paired with a real but wrong author. The author is only a hint stored on FindByTitleRetrieval, never validated against the title. Confirms the planner doesn't 'fix' the mismatch, reject it, or split it into two conflicting lookups — it should emit one Retrieve_by_Title carrying the title and the (incorrect) author hint as given.",
+    "note": "Real title (1984, actually Orwell) paired with a real but wrong author. Updated 2026-07-28: FindByTitle no longer carries an authors hint, so the mismatch is now resolved against the data instead of being stored unvalidated — Retrieve_by_Title + Retrieve_by_Author + Combine_Intersect, whose empty result is the honest answer. Confirms the planner takes the query as given: it must not silently 'fix' Rowling to Orwell, refuse the query, or drop the author to dodge the empty intersection.",
     "expected_nodes": [
-      "Retrieve_by_Title"
+      "Retrieve_by_Title",
+      "Retrieve_by_Author",
+      "Combine_Intersect"
     ]
   },
   {

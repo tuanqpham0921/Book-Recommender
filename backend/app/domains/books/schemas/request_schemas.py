@@ -111,39 +111,34 @@ class FindByTitleRetrieval(BaseRequest):
 
     Args:
         title: Book title to search for.
-        authors: Optional author name(s), used only to disambiguate between
-            similarly titled books (e.g. "Dune" by Frank Herbert) — omit when the
-            author isn't a distinguishing detail.
 
     Returns: A FindByTitleOutput — the searched title plus a list of matching
     BookSummary records (isbn13, title, authors, categories, genre,
     published_year, num_pages, average_rating, ratings_count, is_children).
 
     Use when: a specific title is named — "find Dune", "do you have The Great
-    Gatsby". Also use for authorship-verification questions ("did Frank
-    Herbert write Dune", "is Dune by Frank Herbert") — the title is still the
-    lookup target, with the named author passed as a disambiguating hint to
-    confirm or deny.
+    Gatsby".
 
     Do not use: when the author is the actual subject of the search ("books by
     Frank Herbert"), or when no specific title is named.
 
     Constraints: one title per node — for multiple named titles, emit one node
-    per title.
+    per title. This node searches on the title alone and takes no author
+    argument. When a title and an author are named together ("Dune by Frank
+    Herbert"), or the question is whether a given author wrote a given title
+    ("did Frank Herbert write Dune"), the author is a second retrieval
+    dimension: emit Retrieve_by_Author alongside this node and AND them with
+    Combine_Intersect. That checks the pairing against the data instead of
+    taking it on trust, and an empty intersection is the real answer to "did X
+    write Y?".
 
     Example queries:
         - "find Dune"
         - "do you have The Great Gatsby"
-        - "Dune by Frank Herbert"
-        - "did Frank Herbert write Dune"
-        - "is Dune by Frank Herbert"
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_TITLE] = BookNodeTypeEnum.FIND_TITLE
     title: str = Field(..., json_schema_extra={"example": "Dune"})
-    authors: Optional[list[str]] = Field(
-        default=None, json_schema_extra={"example": ["Frank Herbert"]}
-    )
 
 
 class FindByISBN13Retrieval(BaseRequest):
@@ -183,12 +178,12 @@ class FindByAuthorRetrieval(BaseRequest):
 
     Use when: one author is the subject of the search.
 
-    Do not use: for a single named title where the author is only a
-    disambiguating hint ("Dune by Frank Herbert") — this includes
-    authorship-verification questions like "did Frank Herbert write Dune" or
-    "is Dune by Frank Herbert", which stay a single title lookup — or
-    taste-based suggestions. For books two or more authors wrote *together*,
-    use Retrieve_by_CoAuthors instead.
+    Do not use: for taste-based suggestions. For books two or more authors
+    wrote *together*, use Retrieve_by_CoAuthors instead. When a title and an
+    author are named together ("Dune by Frank Herbert", "did Frank Herbert
+    write Dune"), this node is right but not on its own — Retrieve_by_Title
+    carries the title, this node carries the author, and Combine_Intersect
+    ANDs them.
 
     Constraints: exactly one author per node — several authors
     mean one node per author ("books by Austen and by Coelho"
@@ -317,9 +312,13 @@ class IntersectRetrievals(BaseRequest):
     Use when: the request names two or more search dimensions that must hold on
     the same book, and each dimension has its own retrieval node — most often
     an author plus a genre ("fantasy books by Sanderson" → Retrieve_by_Author
-    plus Retrieve_by_Genre, intersected here). This node is the only way a plan
-    says AND: prior steps read together are pooled (OR), so leaving this node
-    out of a both-must-hold request quietly answers a different question.
+    plus Retrieve_by_Genre, intersected here). A title plus an author is the
+    same shape ("Dune by Frank Herbert", "did Frank Herbert write Dune" →
+    Retrieve_by_Title plus Retrieve_by_Author, intersected here) — the title
+    node has no author argument, so this is the only place that pairing is
+    checked. This node is the only way a plan says AND: prior steps read
+    together are pooled (OR), so leaving this node out of a both-must-hold
+    request quietly answers a different question.
 
     Do not use: when the inputs are alternatives rather than joint requirements.
     Two authors' books gathered into one answer, or one ranked list drawn from

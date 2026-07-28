@@ -45,8 +45,8 @@
     "id": 7,
     "difficulty": "easy",
     "query": "Find Harry Potter and the Sorcerer's Stone by J.K. Rowling.",
-    "note": "Single FindByTitle with optional author hint. Tests that author is stored on the node, not used as a filter.",
-    "expected_nodes": ["Retrieve_by_Title"]
+    "note": "Title plus author (design-intent expectation, updated 2026-07-28 when FindByTitle lost its authors hint field). Two retrieval dimensions on the same book, so the pairing is expressed by composition: Retrieve_by_Title + Retrieve_by_Author + Combine_Intersect. The failures to catch are dropping the author entirely (one title node) and pooling the two retrievals without the intersect, which answers 'Harry Potter OR anything by Rowling'.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Author", "Combine_Intersect"]
   },
   {
     "id": 8,
@@ -353,8 +353,8 @@
     "id": 51,
     "difficulty": "easy",
     "query": "Did Jane Austen write Dune?",
-    "note": "Single FindByTitle. Authorship-verification phrasing — the named author is a disambiguating hint on the title lookup, not a bibliography search, so this must stay one node (not FindByTitle + FindByAuthor).",
-    "expected_nodes": ["Retrieve_by_Title"]
+    "note": "Authorship verification (design-intent expectation, updated 2026-07-28 when FindByTitle lost its authors hint field). Now the same shape as case 7: Retrieve_by_Title + Retrieve_by_Author + Combine_Intersect, where the empty intersection IS the 'no' — the question is answered against the data rather than by an unvalidated hint. The failure to catch is reading 'Jane Austen' as a bibliography search and returning her catalogue.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Author", "Combine_Intersect"]
   },
   {
     "id": 52,

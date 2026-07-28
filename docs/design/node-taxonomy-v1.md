@@ -44,7 +44,7 @@ response generation that always gets attached when the intent is to find books")
 
 | Node type | Class | Role in V1 |
 |---|---|---|
-| `Retrieve_by_Title` | `FindByTitleRetrieval` | Core retrieval — `title` + optional `authors` hint |
+| `Retrieve_by_Title` | `FindByTitleRetrieval` | Core retrieval — `title: str` only (the optional `authors` hint was dropped 2026-07-28; see below) |
 | `Retrieve_by_ISBN13` | `FindByISBN13Retrieval` | Core retrieval — exact `isbn13` |
 | `Retrieve_by_Author` | `FindByAuthorRetrieval` | Core retrieval — `author: str` (was `authors: list[str]`; see the 2026-07-21 split below), promoted out of `playground/app_mock/extended_request_schemas.py` |
 | `Retrieve_by_CoAuthors` | `FindByCoAuthorsRetrieval` | Core retrieval — `authors: list[str]` (min 2), joint works only. Added 2026-07-21 |
@@ -119,6 +119,33 @@ one — base eval cases 53 (union → two `Retrieve_by_Author`) and 54 (joint �
 `Retrieve_by_CoAuthors`) are deliberately the same shape with opposite expected plans,
 so the pair is the actual test. Related: eval-strategy.md's known-failure #4,
 "`Retrieve_by_Author` over-triggers whenever an author appears in the query".
+
+### Title/author hint removed (2026-07-28)
+
+`FindByTitleRetrieval` dropped `authors: Optional[list[str]]`. The field was the last
+place a retrieval node carried a second dimension, and it was a dimension the node never
+actually used: no executor read it, so "Dune by Frank Herbert" and "did Frank Herbert
+write Dune" were answered by a title lookup with the author riding along as an
+unvalidated string.
+
+A title paired with an author is now expressed the way every other two-dimension request
+is — by composition: `Retrieve_by_Title` + `Retrieve_by_Author` + `Combine_Intersect`.
+This finishes what the 2026-07-21 author split started: every retrieval node is now
+single-dimension *and* single-valued, with no exceptions, so the combine tier is the only
+place a plan says "and".
+
+What this buys, beyond consistency: authorship verification becomes real. "Did Jane
+Austen write Dune?" used to be a title lookup that could only ever return Dune — the
+author hint had no way to contradict it. Intersected against Austen's bibliography, the
+empty result *is* the "no", the same way `FindByCoAuthorsOutput`'s empty `books` answers
+"did they ever write together?".
+
+What it costs: three nodes where one used to do, and the author leg fetches a whole
+bibliography to keep one book. For a common query shape ("find X by Y") that is a real
+latency and token increase, and the intersect is now load-bearing — a plan that emits the
+two retrievals and forgets the intersect silently answers "Dune OR anything by Herbert".
+The pooling-vs-AND discrimination that base case 7 and extended case 119 test was
+previously free; it is now something the planner has to get right on an easy query.
 
 > **Status update (2026-07-18):** `CompareStrategy`/`Analyze_Compare` was re-registered
 > (commit `9d0e402`, "registered compare for eval test") — it's back in

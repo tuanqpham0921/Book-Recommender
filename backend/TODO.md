@@ -11,6 +11,30 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+seems like split up system goals as planner works
+    * tho there are some blurry issues
+    * the findings is that recommend analyze semantic and find by genre is blurry
+    * there can be duplicates tasks (not often)
+    * the good side of this is that you can run the parser seperately
+        * this means different prompts, examples, and model
+        * for something harder, like analyze recommend
+            * you can use a bigger model or more reasoning and example
+        * where in the old way, it's just one classifier
+    * but this is now also the problem with the system goals planner
+        * because it has more choices to link
+            * where the old one you filtered it out already
+            * so that's why the older way can use a smaller model and link okay
+    * overal I do think which ever way I decide to do
+        * these are about as good as it gets before I need very intensive eval
+        * it does seems like the description as query normalization work
+        * and there are just more optimizations
+            * things like book domain, project domain, or user domain
+            * this can filter out some stuff
+                * then you can filter out deeper like no actions and such
+            * I don't think it's the main issue tho
+            * linkage and goals setting seems okay
+        
+
 current
 * add a parse arguments of the normalized query fields
     * see how it does first

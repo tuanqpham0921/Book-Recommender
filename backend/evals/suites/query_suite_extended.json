@@ -129,8 +129,8 @@
     "id": 119,
     "difficulty": "medium",
     "query": "Find Dune by Frank Herbert.",
-    "note": "DISCRIMINATION: named title with author as hint → FindByTitle (authors as hint), NOT Retrieve_by_Author.",
-    "expected_nodes": ["Retrieve_by_Title"]
+    "note": "DISCRIMINATION (updated 2026-07-28 when FindByTitle lost its authors hint field): named title plus author → Retrieve_by_Title + Retrieve_by_Author + Combine_Intersect, still NOT a bare Retrieve_by_Author. Mirror of 120, where the author alone is the subject and one node is correct.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Author", "Combine_Intersect"]
   },
   {
     "id": 120,
@@ -207,7 +207,7 @@
     "difficulty": "medium",
     "query": "Add Dune, Hyperion, and Left Hand of Darkness to my reading list.",
     "note": "Single SaveToReadingList with three titles — one node, not three.",
-    "expected_nodes": ["Save_To_Reading_List", "Save_To_Reading_List", "Save_To_Reading_List"]
+    "expected_nodes": ["Save_To_Reading_List"]
   },
   {
     "id": 131,
@@ -228,7 +228,7 @@
     "difficulty": "medium",
     "query": "What genres do I read the most, and what's my average rating?",
     "note": "Single ReadingStats with aspects=[genre_breakdown, average_rating]. Multi-aspect but one node.",
-    "expected_nodes": ["Retrieve_Reading_Stats", "Retrieve_Reading_Stats"]
+    "expected_nodes": ["Retrieve_Reading_Stats"]
   },
   {
     "id": 134,
