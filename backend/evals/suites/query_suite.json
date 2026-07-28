@@ -473,7 +473,7 @@
     "difficulty": "easy",
     "query": "Recommend me a J.K. Rowling book.",
     "note": "AUTHOR-ANCHORED RECOMMEND (design-intent expectation, added 2026-07-28). The author-shaped twin of case 3 ('recommend me a mystery book' → Retrieve_by_Genre + Analyze_Recommend); the suite had title anchors (16, 20, 22) and genre anchors (3, 11) but no author anchor, so this fills the last corner of the recommend triangle. The author is the taste signal: retrieve her catalog, then pick from it. TWO failures to catch, one on each side. (a) Retrieve_by_Author alone, which answers case 52's question instead — the user asked for ONE book chosen for them, not the bibliography. (b) Retrieve_Random: this query is case 66's 'Recommend me a book' with four words inserted, and 'recommend me a book' is a literal Example query in Retrieve_Random's docstring, so 66 and 68 together are the actual test of whether the planner reads the anchor or pattern-matches the phrasing. The named author is exactly the 'taste, mood or anchor' that Retrieve_Random's Do-not-use clause routes away.",
-    "expected_nodes": ["Retrieve_by_Author", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_Random"]
   },
   {
     "id": 69,

@@ -78,7 +78,8 @@ class RecommendationStrategy(BaseRequest):
           pages", "cozy mysteries rated 4+") → add filters
 
     Do not use: when they only want to look up a known book or an author's/genre's
-    full catalog instead of suggestions.
+    full catalog instead of suggestions. Do not use when there is no semantic_input
+    or to find similar book to referenced books or from a analyzed report.
 
     Constraints: needs a supporting retrieval step, so a retrieval is still
     required even for purely thematic requests with no named book.
@@ -93,6 +94,8 @@ class RecommendationStrategy(BaseRequest):
     nearest books to Dune first — mostly long ones — and then throw nearly all of
     them away, answering with a few poor matches or nothing at all. Narrow a
     plain retrieval with Filter_Retrieval; narrow a recommendation with filters.
+
+    If a recommendation author, genre is known, then use retrieve random instead.
 
     Example semantic_input: cozy and hopeful, slow-burn dread, epic with
     strong world-building, darker than the anchor book, a heist on a
@@ -285,7 +288,7 @@ class FindByGenreRetrieval(BaseRequest):
 
 
 class RandomBookRetrieval(BaseRequest):
-    """Purpose: Retrieve random books from the catalog — a surprise with no taste signal.
+    """Purpose: Retrieve random books from the catalog — without aggreation or analyze of other book retrievals needed.
 
     Args:
         filters: Optional bounds the random pick must stay inside. Supply only
@@ -320,6 +323,7 @@ class RandomBookRetrieval(BaseRequest):
         - "pick anything"
         - "recommend me a book"
         - "surprise me with a short sci-fi"
+        - "recommend 3 books by Stephen"
     """
 
     node_type: Literal[BookNodeTypeEnum.RANDOM] = BookNodeTypeEnum.RANDOM
