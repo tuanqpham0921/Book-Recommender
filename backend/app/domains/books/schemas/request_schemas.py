@@ -20,11 +20,12 @@ class CompareStrategy(BaseRequest):
         comparison_criteria: The user's comparison lens (theme, tone, length,
             style, etc.) when stated; omit when they only want a general comparison.
 
-    Returns: An AnalyzeBooksOutput - containing findings on the comparision
+    Returns: AnalyzeBooksOutput — a written comparison, not a book list.
+
+    depends_on: at least 2 nodes that produce books (BookRetrievalOutput,
+    BookRecommendationOutput).
 
     Use when: the user wants a side-by-side read on specific named books.
-    
-    Depends_on: Any 2 nodes that output books (BookRetrievalOutput, BookRecommendationOutput)
 
     Do not use: when they want new suggestions instead, or only want to find
     a single title.
@@ -55,14 +56,15 @@ class RecommendationStrategy(BaseRequest):
             child-friendly — that the SEARCH ITSELF must respect. These are not
             applied to the depended-on books; they bound which candidates the
             similarity search is allowed to return.
-    
-    if no semantic_input or filters are provided, this node will find the closest books
-    similar to the referenced book.
-    
-    depends_on: any BookRetrievalOutput and AnalyzeBooksOutput to find similar books.
-    This node can aggrate the referenced books or analyzed reports to find closest books for recommendation.
 
-    Returns: BookRecommendationOutput - a list of recommended books.
+    With neither semantic_input nor filters, this node returns the books closest
+    to whatever it depends on — the anchor alone carries the whole ask.
+
+    Returns: BookRecommendationOutput — a list of recommended books.
+
+    depends_on: at least 1 node producing books (BookRetrievalOutput) or a
+    report (AnalyzeBooksOutput). Several inputs are pooled: the referenced books
+    and any analyzed reports are aggregated into one anchor for the search.
 
     Use when: the user wants new titles to read.
         - Similarity: "books like X", "more like X or Y" → retrieve X (and Y)
@@ -112,14 +114,14 @@ class RecommendationStrategy(BaseRequest):
 
 
 class FindByTitleRetrieval(BaseRequest):
-    """Purpose: Retrieve books by most similar to the provided title from the database.
+    """Purpose: Retrieve the books whose titles most closely match the one given.
 
     Args:
         title: Book title to search for.
 
-    Returns: BookRetrievalOutput - a list of possible books
-    
-    depends_on: None
+    Returns: BookRetrievalOutput — the candidate matches, best first.
+
+    depends_on: None — this node queries the database directly.
 
     Use when: a specific title is named — "find Dune", "do you have The Great
     Gatsby".
@@ -152,12 +154,13 @@ class FindByISBN13Retrieval(BaseRequest):
     Args:
         isbn13: ISBN13 to search for.
 
-    Returns: BookRetrievalOutput - a list of single book if found
+    Returns: BookRetrievalOutput — the one matching book, or empty when the
+    ISBN13 is not in the catalog.
+
+    depends_on: None — this node queries the database directly.
 
     Use when: an ISBN13 is explicitly given by the user, or already known from
     a prior step's result.
-            
-    depends_on: None
 
     Do not use: when only a title, author, or genre is known — the ISBN13 must
     be a literal identifier already in hand.
@@ -179,9 +182,9 @@ class FindByAuthorRetrieval(BaseRequest):
     Args:
         author: The single author whose books to retrieve.
 
-    Returns: BookRetrievalOutput - a list of possible books.
-    
-    depends_on: None
+    Returns: BookRetrievalOutput — that author's catalog.
+
+    depends_on: None — this node queries the database directly.
 
     Use when: one author is the subject of the search.
 
@@ -212,9 +215,9 @@ class FindByCoAuthorsRetrieval(BaseRequest):
     Args:
         authors: The authors who must all appear on the same book (at least two).
 
-    Returns: BookRetrievalOutput - a list of possible books
-        
-    depends_on: None
+    Returns: BookRetrievalOutput — the joint works, empty when there are none.
+
+    depends_on: None — this node queries the database directly.
 
     Use when: the query is about a collaboration — the named authors as
     co-writers of the same title, signalled by words like "together", "with",
@@ -257,9 +260,9 @@ class FindByGenreRetrieval(BaseRequest):
             across the two nodes — "cozy mysteries" is genre="mystery" here
             plus semantic_input="cozy".
 
-    Returns: BookRetrievalOutput - a list of possible books
-        
-    depends_on: None
+    Returns: BookRetrievalOutput — the books filed under that shelf.
+
+    depends_on: None — this node queries the database directly.
 
     Use when: genre is the primary axis of the search — "fantasy books", "any
     good mysteries", "nonfiction about space".
@@ -287,29 +290,30 @@ class RandomBookRetrieval(BaseRequest):
     Args:
         filters: Optional bounds the random pick must stay inside. Supply only
             what the user actually stated; a bare surprise takes no filters.
-        limit: Optinal number of random books, default to 1
+        limit: How many books to pick. Defaults to 1 — set it only when the
+            user asked for a specific number ("find 3 books").
 
-    Returns: BookRetrievalOutput - a list of possible books
-        
-    depends_on: None
+    Returns: BookRetrievalOutput — `limit` arbitrarily chosen books.
+
+    depends_on: None — this node queries the database directly.
 
     Use when: the user cedes the choice instead of describing what they want —
-    examples "surprise me", "pick anything", "recommend me a book", "find 3 books" with nothing else
-    said. A bare recommend like that is this node ALONE: it is a complete plan
-    on its own, so do not add Analyze_Recommend after it. There is no taste
-    input for a recommendation to work from, and this node already returns a
-    book.
+    "surprise me", "pick anything", "recommend me a book", "find 3 books" with
+    nothing else said. A bare recommend like that is this node ALONE: it is a
+    complete plan on its own, so do not add Analyze_Recommend after it. There
+    is no taste input for a recommendation to work from, and this node already
+    returns the books.
 
     Do not use: the moment the ask carries any taste, mood or anchor
     ("something spooky", "a book like Dune", "a good fantasy") — that is a real
     recommendation and belongs to Analyze_Recommend over a retrieval, because a
     random pick would ignore what they told you.
 
-    Constraints: returns books, chosen arbitrarily. It queries the database
-    directly and takes no depends_on. Because the pick is arbitrary, nothing
-    downstream should narrow them — a filter applied afterwards usually discards
-    the one book and answers with nothing; bounds belong in filters here, where
-    the pick is drawn from inside them.
+    Constraints: returns `limit` books, chosen arbitrarily. It queries the
+    database directly and takes no depends_on. Because the picks are arbitrary,
+    nothing downstream should narrow them — a filter applied afterwards usually
+    discards the whole (small) set and answers with nothing; bounds belong in
+    filters here, where the picks are drawn from inside them.
 
     Example queries:
         - "surprise me"
@@ -332,9 +336,10 @@ class RandomBookRetrieval(BaseRequest):
 class UnionRetrieval(BaseRequest):
     """Purpose: Pool two or more prior retrieval results into one combined set — OR, not AND.
 
-    Returns: BookRetrievalOutput - a list of possible books
-        
-    depends_on: at least 2 nodes that produce a list of books (BookRetrievalOutput, BookRecommendationOutput)
+    Returns: BookRetrievalOutput — every book any input found, deduplicated.
+
+    depends_on: at least 2 nodes that produce books (BookRetrievalOutput,
+    BookRecommendationOutput).
 
     Use when: separate result sets have to become one explicit list before the
     next step can work on them — a later analyze step that reasons over all of
@@ -369,9 +374,11 @@ class UnionRetrieval(BaseRequest):
 class IntersectRetrievals(BaseRequest):
     """Purpose: Keep only the books found by ALL of two or more prior retrievals — AND, not OR.
 
-    Returns: BookRetrievalOutput - a list of possible books
-            
-    depends_on: at least 2 nodes that produce a list of books (BookRetrievalOutput, BookRecommendationOutput)
+    Returns: BookRetrievalOutput — only the books every input found, which may
+    be empty.
+
+    depends_on: at least 2 nodes that produce books (BookRetrievalOutput,
+    BookRecommendationOutput).
 
     Use when: the request names two or more search dimensions that must hold on
     the same book, and each dimension has its own retrieval node — most often
@@ -419,9 +426,12 @@ class FilterRetrieval(BaseRequest):
         filters: The metadata bounds to apply. Every field is inclusive and
             independent — supply only the ones the user actually stated.
 
-    Returns: BookRetrievalOutput - a list of possible books
-                
-    depends_on: at least 2 nodes that produce a list of books (BookRetrievalOutput, BookRecommendationOutput)
+    Returns: BookRetrievalOutput — the subset that satisfies every bound.
+
+    depends_on: exactly 1 node that produces books (BookRetrievalOutput,
+    BookRecommendationOutput) — this node narrows one result set rather than
+    combining several, so pool with Combine_Union first if the bounds apply to
+    more than one. Never Retrieve_Random: see Constraints.
 
     Use when: the request adds a measurable limit to a search that already has a
     subject — "by Sanderson, over 400 pages", "fantasy published after 2015",

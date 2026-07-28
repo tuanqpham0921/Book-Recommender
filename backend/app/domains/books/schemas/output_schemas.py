@@ -4,6 +4,33 @@ eval/review tooling see. Deliberately excludes description/thumbnail/
 embedding: those are presentation/internal fields, not reasoning inputs.
 Full book-card data (including thumbnail) is streamed to the UI separately
 via SSEStream.send_book_card and doesn't go through these models.
+
+## The output-shape vocabulary (added 2026-07-28)
+
+Node docstrings name what they return and what they may depend on using four
+shape names, so the planner can tell which nodes can legally feed which:
+
+- `BookRetrievalOutput` — a list of books. Every retrieval node and the whole
+  combine tier. The only shape a node that "depends on books" can consume.
+- `BookRecommendationOutput` — a list of books that were *chosen*, from
+  `Analyze_Recommend`. Consumable anywhere books are.
+- `AnalyzeBooksOutput` — a written report about books (compare, summarize,
+  themes, reading order/level/time/plan). Names books without being a book
+  list: a report never adds a book, so nothing may treat it as a retrieval.
+- `ActionConfirmationOutput` — a record of a write (shelf actions, feedback).
+
+Shapes outside the vocabulary are spelled out per node (`AuthorInfoOutput`,
+`ReadingStatsOutput`, `UserInfoOutput`, …); they are about people, stats, or
+accounts, not books, and nothing that depends on books can consume them.
+
+**These four names are planner-facing only — they are not classes here.** This
+module still defines one concrete Output class per node (`FindByTitleOutput`,
+`FindByGenreOutput`, …), all structurally `{what_was_searched, books}`, and
+there is no class at all for the recommendation, analyze, or confirmation
+shapes. Collapsing the per-node classes into a real `BookRetrievalOutput` and
+adding the missing three would make the docstrings and the code agree; until
+then, the docstrings describe an intended contract that the executors do not
+yet enforce. See docs/design/node-taxonomy-v1.md.
 """
 
 from pydantic import BaseModel
@@ -52,7 +79,8 @@ class FindByGenreOutput(BaseModel):
 
 
 class RandomBookOutput(BaseModel):
-    """One arbitrarily chosen book. `book` is None when the supplied filters
-    left nothing to pick from — a real answer, not an error."""
+    """Arbitrarily chosen books — as many as the request's `limit` asked for,
+    fewer if the catalog (or the supplied filters) could not supply that many.
+    An empty `books` is a real answer, not an error."""
 
-    book: BookSummary | None = None
+    books: list[BookSummary]

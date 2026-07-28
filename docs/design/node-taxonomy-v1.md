@@ -179,6 +179,37 @@ is what holds the planner to it.
 with `Analyze_Recommend` — the two are separated by whether the user expressed taste,
 which is a judgment call, not a structural one. Worth watching in the adversarial suite.
 
+### Typed `Returns:` / `depends_on:` in every docstring (2026-07-28)
+
+Node docstrings now state their output **shape** and what shapes they may depend on,
+in a fixed four-name vocabulary: `BookRetrievalOutput` (a book list — every retrieval
+node and the whole combine tier), `BookRecommendationOutput` (books that were chosen,
+from `Analyze_Recommend`), `AnalyzeBooksOutput` (a written report — compare, summarize,
+themes, reading order/level/time/plan), and `ActionConfirmationOutput` (a write
+record). Shapes outside it are named per node (`AuthorInfoOutput`, `ReadingStatsOutput`,
+`UserInfoOutput`, …). `depends_on:` is now an audited section in
+`evals/tools_catalog.py`, so a new node cannot ship without declaring what it consumes.
+
+The distinction that does the work is **report vs. book list**. `Analyze_Reading_Order`
+and `Analyze_Reading_Plan` both name books, and both are reports: they re-sequence or
+schedule what they were given and never add a book, so nothing downstream may treat
+them as a retrieval. `Retrieve_Reading_List` goes the other way — it looked like an
+account-info node but produces books, which is what lets base case 50 ("nothing by
+authors I've already read") work at all: the shelf feeds `Analyze_Recommend` as an
+anchor or an exclusion source. `Retrieve_Author_Info` and `Retrieve_Reading_Stats` are
+the honest negatives — prose about a person and counts respectively, consumable by
+nothing that depends on books.
+
+**The vocabulary is planner-facing only, and does not yet exist in code.**
+`output_schemas.py` still defines one concrete class per retrieval node
+(`FindByTitleOutput`, `FindByGenreOutput`, …), all structurally
+`{what_was_searched, books}`, and has no class at all for the recommendation, analyze,
+or confirmation shapes. So the docstrings currently describe a contract the executors
+do not enforce. Closing that gap means collapsing the per-node classes into a real
+`BookRetrievalOutput` and adding the missing three — a change to six classes and six
+mock executors, deliberately not taken on the same day as the docstrings. Until it
+lands, a plan can wire a report into a node expecting books and nothing will object.
+
 > **Status update (2026-07-18):** `CompareStrategy`/`Analyze_Compare` was re-registered
 > (commit `9d0e402`, "registered compare for eval test") — it's back in
 > `BOOK_ANALYZE_CLASSES`/`BOOK_NODE_TYPE_TO_CLS`. The "removed from V1" paragraph above

@@ -30,6 +30,14 @@ separately by class in `EXECUTORS_CLS_MAPPING` — schemas contain no execution 
 1. Add the enum value in the domain's `node_types.py`.
 2. Add the request schema in the domain's `schemas/request_schemas.py` — write the
    docstring for the LLM (include example queries; that's roadmap Phase 2 style).
+   `make tools-catalog` audits every docstring for `Purpose: / Args: / Returns: /
+   depends_on: / Use when: / Do not use: / Constraints:` plus an examples section
+   (`Example queries:`, or example values like `Example genres:`). `Returns:` and
+   `depends_on:` must name **output shapes**, not prose — `BookRetrievalOutput`,
+   `BookRecommendationOutput`, `AnalyzeBooksOutput`, `ActionConfirmationOutput`,
+   or a node-specific name for anything outside that vocabulary. That pairing is
+   how the planner knows which nodes can legally feed which; the vocabulary is
+   defined in `books/schemas/output_schemas.py`.
 3. Register it in `app/registry.py`: `NODE_TYPE_TO_CLS`, the domain class tuple, and
    the `AnyStrategyRequest` union.
 4. Add an executor and map it in `EXECUTORS_CLS_MAPPING` (mock or real).

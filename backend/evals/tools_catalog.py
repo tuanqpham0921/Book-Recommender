@@ -81,6 +81,7 @@ EXPECTED_SECTIONS = (
     "Purpose:",
     "Args:",
     "Returns:",
+    "depends_on:",
     "Use when:",
     "Do not use:",
     "Constraints:",

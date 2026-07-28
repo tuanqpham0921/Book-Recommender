@@ -13,7 +13,9 @@ class UserInfoRequest(BaseRequest):
             token_usage, saved_memory, previous_conversation,
             current_conversation).
 
-    Returns: The requested user profile/session fields.
+    Returns: UserInfoOutput — profile and session fields, not a book list.
+
+    depends_on: None — this node reads the user's record directly.
 
     Use when: the user asks about themselves — "what's my saved memory", "how
     many tokens have I used", "what's in my profile".
@@ -42,7 +44,10 @@ class DeveloperInfoRequest(BaseRequest):
         field: One or more DeveloperInfoEnum values to retrieve (name, bio,
             email, linkedin_url).
 
-    Returns: The requested developer profile fields.
+    Returns: DeveloperInfoOutput — profile fields about the app's author, not
+    a book list.
+
+    depends_on: None — this node reads a static profile.
 
     Use when: the user asks about who built the app — "who made this", "what's
     the developer's email", "link me their LinkedIn".

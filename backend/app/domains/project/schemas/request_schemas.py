@@ -13,7 +13,9 @@ class FeedbackRequest(BaseRequest):
             the user volunteers it, for a possible follow-up.
         feedback: The user's feedback text.
 
-    Returns: Confirmation that the feedback was recorded.
+    Returns: ActionConfirmationOutput — what was recorded, not a book list.
+
+    depends_on: None — the user's own words are the whole input.
 
     Use when: the user is commenting on the app/planner/experience — "this
     recommendation tool is great", "the chat feels slow", "you should add X
@@ -53,7 +55,9 @@ class ProjectInfoRequest(BaseRequest):
             description, technology_stack, project_url, project_github_url,
             project_github_repo_name, project_github_repo_url, all).
 
-    Returns: The requested project metadata fields, rendered as a short
+    depends_on: None — this node reads project metadata directly.
+
+    Returns: ProjectInfoOutput — the requested project metadata fields, rendered as a short
     description of the project.
 
     Use when: the user asks about the project itself — "what tech stack does

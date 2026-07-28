@@ -99,6 +99,7 @@ class TestMissingSections:
         assert missing_sections("Purpose: do a thing.") == [
             "Args:",
             "Returns:",
+            "depends_on:",
             "Use when:",
             "Do not use:",
             "Constraints:",
