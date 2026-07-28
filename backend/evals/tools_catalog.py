@@ -29,6 +29,7 @@ Usage (from backend/, or `make tools-catalog`):
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -83,8 +84,13 @@ EXPECTED_SECTIONS = (
     "Use when:",
     "Do not use:",
     "Constraints:",
-    "Example queries:",
 )
+
+# A node illustrates itself either with example queries or with example values
+# for the field that decides its routing ("Example genres:",
+# "Example semantic_input:"). Either satisfies the audit; having neither does
+# not.
+EXAMPLES_SECTION = re.compile(r"Example [A-Za-z_ ]+:")
 
 
 def get_encoder(model: str):
@@ -121,7 +127,10 @@ def schema_tokens(cls: type, encoder) -> int | None:
 
 
 def missing_sections(description: str) -> list[str]:
-    return [s for s in EXPECTED_SECTIONS if s not in description]
+    missing = [s for s in EXPECTED_SECTIONS if s not in description]
+    if not EXAMPLES_SECTION.search(description):
+        missing.append("Example queries:")
+    return missing
 
 
 def purpose_line(description: str) -> str:

@@ -46,8 +46,9 @@ class RecommendationStrategy(BaseRequest):
     """Purpose: Suggest books that fit the user's ask — the analyze step for most recommendation queries.
 
     Args:
-        semantic_input: Thematic/conceptual description from the query (theme,
-            tone, or mood) — not titles, authors, or genres.
+        semantic_input: What the books should be LIKE — theme, tone, mood or
+            premise. Never a title, author, or shelf label; shelf words go to
+            Retrieve_by_Genre.
         filters: Optional metadata bounds — pages, year, rating, ratings count,
             child-friendly — that the SEARCH ITSELF must respect. These are not
             applied to the depended-on books; they bound which candidates the
@@ -58,8 +59,9 @@ class RecommendationStrategy(BaseRequest):
     Use when: the user wants new titles to read.
         - Similarity: "books like X", "more like X or Y" → retrieve X (and Y)
           first
-        - Thematic / mood: "cozy mysteries", "epic sci-fi with strong
-          world-building" → semantic_input
+        - Thematic / mood: "something cozy and hopeful" → semantic_input. A
+          shelf word riding along ("cozy mysteries") splits: "mystery" to
+          Retrieve_by_Genre, "cozy" stays here
         - Mixed: named anchor book(s) plus a twist ("like X but darker") →
           a supporting retrieval plus semantic_input
         - Any of the above with a measurable limit ("like X but under 300
@@ -82,14 +84,9 @@ class RecommendationStrategy(BaseRequest):
     them away, answering with a few poor matches or nothing at all. Narrow a
     plain retrieval with Filter_Retrieval; narrow a recommendation with filters.
 
-    Example queries:
-        - "books like Dune"
-        - "more like Dune or Foundation"
-        - "cozy mysteries"
-        - "epic sci-fi with strong world-building"
-        - "like Dune but darker and shorter"
-        - "something like Dune between 100 and 200 pages"
-        - "recommend a well-reviewed cozy mystery from the last decade"
+    Example semantic_input: cozy and hopeful, slow-burn dread, epic with
+    strong world-building, darker than the anchor book, a heist on a
+    generation ship, quiet and character-driven, morally grey protagonist.
     """
 
     node_type: Literal[BookNodeTypeEnum.RECOMMENDATION] = BookNodeTypeEnum.RECOMMENDATION
@@ -243,7 +240,11 @@ class FindByGenreRetrieval(BaseRequest):
     """Purpose: Retrieve books belonging to a named genre or category from the database.
 
     Args:
-        genre: Genre or category to search for.
+        genre: One shelf label — what a book is FILED UNDER, not what it is
+            LIKE. Mood and premise ("cozy", "slow-burn") are
+            Analyze_Recommend's semantic_input; a query holding both splits
+            across the two nodes — "cozy mysteries" is genre="mystery" here
+            plus semantic_input="cozy".
 
     Returns: A FindByGenreOutput — the searched genre plus a list of matching
     BookSummary records.
@@ -251,16 +252,17 @@ class FindByGenreRetrieval(BaseRequest):
     Use when: genre is the primary axis of the search — "fantasy books", "any
     good mysteries", "nonfiction about space".
 
-    Do not use: for a themed or mood-based search that isn't a clean genre label
-    ("something cozy and hopeful"), or a single known title.
+    Do not use: for a single known title, or when no word in the query names a
+    shelf.
 
     Constraints: single genre per node — no cross-column filtering (e.g. genre
-    plus a rating threshold isn't supported in this node).
+    plus a rating threshold isn't supported in this node). Several genres mean
+    one node per genre.
 
-    Example queries:
-        - "fantasy books"
-        - "any good mysteries"
-        - "nonfiction about space"
+    Example genres: fiction, non-fiction, children's fiction, children's
+    non-fiction, mystery, thriller, horror, science fiction, fantasy, romance,
+    poetry, drama, history, biography, philosophy, religion, science, comics &
+    graphic novels, literary criticism.
     """
 
     node_type: Literal[BookNodeTypeEnum.FIND_GENRE] = BookNodeTypeEnum.FIND_GENRE
