@@ -49,6 +49,7 @@ response generation that always gets attached when the intent is to find books")
 | `Retrieve_by_Author` | `FindByAuthorRetrieval` | Core retrieval — `author: str` (was `authors: list[str]`; see the 2026-07-21 split below), promoted out of `playground/app_mock/extended_request_schemas.py` |
 | `Retrieve_by_CoAuthors` | `FindByCoAuthorsRetrieval` | Core retrieval — `authors: list[str]` (min 2), joint works only. Added 2026-07-21 |
 | `Retrieve_by_Genre` | `FindByGenreRetrieval` | Core retrieval — `genre: str`, new |
+| `Retrieve_Random` | `RandomBookRetrieval` | Core retrieval — optional `filters: BooksFilter`, one arbitrary pick. Promoted out of `playground/app_mock/extended_request_schemas.py` 2026-07-28; see below |
 | `Analyze_Recommend` | `RecommendationStrategy` | LLM ranking/response step, **no filters field** |
 | *(new)* clarification/rejection | not yet built | Turns refused or ambiguous goals into a helpful reply — still open |
 | `Provide_Feedback` | `FeedbackRequest` | Registered 2026-07-17 (`app/domains/project/registry.py`) — conversational feedback about the app, distinct from the reviewer workflow's `PUT /feedback/review` |
@@ -146,6 +147,37 @@ latency and token increase, and the intersect is now load-bearing — a plan tha
 two retrievals and forgets the intersect silently answers "Dune OR anything by Herbert".
 The pooling-vs-AND discrimination that base case 7 and extended case 119 test was
 previously free; it is now something the planner has to get right on an easy query.
+
+### `Retrieve_Random` promoted to V1 core (2026-07-28)
+
+`RandomBookRetrieval` moved out of `playground/app_mock/extended_request_schemas.py` into
+`app/domains/books/schemas/request_schemas.py` and is now registered, with a
+`RandomBookOutput` result type and a mock executor — the same promotion path
+`FindByAuthorRetrieval` took on 2026-07-21. It is the only V1 retrieval node that is not
+single-dimension: it carries an optional `BooksFilter`, because a random pick has no
+dimension to be single about.
+
+What it settles is the *bare* recommend. "Recommend me a book", with nothing else said,
+had no honest plan under the old node set: `Analyze_Recommend` needs a supporting
+retrieval, and there is no taste input for one to be built from, so the planner either
+invented an anchor or produced a retrieval that answered a question the user hadn't
+asked. `Retrieve_Random` is now that plan, **alone** — its docstring says explicitly that
+no `Analyze_Recommend` follows it, since the node already returns a book and there is
+nothing to rank. The moment the ask carries any taste, mood, or anchor ("a book like
+Dune", "something spooky"), it is a real recommendation again and this node is wrong.
+
+**`Filter_Retrieval` may not depend on it.** Stated in both docstrings. Filtering one
+arbitrarily chosen book usually discards the pick and answers with nothing — the failure
+is silent and looks identical to "no matches". A bounded surprise ("surprise me with a
+short sci-fi") puts the bounds in `Retrieve_Random.filters`, so the pick is drawn from
+inside them rather than tested against them afterwards. This is the same
+search-within-bounds vs. delete-afterwards distinction `Analyze_Recommend.filters` already
+draws, and it is convention only: nothing in the schema enforces it, so the golden test
+is what holds the planner to it.
+
+**Cost:** 345 catalog tokens on every request, and one more node the planner can confuse
+with `Analyze_Recommend` — the two are separated by whether the user expressed taste,
+which is a judgment call, not a structural one. Worth watching in the adversarial suite.
 
 > **Status update (2026-07-18):** `CompareStrategy`/`Analyze_Compare` was re-registered
 > (commit `9d0e402`, "registered compare for eval test") — it's back in

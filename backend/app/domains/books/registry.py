@@ -10,6 +10,7 @@ from app.domains.books.schemas.request_schemas import (
     FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
     FindByTitleRetrieval,
+    RandomBookRetrieval,
     RecommendationStrategy,
     CompareStrategy,
     UnionRetrieval,
@@ -28,6 +29,7 @@ BOOK_RETRIEVAL_CLASSES = (
     FindByAuthorRetrieval,
     FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
+    RandomBookRetrieval,
 )
 BOOK_ANALYZE_CLASSES = (
     RecommendationStrategy,
@@ -52,6 +54,7 @@ BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
     BookNodeTypeEnum.FIND_COAUTHORS.value: FindByCoAuthorsRetrieval,
     BookNodeTypeEnum.FIND_GENRE.value: FindByGenreRetrieval,
+    BookNodeTypeEnum.RANDOM.value: RandomBookRetrieval,
     BookNodeTypeEnum.UNION_RETRIEVAL.value: UnionRetrieval,
     BookNodeTypeEnum.INTERSECT_RETRIEVALS.value: IntersectRetrievals,
     BookNodeTypeEnum.FILTER_RETRIEVAL.value: FilterRetrieval,

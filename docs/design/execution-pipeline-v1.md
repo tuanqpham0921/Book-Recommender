@@ -75,6 +75,13 @@ Both live in `app/domains/books/schemas/request_schemas.py`, sit in their own
 `CATALOG_TIERS` section, and consume prior task output only — neither queries the
 database.
 
+**`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
+one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
+than not, and the empty result is indistinguishable from "nothing matched". Bounds on a
+surprise belong in `Retrieve_Random`'s own `filters`, where the pick is drawn from inside
+them. Convention only — nothing in the schema rejects the edge, so it lives in both
+docstrings and in the golden expectations.
+
 **Union is both implicit and an explicit node.** `Combine_Union` / `UnionRetrieval` was
 registered, removed the same day, then re-added (2026-07-24). The removal argument still
 holds for the *implicit* case: listing several task ids in *any* node's `depends_on`

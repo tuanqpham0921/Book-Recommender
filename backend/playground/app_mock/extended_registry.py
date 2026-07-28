@@ -21,7 +21,6 @@ from playground.app_mock.extended_request_schemas import (
     MarkBookAsReadAction,
     NewReleasesRetrieval,
     PopularBooksRetrieval,
-    RandomBookRetrieval,
     RateBookAction,
     ReadingLevelStrategy,
     ReadingOrderStrategy,
@@ -42,7 +41,6 @@ ExtendedBOOK_RETRIEVAL_CLASSES = (
     AuthorInfoRetrieval,
     NewReleasesRetrieval,
     PopularBooksRetrieval,
-    RandomBookRetrieval,
 )
 ExtendedBOOK_ANALYZE_CLASSES = (
     SummarizeStrategy,
@@ -81,7 +79,6 @@ ExtendedAnyStrategyRequest = Annotated[
         AuthorInfoRetrieval,
         NewReleasesRetrieval,
         PopularBooksRetrieval,
-        RandomBookRetrieval,
         SummarizeStrategy,
         ThemesStrategy,
         ReadingOrderStrategy,
@@ -105,7 +102,6 @@ ExtendedNODE_TYPE_TO_CLS: dict[str, type] = {
     ExtendedBookNodeTypeEnum.AUTHOR_INFO.value: AuthorInfoRetrieval,
     ExtendedBookNodeTypeEnum.NEW_RELEASES.value: NewReleasesRetrieval,
     ExtendedBookNodeTypeEnum.POPULAR.value: PopularBooksRetrieval,
-    ExtendedBookNodeTypeEnum.RANDOM.value: RandomBookRetrieval,
     ExtendedBookNodeTypeEnum.SUMMARIZE.value: SummarizeStrategy,
     ExtendedBookNodeTypeEnum.THEMES.value: ThemesStrategy,
     ExtendedBookNodeTypeEnum.READING_ORDER.value: ReadingOrderStrategy,

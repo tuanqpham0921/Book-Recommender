@@ -8,6 +8,7 @@ class BookNodeTypeEnum(str, Enum):
     FIND_AUTHOR = "Retrieve_by_Author"
     FIND_COAUTHORS = "Retrieve_by_CoAuthors"
     FIND_GENRE = "Retrieve_by_Genre"
+    RANDOM = "Retrieve_Random"
 
     # Combine / filter — operate on prior retrieval results, never the database
     UNION_RETRIEVAL = "Combine_Union"

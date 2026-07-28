@@ -157,37 +157,8 @@ class PopularBooksRetrieval(BaseRequest):
     )
 
 
-class RandomBookRetrieval(BaseRequest):
-    """Purpose: Retrieve a random pick from the catalog — a surprise with no taste signal.
-
-    Args:
-        filters: Bounds for the random pick — BooksFilter (authors,
-            categories, keywords, genre, is_children, page/year/rating
-            ranges, limit).
-
-    Returns: A single randomly selected book within the given bounds.
-
-    Use when: the user explicitly cedes the choice — "surprise me", "pick
-    anything", "random book please". Optional filters keep the surprise inside
-    bounds the user set ("surprise me with a short sci-fi").
-
-    Do not use: for asks that carry taste or mood ("something spooky").
-
-    Constraints: filters is optional; sort_by/limit in filters are not
-    meaningful for a single random pick.
-
-    Example queries:
-        - "surprise me"
-        - "pick anything"
-        - "random book please"
-        - "surprise me with a short sci-fi"
-    """
-
-    node_type: Literal[BookNodeTypeEnum.RANDOM] = BookNodeTypeEnum.RANDOM
-    filters: Optional[BooksFilter] = Field(
-        None,
-        json_schema_extra={"example": {"categories": ["Science Fiction"], "max_pages": 250}},
-    )
+# RandomBookRetrieval — promoted to app.domains.books.schemas.request_schemas
+# (V1 core), same as FindByAuthorRetrieval before it.
 
 
 # -------------------------------------------------------------------

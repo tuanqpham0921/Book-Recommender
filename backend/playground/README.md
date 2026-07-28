@@ -10,11 +10,14 @@ with a NOTE). Every node "executes" by streaming canned markdown / mock book dat
 This is the placeholder until real domain executors are built (roadmap Phase 3), at
 which point the mapping repoints and these mocks remain useful for tests.
 
-## `app_mock/extended_registry.py` — the scaling extension (~18 extra node types)
+## `app_mock/extended_registry.py` — the scaling extension (~16 extra node types)
 
-FindByAuthor, SaveToReadingList, RateBook, ReadingPlan, and friends — schema-only node
-types used to test how the planner behaves as the catalog grows
-(`evals/suites/query_suite_extended.json` targets them).
+SaveToReadingList, RateBook, ReadingPlan, and friends — schema-only node types used to
+test how the planner behaves as the catalog grows
+(`evals/suites/query_suite_extended.json` targets them). Two have graduated out and are
+now V1 core: `FindByAuthorRetrieval` (2026-07-21) and `RandomBookRetrieval` (2026-07-28).
+Their old entries here are left as commented-out one-liners marking the promotion, so
+the extension's history stays readable.
 
 **The toggle is manual and by design**: the "PLAYGROUND EXTENSION" block at the bottom
 of `app/registry.py` folds these into the live registry; commenting out that one block

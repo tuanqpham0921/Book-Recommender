@@ -4,6 +4,7 @@ from app.domains.books.schemas import (
     FindByAuthorRetrieval,
     FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
+    RandomBookRetrieval,
     RecommendationStrategy,
 )
 from app.domains.project.schemas import FeedbackRequest, ProjectInfoRequest
@@ -18,6 +19,7 @@ from .books import (
     FindByAuthorExecutor,
     FindByCoAuthorsExecutor,
     FindByGenreExecutor,
+    RandomBookExecutor,
     RecommendBooksExecutor,
 )
 from .project import ProjectInfoExecutor, FeedbackExecutor
@@ -29,6 +31,7 @@ MOCK_EXECUTORS_CLS_MAPPING = {
     FindByAuthorRetrieval: FindByAuthorExecutor,
     FindByCoAuthorsRetrieval: FindByCoAuthorsExecutor,
     FindByGenreRetrieval: FindByGenreExecutor,
+    RandomBookRetrieval: RandomBookExecutor,
     RecommendationStrategy: RecommendBooksExecutor,
     ProjectInfoRequest: ProjectInfoExecutor,
     FeedbackRequest: FeedbackExecutor,

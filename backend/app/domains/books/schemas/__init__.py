@@ -6,6 +6,7 @@ from .request_schemas import (
     FindByAuthorRetrieval,
     FindByCoAuthorsRetrieval,
     FindByGenreRetrieval,
+    RandomBookRetrieval,
     IntersectRetrievals,
     FilterRetrieval,
 )
@@ -16,6 +17,7 @@ from .output_schemas import (
     FindByAuthorOutput,
     FindByCoAuthorsOutput,
     FindByGenreOutput,
+    RandomBookOutput,
 )
 
 __all__ = [
@@ -26,6 +28,7 @@ __all__ = [
     "FindByAuthorRetrieval",
     "FindByCoAuthorsRetrieval",
     "FindByGenreRetrieval",
+    "RandomBookRetrieval",
     "IntersectRetrievals",
     "FilterRetrieval",
     "BookSummary",
@@ -34,4 +37,5 @@ __all__ = [
     "FindByAuthorOutput",
     "FindByCoAuthorsOutput",
     "FindByGenreOutput",
+    "RandomBookOutput",
 ]

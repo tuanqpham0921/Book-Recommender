@@ -453,5 +453,19 @@
     "query": "What horror books has Stephen King written that are over 500 pages?",
     "note": "FULL COMBINE TIER (design-intent expectation, added 2026-07-24). The longest correct plan in the suite: two anchors that must hold on the same book (author AND genre) plus a metadata bound, which is four nodes — retrieve each anchor, Combine_Intersect them, then Filter_Retrieval the result. Exercises the whole tier and the anchor-vs-constraint line in one query: horror is a search subject and gets a retrieval node, 500 pages is a constraint and cannot. Two failures to catch: emitting the two retrievals as bare siblings, which pools them (every King book OR every horror book) instead of intersecting; and promoting the page bound to its own retrieval node. COLLIDES WITH CASES 56/57/59: those expect a single Retrieve_by_Author with the genre silently dropped, an expectation written before Combine_Intersect existed. This case encodes the post-combine-tier answer; they still encode the pre-combine-tier one. They need re-deciding together — see docs/design/execution-pipeline-v1.md open questions.",
     "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Author", "Combine_Intersect", "Filter_Retrieval"]
+  },
+  {
+    "id": 66,
+    "difficulty": "easy",
+    "query": "Recommend me a book.",
+    "note": "BARE RECOMMEND (design-intent expectation, added 2026-07-28 with Retrieve_Random's promotion to V1 core). The word 'recommend' is present but no taste is: no anchor title, no mood, no genre. Analyze_Recommend needs a supporting retrieval and there is nothing to build one from, so the honest plan is a single Retrieve_Random and nothing after it — the node already returns a book, so there is nothing for an analyze step to rank. Tests whether the planner routes on the verb or on whether the user actually expressed a preference. Two failures to catch: Analyze_Recommend over an invented anchor, and Retrieve_Random + Analyze_Recommend.",
+    "expected_nodes": ["Retrieve_Random"]
+  },
+  {
+    "id": 67,
+    "difficulty": "medium",
+    "query": "Surprise me with a book, but keep it under 200 pages and well rated.",
+    "note": "BOUNDED SURPRISE (design-intent expectation, added 2026-07-28). 'Surprise me' cedes the choice, so this is Retrieve_Random, and both bounds go in its own filters where the pick is drawn from inside them. Filter_Retrieval must NOT be emitted: it can only delete, and deleting from a single arbitrary pick discards it outright far more often than not, answering with nothing that looks identical to 'no matches'. Both docstrings state the ban. Same shape as case 64's filter-placement trap, on the retrieval side. The failure to catch is Retrieve_Random + Filter_Retrieval.",
+    "expected_nodes": ["Retrieve_Random"]
   }
 ]

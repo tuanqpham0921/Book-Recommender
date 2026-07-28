@@ -15,7 +15,7 @@ class ExtendedBookNodeTypeEnum(str, Enum):
     AUTHOR_INFO = "Retrieve_Author_Info"
     NEW_RELEASES = "Retrieve_New_Releases"
     POPULAR = "Retrieve_Popular"
-    RANDOM = "Retrieve_Random"
+    # RANDOM = "Retrieve_Random" — promoted to app.domains.books.node_types (V1 core)
 
     # Strategies (Analyze) — interpret retrieved data
     SUMMARIZE = "Analyze_Summarize"

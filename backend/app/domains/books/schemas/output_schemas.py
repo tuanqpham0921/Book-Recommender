@@ -49,3 +49,10 @@ class FindByCoAuthorsOutput(BaseModel):
 class FindByGenreOutput(BaseModel):
     genre: str
     books: list[BookSummary]
+
+
+class RandomBookOutput(BaseModel):
+    """One arbitrarily chosen book. `book` is None when the supplied filters
+    left nothing to pick from — a real answer, not an error."""
+
+    book: BookSummary | None = None

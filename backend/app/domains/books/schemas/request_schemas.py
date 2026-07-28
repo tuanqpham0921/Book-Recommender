@@ -53,6 +53,9 @@ class RecommendationStrategy(BaseRequest):
             child-friendly — that the SEARCH ITSELF must respect. These are not
             applied to the depended-on books; they bound which candidates the
             similarity search is allowed to return.
+    
+    if no semantic_input or filters are provided, this node will find the closest books
+    similar to the referenced book.
 
     Returns: Markdown-formatted recommendation text, used directly as the assistant's reply.
 
@@ -269,6 +272,53 @@ class FindByGenreRetrieval(BaseRequest):
     genre: str = Field(..., json_schema_extra={"example": "fantasy"})
 
 
+class RandomBookRetrieval(BaseRequest):
+    """Purpose: Retrieve random books from the catalog — a surprise with no taste signal.
+
+    Args:
+        filters: Optional bounds the random pick must stay inside. Supply only
+            what the user actually stated; a bare surprise takes no filters.
+        limit: Optinal number of random books, default to 1
+
+    Returns: A RandomBookOutput — one randomly selected BookSummary from within
+    the given bounds.
+
+    Use when: the user cedes the choice instead of describing what they want —
+    examples "surprise me", "pick anything", "recommend me a book", "find 3 books" with nothing else
+    said. A bare recommend like that is this node ALONE: it is a complete plan
+    on its own, so do not add Analyze_Recommend after it. There is no taste
+    input for a recommendation to work from, and this node already returns a
+    book.
+
+    Do not use: the moment the ask carries any taste, mood or anchor
+    ("something spooky", "a book like Dune", "a good fantasy") — that is a real
+    recommendation and belongs to Analyze_Recommend over a retrieval, because a
+    random pick would ignore what they told you.
+
+    Constraints: returns books, chosen arbitrarily. It queries the database
+    directly and takes no depends_on. Because the pick is arbitrary, nothing
+    downstream should narrow them — a filter applied afterwards usually discards
+    the one book and answers with nothing; bounds belong in filters here, where
+    the pick is drawn from inside them.
+
+    Example queries:
+        - "surprise me"
+        - "pick anything"
+        - "recommend me a book"
+        - "surprise me with a short sci-fi"
+    """
+
+    node_type: Literal[BookNodeTypeEnum.RANDOM] = BookNodeTypeEnum.RANDOM
+    filters: Optional[BooksFilter] = Field(
+        default=None,
+        json_schema_extra={
+            "example": {"categories": ["Science Fiction"], "max_pages": 250}
+        },
+    )
+    # NOTE: this can be post validated
+    limit: int = Field(default=1, description="number of random books requested")
+
+
 class UnionRetrieval(BaseRequest):
     """Purpose: Pool two or more prior retrieval results into one combined set — OR, not AND.
 
@@ -377,7 +427,11 @@ class FilterRetrieval(BaseRequest):
     Constraints: at least one filter bound — an empty filter is a no-op and
     will be refused. Bounds are combined as AND. This node reads prior results
     only; it never queries the database, so it can only shrink what the prior
-    steps already returned.
+    steps already returned. It may never depend on Retrieve_Random: that node
+    returns one arbitrarily chosen book, so filtering it afterwards discards
+    the pick and answers with nothing far more often than not. A bounded
+    surprise ("surprise me with a short sci-fi") puts the bounds in
+    Retrieve_Random's own filters, so the pick is drawn from inside them.
 
     Example queries:
         - "books by Brandon Sanderson over 400 pages"
