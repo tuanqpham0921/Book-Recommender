@@ -11,6 +11,17 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+current eval issue
+    * why is parse confidence 0.0 sometimes
+    * find published year should catch "Find books between 300 and 500 pages published after 2015."
+        * probably because it's not in the docstring
+    * add prompt example for analyze -> recommend or the other way
+        * you do best effort at the nodes
+        * like for analyze recommend call an analyze node if needed
+            * or compare(a,b) if no analyze(a) and anlyze(b)
+            * then this could best effort to find
+            * but this can be for later 
+
 continue with the generation node
     * you need to get all the analyze nodes too?
     * or just the last node hold all the information needed to send to generation
