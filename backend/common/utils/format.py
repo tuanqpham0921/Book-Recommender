@@ -22,6 +22,12 @@ def to_serializable(value: Any) -> Any:
             for name, info in type(value).model_fields.items()
             if not info.exclude
         }
+        # model_fields only covers declared fields, so on extra="allow" models
+        # (e.g. the OpenAI SDK's) anything the API returned that the schema
+        # doesn't know about sits in __pydantic_extra__ and would be dropped.
+        if value.__pydantic_extra__:
+            for k, v in value.__pydantic_extra__.items():
+                data[k] = to_serializable(v)
         if value.__pydantic_private__:
             for k, v in value.__pydantic_private__.items():
                 data[k] = to_serializable(v)
