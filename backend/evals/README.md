@@ -105,10 +105,13 @@ out rather than hidden:
 
 ## Repo sizing (`app_docs/`)
 
-Also not about planner quality: `app_docs/token_budget.ipynb` counts the repo's own code
-and docs to size an embedding index for **project/code guidance** — tokens, chunks, index
-MB and dollars, plus retrieval-vs-whole-corpus cost per question. Local counting only, no
-API calls and no database. See [app_docs/README.md](app_docs/README.md).
+Also not about planner quality — two notebooks on making the **repo itself** retrievable
+for project/code guidance. `app_docs/token_budget.ipynb` counts the code and docs to size a
+do-it-yourself index (tokens, chunks, index MB, dollars, retrieval-vs-whole-corpus cost per
+question); local counting only, no API calls and no database. `app_docs/file_search_docs.ipynb`
+takes the managed route — uploads `docs/` to an OpenAI vector store and queries it with the
+hosted file search tool; that one does spend money and leaves state on the account. See
+[app_docs/README.md](app_docs/README.md).
 
 ## Campaign convention (`results/`)
 

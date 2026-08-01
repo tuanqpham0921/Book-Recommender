@@ -5,8 +5,14 @@ next door measure **how well the planner plans**; this folder measures **what it
 cost to make the repo itself retrievable** — embedding the code and docs so an assistant
 can answer "where does X live" / "how does this flow work" questions about the project.
 
-Nothing here calls OpenAI, touches the database, or needs the backend running. It is
-local token counting, so it is free to re-run.
+Two notebooks, two halves of the same question:
+
+| | what it does | spends money? |
+|---|---|---|
+| `token_budget.ipynb` | sizes a do-it-yourself index over the whole repo | no — local counting only |
+| `file_search_docs.ipynb` | actually uploads `docs/` to an OpenAI vector store and queries it | yes, and it creates remote state |
+
+Neither touches the database or needs the backend running.
 
 ## `token_budget.ipynb`
 
@@ -37,6 +43,31 @@ What it does:
 Chat rates come from [`config/pricing.py`](../../config/pricing.py). Embedding rates are
 defined in the notebook, with the same staleness warning — the app does not bill
 embeddings today, so they have no home in `pricing.py` yet.
+
+## `file_search_docs.ipynb`
+
+The managed alternative: hand `docs/` to OpenAI's [file search
+tool](https://developers.openai.com/api/docs/guides/tools-file-search) and let it own the
+chunking, embedding and retrieval. Scoped to `docs/` (8 files, ~21k tokens) deliberately —
+it is the cheapest slice to prove the loop on before deciding whether the code corpus is
+worth indexing at all.
+
+Load → `upload_and_poll` → query, in six cells. Both query paths are shown:
+`vector_stores.search` for raw chunks and scores (retrieval quality on its own), and
+`responses.create` with the `file_search` tool for the answer plus citations.
+
+Three things to know before running it:
+
+- **It creates state on the OpenAI account.** The store is looked up by name
+  (`book-recommender-docs`) and reused, so re-running does not duplicate it. The last cell
+  is a commented-out teardown — deleting a store does *not* delete the uploaded files, so
+  it removes both.
+- **The embeddings live at OpenAI, not in pgvector.** This is a different architecture from
+  the book embeddings, not an extension of them.
+- **Files upload with their path flattened into the name**
+  (`docs__design__node-taxonomy-v1.md`) rather than as bare basenames, so citations stay
+  unambiguous if this ever grows past `docs/` — nearly every folder in this repo has a
+  `README.md`.
 
 ## Headline numbers (2026-08-01, `441d25e`)
 
