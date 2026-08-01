@@ -1,127 +1,243 @@
-import json
-
 from openai import OpenAI
 from config import settings
 from common.utils import save_file, print_json
 client = OpenAI(api_key=settings.openai.API_KEY)
+import time
+
+import json
+model = "gpt-5.6"
+
+system_prompt = """
+<tool_orchestration>
+Use Programmatic Tool Calling to compare inventory with demand for sku_123
+using only get_inventory and get_demand. Run both calls concurrently. Use
+only documented tool input and output fields.
+
+Process and reduce the intermediate results, then emit exactly one JSON object
+with sku, available_units, requested_units, and shortage_units, where
+shortage_units is max(requested_units - available_units, 0). Include
+available_units and requested_units as evidence for the calculation.
+
+Stop when both tool results contain the required fields. Retry transient
+failures at most 1 time. Do not repeat completed calls or perform
+side-effecting actions. If a required result is still missing, return a clear
+structured failure.
+
+Use direct tool calls only for approval before any inventory-changing action.
+</tool_orchestration>
+"""
 
 
 
+def get_inventory(sku):
+    return {"sku": sku, "available_units": 42}
 
-TICKETS = {
-    "T-1001": {
-        "customer_id": "C-9",
-        "subject": "export hangs at 90%",
-        "status": "open",
-    },
-    "T-1002": {"customer_id": "C-4", "subject": "billing page 404", "status": "open"},
-    "T-1003": {"customer_id": "C-9", "subject": "webhook retries", "status": "closed"},
+
+def get_demand(sku):
+    return {"sku": sku, "requested_units": 31}
+
+def get_user(id):
+    return {"id": id, "name": "hello"}
+
+
+implementations = {
+    "get_inventory": get_inventory,
+    "get_demand": get_demand,
 }
 
-CUSTOMERS = {
-    "C-9": {"name": "Meridian Ltd", "plan": "enterprise", "mrr": 4200},
-    "C-4": {"name": "Bluepine", "plan": "free", "mrr": 0},
-}
-
-LOCAL_TOOLS = {
-    "list_tickets": lambda status: [
-        {"id": k, **v} for k, v in TICKETS.items() if v["status"] == status
-    ],
-    "get_ticket": lambda ticket_id: TICKETS[ticket_id],
-    "get_customer": lambda customer_id: CUSTOMERS[customer_id],
-}
-
-TOOL_DEFS = [
+tools = [
     {
         "type": "function",
-        "name": "list_tickets",
-        "description": "List tickets by status",
+        "name": "get_inventory",
+        "description": "Return an object with sku (string) and available_units (number).",
         "parameters": {
             "type": "object",
-            "properties": {"status": {"type": "string"}},
-            "required": ["status"],
+            "properties": {"sku": {"type": "string"}},
+            "required": ["sku"],
+            "additionalProperties": False,
         },
+        "output_schema": {
+            "type": "object",
+            "properties": {
+                "sku": {"type": "string"},
+                "available_units": {"type": "number"},
+            },
+            "required": ["sku", "available_units"],
+            "additionalProperties": False,
+        },
+        "allowed_callers": ["programmatic"],
     },
     {
         "type": "function",
-        "name": "get_ticket",
-        "description": "Fetch one ticket by id",
+        "name": "get_demand",
+        "description": "Return an object with sku (string) and requested_units (number).",
         "parameters": {
             "type": "object",
-            "properties": {"ticket_id": {"type": "string"}},
-            "required": ["ticket_id"],
+            "properties": {"sku": {"type": "string"}},
+            "required": ["sku"],
+            "additionalProperties": False,
         },
-    },
-    {
-        "type": "function",
-        "name": "get_customer",
-        "description": "Fetch a customer record",
-        "parameters": {
+        "output_schema": {
             "type": "object",
-            "properties": {"customer_id": {"type": "string"}},
-            "required": ["customer_id"],
+            "properties": {
+                "sku": {"type": "string"},
+                "requested_units": {"type": "number"},
+            },
+            "required": ["sku", "requested_units"],
+            "additionalProperties": False,
         },
+        "allowed_callers": ["programmatic"],
     },
+    {"type": "programmatic_tool_calling"},
 ]
 
-PTC_TOOLS = [{"type": "programmatic_tool_calling"}] + [
-    {**t, "allowed_callers": ["programmatic"]} for t in TOOL_DEFS
+input_items = [
+    {
+        "role": "system",
+        "content": system_prompt
+    },
+    {
+        "role": "user",
+        "content": "Compare inventory with demand for sku_123.",
+    }
 ]
 
-TASK = (
-    "List open tickets, fetch the customer for each, and return JSON: "
-    "paying customers only, sorted by MRR descending, "
-    "fields: ticket_id, subject, customer_name, mrr."
-)
+start = time.perf_counter()
+previous_id = None
+pending_items = input_items
+while True:
+    payload = {
+        "model": model,
+        "tools": tools,
+        "previous_response_id": previous_id,
+        "input": pending_items,
+    }
 
-MAX_TOOL_CALLS = 50
+    # print("========== REQUEST ==========")
+    # print(json.dumps(payload, indent=2))
 
+    response = client.responses.create(**payload)
+    previous_id = response.id
+    # print("id:", previous_id)
+    # print("pending_items:", len(pending_items))
+    
+    print_json(response)
 
-def main():
-    input_items, trips, tokens, tool_calls = (
-        [{"role": "user", "content": TASK}],
-        0,
-        0,
-        0,
-    )
+    if response.status != "completed":
+        raise RuntimeError(f"Response ended with status {response.status}")
 
-    while True:
-        response = client.responses.create(
-            model="gpt-5.6-terra", input=input_items, tools=PTC_TOOLS
+    # Preserve every output item, including program and reasoning items.
+    pending_items = []
+
+    calls = [item for item in response.output if item.type == "function_call"]
+    if not calls:
+        message = next(
+            (item for item in response.output if item.type == "message"), None
         )
-        # print_json(response)
+        if message:
+            refusal = next(
+                (part.refusal for part in message.content if part.type == "refusal"),
+                "",
+            )
+            print(response.output_text or refusal)
+            break
+        continue
+
+    for call in calls:
+        run = implementations.get(call.name)
+        if run is None:
+            raise ValueError(f"Unknown tool: {call.name}")
+
+        result = run(**json.loads(call.arguments))
+        # print("call:", type(call))
+        # print("call.caller:", type(call.caller))
+        pending_items.append(
+            {
+                "type": "function_call_output",
+                "call_id": call.call_id,
+                "output": json.dumps(result),
+                # Preserve caller so the runtime can resume the correct program.
+                "caller": call.caller if call.caller else None,
+            }
+        )
         
-        trips += 1
-        tokens += response.usage.total_tokens
+elapsed = time.perf_counter() - start
 
-        for item in response.output:
-            if item.type == "program":
-                print("--- generated program ---\n", item.code)
-                print(type(item.code))
+print(f"Response time: {elapsed:.3f}s")
+print("------------------------------------")
 
-        pending = [i for i in response.output if i.type == "function_call"]
-        if not pending:
-            print(
-                f"\nresult ({trips} round trips, {tokens} tokens):\n",
-                response.output_text,
+
+input_items = [
+    {
+        "role": "system",
+        "content": system_prompt
+    },
+    {
+        "role": "user",
+        "content": "Compare inventory with demand for sku_345.",
+    }
+]
+
+
+start = time.perf_counter()
+previous_id = None
+pending_items = input_items
+while True:
+    payload = {
+        "model": model,
+        "tools": tools,
+        "previous_response_id": previous_id,
+        "input": pending_items,
+    }
+
+    # print("========== REQUEST ==========")
+    # print(json.dumps(payload, indent=2))
+
+    response = client.responses.create(**payload)
+    previous_id = response.id
+    # print("id:", previous_id)
+    # print("pending_items:", len(pending_items))
+    
+    print_json(response)
+
+    if response.status != "completed":
+        raise RuntimeError(f"Response ended with status {response.status}")
+
+    # Preserve every output item, including program and reasoning items.
+    pending_items = []
+
+    calls = [item for item in response.output if item.type == "function_call"]
+    if not calls:
+        message = next(
+            (item for item in response.output if item.type == "message"), None
+        )
+        if message:
+            refusal = next(
+                (part.refusal for part in message.content if part.type == "refusal"),
+                "",
             )
-            return
+            print(response.output_text or refusal)
+            break
+        continue
 
-        input_items += response.output
+    for call in calls:
+        run = implementations.get(call.name)
+        if run is None:
+            raise ValueError(f"Unknown tool: {call.name}")
 
-        for call in pending:
-            tool_calls += 1
-            if tool_calls > MAX_TOOL_CALLS:
-                raise RuntimeError("tool budget exceeded")
-            result = LOCAL_TOOLS[call.name](**json.loads(call.arguments))
-            input_items.append(
-                {
-                    "type": "function_call_output",
-                    "call_id": call.call_id,
-                    "output": json.dumps(result),
-                }
-            )
+        result = run(**json.loads(call.arguments))
+        # print("call:", type(call))
+        # print("call.caller:", type(call.caller))
+        pending_items.append(
+            {
+                "type": "function_call_output",
+                "call_id": call.call_id,
+                "output": json.dumps(result),
+                # Preserve caller so the runtime can resume the correct program.
+                "caller": call.caller if call.caller else None,
+            }
+        )
+        
+elapsed = time.perf_counter() - start
 
-
-if __name__ == "__main__":
-    main()
+print(f"Response time: {elapsed:.3f}s")
