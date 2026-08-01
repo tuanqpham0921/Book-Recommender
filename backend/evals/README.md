@@ -103,6 +103,13 @@ out rather than hidden:
   — the report prints an explicit "costs are understated" warning naming the models. Add
   them to `config/pricing.py`; only future runs will be right.
 
+## Repo sizing (`app_docs/`)
+
+Also not about planner quality: `app_docs/token_budget.ipynb` counts the repo's own code
+and docs to size an embedding index for **project/code guidance** — tokens, chunks, index
+MB and dollars, plus retrieval-vs-whole-corpus cost per question. Local counting only, no
+API calls and no database. See [app_docs/README.md](app_docs/README.md).
+
 ## Campaign convention (`results/`)
 
 Per campaign: a directory with the raw SQL dumps of `chat_runs` + `feedback` (dump
