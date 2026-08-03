@@ -68,12 +68,9 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         self.output.session_id = request_context.session_id
-        # id_to_task = planner_result.accepted_goals_ids()
         results: dict[str, Any] = {}
         execution_order = planner_result.execution_order()
-        
-        from common.utils import print_json
-        
+                
         for layer, goals_layer in execution_order.items():
             for goal in goals_layer:
                 # Not wrapped in run_async_step: that helper requires the
@@ -81,48 +78,47 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 # returns the parsed BaseRequest. The LLM call inside already
                 # registers itself as a step, so tokens still roll up here.
                 try:
-                    parsed_args = await self.parse_goals_arguments(goal)
+                    task = await self.parse_goals_arguments(goal)
                 except StepFailure:
                     # one goal's parse failed — record it and keep going
                     self.output.failed_task.append(goal.id)
                     continue
 
-                # task = id_to_task[goal.id]
-                # dependent_results = {
-                #     dep_id: results[dep_id]
-                #     for dep_id in task.get_depends_on()
-                #     if dep_id in results
-                # }
+                dependent_results = {
+                    dep_id: results[dep_id]
+                    for dep_id in task.get_depends_on()
+                    if dep_id in results
+                }
 
-                # executor_cls = EXECUTORS_CLS_MAPPING.get(type(task))
-                # if executor_cls is None:
-                #     logger.warning(
-                #         f"No executor registered for {type(task).__name__} (task {goal.id})"
-                #     )
-                #     self.output.failed_task.append(goal.id)
-                #     continue
+                executor_cls = EXECUTORS_CLS_MAPPING.get(type(task))
+                if executor_cls is None:
+                    logger.warning(
+                        f"No executor registered for {type(task).__name__} (task {goal.id})"
+                    )
+                    self.output.failed_task.append(goal.id)
+                    continue
 
-                # executor = executor_cls(
-                #     sse_stream=self.sse_stream,
-                #     llm_client=self.llm_client,
-                #     messages=self.messages,
-                #     app_env=self.app_env,
-                # )
-                # step_result = await self.run_async_step(
-                #     executor(
-                #         task=parsed_args,
-                #         dependent_results=dependent_results,
-                #         request_context=request_context,
-                #     ),
-                #     raise_on_failure=False,
-                # )
-                # if not step_result.ok:
-                #     self.output.failed_task.append(goal.id)
-                #     continue
+                executor = executor_cls(
+                    sse_stream=self.sse_stream,
+                    llm_client=self.llm_client,
+                    messages=self.messages,
+                    app_env=self.app_env,
+                )
+                step_result = await self.run_async_step(
+                    executor(
+                        task=task,
+                        dependent_results=dependent_results,
+                        request_context=request_context,
+                    ),
+                    raise_on_failure=False,
+                )
+                if not step_result.ok:
+                    self.output.failed_task.append(goal.id)
+                    continue
 
-                # results[goal.id] = step_result.output.result
+                results[goal.id] = step_result.output.result
                 
-                self.output.completed_task.append(parsed_args)
+                self.output.completed_task.append(task)
 
         self.output.task_results = results
         self.finalize_result(ok=not self.output.failed_task)
