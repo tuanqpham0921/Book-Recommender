@@ -7,6 +7,7 @@ from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.orchestration.request_context import RequestContext
+from common.workflow import StepFailure
 from app.registry import EXECUTORS_CLS_MAPPING
 from clients.openai_client import OpenAIClient
 from app.common.messages import AssistantMessage, APIMessage
@@ -24,13 +25,13 @@ class TaskRunnerOutput(AppWorkflowOutput):
     task_results: dict[str, Any] = Field(default_factory=dict)
     failed_task: list[str] = Field(default_factory=list)
     
-    completed_task: list[BaseRequest] | None = None
+    completed_task: list[BaseRequest] = Field(default_factory=list)
     parsed_diagram: str | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {
             "goal.ids": list(self.task_results.keys()),
-            "failed_task.ids": self.failed_task.ids,
+            "failed_task.ids": self.failed_task,
         }
 
 
@@ -75,11 +76,17 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         
         for layer, goals_layer in execution_order.items():
             for goal in goals_layer:
-                parsed_args = await self.run_async_step(
-                    self.parse_goal_arguments(goal),
-                    raise_on_failure=False
-                )
-                          
+                # Not wrapped in run_async_step: that helper requires the
+                # coroutine to resolve to an OperationResult, and this one
+                # returns the parsed BaseRequest. The LLM call inside already
+                # registers itself as a step, so tokens still roll up here.
+                try:
+                    parsed_args = await self.parse_goals_arguments(goal)
+                except StepFailure:
+                    # one goal's parse failed — record it and keep going
+                    self.output.failed_task.append(goal.id)
+                    continue
+
                 # task = id_to_task[goal.id]
                 # dependent_results = {
                 #     dep_id: results[dep_id]
@@ -92,7 +99,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 #     logger.warning(
                 #         f"No executor registered for {type(task).__name__} (task {goal.id})"
                 #     )
-                #     self.output.failed_task.ids.append(goal.id)
+                #     self.output.failed_task.append(goal.id)
                 #     continue
 
                 # executor = executor_cls(
@@ -110,7 +117,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 #     raise_on_failure=False,
                 # )
                 # if not step_result.ok:
-                #     self.output.failed_task.ids.append(goal.id)
+                #     self.output.failed_task.append(goal.id)
                 #     continue
 
                 # results[goal.id] = step_result.output.result
@@ -118,9 +125,9 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 self.output.completed_task.append(parsed_args)
 
         self.output.task_results = results
-        self.finalize_result(ok=not self.output.failed_task.ids)
+        self.finalize_result(ok=not self.output.failed_task)
         
-        await self.send_mermaid_parsed(self.output.completed_task)
+        await self.send_mermaid_parsed(self.output.completed_task, planner_result.generation_nodes)
 
     async def parse_goals_arguments(self, goal: SystemGoal) -> BaseRequest:
         """Testing the arugment parser. Should be in task_runner later(?)
