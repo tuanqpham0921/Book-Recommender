@@ -48,6 +48,8 @@ class BookSummary(BaseModel):
     ratings_count: int | None = None
     is_children: bool | None = None
 
+class RecommendationOutput(BaseModel):
+    books: list[BookSummary]
 
 class FindByTitleOutput(BaseModel):
     title: str
