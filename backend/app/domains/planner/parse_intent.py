@@ -161,7 +161,10 @@ class GoalParseRequest(BaseModel):
         json_schema_extra={"example": "What's the weather like today?"},
     )
 
-
+# NOTE: there's a bug if
+# task_1 -> task_2
+# if task_1 is rejected then task_2 should not still depend on or run
+# you need the previous pruning
 class InitialParseOutput(AppWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
     refused_goals: list[SystemGoal] = Field(default_factory=list)

@@ -11,76 +11,24 @@ from app.domains.books.registry import (
     BOOK_NODE_TYPE_TO_CLS,
     BOOK_RETRIEVAL_CLASSES,
     BOOK_ANALYZE_CLASSES,
-    BOOK_COMBINE_CLASSES,
     BOOK_REQUEST_CLASSES,
-    FindByISBN13Retrieval,
-    FindByAuthorRetrieval,
-    FindByCoAuthorsRetrieval,
-    FindByGenreRetrieval,
     FindByTitleRetrieval,
-    RandomBookRetrieval,
     RecommendationStrategy,
-    UnionRetrieval,
-    IntersectRetrievals,
-    FilterRetrieval,
-)
-from app.domains.project.registry import (
-    PROJECT_NODE_TYPE_TO_CLS,
-    PROJECT_RETRIEVAL_CLASSES,
-    PROJECT_REQUEST_CLASSES,
-    FeedbackRequest,
-    ProjectInfoRequest,
 )
 from app.domains.node_types import NodeTypeEnum
-from app.domains.users.schemas.request_schemas import (
-    DeveloperInfoRequest,
-    UserInfoRequest,
-)
-from app.domains.users.node_types import UserNodeTypeEnum
 from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
 
 # -------------------------------------------------------------------
-# BOOK DOMAIN — class tuples and BOOK_NODE_TYPE_TO_CLS come from
-# app.domains.books.registry (imported above); this domain doesn't define
-# them inline anymore.
-
-# -------------------------------------------------------------------
-# PROJECT DOMAIN — class tuples and PROJECT_NODE_TYPE_TO_CLS come from
-# app.domains.project.registry (imported above); this domain doesn't define
-# them inline anymore.
-
-# -------------------------------------------------------------------
-# USER DOMAIN
-USER_RETRIEVAL_CLASSES = (
-    UserInfoRequest,
-    DeveloperInfoRequest,
-)
-
-USER_REQUEST_CLASSES = USER_RETRIEVAL_CLASSES
-# -------------------------------------------------------------------
 # All request schema classes — add new ones here
 
-RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES + USER_RETRIEVAL_CLASSES + PROJECT_RETRIEVAL_CLASSES
-COMBINE_CLASSES = BOOK_COMBINE_CLASSES
+RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES
 ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
 
-REQUEST_CLASSES = RETRIEVAL_CLASSES + COMBINE_CLASSES + ANALYZE_CLASSES
+REQUEST_CLASSES = RETRIEVAL_CLASSES +  ANALYZE_CLASSES
 AnyStrategyRequest = Annotated[
     Union[
         RecommendationStrategy,
         FindByTitleRetrieval,
-        FindByISBN13Retrieval,
-        FindByAuthorRetrieval,
-        FindByCoAuthorsRetrieval,
-        FindByGenreRetrieval,
-        RandomBookRetrieval,
-        UnionRetrieval,
-        IntersectRetrievals,
-        FilterRetrieval,
-        UserInfoRequest,
-        DeveloperInfoRequest,
-        FeedbackRequest,
-        ProjectInfoRequest,
     ],
     Field(discriminator="node_type"),
 ]
@@ -90,9 +38,6 @@ AnyStrategyRequest = Annotated[
 # entries come from their own domains.*.registry modules)
 NODE_TYPE_TO_CLS: dict[str, type] = {
     **BOOK_NODE_TYPE_TO_CLS,
-    **PROJECT_NODE_TYPE_TO_CLS,
-    UserNodeTypeEnum.USER_INFO.value: UserInfoRequest,
-    UserNodeTypeEnum.DEVELOPER_INFO.value: DeveloperInfoRequest,
 }
 
 
@@ -111,7 +56,6 @@ def class_docstring(cls: type) -> str:
 
 CATALOG_TIERS: dict[str, tuple[type, ...]] = {
     "Retrieval — lookup or fetch data": RETRIEVAL_CLASSES,
-    "Combine — intersect or narrow what retrieval steps already returned": COMBINE_CLASSES,
     "Analyze — interpret, compare, or recommend using retrieved data": ANALYZE_CLASSES,
 }
 

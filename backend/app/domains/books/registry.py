@@ -5,17 +5,8 @@ plus the catalog and executor mapping — see that module for the full picture.
 
 from app.domains.books.node_types import BookNodeTypeEnum
 from app.domains.books.schemas.request_schemas import (
-    FindByISBN13Retrieval,
-    FindByAuthorRetrieval,
-    FindByCoAuthorsRetrieval,
-    FindByGenreRetrieval,
     FindByTitleRetrieval,
-    RandomBookRetrieval,
     RecommendationStrategy,
-    CompareStrategy,
-    UnionRetrieval,
-    IntersectRetrievals,
-    FilterRetrieval,
 )
 
 # CompareStrategy (Analyze_Compare) is intentionally parked: the class still
@@ -25,39 +16,17 @@ from app.domains.books.schemas.request_schemas import (
 # gates on NODE_TYPE_TO_CLS membership). See docs/design/node-taxonomy-v1.md.
 BOOK_RETRIEVAL_CLASSES = (
     FindByTitleRetrieval,
-    FindByISBN13Retrieval,
-    FindByAuthorRetrieval,
-    FindByCoAuthorsRetrieval,
-    FindByGenreRetrieval,
-    RandomBookRetrieval,
 )
 BOOK_ANALYZE_CLASSES = (
     RecommendationStrategy,
-    CompareStrategy
 )
-# Combine/filter tier — these consume prior retrieval output and never touch the
-# database, so they are neither a retrieval nor an analyze step. See
-# docs/design/execution-pipeline-v1.md.
-BOOK_COMBINE_CLASSES = (
-    UnionRetrieval,
-    IntersectRetrievals,
-    FilterRetrieval,
-)
+
 BOOK_REQUEST_CLASSES = (
-    BOOK_RETRIEVAL_CLASSES + BOOK_COMBINE_CLASSES + BOOK_ANALYZE_CLASSES
+    BOOK_RETRIEVAL_CLASSES + BOOK_ANALYZE_CLASSES
 )
 
 # Manual node_type -> class lookup — add new mappings here
 BOOK_NODE_TYPE_TO_CLS: dict[str, type] = {
     BookNodeTypeEnum.FIND_TITLE.value: FindByTitleRetrieval,
-    BookNodeTypeEnum.FIND_ISBN13.value: FindByISBN13Retrieval,
-    BookNodeTypeEnum.FIND_AUTHOR.value: FindByAuthorRetrieval,
-    BookNodeTypeEnum.FIND_COAUTHORS.value: FindByCoAuthorsRetrieval,
-    BookNodeTypeEnum.FIND_GENRE.value: FindByGenreRetrieval,
-    BookNodeTypeEnum.RANDOM.value: RandomBookRetrieval,
-    BookNodeTypeEnum.UNION_RETRIEVAL.value: UnionRetrieval,
-    BookNodeTypeEnum.INTERSECT_RETRIEVALS.value: IntersectRetrievals,
-    BookNodeTypeEnum.FILTER_RETRIEVAL.value: FilterRetrieval,
     BookNodeTypeEnum.RECOMMENDATION.value: RecommendationStrategy,
-    BookNodeTypeEnum.COMPARE.value: CompareStrategy
 }

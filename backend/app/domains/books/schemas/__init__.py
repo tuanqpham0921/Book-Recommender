@@ -1,41 +1,15 @@
 from .request_schemas import (
-    CompareStrategy,
-    RecommendationStrategy,
     FindByTitleRetrieval,
-    FindByISBN13Retrieval,
-    FindByAuthorRetrieval,
-    FindByCoAuthorsRetrieval,
-    FindByGenreRetrieval,
-    RandomBookRetrieval,
-    IntersectRetrievals,
-    FilterRetrieval,
+    RecommendationStrategy
 )
 from .output_schemas import (
-    BookSummary,
     FindByTitleOutput,
-    FindByISBN13Output,
-    FindByAuthorOutput,
-    FindByCoAuthorsOutput,
-    FindByGenreOutput,
-    RandomBookOutput,
+    RecommendationOutput
 )
 
 __all__ = [
-    "CompareStrategy",
     "RecommendationStrategy",
     "FindByTitleRetrieval",
-    "FindByISBN13Retrieval",
-    "FindByAuthorRetrieval",
-    "FindByCoAuthorsRetrieval",
-    "FindByGenreRetrieval",
-    "RandomBookRetrieval",
-    "IntersectRetrievals",
-    "FilterRetrieval",
-    "BookSummary",
+    "RecommendationOutput"
     "FindByTitleOutput",
-    "FindByISBN13Output",
-    "FindByAuthorOutput",
-    "FindByCoAuthorsOutput",
-    "FindByGenreOutput",
-    "RandomBookOutput",
 ]
