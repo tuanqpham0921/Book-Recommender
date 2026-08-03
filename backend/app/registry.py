@@ -191,30 +191,30 @@ def main() -> None:
     print(format_node_type_catalog())
 
 
-# -------------------------------------------------------------------
-# PLAYGROUND EXTENSION — comment out this whole block to run with only the
-# app-registered node types above; nothing else in this file needs to change.
-# Folds the scalability-testing schemas from
-# playground/app_mock/extended_registry.py into the live planner registry.
-# Must run before the __main__ guard below, so `python -m app.registry`
-# reflects the same registry state everything else sees.
-from playground.app_mock.extended_registry import (
-    ExtendedANALYZE_CLASSES,
-    ExtendedLIBRARY_CLASSES,
-    ExtendedNODE_TYPE_TO_CLS,
-    ExtendedRETRIEVAL_CLASSES,
-)
+# # -------------------------------------------------------------------
+# # PLAYGROUND EXTENSION — comment out this whole block to run with only the
+# # app-registered node types above; nothing else in this file needs to change.
+# # Folds the scalability-testing schemas from
+# # playground/app_mock/extended_registry.py into the live planner registry.
+# # Must run before the __main__ guard below, so `python -m app.registry`
+# # reflects the same registry state everything else sees.
+# from playground.app_mock.extended_registry import (
+#     ExtendedANALYZE_CLASSES,
+#     ExtendedLIBRARY_CLASSES,
+#     ExtendedNODE_TYPE_TO_CLS,
+#     ExtendedRETRIEVAL_CLASSES,
+# )
 
-RETRIEVAL_CLASSES = RETRIEVAL_CLASSES + ExtendedRETRIEVAL_CLASSES
-ANALYZE_CLASSES = ANALYZE_CLASSES + ExtendedANALYZE_CLASSES
-# ExtendedLIBRARY_CLASSES is neither retrieval nor analyze (read/write actions
-# on the user's shelf) — folded into REQUEST_CLASSES only, so it still counts
-# as a request class without joining either tier's class list
-REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES + ExtendedLIBRARY_CLASSES
+# RETRIEVAL_CLASSES = RETRIEVAL_CLASSES + ExtendedRETRIEVAL_CLASSES
+# ANALYZE_CLASSES = ANALYZE_CLASSES + ExtendedANALYZE_CLASSES
+# # ExtendedLIBRARY_CLASSES is neither retrieval nor analyze (read/write actions
+# # on the user's shelf) — folded into REQUEST_CLASSES only, so it still counts
+# # as a request class without joining either tier's class list
+# REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES + ExtendedLIBRARY_CLASSES
 
-NODE_TYPE_TO_CLS.update(ExtendedNODE_TYPE_TO_CLS)
-CATALOG_TIERS["Retrieval — lookup or fetch data"] = RETRIEVAL_CLASSES
-CATALOG_TIERS["Analyze — interpret, compare, or recommend using retrieved data"] = ANALYZE_CLASSES
+# NODE_TYPE_TO_CLS.update(ExtendedNODE_TYPE_TO_CLS)
+# CATALOG_TIERS["Retrieval — lookup or fetch data"] = RETRIEVAL_CLASSES
+# CATALOG_TIERS["Analyze — interpret, compare, or recommend using retrieved data"] = ANALYZE_CLASSES
 
 
 if __name__ == "__main__":
