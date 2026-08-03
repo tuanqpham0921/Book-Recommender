@@ -190,6 +190,14 @@ class InitialParseOutput(AppWorkflowOutput):
             ]
 
         return payload
+    
+    def execution_order(self):
+        from collections import defaultdict
+        order = defaultdict(list)
+        
+        for node in self.accepted_goals:
+            order[len(node.depends_on)].append(node)
+        return order
 
 
 class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):

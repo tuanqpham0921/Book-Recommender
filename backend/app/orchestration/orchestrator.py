@@ -52,24 +52,24 @@ class Orchestrator:
                 timeout=CONVERSATION_TIMEOUT,
             )
 
-            # strategy_result = conversation_orchestrator.output.strategy_result
-            # if (
-            #     conversation_orchestrator.result.ok
-            #     and strategy_result
-            #     and strategy_result.accepted
-            # ):
-            #     task_runner = TaskRunnerWorkflow(
-            #         sse_stream,
-            #         request_context.llm_client,
-            #         app_env=request_context.app_env,
-            #     )
-            #     await asyncio.wait_for(
-            #         task_runner(
-            #             request_context=request_context,
-            #             strategy_result=strategy_result,
-            #         ),
-            #         timeout=CONVERSATION_TIMEOUT,
-            #     )
+            planner_result = conversation_orchestrator.output.parse_result
+            if (
+                conversation_orchestrator.result.ok
+                and planner_result
+                and planner_result.accepted_goals
+            ):
+                task_runner = TaskRunnerWorkflow(
+                    sse_stream,
+                    request_context.llm_client,
+                    app_env=request_context.app_env,
+                )
+                await asyncio.wait_for(
+                    task_runner(
+                        request_context=request_context,
+                        planner_result=conversation_orchestrator.output,
+                    ),
+                    timeout=CONVERSATION_TIMEOUT,
+                )
 
             # Normal completion — chat_id lets the client attach feedback
             # to the chat_runs row recorded in the finally block below
