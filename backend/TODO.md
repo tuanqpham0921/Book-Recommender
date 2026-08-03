@@ -11,6 +11,15 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+* make each task returning a output type (instead of the sse_stream)
+* then at the end is where you want to do the generation
+* think about your UI and how it should work
+    * generation vs references...
+* migrate to v1/responses
+
+Goal for now
+    * getting a set up just for find_title and recommend
+
 current eval issue
     * why is parse confidence 0.0 sometimes
     * find published year should catch "Find books between 300 and 500 pages published after 2015."
