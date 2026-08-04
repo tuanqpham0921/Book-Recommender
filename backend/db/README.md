@@ -11,9 +11,19 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `Base.metadata.create_all` is *not* how tables come to exist — which is why
   `index=True` flags on models do nothing (docs/backlog.md, Performance).
 - `stores/` — repository pattern; routes/workflows never touch sessions directly.
-  `base_store.py` (shared execute helpers), `book_store.py` (primary store: title /
-  author / ISBN / filter search + embeddings), `chat_run_store.py` (review queue,
-  ordered least-reviewed-first), `feedback_store.py` (review upsert).
+  `base_store.py` (shared execute helpers), `book_store.py` (primary store: title
+  search + embeddings, plus the deferred-query API below), `chat_run_store.py`
+  (review queue, ordered least-reviewed-first), `feedback_store.py` (review upsert).
+- **Deferred queries** (`deferred_query.py` + the `build_*_query` / `build_count` /
+  `compose` / `build_materialize` family in `utils.py`). Retrieval nodes do not
+  fetch rows: `BookStore.title_query()` builds a statement, `count()` runs only a
+  `COUNT` over it, and the statement itself rides downstream on the node's output.
+  `compose()` folds several of them into one `WITH` clause (`"or"` pools, `"and"`
+  intersects, both deduped by isbn13 in SQL), and `materialize()` is the single
+  place rows are fetched — at the end of the plan. A `DeferredBookQuery` selects
+  isbn13 (plus an optional `score`) and carries **no LIMIT and no ORDER BY**; that
+  is what makes two of them composable, so don't add either in a builder. See
+  docs/design/execution-pipeline-v1.md.
 - `bootstrap.py`, `readiness.py` — startup schema checks backing `GET /ready`.
 - `ingestion/` — populates `books` from `data/books.csv`. **Legacy, ignore**: old
   Workflow/@task patterns; don't refactor it or model new code on it.

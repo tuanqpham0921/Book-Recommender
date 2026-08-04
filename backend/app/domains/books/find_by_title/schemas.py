@@ -40,8 +40,8 @@ class FindByTitleRetrieval(BaseRequest):
     title: str = Field(..., json_schema_extra={"example": "Dune"})
 
 class FindByTitleOutput(BookRetrievalOutput):
-    """`title` is what was searched for; `books` are the candidate matches,
-    best first. An empty `books` means the catalog has no such title."""
-
-    num_books: int=0
+    """`num_books` is how many titles matched and `query` is how to reach them;
+    this node counts and does not fetch. `num_books == 0` means the catalog has
+    no such title — a real answer, and the moment to ask the user for a better
+    one rather than to fail the node."""
 

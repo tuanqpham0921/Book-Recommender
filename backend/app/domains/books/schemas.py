@@ -34,9 +34,10 @@ the shape it returns.
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domains.node_executor import NodeWorkflowOutput
+from db.stores import DeferredBookQuery
 
 
 class BookSummary(BaseModel):
@@ -57,15 +58,32 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     `books` is a real answer — it means nothing matched, not that the node
     failed.
 
+    Counts-first, per docs/design/execution-pipeline-v1.md: retrieval fills in
+    `num_books` and `query` and leaves `books` empty. Only the last node in a
+    plan runs `query` for rows, so a populated `books` means "these rows were
+    actually fetched", not "this is everything that matched" — `num_books` is
+    the size of the match, `len(books)` is the size of the fetch.
+
+    `query` is `exclude=True` on purpose: `to_serializable` (common/utils/
+    format.py) skips excluded fields but does walk private attrs, so a
+    SQLAlchemy statement stashed anywhere else on this model reaches the JSONB
+    insert in `record_chat_run` and breaks it. `query_sql` is the persisted,
+    readable stand-in.
+
     Every field here and on subclasses needs a default: `Workflow.__init__`
     builds the envelope by calling `output_type()` with no arguments, before
     the executor has anything to put in it.
     """
 
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     books: list[BookSummary] = Field(default_factory=list)
+    num_books: int = 0
+    query_sql: str | None = None
+    query: DeferredBookQuery | None = Field(default=None, exclude=True)
 
     def to_summary(self) -> dict[str, Any]:
-        return {"num_books": len(self.books)}
+        return {"num_books": self.num_books, "num_fetched": len(self.books)}
 
 
 class BookRecommendationOutput(BookRetrievalOutput):

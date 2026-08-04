@@ -1,7 +1,8 @@
 # Execution pipeline: retrieve → filter → analyze → generate (design record)
 
-**Date:** 2026-07-24 · **Status:** partly implemented — the combine tier's *schemas* are
-registered; no executors, no counts-only retrieval, no generation node.
+**Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
+(2026-08-04) on `minimal_end_to_end_v1`, for the two nodes registered there; the combine
+tier's *schemas* exist with no executors, and there is no generation node.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
 [roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
@@ -130,7 +131,12 @@ now four nodes — traded for one unambiguous home per operation.
 these nodes consume task output without analyzing it. The planner's dependency remapping
 and topological sort gate on `DependentRequest`.
 
-**Known limitation, unresolved:** `Combine_Intersect` intersects *materialized* result sets,
+**Known limitation, plumbing now exists (2026-08-04):** `compose(queries, op="and")` pushes
+the predicate into SQL as an `INTERSECT` over CTEs, which is what the paragraph below asks
+for. The `Combine_Intersect` executor still has to be written, and the node is not
+registered on `minimal_end_to_end_v1`. Original statement of the problem:
+
+`Combine_Intersect` intersects *materialized* result sets,
 and retrieval today returns a `limit`-capped list (default 3). Intersecting two capped
 lists is usually empty — "fantasy books by Sanderson" would intersect a 3-book author page
 against a 3-book genre page and return nothing. The node is semantically right and
@@ -185,13 +191,30 @@ exactly one sink, so the two agree except on compound messages.
   expectations describe the old world. They need re-deciding, not just re-running.
 - ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
   stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.
-- Does the CTE composition live in the executors or in `db/stores/book_store.py`? The
-  store currently exposes `search_by_filters` / `search_by_book_filter` / `search_by_title`
-  / `search_by_embedding`, all of which materialize rows.
-- Does retrieval-returns-counts change the retrieval **output contracts** in
-  `app/domains/books/schemas/output_schemas.py` (today they carry `BookSummary` lists)?
+- ~~Does the CTE composition live in the executors or in `db/stores/book_store.py`?~~
+  Resolved 2026-08-04 — **the store layer**. `db/stores/deferred_query.py` holds the
+  carrier (`DeferredBookQuery`: a SELECT of isbn13 plus an optional `score`, with no LIMIT
+  and no ORDER BY — the two invariants that make it composable), and `db/stores/utils.py`
+  holds `build_title_query` / `build_count` / `compose` / `build_materialize`. Executors
+  pass the object around and never write SQLAlchemy; otherwise every combine node grows
+  its own copy of the composition rules.
+- ~~Does retrieval-returns-counts change the retrieval **output contracts**?~~ Resolved
+  2026-08-04 — yes, minimally. `BookRetrievalOutput` (`app/domains/books/schemas.py`) gains
+  `num_books` (promoted off `FindByTitleOutput`, since every retrieval and combine node now
+  reports one), `query_sql` (persisted, readable), and `query` (the carrier,
+  `exclude=True`). `books` stays and stays empty until something materializes, so
+  `num_books` is the size of the match and `len(books)` the size of the fetch.
+  **The `exclude=True` is load-bearing:** `to_serializable` skips excluded fields but does
+  walk `__pydantic_private__`, so a statement stashed as a private attr instead would reach
+  the JSONB insert in `record_chat_run` and break it.
 - How does a mock executor represent "a query I have not run yet" so this can be tested
-  before real executors exist?
+  before real executors exist? **Still open** — a mock leaves `query` as `None` today, and
+  the terminal node then materializes nothing rather than falling back to `books`.
+- **New, from building it:** `compose()` drops `score`, because a per-dimension similarity
+  score means nothing across dimensions. So a pooled query ranks by rating, and a small
+  `limit` on the pool can rank the actual anchor below its own sequels — "Dune" comes third
+  behind two better-rated books in the Dune+Neuromancer pool. Carrying `max(score)` through
+  the union would fix it; not built.
 
 ## Before building this
 
