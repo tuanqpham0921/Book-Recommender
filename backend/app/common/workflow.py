@@ -95,7 +95,12 @@ class AppBaseWorkflow(Workflow[OutputT]):
         # NOTE: this is wrong, you add this in after processing
         # or tool calling
         # then you add the result as a [toolcall, tool result]
-        # so you wrap it in a retrie if needed
+        # so you wrap it in a retry if needed
+        # NOTE: it might also make more sense to put the __call__
+        # in the request nodes, for post processing
+        # this way you have a clear args_parse, tool call messages
+        # and the workflow is the parent node that manages that circles
+        # for retries and catching errors
         self.record_tool_call(tool_call=tool_calls[0])
         return tool_calls[0].function.parsed_arguments
     
