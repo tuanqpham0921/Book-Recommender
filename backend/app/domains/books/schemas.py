@@ -59,10 +59,15 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     failed.
 
     Counts-first, per docs/design/execution-pipeline-v1.md: retrieval fills in
-    `num_books` and `query` and leaves `books` empty. Only the last node in a
-    plan runs `query` for rows, so a populated `books` means "these rows were
-    actually fetched", not "this is everything that matched" — `num_books` is
-    the size of the match, `len(books)` is the size of the fetch.
+    `num_books`, `preview` and `query`, and leaves `books` empty. Only the last
+    node in a plan runs `query` for rows, so a populated `books` means "these
+    rows were actually fetched", not "this is everything that matched" —
+    `num_books` is the size of the match, `len(books)` is the size of the fetch.
+
+    `preview` is a handful of those matches shown under the count in the UI, so
+    "1,240 books" comes with evidence of what they look like. It is a *sample*,
+    ranked for recognizability rather than correctness — never treat it as the
+    node's answer, and never let a downstream node read it instead of `query`.
 
     `query` is `exclude=True` on purpose: `to_serializable` (common/utils/
     format.py) skips excluded fields but does walk private attrs, so a
@@ -81,9 +86,14 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     num_books: int = 0
     query_sql: str | None = None
     query: DeferredBookQuery | None = Field(default=None, exclude=True)
+    preview: list[BookSummary] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
-        return {"num_books": self.num_books, "num_fetched": len(self.books)}
+        return {
+            "num_books": self.num_books,
+            "num_fetched": len(self.books),
+            "preview": [book.title for book in self.preview],
+        }
 
 
 class BookRecommendationOutput(BookRetrievalOutput):

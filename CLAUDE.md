@@ -90,7 +90,7 @@ Each capability is a **vertical slice** — one folder under `app/domains/<domai
 3. **`PlannerWorkflow`** runs the planner pipeline (parse → classify → diagram)
 4. Results stream back to the client via **SSEStream** (`app/common/sse_stream.py`)
 
-**Current state:** `TaskRunnerWorkflow` (`app/domains/task_runner.py`) — the step that would actually execute the classified strategies — is implemented but currently commented out in `Orchestrator.run`. Today's request flow only runs the planner pipeline through diagram generation; it does not yet execute tasks end-to-end. Conversation is **single-turn**: each request is processed statelessly (turns are recorded to `chat_runs` but never read back).
+**Current state:** `TaskRunnerWorkflow` (`app/domains/task_runner.py`) executes the classified strategies against the real executors, for the node types registered on this branch. It brackets each node with `task.start`/`task.end` SSE events so the UI can render one collapsible section per step (count in the header, preview cards inside); see `frontend/src/README.md`. Conversation is **single-turn**: each request is processed statelessly (turns are recorded to `chat_runs` but never read back).
 
 ### API Surface
 

@@ -112,14 +112,36 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                     messages=self.messages,
                     app_env=self.app_env,
                 )
-                step_result = await self.run_async_step(
-                    executor(
-                        query=goal.description,
-                        dependent_results=dependent_results,
-                        request_context=request_context,
-                    ),
-                    raise_on_failure=False,
+
+                # The runner owns both ends of the UI's task section, not the
+                # executors: one place to keep them paired, and a node that
+                # raises can't leave a section hanging open.
+                await self.sse_stream.send_task_start(
+                    task_id=goal.id,
+                    title=executor_cls.ui_section_title
+                    or goal.target_node_type.value.replace("_", " "),
+                    collapsible=executor_cls.ui_section_collapsible,
                 )
+                step_result = None
+                try:
+                    step_result = await self.run_async_step(
+                        executor(
+                            query=goal.description,
+                            dependent_results=dependent_results,
+                            request_context=request_context,
+                        ),
+                        raise_on_failure=False,
+                    )
+                finally:
+                    output = getattr(step_result, "output", None)
+                    await self.sse_stream.send_task_end(
+                        task_id=goal.id,
+                        # every retrieval output carries num_books, so the
+                        # header fills itself in and executors stay dumb
+                        count=getattr(output, "num_books", None),
+                        ok=bool(step_result and step_result.ok),
+                    )
+
                 if not step_result.ok:
                     self.output.failed_task.append(goal.id)
                     continue

@@ -15,6 +15,7 @@ from db.stores.deferred_query import DeferredBookQuery
 from db.stores.utils import (
     build_count,
     build_materialize,
+    build_preview,
     build_title_query,
     build_title_search,
     compose,
@@ -97,6 +98,36 @@ class TestCompose:
 
         with pytest.raises(ValueError):
             compose([])
+
+
+class TestBuildPreview:
+    def test_returns_sample_and_total_in_one_statement(self):
+        # the whole point: no separate COUNT round trip, and no way for the
+        # count and the sample to disagree
+        compiled = _compiled_sql(build_preview(_title(), BookModel, limit=3))
+        assert "count(*) OVER ()" in compiled
+        assert "AS total" in compiled
+        assert "LIMIT" in compiled.upper()
+
+    def test_single_dimension_query_ranks_by_its_own_score(self):
+        # you searched for "Dune", so Dune leads — not the most popular
+        # book that happens to match
+        compiled = _compiled_sql(build_preview(_title(), BookModel))
+        assert "ORDER BY preview_src.score DESC" in compiled
+
+    def test_composed_query_ranks_by_popularity_not_average_rating(self):
+        # a sample of a large match should be recognizable books; top-rated
+        # surfaces obscure 5.0s with three ratings
+        pooled = DeferredBookQuery(
+            compose([_title("Dune"), _title("Neuromancer")]), label="anchor"
+        )
+        compiled = _compiled_sql(build_preview(pooled, BookModel))
+        assert "ORDER BY books.ratings_count DESC NULLS LAST" in compiled
+
+    def test_excludes_the_vector_column(self):
+        compiled = _compiled_sql(build_preview(_title(), BookModel))
+        assert "books.thumbnail" in compiled  # the card needs this
+        assert "books.embedding" not in compiled
 
 
 class TestBuildMaterialize:

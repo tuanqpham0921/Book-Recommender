@@ -111,10 +111,33 @@ def build_title_query(
         )
     )
 
-
 def build_count(query: DeferredBookQuery):
     """COUNT over a deferred query without materializing its rows."""
     return select(func.count()).select_from(query.cte("matched"))
+
+def build_preview(query: DeferredBookQuery, model, limit: int = 3):
+    """A small sample of the match **and** its total size, in one statement.
+
+    `count(*) OVER ()` is evaluated before LIMIT, so `total` is the size of the
+    whole match while the rows are only the sample. One round trip instead of a
+    COUNT plus a SELECT, and no way for the two to disagree.
+
+    Ranks by the query's own `score` when it has one — you searched for "Dune",
+    so Dune should lead — and by popularity otherwise. `ratings_count`, not
+    `average_rating`: a sample of a 1,200-book match should be books people
+    recognize, and top-rated surfaces obscure 5.0s with three ratings.
+    """
+    src = query.cte("preview_src")
+    stmt = (
+        select(model, func.count().over().label("total"))
+        .join(src, model.isbn13 == src.c.isbn13)
+        .options(defer(model.embedding, raiseload=True))
+    )
+    if "score" in src.c.keys():
+        stmt = stmt.order_by(src.c.score.desc())
+    else:
+        stmt = stmt.order_by(model.ratings_count.desc().nulls_last())
+    return stmt.limit(limit)
 
 
 def compose(queries: List[DeferredBookQuery], op: str = "or"):

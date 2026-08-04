@@ -1,12 +1,14 @@
 from typing import Any
 
 from app.domains.node_executor import NodeExecutor
+from app.domains.books.schemas import BookSummary
 from app.orchestration.request_context import RequestContext
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
 from db.stores.utils import compile_sql
 
 class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
+    ui_section_title = "Found books by title"
     tool_cls = FindByTitleRetrieval
 
     async def run(
@@ -36,11 +38,17 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
 
         self.output.query = deferred
         self.output.query_sql = compile_sql(deferred.stmt)
-        self.output.num_books = await store.count(deferred)
+
+        # one round trip for both: the size of the match, and a few of them to
+        # show under it so the number comes with evidence
+        total, rows = await store.preview(deferred)
+        self.output.num_books = total
+        self.output.preview = [BookSummary.model_validate(row) for row in rows]
 
         await self.sse_stream.send_chars(
             f"- Found {self.output.num_books} books titled: {book_title}"
         )
+        await self.stream_books(rows)
 
         self.finalize_result()
 

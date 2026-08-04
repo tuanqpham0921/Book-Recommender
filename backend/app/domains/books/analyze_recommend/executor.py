@@ -11,6 +11,9 @@ from .schemas import RecommendationOutput, RecommendationStrategy
 
 class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
+    ui_section_title = "Recommendation"
+    # this node owns the answer — folding it away would hide the reply
+    ui_section_collapsible = False
     tool_cls = RecommendationStrategy
 
     async def run(
@@ -64,7 +67,8 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         self.output.books = [BookSummary.model_validate(book) for book in books]
         self.output.num_books = len(books)
 
-        await self._stream_books([books], self.sse_stream)
+        # the answer, so the cards are worth streaming rather than dumping
+        await self.stream_books(books, delay=0.2)
 
     def finalize_result(self):
         ok = self.output.args is not None

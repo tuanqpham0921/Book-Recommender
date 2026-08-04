@@ -45,6 +45,14 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
     failure_message = "Node failed"
     ui_loading_message = "Working..."
 
+    # How this node's step is titled in the UI's task list. `TaskRunnerWorkflow`
+    # opens and closes the section, so a node only declares its own label —
+    # falling back to the node type name when it doesn't.
+    ui_section_title: str | None = None
+    # Terminal nodes own the answer, so their section is not something to fold
+    # away; the supporting steps are.
+    ui_section_collapsible: bool = True
+
     def __init__(
         self,
         sse_stream: SSEStream,
@@ -104,20 +112,25 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
             include_tool_description=False,
         )
         
-    async def _stream_books(self, results, sse_stream):
-        """Stream book cards to frontend."""
-        # await sse_stream.send_json({"type": "books_start", "total": len(results)})
+    async def stream_books(self, books: list[dict[str, Any]], delay: float = 0.0):
+        """Stream book cards to the frontend.
+
+        Takes the raw row dicts (`BookStore.preview` / `.materialize`), not
+        `BookSummary` and not ORM objects: the card renders `thumbnail`, which
+        `BookSummary` deliberately drops, and the payload has to be JSON.
+
+        `delay` defaults to 0 — a preview lands inside a collapsed section
+        where nobody watches cards arrive one by one, and three nodes' worth of
+        smoothing is seconds of dead time. Pass a delay for the final answer,
+        where the streaming is the point.
+        """
         sent_isbn = set()
-        for result in results:
-            if isinstance(result, str):
+        for i, book in enumerate(books):
+            isbn13 = book.get("isbn13")
+            if isbn13 in sent_isbn:
                 continue
 
-            for i, book_dict in enumerate(result):
-                if book_dict["isbn13"] in sent_isbn:
-                    continue
-
-                await sse_stream.send_book_card(
-                    position=i, data=book_dict
-                )
-                await asyncio.sleep(0.2)  # Smooth streaming
-                sent_isbn.add(book_dict["isbn13"])
+            await self.sse_stream.send_book_card(position=i, data=book)
+            if delay:
+                await asyncio.sleep(delay)
+            sent_isbn.add(isbn13)
