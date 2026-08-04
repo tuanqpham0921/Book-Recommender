@@ -7,7 +7,7 @@ from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
-from app.domains.books.registry import (
+from app.domains.books.guide import (
     BOOK_NODE_TYPE_TO_CLS,
     BOOK_RETRIEVAL_CLASSES,
     BOOK_ANALYZE_CLASSES,

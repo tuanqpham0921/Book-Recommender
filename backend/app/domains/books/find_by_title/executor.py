@@ -2,7 +2,7 @@ from typing import Any
 
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow
-from ..schemas.output_schemas import FindByTitleOutput
+from .schemas import FindByTitleOutput
 from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
 from clients.base import BaseLLMClient
 

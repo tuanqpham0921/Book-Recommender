@@ -194,6 +194,8 @@ class InitialParseOutput(AppWorkflowOutput):
 
         return payload
     
+    # TODO:
+    # this is wrong, you need the indegree
     def execution_order(self):
         from collections import defaultdict
         order = defaultdict(list)
