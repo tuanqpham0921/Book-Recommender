@@ -22,14 +22,11 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         dependent_results: dict[str, Any],
         request_context: RequestContext,
     ) -> None:
-        # 0. send a UI loading message
-        # 1. with dependent_results, you can check if you have everything you need
-        #    * for later version, you can call the planner to best effort retrieve
-        # 2. call the args parser here
-        # 3. (?) update the ui somehow (maybe the args parser can come-up with something)
-        # 4. Same thing here, get build the CTE, get the closest books
-        # 5. post-process the query and populate the output class
-        # this returns actual books
+        # aggrate the results get the counts
+        # if it's over 5, then pause and ask the user
+        # for not just pick the 5 most rated
+        # then use those description to do the embedding search
+        # this should return a list of books
         await self.sse_stream.send_ui_loading("recommending books...")
 
         parsed_args = await self.parse_arguments(query=query)

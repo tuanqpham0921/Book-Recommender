@@ -14,6 +14,7 @@ currently
     * parser work
     * add in the SQL query
 
+lots of code changes to c83d590c87da7fc5bb60f6369c93e754b31e07a6
 
 initial re-tries design
     * The workflow holds the retries
