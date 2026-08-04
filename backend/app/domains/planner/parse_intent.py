@@ -169,7 +169,10 @@ class InitialParseOutput(AppWorkflowOutput):
     refused_goals: list[SystemGoal] = Field(default_factory=list)
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
 
-    out_of_scope: list[str] = None
+    # Optional, not `list[str] = None`: model_dump_json emits `null` here when
+    # unset, and a non-optional annotation then rejects its own dump on reload
+    # — which is how chat_runs rows get replayed.
+    out_of_scope: list[str] | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {

@@ -1,6 +1,16 @@
-"""Tests for InitialParseWorkflow.process_parse_result and GoalParseRequest validators."""
+"""Tests for InitialParseWorkflow.process_parse_result and GoalParseRequest validators.
+
+Scoped to what `minimal_end_to_end_v1` actually implements. Removed with the
+code they covered: `small_talk` (gone from GoalParseRequest and
+InitialParseOutput), the `_overflow_system_goals` / `_invalid_system_goals`
+capture (goals over MAX_SYSTEM_GOALS are now rejected by the field's
+max_length instead), `InitialParseOutput.reasoning`, and
+`generate_user_response`.
+"""
 
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_types import UnknownNodeTypeEnum
@@ -16,44 +26,40 @@ from app.domains.field_types import REASONING_FALLBACK
 
 
 def _make_goal(
+    goal_id="1",
     description="Find a book about machine learning",
     confidence=0.9,
     node_type=FindTitleNodeTypeEnum.REQUEST,
+    depends_on=None,
 ):
     return SystemGoal(
+        id=goal_id,
         description=description,
+        reasoning="A sufficiently long reasoning for the test",
         confidence=confidence,
         target_node_type=node_type,
+        depends_on=depends_on if depends_on is not None else [],
     )
 
 
 def _make_parse_result(
-    goals=None, small_talk=None, out_of_scope=None, reasoning="Parsed the user request"
+    goals=None, out_of_scope=None, reasoning="Parsed the user request"
 ):
-    return GoalParseRequest(
-        system_goals=goals or [],
-        small_talk=small_talk,
-        out_of_scope=out_of_scope,
-        reasoning=reasoning,
-    )
+    # out_of_scope is omitted rather than passed as None: it is annotated
+    # `list[str]` with a None default, so passing None explicitly is a
+    # validation error while leaving it out is not.
+    kwargs = {"system_goals": goals or [], "reasoning": reasoning}
+    if out_of_scope is not None:
+        kwargs["out_of_scope"] = out_of_scope
+    return GoalParseRequest(**kwargs)
 
 
 class TestSystemGoalValidators:
     def test_non_numeric_confidence_falls_back_to_min(self):
-        goal = SystemGoal(
-            description="Find a book about machine learning topics",
-            confidence="not-a-number",
-            target_node_type=FindTitleNodeTypeEnum.REQUEST,
-        )
-        assert goal.confidence == MIN_CONFIDENCE
+        assert _make_goal(confidence="not-a-number").confidence == MIN_CONFIDENCE
 
     def test_out_of_range_confidence_falls_back_to_min(self):
-        goal = SystemGoal(
-            description="Find a book about machine learning topics",
-            confidence=1.5,
-            target_node_type=FindTitleNodeTypeEnum.REQUEST,
-        )
-        assert goal.confidence == MIN_CONFIDENCE
+        assert _make_goal(confidence=1.5).confidence == MIN_CONFIDENCE
 
 
 class TestGoalParseRequestValidators:
@@ -76,144 +82,26 @@ class TestGoalParseRequestValidators:
         assert len(req.reasoning) <= MAX_STRING_LENGTH
         assert req.reasoning.endswith("...")
 
-    def test_small_talk_truncated_when_over_max(self):
-        req = GoalParseRequest(
-            system_goals=[],
-            reasoning="Parsed the request cleanly",
-            small_talk="x" * (MAX_STRING_LENGTH + 50),
-        )
-        assert len(req.small_talk) <= MAX_STRING_LENGTH
-        assert req.small_talk.endswith("...")
-
-    def test_small_talk_none_stays_none(self):
-        req = GoalParseRequest(system_goals=[], reasoning="Parsed the request cleanly")
-        assert req.small_talk is None
-
-    def test_small_talk_non_string_is_coerced(self):
-        req = GoalParseRequest(
-            system_goals=[],
-            reasoning="Parsed the request cleanly",
-            small_talk=99,
-        )
-        assert req.small_talk == "99"
-
-    def test_out_of_scope_non_string_is_coerced(self):
-        req = GoalParseRequest(
-            system_goals=[],
-            reasoning="Parsed cleanly here",
-            out_of_scope=12345,
-        )
-        assert isinstance(req.out_of_scope, str)
-
-    def test_out_of_scope_truncated_when_over_max(self):
-        req = GoalParseRequest(
-            system_goals=[],
-            reasoning="Parsed the request cleanly",
-            out_of_scope="y" * (MAX_STRING_LENGTH + 50),
-        )
-        assert len(req.out_of_scope) <= MAX_STRING_LENGTH
-        assert req.out_of_scope.endswith("...")
-
-    def test_system_goals_non_list_is_wrapped_in_list(self):
-        goal = _make_goal()
-        req = GoalParseRequest(
-            system_goals=goal, reasoning="Parsed the request cleanly"
-        )
-        assert isinstance(req.system_goals, list)
-        assert len(req.system_goals) == 1
-
-    def test_system_goals_truncated_when_over_max(self):
-        goals = [_make_goal() for _ in range(MAX_SYSTEM_GOALS + 3)]
-        req = GoalParseRequest(
-            system_goals=goals, reasoning="Parsed the request cleanly"
-        )
-        assert len(req.system_goals) == MAX_SYSTEM_GOALS
-
-
-class TestSystemGoalsOverflow:
-    def test_goals_beyond_max_land_in_overflow(self):
-        goals = [
-            _make_goal(description=f"Goal number {i}")
-            for i in range(MAX_SYSTEM_GOALS + 3)
-        ]
-        req = _make_parse_result(goals=goals)
-        assert req.system_goals == goals[:MAX_SYSTEM_GOALS]
-        assert req._overflow_system_goals == goals[MAX_SYSTEM_GOALS:]
-
-    def test_no_overflow_when_within_limit(self):
-        req = _make_parse_result(goals=[_make_goal()])
-        assert req._overflow_system_goals == []
-
-    def test_overflow_from_raw_dicts_holds_validated_instances(self):
-        # the LLM delivers dicts; overflow must still be usable SystemGoal
-        # instances, not raw dicts
-        goal_dicts = [
-            _make_goal(description=f"Goal number {i}").model_dump()
-            for i in range(MAX_SYSTEM_GOALS + 2)
-        ]
-        req = _make_parse_result(goals=goal_dicts)
-        assert len(req._overflow_system_goals) == 2
-        assert all(isinstance(g, SystemGoal) for g in req._overflow_system_goals)
-
-    def test_invalid_goals_do_not_consume_capacity(self):
-        # invalid items are filtered before the cut, so they never displace
-        # valid goals into overflow
-        garbage = [{"bad": "dict"}, 3, None]
-        goals = [
-            _make_goal(description=f"Goal number {i}") for i in range(MAX_SYSTEM_GOALS)
-        ]
-        req = _make_parse_result(goals=garbage + goals)
-        assert req.system_goals == goals
-        assert req._overflow_system_goals == []
-        assert req._invalid_system_goals == garbage
-
-    def test_one_invalid_goal_does_not_discard_the_batch(self):
-        # regression for the missing write-back failure mode: one bad item
-        # must not raise and take every valid goal down with it
-        good = _make_goal()
-        req = _make_parse_result(goals=[{"bad": "dict"}, good])
-        assert req.system_goals == [good]
-        assert req._invalid_system_goals == [{"bad": "dict"}]
-
 
 class TestProcessParseResult:
-    def test_empty_result_sets_result_not_ok(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result())
+    def test_empty_result_raises_and_sets_result_not_ok(self, parse_wf):
+        # nothing in-domain and nothing out-of-scope means the parse produced
+        # no usable content at all — the workflow's error handling takes over
+        with pytest.raises(RuntimeError, match="Nothing was classified"):
+            parse_wf.process_parse_result(_make_parse_result())
         assert parse_wf.result.ok is False
 
-    def test_empty_result_sets_warning_reasoning(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result())
-        assert not parse_wf.result.ok
-        assert "Nothing was classified" in parse_wf.output.reasoning
-
-    def test_small_talk_only_does_not_trigger_empty_branch(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result(small_talk="Hello there!"))
-        # the empty branch overwrites reasoning with its warning; small talk
-        # alone must keep the parsed reasoning instead
-        assert parse_wf.output.reasoning == "Parsed the user request"
-        assert parse_wf.output.small_talk == "Hello there!"
-
     def test_out_of_scope_only_does_not_trigger_empty_branch(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result(out_of_scope="Cooking recipe"))
-        assert parse_wf.output.reasoning == "Parsed the user request"
-        assert parse_wf.output.out_of_scope == "Cooking recipe"
-
-    def test_small_talk_stored_on_output(self, parse_wf):
-        parse_wf.process_parse_result(_make_parse_result(small_talk="Hello there!"))
-        assert parse_wf.output.small_talk == "Hello there!"
+        parse_wf.process_parse_result(
+            _make_parse_result(out_of_scope=["Cooking recipe"])
+        )
+        assert parse_wf.output.out_of_scope == ["Cooking recipe"]
 
     def test_out_of_scope_stored_on_output(self, parse_wf):
         parse_wf.process_parse_result(
-            _make_parse_result(out_of_scope="Cooking recipe request")
+            _make_parse_result(out_of_scope=["Cooking recipe request"])
         )
-        assert parse_wf.output.out_of_scope == "Cooking recipe request"
-
-    def test_reasoning_stored_on_output(self, parse_wf):
-        reasoning = "Detailed reasoning about this classification result"
-        parse_wf.process_parse_result(
-            _make_parse_result(goals=[_make_goal()], reasoning=reasoning)
-        )
-        assert parse_wf.output.reasoning == reasoning
+        assert parse_wf.output.out_of_scope == ["Cooking recipe request"]
 
     def test_low_confidence_goal_goes_to_refused(self, parse_wf):
         goal = _make_goal(confidence=0.3)
@@ -272,28 +160,6 @@ class TestProcessParseResult:
         parse_wf.process_parse_result(_make_parse_result(goals=[_make_goal()]))
         assert len(parse_wf.output.buffer_goals) == 1
 
-    def test_overflow_goals_flow_into_buffer(self, parse_wf):
-        goals = [
-            _make_goal(description=f"Goal number {i}")
-            for i in range(MAX_SYSTEM_GOALS + 3)
-        ]
-        parse_wf.process_parse_result(_make_parse_result(goals=goals))
-        assert len(parse_wf.output.accepted_goals) == MAX_SYSTEM_GOALS
-        assert len(parse_wf.output.buffer_goals) == 3
-
-    def test_refused_goals_free_capacity_for_overflow(self, parse_wf):
-        # 2 low-confidence goals inside the limit get refused; goals from
-        # overflow are promoted into the freed accepted capacity
-        low = [_make_goal(confidence=0.1), _make_goal(confidence=0.1)]
-        good = [
-            _make_goal(description=f"Goal number {i}")
-            for i in range(MAX_SYSTEM_GOALS + 1)
-        ]
-        parse_wf.process_parse_result(_make_parse_result(goals=low + good))
-        assert len(parse_wf.output.refused_goals) == 2
-        assert len(parse_wf.output.accepted_goals) == MAX_SYSTEM_GOALS
-        assert len(parse_wf.output.buffer_goals) == 1
-
     def test_refused_goal_does_not_go_to_buffer_when_accepted_is_full(self, parse_wf):
         for _ in range(MAX_SYSTEM_GOALS):
             parse_wf.output.accepted_goals.append(_make_goal())
@@ -306,8 +172,8 @@ class TestProcessParseResult:
         parse_wf.process_parse_result(
             _make_parse_result(
                 goals=[
-                    _make_goal(confidence=0.9),
-                    _make_goal(confidence=0.1),
+                    _make_goal(goal_id="1", confidence=0.9),
+                    _make_goal(goal_id="2", confidence=0.1),
                 ]
             )
         )
@@ -336,9 +202,9 @@ class TestFinalizeResult:
         assert parse_wf.result.ok is True
 
     async def test_ok_true_when_only_a_reply_payload(self, parse_wf):
-        # small talk / out-of-scope / refusals streamed a reply — that is a
-        # handled conversation, not a failure
-        await parse_wf.finalize_result(payload={"small_talk": "Hello!"})
+        # out-of-scope / refusals streamed a reply — that is a handled
+        # conversation, not a failure
+        await parse_wf.finalize_result(payload={"out_of_scope": ["Cooking recipe"]})
         assert parse_wf.result.ok is True
         assert isinstance(parse_wf.result.ok, bool)
 
@@ -351,15 +217,8 @@ class TestToLlmMessages:
     def test_empty_output_returns_empty_dict(self, parse_wf):
         assert parse_wf.output.to_llm_messages() == {}
 
-    def test_small_talk_included_in_payload(self, parse_wf):
-        parse_wf.output.small_talk = "Hello!"
-        parse_wf.output.reasoning = "Some reasoning text here"
-        result = parse_wf.output.to_llm_messages()
-        assert result["small_talk"] == "Hello!"
-
     def test_out_of_scope_included_in_payload(self, parse_wf):
-        parse_wf.output.out_of_scope = "Cooking recipes"
-        parse_wf.output.reasoning = "Some reasoning text here"
+        parse_wf.output.out_of_scope = ["Cooking recipes"]
         result = parse_wf.output.to_llm_messages()
         assert "out_of_scope" in result
 
@@ -367,25 +226,13 @@ class TestToLlmMessages:
         goal = _make_goal()
         goal.refuse("Too low confidence")
         parse_wf.output.refused_goals.append(goal)
-        parse_wf.output.reasoning = "Some reasoning text here"
         result = parse_wf.output.to_llm_messages()
         assert result["refused_goals"] == [(goal.description, goal.refusal_reasons)]
-
-    def test_reasoning_included_when_payload_is_non_empty(self, parse_wf):
-        parse_wf.output.small_talk = "Hello!"
-        parse_wf.output.reasoning = "Because of small talk"
-        result = parse_wf.output.to_llm_messages()
-        assert result["reasoning"] == "Because of small talk"
-
-    def test_reasoning_excluded_when_payload_is_empty(self, parse_wf):
-        parse_wf.output.reasoning = "Some reasoning"
-        result = parse_wf.output.to_llm_messages()
-        assert "reasoning" not in result
 
 
 def _mock_assistant_msg(parse_result=None):
     if parse_result is None:
-        parse_result = _make_parse_result()
+        parse_result = _make_parse_result(goals=[_make_goal()])
     tool_call = MagicMock()
     tool_call.id = "call_1"
     tool_call.function.name = "GoalParseRequest"
@@ -399,7 +246,6 @@ class TestRun:
     async def test_sends_ui_loading_at_start(self, parse_wf):
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
         parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg())
-        parse_wf.generate_user_response = AsyncMock()
 
         await parse_wf.run()
 
@@ -414,7 +260,6 @@ class TestRun:
         parse_wf.run_llm_call = AsyncMock(
             return_value=_mock_assistant_msg(parse_result)
         )
-        parse_wf.generate_user_response = AsyncMock()
 
         await parse_wf.run()
 
@@ -426,40 +271,27 @@ class TestRun:
         parse_wf.run_llm_call = AsyncMock(
             return_value=_mock_assistant_msg(parse_result)
         )
-        parse_wf.generate_user_response = AsyncMock()
 
         await parse_wf.run()
 
         assert parse_wf.result.ok is True
 
+    async def test_out_of_scope_is_streamed_to_the_user(self, parse_wf):
+        parse_result = _make_parse_result(
+            goals=[_make_goal()], out_of_scope=["Cooking recipe"]
+        )
+        parse_wf.sse_stream.send_ui_loading = AsyncMock()
+        parse_wf.sse_stream.send_chars = AsyncMock()
+        parse_wf.run_llm_call = AsyncMock(
+            return_value=_mock_assistant_msg(parse_result)
+        )
 
-class TestGenerateUserResponse:
-    async def test_returns_early_when_payload_is_empty(self, parse_wf):
-        parse_wf.run_llm_call = AsyncMock()
+        await parse_wf.run()
 
-        await parse_wf.generate_user_response(payload={})
-
-        parse_wf.run_llm_call.assert_not_called()
-
-    async def test_calls_llm_when_payload_is_non_empty(self, parse_wf):
-        parse_wf.output.small_talk = "Hello!"
-        parse_wf.output.reasoning = "Some reasoning text here"
-        parse_wf.run_llm_call = AsyncMock(return_value=MagicMock())
-        parse_wf.sse_stream.send_divider = AsyncMock()
-
-        await parse_wf.generate_user_response(parse_wf.output.to_llm_messages())
-
-        parse_wf.run_llm_call.assert_called_once()
-
-    async def test_sends_divider_after_llm_call(self, parse_wf):
-        parse_wf.output.small_talk = "Hello!"
-        parse_wf.output.reasoning = "Some reasoning text here"
-        parse_wf.run_llm_call = AsyncMock(return_value=MagicMock())
-        parse_wf.sse_stream.send_divider = AsyncMock()
-
-        await parse_wf.generate_user_response(parse_wf.output.to_llm_messages())
-
-        parse_wf.sse_stream.send_divider.assert_called_once()
+        streamed = "".join(
+            call.args[0] for call in parse_wf.sse_stream.send_chars.call_args_list
+        )
+        assert "Cooking recipe" in streamed
 
 
 class TestInitialParseOutputHelpers:
@@ -472,8 +304,8 @@ class TestInitialParseOutputHelpers:
         parse_wf.process_parse_result(
             _make_parse_result(
                 goals=[
-                    _make_goal(confidence=0.9),
-                    _make_goal(confidence=0.1),
+                    _make_goal(goal_id="1", confidence=0.9),
+                    _make_goal(goal_id="2", confidence=0.1),
                 ]
             )
         )

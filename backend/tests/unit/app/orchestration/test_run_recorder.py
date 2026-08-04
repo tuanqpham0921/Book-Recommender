@@ -111,7 +111,6 @@ class TestBuildChatRunRow:
         goal = row["planner"]["output"]["parse_result"]["accepted_goals"][0]
         assert goal["_refusal"] is True
         assert goal["_refusal_reasons"] == ["just to populate a private attr"]
-        assert goal["_id"].startswith("goal_")
 
 
 class TestRecordChatRun:
