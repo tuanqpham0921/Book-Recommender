@@ -1,5 +1,6 @@
 from app.domains.base_request import BaseRequest
-from pydantic import BaseModel, Field
+from app.domains.books.schemas import BookRetrievalOutput
+from pydantic import Field
 from typing import Literal
 from .labels import FindTitleNodeTypeEnum
 
@@ -37,7 +38,9 @@ class FindByTitleRetrieval(BaseRequest):
     node_type: Literal[FindTitleNodeTypeEnum.REQUEST] = FindTitleNodeTypeEnum.REQUEST
     title: str = Field(..., json_schema_extra={"example": "Dune"})
 
-class FindByTitleOutput(BaseModel):
-    title: str
-    books: list[dict]
-    
+class FindByTitleOutput(BookRetrievalOutput):
+    """`title` is what was searched for; `books` are the candidate matches,
+    best first. An empty `books` means the catalog has no such title."""
+
+    title: str = ""
+

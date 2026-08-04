@@ -16,8 +16,7 @@ from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserM
 from app.common.prompt_loader import format_prompt, load_prompt
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
-from app.domains.node_types import NodeTypeEnum
-from app.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
+from app.registry import NODE_TYPE_TO_CLS, NodeTypeEnum, format_node_type_catalog
 from clients import OpenAIParserRequest
 from clients.base import BaseLLMClient
 from clients.openai_requests import OpenAIChatRequest

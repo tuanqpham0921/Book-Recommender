@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-from app.domains.books.node_types import BookNodeTypeEnum
+from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planner.parse_intent import (
     GoalParseRequest,
@@ -18,7 +18,7 @@ from app.domains.field_types import REASONING_FALLBACK
 def _make_goal(
     description="Find a book about machine learning",
     confidence=0.9,
-    node_type=BookNodeTypeEnum.FIND_TITLE,
+    node_type=FindTitleNodeTypeEnum.REQUEST,
 ):
     return SystemGoal(
         description=description,
@@ -43,7 +43,7 @@ class TestSystemGoalValidators:
         goal = SystemGoal(
             description="Find a book about machine learning topics",
             confidence="not-a-number",
-            target_node_type=BookNodeTypeEnum.FIND_TITLE,
+            target_node_type=FindTitleNodeTypeEnum.REQUEST,
         )
         assert goal.confidence == MIN_CONFIDENCE
 
@@ -51,7 +51,7 @@ class TestSystemGoalValidators:
         goal = SystemGoal(
             description="Find a book about machine learning topics",
             confidence=1.5,
-            target_node_type=BookNodeTypeEnum.FIND_TITLE,
+            target_node_type=FindTitleNodeTypeEnum.REQUEST,
         )
         assert goal.confidence == MIN_CONFIDENCE
 
@@ -261,7 +261,7 @@ class TestProcessParseResult:
         assert len(parse_wf.output.accepted_goals) == 0
 
     def test_valid_goal_goes_to_accepted(self, parse_wf):
-        goal = _make_goal(confidence=0.9, node_type=BookNodeTypeEnum.FIND_TITLE)
+        goal = _make_goal(confidence=0.9, node_type=FindTitleNodeTypeEnum.REQUEST)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
         assert len(parse_wf.output.accepted_goals) == 1
         assert len(parse_wf.output.refused_goals) == 0

@@ -1,17 +1,21 @@
-from .executor import FindByTitle
+from app.domains.node_spec import NodeSpec, NodeTier
+
+from .executor import FindByTitleExecutor
 from .labels import FindTitleNodeTypeEnum
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
 
-GUIDE_TO_CLS = {
-    FindTitleNodeTypeEnum.REQUEST.value: FindByTitleRetrieval,
-    FindTitleNodeTypeEnum.OUTPUT.value: FindByTitleOutput,
-    FindTitleNodeTypeEnum.EXECUTOR.value: FindByTitle
-}
+SPEC = NodeSpec(
+    node_type=FindTitleNodeTypeEnum.REQUEST.value,
+    tier=NodeTier.RETRIEVAL,
+    request=FindByTitleRetrieval,
+    output=FindByTitleOutput,
+    executor=FindByTitleExecutor,
+)
 
 __all__ = [
-    "GUIDE_TO_CLS",
-    FindByTitle,
-    FindTitleNodeTypeEnum,
-    FindByTitleOutput,
-    FindByTitleRetrieval
+    "SPEC",
+    "FindByTitleExecutor",
+    "FindTitleNodeTypeEnum",
+    "FindByTitleOutput",
+    "FindByTitleRetrieval",
 ]

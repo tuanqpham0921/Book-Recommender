@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.common.messages import UserMessage
 from app.common.sse_stream import SSEStream
-from app.domains.books.node_types import BookNodeTypeEnum
+from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.orchestration.request_context import RequestContext
@@ -28,7 +28,7 @@ def _make_goal():
         description="Find a book about machine learning topics",
         reasoning="A sufficiently long reasoning for the test",
         confidence=0.9,
-        target_node_type=BookNodeTypeEnum.FIND_TITLE,
+        target_node_type=FindTitleNodeTypeEnum.REQUEST,
         depends_on=[],
     )
     goal.refuse("just to populate a private attr")

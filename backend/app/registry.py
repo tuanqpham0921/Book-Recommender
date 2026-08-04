@@ -1,3 +1,16 @@
+"""The live node registry — everything the planner and the task runner look up.
+
+Nothing here is hand-maintained per node. Each capability is a vertical slice
+under `app/domains/<domain>/<node>/` that exports one `NodeSpec`; a domain's
+`guide.py` lists its specs; this module composes those into `SPECS` and derives
+the rest. Adding a capability means adding a folder and one line in a guide —
+see `app/domains/README.md`.
+
+To see what the planner is actually told it can do right now, run
+`make tools-catalog`: it renders this module, so it always reflects the live
+state rather than a checked-in snapshot.
+"""
+
 import inspect
 import logging
 from enum import Enum
@@ -7,38 +20,63 @@ from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
-from app.domains.books.guide import (
-    BOOK_NODE_TYPE_TO_CLS,
-    BOOK_RETRIEVAL_CLASSES,
-    BOOK_ANALYZE_CLASSES,
-    BOOK_REQUEST_CLASSES,
-    FindByTitleRetrieval,
-    RecommendationStrategy,
-)
-from app.domains.node_types import NodeTypeEnum
+from app.domains.books.guide import BOOK_SPECS
+from app.domains.node_spec import NodeSpec, NodeTier
+from app.domains.node_types import UnknownNodeTypeEnum
 from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
 
 # -------------------------------------------------------------------
-# All request schema classes — add new ones here
+# All node specs — add a domain's guide here
 
-RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES
-ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
+SPECS: tuple[NodeSpec, ...] = BOOK_SPECS
 
-REQUEST_CLASSES = RETRIEVAL_CLASSES +  ANALYZE_CLASSES
+_duplicates = {s.node_type for s in SPECS if [x.node_type for x in SPECS].count(s.node_type) > 1}
+if _duplicates:
+    raise RuntimeError(f"Duplicate node_type across domain guides: {sorted(_duplicates)}")
+
+
+# -------------------------------------------------------------------
+# DERIVED LOOKUPS — all of these used to be hand-maintained in parallel
+
+# node_type name -> request schema class. The planner gates accepted goals on
+# membership here (parse_intent.py), so this is also the "is it registered"
+# check: a node absent from SPECS is unreachable, which is how a node is parked.
+NODE_TYPE_TO_CLS: dict[str, type] = {s.node_type: s.request for s in SPECS}
+
+
+def _requests_in(tier: NodeTier) -> tuple[type, ...]:
+    return tuple(s.request for s in SPECS if s.tier is tier)
+
+
+RETRIEVAL_CLASSES = _requests_in(NodeTier.RETRIEVAL)
+ANALYZE_CLASSES = _requests_in(NodeTier.ANALYZE)
+REQUEST_CLASSES = tuple(s.request for s in SPECS)
+
+# The tool-call union the parsers validate against. Discriminated on node_type,
+# whose Literal default NodeSpec already checked against the spec's name.
 AnyStrategyRequest = Annotated[
-    Union[
-        RecommendationStrategy,
-        FindByTitleRetrieval,
-    ],
+    Union[REQUEST_CLASSES],  # type: ignore[valid-type]
     Field(discriminator="node_type"),
 ]
 
-
-# Manual node_type → class lookup — add new mappings here (book/project
-# entries come from their own domains.*.registry modules)
-NODE_TYPE_TO_CLS: dict[str, type] = {
-    **BOOK_NODE_TYPE_TO_CLS,
-}
+# The capability names the planner LLM may emit, as one flat enum. Built from
+# SPECS rather than unioning each slice's own label enum: a union renders as an
+# anyOf of one-member enums in the JSON schema — more tokens per request with
+# every node added, and a weaker constraint for the model than a single enum.
+#
+# UNKNOWN is a member on purpose. It lets the LLM say "no capability fits"
+# instead of picking the nearest wrong one, and parse_intent.py then refuses
+# that goal with a reason the user sees. Drop it and the same message becomes a
+# hard pydantic error on the whole tool call, taking the other goals with it.
+NodeTypeEnum = Enum(  # type: ignore[misc]
+    "NodeTypeEnum",
+    {
+        **{s.node_type: s.node_type for s in SPECS},
+        UnknownNodeTypeEnum.UNKNOWN.name: UnknownNodeTypeEnum.UNKNOWN.value,
+    },
+    type=str,
+    module=__name__,
+)
 
 
 def get_request_class(node_type: NodeTypeEnum | str) -> type:
@@ -54,9 +92,11 @@ def class_docstring(cls: type) -> str:
     return docs.strip()
 
 
+# Tier label -> request classes, in the order the tiers are declared on
+# NodeTier. Kept as a plain dict because the playground extension below folds
+# its own tiers in by mutating it.
 CATALOG_TIERS: dict[str, tuple[type, ...]] = {
-    "Retrieval — lookup or fetch data": RETRIEVAL_CLASSES,
-    "Analyze — interpret, compare, or recommend using retrieved data": ANALYZE_CLASSES,
+    tier.value: _requests_in(tier) for tier in NodeTier
 }
 
 
@@ -67,7 +107,9 @@ def catalog_entries() -> dict[str, dict[str, str]]:
     once with its registered name. Registered classes missing from every tier
     in CATALOG_TIERS fall into an "Other supported actions" section; a tier
     class that was never registered has no node_type name for the LLM to use,
-    so it is skipped with a warning.
+    so it is skipped with a warning. Neither case can arise from a NodeSpec —
+    both are reachable only through the playground extension, which still
+    supplies raw class tuples.
     """
     cls_to_node_type = {cls: name for name, cls in NODE_TYPE_TO_CLS.items()}
     entries: dict[str, dict[str, str]] = {}
@@ -117,18 +159,24 @@ def format_node_type_catalog() -> str:
             ]
             lines.append("")
     if not lines:
-        raise  RuntimeError("Node type catalog is empty.")
-    
+        raise RuntimeError("Node type catalog is empty.")
+
     return "\n".join(lines).rstrip()
 
 
 # -------------------------------------------------------------------
 # EXECUTOR MAPPING
 
-# NOTE: temporary — points at the mock executors under playground/app_mock
-# until real domain executors are built, then this should map to those instead.
-EXECUTORS_CLS_MAPPING = MOCK_EXECUTORS_CLS_MAPPING
+# The real executors, derived from the slices.
+NODE_EXECUTORS_CLS_MAPPING: dict[type, type] = {
+    s.request: s.executor for s in SPECS if s.executor is not None
+}
 
+# NOTE: temporary — the live mapping points at the mock executors under
+# playground/app_mock, because the slice executors in
+# app/domains/**/executor.py are still stubs that raise NotImplementedError.
+# Flip this to NODE_EXECUTORS_CLS_MAPPING once they query the database.
+EXECUTORS_CLS_MAPPING = MOCK_EXECUTORS_CLS_MAPPING
 
 
 def main() -> None:
@@ -142,6 +190,12 @@ def main() -> None:
 # # playground/app_mock/extended_registry.py into the live planner registry.
 # # Must run before the __main__ guard below, so `python -m app.registry`
 # # reflects the same registry state everything else sees.
+# #
+# # CAVEAT (pre-dates the NodeSpec refactor): these classes arrive as raw
+# # tuples, not specs, so they join the catalog and NODE_TYPE_TO_CLS but NOT
+# # NodeTypeEnum — SystemGoal.target_node_type will reject a goal aimed at one.
+# # Fine for measuring catalog size, which is what the toggle is for; give the
+# # playground schemas real NodeSpecs before planning against them end to end.
 # from playground.app_mock.extended_registry import (
 #     ExtendedANALYZE_CLASSES,
 #     ExtendedLIBRARY_CLASSES,
@@ -157,8 +211,8 @@ def main() -> None:
 # REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES + ExtendedLIBRARY_CLASSES
 
 # NODE_TYPE_TO_CLS.update(ExtendedNODE_TYPE_TO_CLS)
-# CATALOG_TIERS["Retrieval — lookup or fetch data"] = RETRIEVAL_CLASSES
-# CATALOG_TIERS["Analyze — interpret, compare, or recommend using retrieved data"] = ANALYZE_CLASSES
+# CATALOG_TIERS[NodeTier.RETRIEVAL.value] = RETRIEVAL_CLASSES
+# CATALOG_TIERS[NodeTier.ANALYZE.value] = ANALYZE_CLASSES
 
 
 if __name__ == "__main__":

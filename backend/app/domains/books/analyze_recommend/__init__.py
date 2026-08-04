@@ -1,17 +1,21 @@
+from app.domains.node_spec import NodeSpec, NodeTier
+
 from .executor import RecommendBooksExecutor
-from .labels import AnalyzeRecomendNodeTypeEnum
+from .labels import AnalyzeRecommendNodeTypeEnum
 from .schemas import RecommendationOutput, RecommendationStrategy
 
-GUIDE_TO_CLS = {
-    AnalyzeRecomendNodeTypeEnum.REQUEST.value: RecommendationStrategy,
-    AnalyzeRecomendNodeTypeEnum.OUTPUT.value: RecommendationOutput,
-    AnalyzeRecomendNodeTypeEnum.EXECUTOR.value: RecommendBooksExecutor
-}
+SPEC = NodeSpec(
+    node_type=AnalyzeRecommendNodeTypeEnum.REQUEST.value,
+    tier=NodeTier.ANALYZE,
+    request=RecommendationStrategy,
+    output=RecommendationOutput,
+    executor=RecommendBooksExecutor,
+)
 
 __all__ = [
-    "GUIDE_TO_CLS",
-    RecommendBooksExecutor,
-    AnalyzeRecomendNodeTypeEnum,
-    RecommendationOutput,
-    RecommendationStrategy
+    "SPEC",
+    "RecommendBooksExecutor",
+    "AnalyzeRecommendNodeTypeEnum",
+    "RecommendationOutput",
+    "RecommendationStrategy",
 ]

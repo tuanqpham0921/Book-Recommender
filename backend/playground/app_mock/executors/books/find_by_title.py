@@ -1,7 +1,7 @@
 from typing import Any
 
-from app.domains.books.schemas import FindByTitleRetrieval
-from app.domains.books.schemas.output_schemas import BookSummary, FindByTitleOutput
+from app.domains.books.find_by_title import FindByTitleOutput, FindByTitleRetrieval
+from app.domains.books.schemas import BookSummary
 from ..base import MockRetrievalExecutorWorkflow
 from ...utils.mock_books import find_by_title
 

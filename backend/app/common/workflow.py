@@ -1,6 +1,7 @@
+import inspect
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
-from typing import Any, Generic, TypeVar, cast
+from typing import Any, Generic, TypeVar, cast, get_args
 
 from common.operation import OperationResult, TokenUsage
 from common.workflow import Workflow
@@ -28,6 +29,29 @@ class AppBaseWorkflow(Workflow[OutputT]):
     success_message = "Workflow completed successfully"
     failure_message = "Workflow failed"
 
+    @classmethod
+    def _generic_output_type(cls) -> type | None:
+        """The OutputT a subclass pinned in `AppBaseWorkflow[SomeOutput]`.
+
+        Lets a workflow declare its output once, in the class header, instead
+        of repeating it as an `output_type=` argument in an __init__ that
+        otherwise does nothing. Walks the MRO so a subclass of a subclass
+        (a node executor built on a shared retrieval base) still resolves.
+        """
+        for klass in cls.__mro__:
+            for base in getattr(klass, "__orig_bases__", ()):
+                for arg in get_args(base):
+                    # a still-generic base parameterizes with a TypeVar, not a
+                    # class; AppWorkflowOutput itself is abstract and can't be
+                    # instantiated as an envelope. Skip both and keep walking.
+                    if (
+                        isinstance(arg, type)
+                        and issubclass(arg, AppWorkflowOutput)
+                        and not inspect.isabstract(arg)
+                    ):
+                        return arg
+        return None
+
     def __init__(
         self,
         llm_client: BaseLLMClient,
@@ -36,7 +60,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
         messages: list[APIMessage] | None = None,
         app_env: str | None = None,
     ):
-        super().__init__(output_type)
+        super().__init__(output_type or self._generic_output_type())
         self.llm_client = llm_client
         self.sse_stream = sse_stream
         self.messages: list[APIMessage] = messages if messages is not None else []

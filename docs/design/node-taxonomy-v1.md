@@ -252,6 +252,41 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   four retrieval mocks now build their `build_data()` payload through the new output
   schemas instead of ad-hoc dicts.
 
+**Done (2026-08-04) — vertical slices and `NodeSpec`:**
+
+- A node is now one folder, not entries scattered across five files.
+  `app/domains/<domain>/<node>/` holds `labels.py`, `schemas.py`, `executor.py`
+  and an `__init__.py` exporting a single
+  [`NodeSpec`](../../backend/app/domains/node_spec.py) (node_type, tier, request,
+  output, executor). `app/domains/books/registry.py` became `guide.py` and is now
+  just the tuple of that domain's specs — one line per node.
+- `app/registry.py` **derives** `NODE_TYPE_TO_CLS`, the tier class tuples,
+  `CATALOG_TIERS`, `AnyStrategyRequest`, `NodeTypeEnum` and the executor mapping
+  from `SPECS`. Those five used to be maintained by hand and could disagree; they
+  now cannot. Parking a node is deleting its SPEC from the guide, replacing the
+  comment block that used to explain which three lists a parked class was absent
+  from.
+- `NodeTypeEnum` is a flat enum built from the specs, not a `Union` of per-domain
+  enums. A union renders in the JSON schema as an `anyOf` of one-member enums —
+  it grows per node and constrains the model less than one enum. It also ends the
+  class of bug where the enum advertised 11 names while the registry held 2; the
+  enum and the registry are now the same list by construction. `unknown` stays a
+  member so the planner keeps its graceful "no capability fits" refusal.
+- `NodeSpec.__post_init__` checks the spec's `node_type` against the request
+  schema's `Literal` default. This is the guard for a real bug: a slice written
+  as `Retrieve_By_Title` (capital `By`) against a codebase that says
+  `Retrieve_by_Title` everywhere would have silently broken the
+  `report_system_goals` golden diff.
+- Executors subclass [`NodeExecutor`](../../backend/app/domains/node_executor.py),
+  which pins the `run(task, dependent_results, request_context)` signature the
+  task runner calls and resolves the output type from the generic parameter.
+- The output-shape vocabulary is now partly real classes:
+  `app/domains/books/schemas.py` defines `BookSummary`, `BookRetrievalOutput` and
+  `BookRecommendationOutput`, and each node's output subclasses the shape its
+  docstring claims. `AnalyzeBooksOutput` and `ActionConfirmationOutput` remain
+  reserved names with no class — no registered node produces either yet. This
+  closes half of the gap the old `output_schemas.py` module docstring described.
+
 **Still open (roadmap Phase 1):**
 
 - Remove `CompareStrategy` from `NODE_TYPE_TO_CLS`/catalog (class stays parked).

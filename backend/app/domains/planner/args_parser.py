@@ -4,7 +4,6 @@ from .parse_intent import SystemGoal
 from app.common.prompt_loader import format_prompt, load_prompt
 
 from app.domains.base_request import BaseRequest
-from app.domains.node_types import NodeTypeEnum
 from app.registry import NODE_TYPE_TO_CLS
 from clients import OpenAIParserRequest
 from clients.openai_requests import OpenAIChatRequest

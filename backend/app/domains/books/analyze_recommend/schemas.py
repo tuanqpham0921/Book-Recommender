@@ -1,7 +1,8 @@
 from app.domains.base_request import BaseRequest
-from pydantic import BaseModel, Field
+from app.domains.books.schemas import BookRecommendationOutput
+from pydantic import Field
 from typing import Literal, Optional
-from .labels import AnalyzeRecomendNodeTypeEnum
+from .labels import AnalyzeRecommendNodeTypeEnum
 from db.schema import BooksFilter
 
 class RecommendationStrategy(BaseRequest):
@@ -61,7 +62,7 @@ class RecommendationStrategy(BaseRequest):
     generation ship, quiet and character-driven, morally grey protagonist.
     """
 
-    node_type: Literal[AnalyzeRecomendNodeTypeEnum.REQUEST] = AnalyzeRecomendNodeTypeEnum.REQUEST
+    node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
     semantic_input: Optional[str] = Field(
         None, json_schema_extra={"example": "cozy and hopeful"}
     )
@@ -74,5 +75,6 @@ class RecommendationStrategy(BaseRequest):
         ),
     )
 
-class RecommendationOutput(BaseModel):
-    books: list[dict]
+class RecommendationOutput(BookRecommendationOutput):
+    """The books this node chose. An empty `books` means nothing in the
+    catalog satisfied the anchor plus the filters."""

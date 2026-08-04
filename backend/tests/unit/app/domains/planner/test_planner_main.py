@@ -6,7 +6,7 @@ import pytest
 
 from app.common.messages import AssistantMessage, UserMessage
 from app.common.sse_stream import SSEStream
-from app.domains.books.node_types import BookNodeTypeEnum
+from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from common.operation import OperationResult, RuntimeErrorInfo, TokenUsage
@@ -26,7 +26,7 @@ def _make_goal():
     goal = SystemGoal(
         description="Find a book about machine learning topics",
         confidence=0.9,
-        target_node_type=BookNodeTypeEnum.FIND_TITLE,
+        target_node_type=FindTitleNodeTypeEnum.REQUEST,
     )
     goal.refuse("just to populate a private attr")
     return goal

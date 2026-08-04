@@ -1,6 +1,5 @@
 from common.utils import uuid_8
 from pydantic import BaseModel, Field, model_validator, PrivateAttr, field_validator
-from app.domains.node_types import NodeTypeEnum
 from app.domains.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
@@ -24,7 +23,12 @@ TASK_PLACEHOLDER = "task_placeholder"
 GOAL_PLACEHOLDER = "goal_placeholder"
 
 class BaseRequest(BaseModel):
-    node_type: NodeTypeEnum
+    # Every concrete request pins this to a Literal of its own node type —
+    # that Literal is the discriminator AnyStrategyRequest resolves on, and
+    # NodeSpec checks it against the spec's name. Typing the base as the flat
+    # NodeTypeEnum would mean importing the registry, which imports the slices,
+    # which import this module.
+    node_type: str
     # id: str = Field(...,
     #                 description="assign a task id to the node request",
     #                 json_schema_extra={"example": ["task_1", "task_2"]}

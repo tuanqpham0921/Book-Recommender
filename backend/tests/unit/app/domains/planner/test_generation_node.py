@@ -31,35 +31,37 @@ def attached_to(nodes: list[GenerationNode]) -> list[list[str]]:
 
 class TestFindSinkGoals:
     def test_the_node_with_the_most_dependencies_is_not_the_end(self):
-        # base case 46: four retrievals -> Compare -> Recommend. Compare has
-        # four deps and Recommend has one, so counting deps picks Compare —
-        # which would write the answer from the comparison and silently drop
-        # the recommendation the user actually asked for.
+        # base case 46: four retrievals -> Compare -> Recommend. The middle
+        # node has four deps and the last has one, so counting deps picks the
+        # middle — which would write the answer from the comparison and
+        # silently drop the recommendation the user actually asked for.
+        # (Analyze_Compare is parked, so goal 5 stands in for it; only the
+        # shape matters here.)
         plan = [
             goal("1", "Retrieve_by_Title", []),
             goal("2", "Retrieve_by_Title", []),
             goal("3", "Retrieve_by_Title", []),
             goal("4", "Retrieve_by_Title", []),
-            goal("5", "Analyze_Compare", ["1", "2", "3", "4"]),
+            goal("5", "Analyze_Recommend", ["1", "2", "3", "4"]),
             goal("6", "Analyze_Recommend", ["5"]),
         ]
 
         assert [g.id for g in find_sink_goals(plan)] == ["6"]
 
     def test_an_independent_goal_is_its_own_end(self):
-        # base case 45: project info runs alongside genre -> recommend. The
-        # project-info goal has no deps and no dependents, so a depth- or
+        # base case 45: an out-of-domain goal runs alongside retrieve ->
+        # recommend. Goal 1 has no deps and no dependents, so a depth- or
         # count-based rule buries it with the retrievals and never answers it.
         plan = [
-            goal("1", "Retrieve_Project_Info", []),
-            goal("2", "Retrieve_by_Genre", []),
+            goal("1", "unknown", []),
+            goal("2", "Retrieve_by_Title", []),
             goal("3", "Analyze_Recommend", ["2"]),
         ]
 
         assert [g.id for g in find_sink_goals(plan)] == ["1", "3"]
 
     def test_a_single_goal_plan_is_all_sink(self):
-        assert [g.id for g in find_sink_goals([goal("1", "Retrieve_Random", [])])] == ["1"]
+        assert [g.id for g in find_sink_goals([goal("1", "Retrieve_by_Title", [])])] == ["1"]
 
     def test_no_goals_no_sinks(self):
         assert find_sink_goals([]) == []
@@ -68,8 +70,8 @@ class TestFindSinkGoals:
 class TestCreateGenerationNodes:
     def test_one_answer_per_sink(self):
         plan = [
-            goal("1", "Retrieve_Project_Info", []),
-            goal("2", "Retrieve_by_Genre", []),
+            goal("1", "unknown", []),
+            goal("2", "Retrieve_by_Title", []),
             goal("3", "Analyze_Recommend", ["2"]),
         ]
 
@@ -78,7 +80,7 @@ class TestCreateGenerationNodes:
     def test_ids_are_unique_so_the_graph_does_not_collapse(self):
         # two nodes under one id would overwrite each other in the diagram's
         # id-keyed mapping, silently losing an answer
-        plan = [goal("1", "Retrieve_by_Genre", []), goal("2", "Retrieve_by_Author", [])]
+        plan = [goal("1", "Retrieve_by_Title", []), goal("2", "Retrieve_by_Title", [])]
 
         ids = [node.id for node in create_generation_nodes(plan)]
 
@@ -86,8 +88,8 @@ class TestCreateGenerationNodes:
 
     def test_single_answer_collapses_every_sink_onto_one_node(self):
         plan = [
-            goal("1", "Retrieve_Project_Info", []),
-            goal("2", "Retrieve_by_Genre", []),
+            goal("1", "unknown", []),
+            goal("2", "Retrieve_by_Title", []),
             goal("3", "Analyze_Recommend", ["2"]),
         ]
 
@@ -112,14 +114,14 @@ class TestCreateGenerationNodes:
         assert attached_to(create_generation_nodes(plan)) == [["1"], ["2"]]
 
     def test_defaults_to_the_generic_answer_type(self):
-        nodes = create_generation_nodes([goal("1", "Retrieve_Random", [])])
+        nodes = create_generation_nodes([goal("1", "Retrieve_by_Title", [])])
 
         assert nodes[0].node_type is GenerationTypeEnum.GENERIC_RESPONSE
 
     def test_depends_on_is_a_list_not_a_string(self):
         # the renderer iterates depends_on; a bare str would yield one edge per
         # character rather than one edge to the goal
-        node = create_generation_nodes([goal("12", "Retrieve_Random", [])])[0]
+        node = create_generation_nodes([goal("12", "Retrieve_by_Title", [])])[0]
 
         assert node.depends_on == ["12"]
         assert node.get_depends_on() == ["12"]

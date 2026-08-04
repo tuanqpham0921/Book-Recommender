@@ -9,7 +9,7 @@ from app.common.mermaid import (
     get_parsed_mermaid_diagram,
 )
 from app.domains.base_request import BaseRequest
-from app.domains.books.schemas.request_schemas import FindByTitleRetrieval
+from app.domains.books.find_by_title import FindByTitleRetrieval
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planner.parse_intent import SystemGoal
 
@@ -129,23 +129,23 @@ class TestGetGoalsMermaidDiagram:
         assert get_goals_mermaid_diagram([]) is None
 
     def test_single_goal_has_no_edges(self):
-        g = _make_goal("1", "Retrieve_by_Genre")
+        g = _make_goal("1", "Retrieve_by_Title")
         diagram = get_goals_mermaid_diagram([g])
         assert diagram.startswith("flowchart")
         assert "-->" not in diagram
 
     def test_header_is_target_capability_not_node_type(self):
         # boxes are headed by the capability the goal targets, not "system_goal"
-        g = _make_goal("1", "Retrieve_by_Author")
+        g = _make_goal("1", "Retrieve_by_Title")
         diagram = get_goals_mermaid_diagram([g])
-        assert "Retrieve_by_Author" in diagram
+        assert "Retrieve_by_Title" in diagram
         assert "system_goal" not in diagram
 
     def test_edges_drawn_from_depends_on(self):
         goals = [
-            _make_goal("1", "Retrieve_by_Genre"),
-            _make_goal("2", "Retrieve_by_Author"),
-            _make_goal("3", "Combine_Intersect", depends_on=["1", "2"]),
+            _make_goal("1", "Retrieve_by_Title"),
+            _make_goal("2", "Retrieve_by_Title"),
+            _make_goal("3", "Analyze_Recommend", depends_on=["1", "2"]),
         ]
         diagram = get_goals_mermaid_diagram(goals)
         assert f"{mermaid_id('1')} --> {mermaid_id('3')}" in diagram
@@ -155,15 +155,15 @@ class TestGetGoalsMermaidDiagram:
         goals = [
             _make_goal("1", "Retrieve_by_Title"),
             _make_goal("2", "Analyze_Recommend", depends_on=["1"]),
-            _make_goal("3", "Filter_Retrieval", depends_on=["2"]),
+            _make_goal("3", "Analyze_Recommend", depends_on=["2"]),
         ]
         assert get_goals_mermaid_diagram(goals).startswith("flowchart LR")
 
     def test_cycle_does_not_recurse_forever(self):
         # invalid plan (planner should reject), but the renderer must not hang
         goals = [
-            _make_goal("1", "Retrieve_by_Genre", depends_on=["2"]),
-            _make_goal("2", "Retrieve_by_Author", depends_on=["1"]),
+            _make_goal("1", "Retrieve_by_Title", depends_on=["2"]),
+            _make_goal("2", "Retrieve_by_Title", depends_on=["1"]),
         ]
         diagram = get_goals_mermaid_diagram(goals)
         assert diagram.startswith("flowchart")

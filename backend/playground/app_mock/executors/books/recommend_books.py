@@ -1,4 +1,4 @@
-from app.domains.books.schemas import RecommendationStrategy
+from app.domains.books.analyze_recommend import RecommendationStrategy
 from ..base import MockExecutorWorkflow
 
 

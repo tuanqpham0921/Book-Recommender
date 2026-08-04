@@ -1,6 +1,9 @@
 from enum import Enum
 
+
 class FindTitleNodeTypeEnum(str, Enum):
-    REQUEST = "Retrieve_By_Title"
-    OUTPUT  = "Retrieve_By_Title_Output"
-    EXECUTOR = "Retrieve_By_Title_Executor"
+    """The planner-facing name for this node. One member: the request. The
+    output and executor classes are reached through the slice's NodeSpec, so
+    they need no string label of their own."""
+
+    REQUEST = "Retrieve_by_Title"
