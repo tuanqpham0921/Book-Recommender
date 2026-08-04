@@ -19,7 +19,7 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
     ) -> None:
         # 3. do a query to db
         #    * build the statement
-        #    * do a qeury with just count
+        #    * do a query with just count
         #    * populate the output with found numbers
         #    * return the CTE as a step
         # 4. finalize the output
