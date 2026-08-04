@@ -10,6 +10,32 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+currently
+    * parser work
+    * add in the SQL query
+
+
+initial re-tries design
+    * The workflow holds the retries
+    * right now everything is 1 pass
+    * but if you want retries (business logic or re-write query)
+    * you'll have to wrap the hold workflow and each
+        * llm_args_parse -> post_process -> store to an output
+        * and this whole thing is in a seperate operation result
+        * this is similar to how the llm api is returned
+    * the current only retries on api or calls errors
+    * the parent handles the re-write and business logic
+    * note for your arch, the hitl is only for filtering or determinisitic options
+        * you can't do free input yet, because it's a lot more. They can put, actually compare instead of recommend
+        * this will need a cut off re-plan (remove this node) or complete re-plan
+    * it's human in the loop, but you don't have a loop
+        * the only hitl is at the analyze nodes
+        * you they want recommend books between 1990 and 2000 or compare, there could be thousands of books to embedings for similarity search
+        * this is the place for it
+        *retrieval hitl or retries are hints, if you can't find exact match
+            * it might be a confirmation that the fuzzy search or the llm parser
+            * prior knowledge is suffcient, if not then you can discard the books for the next step.
+
 
 * make each task returning a output type (instead of the sse_stream)
 * then at the end is where you want to do the generation

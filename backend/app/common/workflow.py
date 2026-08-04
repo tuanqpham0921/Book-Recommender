@@ -92,6 +92,10 @@ class AppBaseWorkflow(Workflow[OutputT]):
         # NOTE: the output needs to be added somewhere correctly
         # you may not want to add it right away? because you need to process it?
         # or is this the workflow output?
+        # NOTE: this is wrong, you add this in after processing
+        # or tool calling
+        # then you add the result as a [toolcall, tool result]
+        # so you wrap it in a retrie if needed
         self.record_tool_call(tool_call=tool_calls[0])
         return tool_calls[0].function.parsed_arguments
     
