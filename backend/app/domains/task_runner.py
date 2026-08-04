@@ -15,9 +15,16 @@ from app.domains.base_request import BaseRequest
 from app.domains.planner.generation_node import GenerationNode, create_generation_nodes
 from typing import Any, cast
 from app.domains.planner.parse_intent import SystemGoal
+from dataclasses import dataclass
+from common.operation import OperationResult
 
 logger = logging.getLogger(__name__)
 
+# TODO: do the link later
+@dataclass
+class TaskRecord:
+    goal: SystemGoal
+    result: OperationResult
 
 class TaskRunnerOutput(AppWorkflowOutput):
     session_id: str | None = None
@@ -32,6 +39,7 @@ class TaskRunnerOutput(AppWorkflowOutput):
             "goal.ids": list(self.task_results.keys()),
             "failed_task.ids": self.failed_task,
         }
+
 
 
 class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
@@ -126,6 +134,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 step_result.output.depends_on = goal.depends_on.copy()
                 
                 self.output.completed_task.append(step_result.output)
+                await self.sse_stream.send_divider()
 
         self.output.task_results = results
         self.finalize_result(ok=not self.output.failed_task)

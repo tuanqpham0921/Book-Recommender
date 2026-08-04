@@ -29,7 +29,6 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
 
         await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
         
-        self.output.args = parsed_args
         self.finalize_result()
             
     def finalize_result(self):

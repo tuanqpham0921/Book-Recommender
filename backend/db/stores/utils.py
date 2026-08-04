@@ -24,7 +24,6 @@ def compile_sql(stmt):
 def build_title_search(
     model,
     book_title: str,
-    authors: Optional[list[str]] = None,
     limit: int = 1,
     similarity_threshold: float = 0.7,
 ):
@@ -36,9 +35,6 @@ def build_title_search(
             func.similarity(model.title, book_title) > similarity_threshold,
         )
     )
-    if authors:
-        for author in authors:
-            stmt = stmt.where(model.authors.ilike(f"%{author}%"))
 
     stmt = stmt.order_by(func.similarity(model.title, book_title).desc())
     stmt = stmt.limit(limit)

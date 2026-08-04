@@ -3,6 +3,7 @@ from app.domains.books.schemas import BookRetrievalOutput
 from pydantic import Field
 from typing import Literal
 from .labels import FindTitleNodeTypeEnum
+from db.schema import BookModel
 
 class FindByTitleRetrieval(BaseRequest):
     """Purpose: Retrieve the books whose titles most closely match the one given.
@@ -42,5 +43,5 @@ class FindByTitleOutput(BookRetrievalOutput):
     """`title` is what was searched for; `books` are the candidate matches,
     best first. An empty `books` means the catalog has no such title."""
 
-    title: str = ""
+    num_books: int=0
 

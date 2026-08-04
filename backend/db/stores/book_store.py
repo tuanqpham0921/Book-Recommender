@@ -29,11 +29,11 @@ class BookStore(BaseStore[BookModel]):
         return [self.row_to_dict(row)] if row else []
 
     async def search_by_title(
-        self, title: str, authors: list[str], limit: int = 10, similarity_threshold: float = 0.7
+        self, title: str, limit: int = 10, similarity_threshold: float = 0.7
     ) -> List[Dict[str, Any]]:
         """Search books by title with fuzzy matching."""
         
-        stmt = build_title_search(self.model, title, authors, limit, similarity_threshold)
+        stmt = build_title_search(self.model, title, limit, similarity_threshold)
         result = await self._execute_statement(stmt)
         rows = result.scalars().all()
         return [self.row_to_dict(row) for row in rows]

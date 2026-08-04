@@ -24,6 +24,7 @@ from app.orchestration.request_context import RequestContext
 from clients.base import BaseLLMClient
 from app.common.prompt_loader import load_prompt
 from clients import OpenAIParserRequest
+import asyncio
 
 class NodeWorkflowOutput(AppWorkflowOutput, ABC):
     """Domain payload stored on OperationResult.output."""
@@ -77,6 +78,7 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
         """parser for the node"""
         req = self.build_arg_parser_request(query)
         parsed_args = await self.run_llm_args_parse(req)
+        self.output.args = parsed_args
         return parsed_args
     
     def build_arg_parser_request(self, query: str) -> OpenAIParserRequest:
@@ -101,3 +103,21 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
             max_completion_tokens=2000,
             include_tool_description=False,
         )
+        
+    async def _stream_books(self, results, sse_stream):
+        """Stream book cards to frontend."""
+        # await sse_stream.send_json({"type": "books_start", "total": len(results)})
+        sent_isbn = set()
+        for result in results:
+            if isinstance(result, str):
+                continue
+
+            for i, book_dict in enumerate(result):
+                if book_dict["isbn13"] in sent_isbn:
+                    continue
+
+                await sse_stream.send_book_card(
+                    position=i, data=book_dict
+                )
+                await asyncio.sleep(0.2)  # Smooth streaming
+                sent_isbn.add(book_dict["isbn13"])
