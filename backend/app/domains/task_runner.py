@@ -8,11 +8,10 @@ from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.orchestration.request_context import RequestContext
 from common.workflow import StepFailure
-from app.registry import EXECUTORS_CLS_MAPPING
+from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from clients.openai_client import OpenAIClient
 from app.common.messages import AssistantMessage, APIMessage
 from app.domains.base_request import BaseRequest
-from app.domains.planner.args_parser import build_arg_parser_request, extract_parsed_request
 from app.domains.planner.generation_node import GenerationNode, create_generation_nodes
 from typing import Any, cast
 from app.domains.planner.parse_intent import SystemGoal
@@ -73,27 +72,28 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 
         for layer, goals_layer in execution_order.items():
             for goal in goals_layer:
-                # Not wrapped in run_async_step: that helper requires the
-                # coroutine to resolve to an OperationResult, and this one
-                # returns the parsed BaseRequest. The LLM call inside already
-                # registers itself as a step, so tokens still roll up here.
-                try:
-                    task = await self.parse_goals_arguments(goal)
-                except StepFailure:
-                    # one goal's parse failed — record it and keep going
-                    self.output.failed_task.append(goal.id)
-                    continue
 
                 dependent_results = {
                     dep_id: results[dep_id]
-                    for dep_id in task.get_depends_on()
+                    for dep_id in goal.get_depends_on()
                     if dep_id in results
                 }
-
-                executor_cls = EXECUTORS_CLS_MAPPING.get(type(task))
+                
+                # Two hops, not one: the goal carries a node type name, while
+                # EXECUTORS_CLS_MAPPING is keyed by request schema class.
+                request_cls = NODE_TYPE_TO_CLS.get(goal.target_node_type.value)
+                executor_cls = (
+                    EXECUTORS_CLS_MAPPING.get(request_cls) if request_cls else None
+                )
                 if executor_cls is None:
+                    reason = (
+                        "node type is not registered"
+                        if request_cls is None
+                        else f"{request_cls.__name__} has no executor"
+                    )
                     logger.warning(
-                        f"No executor registered for {type(task).__name__} (task {goal.id})"
+                        f"Skipping task {goal.id} "
+                        f"({goal.target_node_type.value}): {reason}"
                     )
                     self.output.failed_task.append(goal.id)
                     continue
@@ -106,7 +106,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 )
                 step_result = await self.run_async_step(
                     executor(
-                        task=task,
+                        query=goal.description,
                         dependent_results=dependent_results,
                         request_context=request_context,
                     ),
@@ -116,39 +116,22 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                     self.output.failed_task.append(goal.id)
                     continue
 
-                results[goal.id] = step_result.output.result
+                results[goal.id] = step_result.output
                 
-                self.output.completed_task.append(task)
+                # NOTE: linking the result to the goal_id
+                # for debugging and visualization
+                # but do we want to pass in a reference to the task runner
+                # or here is fine
+                step_result.output.id = goal.id
+                step_result.output.depends_on = goal.depends_on.copy()
+                
+                self.output.completed_task.append(step_result.output)
 
         self.output.task_results = results
         self.finalize_result(ok=not self.output.failed_task)
         
         await self.send_mermaid_parsed(self.output.completed_task, planner_result.generation_nodes)
 
-    async def parse_goals_arguments(self, goal: SystemGoal) -> BaseRequest:
-        """Testing the arugment parser. Should be in task_runner later(?)
-
-        One LLM call per goal, each run as its own step so the call lands in
-        self.result.steps and its tokens roll up into the workflow's
-        token_usage. A failed call aborts the workflow via StepFailure — the
-        same outcome as before, but reported with the client's error message
-        instead of an AttributeError on a None output.
-        """
-        
-        await self.sse_stream.send_ui_loading(f"parsing argument for goal: {goal.id}")
-        
-        step_result = await self.run_async_step(
-            self.llm_client.execute(
-                build_arg_parser_request(goal)
-            )
-        )
-        assistant_msg = cast(AssistantMessage, step_result.output)
-        parsed_args = extract_parsed_request(goal, assistant_msg)
-
-        await self.sse_stream.send_chars(f"- loaded argument for goal: {goal.id}\n")
-        return parsed_args
-        
-    
     async def send_mermaid_parsed(
         self,
         parsed_system_goals: list[BaseRequest],

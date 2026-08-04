@@ -7,10 +7,11 @@ from .schemas import RecommendationOutput, RecommendationStrategy
 
 class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
+    tool_cls = RecommendationStrategy
 
     async def run(
         self,
-        task: RecommendationStrategy,
+        query: str,
         dependent_results: dict[str, Any],
         request_context: RequestContext,
     ) -> None:
@@ -22,7 +23,15 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         # 4. Same thing here, get build the CTE, get the closest books
         # 5. post-process the query and populate the output class
         # this returns actual books
-        raise NotImplementedError(
-            "RecommendBooksExecutor is a stub — app/registry.py still routes "
-            "this node to the mock executor in playground/app_mock."
-        )
+        await self.sse_stream.send_ui_loading("recommending books...")
+                
+        parsed_args = await self.parse_arguments(query=query)
+
+        await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
+        
+        self.output.args = parsed_args
+        self.finalize_result()
+            
+    def finalize_result(self):
+        ok = self.output.args is not None
+        return super().finalize_result(ok=ok, message="parsed args okay")

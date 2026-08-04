@@ -7,10 +7,11 @@ from .schemas import FindByTitleOutput, FindByTitleRetrieval
 
 class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
+    tool_cls = FindByTitleRetrieval
 
     async def run(
         self,
-        task: FindByTitleRetrieval,
+        query: str,
         dependent_results: dict[str, Any],
         request_context: RequestContext,
     ) -> None:
@@ -25,7 +26,17 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
         # 4. finalize the output
         #    * check if there are atleast 1 book
         #    * maybe stamp on the UI with the reference book
-        raise NotImplementedError(
-            "FindByTitleExecutor is a stub — app/registry.py still routes this "
-            "node to the mock executor in playground/app_mock."
-        )
+        await self.sse_stream.send_ui_loading("finding books by title")
+        
+        parsed_args = await self.parse_arguments(query=query)
+    
+        await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
+        
+        self.output.args = parsed_args
+        self.finalize_result()
+        
+    def finalize_result(self):
+        ok = self.output.args is not None
+        return super().finalize_result(ok=ok, message="parsed args okay")
+        
+        

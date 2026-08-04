@@ -5,6 +5,8 @@ from typing import Literal, Optional
 from .labels import AnalyzeRecommendNodeTypeEnum
 from db.schema import BooksFilter
 
+# NOTE: this can inherit from the workflow itself?
+# then everything is in one place, but do we want that?
 class RecommendationStrategy(BaseRequest):
     """Purpose: Suggest books that fit the user's ask — the analyze step for most recommendation queries.
 

@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.common.workflow import AppWorkflowOutput
+from app.domains.node_executor import NodeWorkflowOutput
 
 
 class BookSummary(BaseModel):
@@ -52,7 +52,7 @@ class BookSummary(BaseModel):
     is_children: bool | None = None
 
 
-class BookRetrievalOutput(AppWorkflowOutput):
+class BookRetrievalOutput(NodeWorkflowOutput):
     """A list of books, as produced by any retrieval or combine node. An empty
     `books` is a real answer — it means nothing matched, not that the node
     failed.

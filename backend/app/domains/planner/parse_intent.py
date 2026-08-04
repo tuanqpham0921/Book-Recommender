@@ -116,6 +116,9 @@ class SystemGoal(BaseModel):
     def refuse(self, *reasons: str) -> None:
         self._refusal = True
         self._refusal_reasons.extend(reasons)
+        
+    def get_depends_on(self):
+        return self.depends_on
 
 
 class GoalParseRequest(BaseModel):
@@ -236,12 +239,12 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     async def run(self) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        tool_call = await self._run_llm_args_parse()
+        parse_result = await self._run_llm_args_parse()
         # parsed_arguments is typed `object | None` by the openai lib; the
         # parser validated it against GoalParseRequest, so the cast holds
-        parse_result = cast(GoalParseRequest, tool_call.function.parsed_arguments)
         self.process_parse_result(parse_result)
-        self._record_tool_call(tool_call)
+        # NOTE: the output needs to be added somewhere correctly
+        
         payload = self.output.to_llm_messages()
         await self.finalize_result(payload)
         
@@ -275,22 +278,8 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             tool_models=[GoalParseRequest],
             max_completion_tokens = 1000,
         )
-        assistant_msg = await self.run_llm_call(req)
-        tool_calls = assistant_msg.tool_calls
-        if not tool_calls:
-            # previously an unguarded [0] on None — same failure semantics
-            # (runtime error caught by the workflow), clearer message
-            raise ValueError("LLM response contained no tool calls")
-        return tool_calls[0]
-
-    def _record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
-        self.messages.append(
-            ToolMessage(
-                name=tool_call.function.name,
-                tool_call_id=tool_call.id,
-                content=self.output,
-            )
-        )
+        tool_call = await self.run_llm_args_parse(req)
+        return tool_call
 
     async def finalize_result(self, payload) -> None:
         # ok = the conversation was handled: either there are goals to plan,

@@ -1,28 +1,43 @@
 """Base class for every node's executor — the *how* behind a request schema.
 
 Exists to pin one thing: the `run()` signature. `TaskRunnerWorkflow` calls
-every executor as `executor(task=…, dependent_results=…, request_context=…)`,
-and nothing but convention used to hold each slice's `run()` to that shape — a
-node that quietly dropped an argument only failed at execution time, on a live
-request. Subclassing this makes the mismatch a load-time error instead.
+every executor as `executor(query=…, dependent_results=…, request_context=…)`,
+and nothing but convention holds each slice's `run()` to that shape — a node
+that renames or drops an argument only fails at execution time, on a live
+request. Subclassing this at least makes a missing `run()` a load-time error;
+the parameter *names* are still only enforced by convention, so keep them in
+step with the call site in `task_runner.py`.
 
 Declare the output in the class header (`NodeExecutor[FindByTitleOutput]`) and
 `AppBaseWorkflow` resolves it from the generic parameter, so a slice's executor
 needs no `__init__` of its own.
 """
-
+from pydantic import Field
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
-from app.common.messages import APIMessage
+from app.common.messages import APIMessage, AssistantMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.base_request import BaseRequest
 from app.orchestration.request_context import RequestContext
 from clients.base import BaseLLMClient
+from app.common.prompt_loader import load_prompt
+from clients import OpenAIParserRequest
 
-OutputT = TypeVar("OutputT", bound=AppWorkflowOutput)
+class NodeWorkflowOutput(AppWorkflowOutput, ABC):
+    """Domain payload stored on OperationResult.output."""
+    id: str = None
+    args: BaseRequest = None
+    depends_on: list[str] = Field(default=[])
 
+    @abstractmethod
+    def to_summary(self) -> dict[str, Any]:
+        ...
+
+
+OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)
+ARG_PARSER_PROMPT_PATH = "domains/planner/prompts/1_argument_parser.txt"
 
 class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
     success_message = "Node completed successfully"
@@ -47,7 +62,7 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
     @abstractmethod
     async def run(
         self,
-        task: BaseRequest,
+        query: str,
         dependent_results: dict[str, Any],
         request_context: RequestContext,
     ) -> None:
@@ -57,3 +72,32 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
         depends on — only the ones that actually produced a result, so a
         dependency that failed is absent rather than None.
         """
+
+    async def parse_arguments(self, query: str) -> BaseRequest:
+        """parser for the node"""
+        req = self.build_arg_parser_request(query)
+        parsed_args = await self.run_llm_args_parse(req)
+        return parsed_args
+    
+    def build_arg_parser_request(self, query: str) -> OpenAIParserRequest:
+        """Build the LLM request that fills in this message"""
+        if not query:
+            raise ValueError("input error")
+
+        system_prompt = load_prompt(prompt_path=ARG_PARSER_PROMPT_PATH)
+        query = AssistantMessage(content=query)
+
+        return OpenAIParserRequest(
+            prompt=system_prompt,
+            model="gpt-5-nano",
+            reasoning_effort="minimal",
+            # NOTE: this should be a list of previous messages as well
+            # but for now we can just do clear and direct instructions
+            messages=[query],
+            tool_models=[self.tool_cls],
+            # The goal already picked the node type and tool_choice pins it, so the
+            # class docstring — which is there to help the planner choose between
+            # tools — would only be noise here. Field descriptions still ship.
+            max_completion_tokens=2000,
+            include_tool_description=False,
+        )

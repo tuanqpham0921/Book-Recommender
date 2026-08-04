@@ -80,6 +80,29 @@ class AppBaseWorkflow(Workflow[OutputT]):
         msg = cast(AssistantMessage, result.output)
         self.messages.append(msg)
         return msg
+    
+    async def run_llm_args_parse(self, req: BaseLLMRequest, save_payload: bool = False) -> ParsedFunctionToolCall:
+        assistant_msg = await self.run_llm_call(req, save_payload=save_payload)
+        tool_calls = assistant_msg.tool_calls
+        if not tool_calls:
+            # previously an unguarded [0] on None — same failure semantics
+            # (runtime error caught by the workflow), clearer message
+            raise ValueError("LLM response contained no tool calls")
+        
+        # NOTE: the output needs to be added somewhere correctly
+        # you may not want to add it right away? because you need to process it?
+        # or is this the workflow output?
+        self.record_tool_call(tool_call=tool_calls[0])
+        return tool_calls[0].function.parsed_arguments
+    
+    def record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
+        self.messages.append(
+            ToolMessage(
+                name=tool_call.function.name,
+                tool_call_id=tool_call.id,
+                content=self.output,
+            )
+        )
 
     async def run_tool_call(
         self, tool_call: ParsedFunctionToolCall, **kwargs
