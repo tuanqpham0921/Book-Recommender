@@ -11,10 +11,17 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 currently
-    * parser work
-    * add in the SQL query
-
-lots of code changes to c83d590c87da7fc5bb60f6369c93e754b31e07a6
+    * get the recommend (a collect node) set up
+        * the collect node always have to make sure it's not too many
+        * and it's returning a list of books
+    * then design an SSE stream events for the UI
+        * things like sections and message and stuff
+    
+reminder:
+    * put in the out of scope that you can't answer things not in the db columns
+        * so like who's the main character of the Hunger games?
+        * or that guy with the sword in Dune
+        * but you can answer things like Who Dune was written by or when...
 
 initial re-tries design
     * The workflow holds the retries

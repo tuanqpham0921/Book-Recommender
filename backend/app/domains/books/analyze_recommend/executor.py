@@ -22,16 +22,12 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         dependent_results: dict[str, Any],
         request_context: RequestContext,
     ) -> None:
-        # aggrate the results get the counts
-        # if it's over 5, then pause and ask the user
-        # for not just pick the 5 most rated
-        # then use those description to do the embedding search
-        # this should return a list of books
+        
         await self.sse_stream.send_ui_loading("recommending books...")
 
-        parsed_args = await self.parse_arguments(query=query)
+        
 
-        await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
+        
 
         # This is the terminal node today, so it is the one that runs SQL for
         # rows. Several depends_on ids mean "pool what all of these found"
@@ -45,6 +41,17 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         ]
         if upstream:
             await self._materialize(upstream, request_context)
+            
+        # walk through the dependents results
+        # get all the queries and do a count first
+        # if there are a lot then just pick the top 5
+        # then use the descriptions to make a semantic input
+        # we can deal with the compare or other analyze docs later
+        parsed_args = await self.parse_arguments(query=query)
+        # then do the similarity search
+
+
+        await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
 
         self.finalize_result()
 
