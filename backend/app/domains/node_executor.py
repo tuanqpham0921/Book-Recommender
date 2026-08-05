@@ -25,6 +25,7 @@ from clients.base import BaseLLMClient
 from app.common.prompt_loader import load_prompt
 from clients import OpenAIParserRequest
 import asyncio
+from sqlalchemy import Select
 
 class NodeWorkflowOutput(AppWorkflowOutput, ABC):
     """Domain payload stored on OperationResult.output."""

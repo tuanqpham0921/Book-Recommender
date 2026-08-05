@@ -38,6 +38,9 @@ class Workflow(ABC, Generic[OutputT]):
         )
         if output_type is not None:
             self.result.output = output_type()
+            
+    def add_details(self, *message):
+        self.result.add_details(message)
 
     @property
     def output(self) -> OutputT:

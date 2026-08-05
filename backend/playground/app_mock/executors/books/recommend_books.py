@@ -1,12 +1,7 @@
 from app.domains.books.analyze_recommend import RecommendationStrategy
 from ..base import MockExecutorWorkflow
 
-
-class RecommendBooksExecutor(MockExecutorWorkflow):
-    ui_loading_message = "Finding book recommendations..."
-
-    def build_reply(self, task: RecommendationStrategy, dependent_results: dict) -> str:
-        return (
+mock_reply = (
             "## Recommendations for you\n\n"
             "I put together a few recommendations based on what you've told me so "
             "far. I tried to balance books that closely match your stated "
@@ -38,3 +33,9 @@ class RecommendBooksExecutor(MockExecutorWorkflow):
             "Let me know if you'd like me to lean more into any of these factors, "
             "and I can refine the list further."
         )
+
+class RecommendBooksExecutor(MockExecutorWorkflow):
+    ui_loading_message = "Finding book recommendations..."
+
+    def build_reply(self, task: RecommendationStrategy, dependent_results: dict) -> str:
+        return mock_reply

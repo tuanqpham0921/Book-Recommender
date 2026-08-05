@@ -58,15 +58,11 @@ class RecommendationStrategy(BaseRequest):
     plain retrieval with Filter_Retrieval; narrow a recommendation with filters.
 
     If a recommendation author, genre is known, then use retrieve random instead.
-
-    Example semantic_input: cozy and hopeful, slow-burn dread, epic with
-    strong world-building, darker than the anchor book, a heist on a
-    generation ship, quiet and character-driven, morally grey protagonist.
     """
 
     node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
-    semantic_input: Optional[str] = Field(
-        None, json_schema_extra={"example": "cozy and hopeful"}
+    semantic_input: str = Field(
+        ..., json_schema_extra={"example": "cozy and hopeful"}
     )
     filters: Optional[BooksFilter] = Field(
         default=None,

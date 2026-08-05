@@ -161,7 +161,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         self.output.task_results = results
         self.finalize_result(ok=not self.output.failed_task)
         
-        await self.send_mermaid_parsed(self.output.completed_task, planner_result.generation_nodes)
+        # await self.send_mermaid_parsed(self.output.completed_task, planner_result.generation_nodes)
 
     async def send_mermaid_parsed(
         self,

@@ -15,10 +15,11 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
         self,
         query: str,
         dependent_results: dict[str, Any],
-
         # TODO: this can move to a book store workflow, __init__
         request_context: RequestContext,
     ) -> None:
+        self.store = request_context.book_store
+        
         """Count the matching titles and hand the query downstream — no rows.
 
         The count is what makes a "4,000 matched, narrow it down?" pause

@@ -11,6 +11,11 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 currently
+    * set up a preplanner that you can load in or mock
+        * Show me books similar to Pride and Prejudice
+        * Find books like 1984 or Brave New World
+        * Find books like 1984 or Brave New World, Dune, Brave New World (for more than 5)
+
     * get the recommend (a collect node) set up
         * the collect node always have to make sure it's not too many
         * and it's returning a list of books
