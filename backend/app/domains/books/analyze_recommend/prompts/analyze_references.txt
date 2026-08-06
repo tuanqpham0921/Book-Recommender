@@ -6,15 +6,18 @@ user referred to, and reports previously written about books.
 
 # Objective
 
-Write one book description — the ideal book the user is looking for next,
+Write one book description — the ideal book the user is looking for *next*,
 drawn only from the supplied documents.
+
+Next, not again. The referenced books are removed from the results by a
+separate metadata filter, so a description that retells one of them is a
+description of a book nobody can be shown. Write the book they have in common.
 
 That description is embedded and matched against the description of every book
 in the catalog, so it has to read like a description in that catalog, not like
 a request, a summary, or a comparison. Prose the catalog would never contain
 ("readers who enjoyed this", "a book similar to the above") matches nothing.
-The referenced books are removed from the results afterwards by a separate
-metadata filter, so you never need to exclude anything yourself.
+You never need to exclude anything yourself either — the filter handles it.
 
 # Input format
 
@@ -62,9 +65,16 @@ that text and describe the rest of the document normally.
   the common theme, tone and kind of story. Where they share little beyond a
   broad genre, keep the description general and true to that shared ground
   rather than fusing their specifics into a book neither resembles.
-- Prefer the concrete over the abstract. "A quick-tongued woman without a
-  fortune misjudges a proud, reserved man" places the book; "a story about
-  human relationships" places nothing.
+- Describe the *kind* of book, not this one. Details that identify a single
+  story — how many sisters, which scandal, who marries whom — pull the
+  description back onto the references, and the references are precisely the
+  books removed from the results. Keep what recurs across many books: the
+  social world, the shape of the conflict, the register. Drop what happens
+  only here.
+- Do not go abstract to achieve that. "Two proud people of unequal rank
+  misjudge each other in a class-bound society" places a book; "a story about
+  human relationships" places nothing. Aim between the two — narrow enough to
+  rule most books out, wide enough that more than one book fits.
 - Blurb language that describes a book's reception rather than its content
   ("a beloved classic", "delighted generations of readers") is not something
   to carry over — it appears in every kind of book and narrows nothing.
@@ -97,18 +107,18 @@ Documents:
 
 semantic_input:
 
-    A witty comedy of manners set among the country gentry of early
-    nineteenth-century England, where marriage is as much an economic
-    negotiation as a matter of feeling and the arrival of eligible young men
-    turns a household upside down. A sharp, quick-tongued young woman with
-    little fortune and four unmarried sisters collides with a proud, reserved
-    gentleman of higher standing; each misjudges the other, and mutual dislike
-    hardens before either is willing to look again. Around them a family of
-    very different daughters, an anxious mother and a wry, detached father
-    supply steady social comedy, while a scandal threatens the family's
-    standing and forces matters to a head. The tone is light, ironic and
-    keenly observant rather than sentimental, entertained by snobbery,
-    self-deception and the small absurdities of a closed society, and attentive
-    to the gap between what people say and what they mean. The story turns on
-    hasty judgement and wounded vanity giving way to self-knowledge, and on
-    social disdain yielding to genuine understanding and affection.
+    A comedy of manners set in a closed, class-bound society where marriage is
+    as much an economic arrangement as a matter of feeling, and where a
+    family's standing is fragile enough that one misstep can unsettle it. Two
+    strong-minded people of unequal rank take an early dislike to each other,
+    each too certain of a first impression to look again, and that misjudgement
+    hardens until circumstance forces both to revise it. The texture is social
+    rather than dramatic — visits, letters, dances, conversation — and what
+    goes unsaid carries more weight than what is spoken aloud. The tone is
+    light, ironic and shrewdly observant, entertained by snobbery and
+    self-deception without ever turning cruel. The story moves toward
+    self-knowledge, humility, and an affection that has to be earned.
+
+Note what the example leaves out. The five daughters, the anxious mother, the
+elopement — those belong to one book, and describing them would only find that
+book again.
