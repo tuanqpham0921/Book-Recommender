@@ -106,7 +106,7 @@ def build_title_query(
         func.similarity(model.title, book_title).label("score"),
     ).where(
         or_(
-            model.title.ilike(f"%{book_title}%"),
+            model.title.ilike(f"{book_title}"),
             func.similarity(model.title, book_title) > similarity_threshold,
         )
     )

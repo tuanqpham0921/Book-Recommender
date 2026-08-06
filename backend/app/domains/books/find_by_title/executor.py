@@ -43,6 +43,9 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
         # one round trip for both: the size of the match, and a few of them to
         # show under it so the number comes with evidence
         total, rows = await store.preview(deferred)
+        
+        # TODO: this is fine, tho we want to document this clearly (as batch)
+        # as a batching, and return a structured output
         self.output.num_books = total
         self.output.preview = [BookSummary.model_validate(row) for row in rows]
 

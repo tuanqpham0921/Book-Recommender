@@ -10,8 +10,20 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
-currently
+TODO:
+    * have the db or book domain caller load in the book model
+        * summary is a function that return a book summary thing?
+    * book store should hold sessions factories
+        * each query is a session
+        * so it doesn't just 1 session for a query
 
+Ideas:
+    * possible to have the db query to have multiple calls in one
+    * so instead of 50-100 pages, we can do 3 different ones at the same time
+    
+
+
+currently
     * get the recommend (a collect node) set up
         * the collect node always have to make sure it's not too many
         * and it's returning a list of books
