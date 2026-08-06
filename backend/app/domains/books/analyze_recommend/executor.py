@@ -1,3 +1,4 @@
+import logging
 from typing import Any, List, Dict
 
 from app.domains.node_executor import NodeExecutor
@@ -6,25 +7,15 @@ from app.orchestration.request_context import RequestContext
 from config import BookConstraints
 from db.stores import DeferredBookQuery
 from db.stores.utils import compile_sql, compose
+from .analyze_references import (
+    ParsedDependents,
+    ReferenceAnalysis,
+    build_analysis_request,
+    render_documents,
+)
 from .schemas import RecommendationOutput, RecommendationStrategy
-from dataclasses import dataclass, field
 
-# NOTE: not sure if I need this whole structure
-@dataclass
-class RecommendationParsedDependents:
-    books: list[BookSummary] # for actual books
-    books_sql: list[DeferredBookQuery] = field(default_factory=[]) # deffered quries
-    analyze_docs: list[str] = field(default_factory=[]) # for any analyzed docs already
-    unknown: list[Any] = field(default_factory=[]) # dependent results we can reject
-
-    def __init__(self, dependent_results: dict[str, Any]):
-        self.books_sql = [
-            result.query
-            for result in dependent_results.values()
-            if getattr(result, "query", None) is not None
-        ]
-        # TODO: other fields when you implment them
-        # you can check if the types are allowed
+logger = logging.getLogger(__name__)
 
 
 class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
@@ -45,54 +36,78 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
 
         await self.sse_stream.send_ui_loading("recommending books...")
 
-        parsed_dependents = RecommendationParsedDependents(dependent_results)
-        
-        # TODO: need to dependent results as well
-        books = await self._materialize_books(parsed_dependents.books_sql)
+        parsed_dependents = ParsedDependents.from_results(dependent_results)
+        self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
+        if parsed_dependents.unknown:
+            logger.warning(
+                f"Ignoring unreadable dependent results: {parsed_dependents.unknown}"
+            )
 
-        # TODO: need to make this (?)
-        # [
-        #   system prompt:
-        #   assistant_query: (need to have the filter parser here)
-        #   semantic stuff?
-        # ]
-        # or have a seperate filter parser
-        
-        combined_query = self.build_semantic_query(books)
-        # combined_query += f"\n {query}"
+        # rows a dependency already chose come through as-is; the rest of the
+        # anchor is one composed query, run for rows here
+        books = list(parsed_dependents.books)
+        if parsed_dependents.queries:
+            books += await self._materialize_books(parsed_dependents.queries)
 
-        print("----- combined query -------")
-        print(combined_query)
-        print("------------")
+        # Two parsers, two inputs. The reference analyzer reads the *documents*
+        # and answers "what is the user's anchor like"; the argument parser
+        # reads the user's *own words* and answers "what did they ask for on
+        # top of it" — the twist ("but darker") and the measurable bounds. The
+        # documents can't carry either, which is why the goal text goes here
+        # and not into the combined block.
+        parsed_args = await self.parse_arguments(query=query)
+        semantic_input = await self.analyze_references(books, parsed_dependents.reports)
 
-        parsed_args = await self.parse_arguments(query=combined_query)
-
-        print("------ Parsed semantic input ------")
-        print(parsed_args.semantic_input)
-        print("------------")
+        search_text = self.build_search_text(semantic_input, parsed_args.semantic_input)
+        if not search_text:
+            raise ValueError("Nothing to search on: no references and no semantic input")
 
         # then do the similarity search
         await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
 
-        recommended_books = await self.similarity_search(parsed_args)
+        recommended_books = await self.similarity_search(
+            search_text, exclude_isbns=[book.isbn13 for book in books]
+        )
         self.output.books = recommended_books
         self.output.num_books = len(recommended_books)
-        
-        print("------ recommended books ------")
-        print(f"recommended {len(recommended_books)}")
+
         rows = [book.model_dump() for book in recommended_books]
-        
-        # from common.utils import print_json
-        # print_json(rows)
-        
-        print("------------")
-        
-        
+
         await self.response_to_user(recommended_books, books)
         await self.stream_books(rows)
-        
+
         self.finalize_result()
-        
+
+    async def analyze_references(
+        self, books: list[BookSummary], reports: list[str]
+    ) -> str | None:
+        """Fold the dependent books and reports into one description to embed.
+
+        Returns None when there is nothing to fold — a node with no readable
+        dependency still has the user's own semantic_input to search on, so
+        this is a missing input, not a failure.
+        """
+        document_text = render_documents(books, reports)
+        if not document_text:
+            self.add_details("No reference documents to analyze")
+            return None
+
+        req = build_analysis_request(document_text)
+        analysis: ReferenceAnalysis = await self.run_llm_args_parse(req)
+        self.add_details(
+            f"Analyzed {len(books)} reference books and {len(reports)} reports "
+            f"into {len(analysis.semantic_input.split())} words"
+        )
+        return analysis.semantic_input
+
+    @staticmethod
+    def build_search_text(analyzed: str | None, user_input: str | None) -> str:
+        """The text that actually gets embedded — the analyzed anchor, plus
+        whatever the user asked for on top of it. Either half can be missing:
+        a bare "books like X" has no twist, and a purely thematic ask has no
+        anchor to analyze."""
+        return "\n\n".join(part for part in (analyzed, user_input) if part)
+
     async def response_to_user(self, recommended_books, referenced_books):
         # TODO: generate a user response here with LLM
         
@@ -101,30 +116,29 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
             mock_reply
         )
 
-    async def similarity_search(self, parsed_args):
-        # TODO: ensure there isn't an large amount of text
-        # TODO: put the reference books to exlucde in here
-        embedding = await self.llm_client.get_embeddings([parsed_args.semantic_input])
+    async def similarity_search(self, search_text: str, exclude_isbns: list[str]):
+        embedding = await self.llm_client.get_embeddings([search_text])
         embedding = embedding[0]
 
+        # TODO: push exclude_isbns into search_by_embedding as a NOT IN — the
+        # references are what the user already named, so returning them is the
+        # one answer we know is wrong. Filtered here meanwhile, which shrinks
+        # the result set below `limit` instead of backfilling it.
         rows = await self.store.search_by_embedding(embedding)
-        books = [BookSummary.model_validate(row) for row in rows]
+        excluded = set(exclude_isbns)
+        books = [
+            BookSummary.model_validate(row)
+            for row in rows
+            if row.get("isbn13") not in excluded
+        ]
         return books
-
-    def build_semantic_query(self, books):
-        # TODO: add in other books and analyze docs
-        result = []
-        for book in books:
-            result.append(f"{book.title}: {book.description} \n")
-
-        return "\n".join(result)
 
     # TODO: this is re-usable should be in a workflow
     # for analyze nodes
     # maybe make a seperate book workflow
     async def _materialize_books(
         self, upstream: list[DeferredBookQuery]
-    ) -> List[Dict[str, Any]]:
+    ) -> List[BookSummary]:
         """Run the composed upstream query for rows, and stream them."""
         anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
         self.output.query = anchor
