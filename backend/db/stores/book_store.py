@@ -35,7 +35,7 @@ class BookStore(BaseStore[BookModel]):
         self,
         query_embedding: List[float],
         similarity_threshold: float = 0.7,
-        limit: int = 10,
+        limit: int = 50,
     ) -> List[Dict[str, Any]]:
         """Search books using embedding similarity."""
 

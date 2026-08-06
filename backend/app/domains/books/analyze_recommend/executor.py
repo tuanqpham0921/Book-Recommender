@@ -1,5 +1,6 @@
 import logging
 from typing import Any, List
+from pydantic import BaseModel
 
 from app.domains.node_executor import NodeExecutor
 from app.domains.books.schemas import BookSummary
@@ -14,16 +15,44 @@ from .analyze_references import (
     render_documents,
 )
 from .schemas import RecommendationOutput, RecommendationStrategy
+from dataclasses import dataclass, field
+from collections import Counter
 
 logger = logging.getLogger(__name__)
 
-from dataclasses import dataclass
+MAX_ALLOWED_SAME_AUTHOR = 4
+MAX_RECOMMENDED_BOOKS = 10
+
+class ReferenceBook(BaseModel):
+    isbn13: str
+    title: str
+    authors: str | None = None
+    categories: str | None = None
+    genre: str | None = None
+    is_children: bool | None = None
+    description: str | None = None
+    
 
 @dataclass
 class RecommendationArguments:
+    refereced_books: list[ReferenceBook] = field(default_factory=list)
     semantic_input: str | None = None
     
-
+    def to_summary(self):
+        titles = [book.title for book in self.books]
+        authors = [book.authors for book in self.books]
+        author_num = Counter(authors)
+        genres = [book.genre for book in self.books]
+        genre_num = Counter(genres)
+        return {
+            "referenced_titles": titles, 
+            "refrence_authors": authors,
+            "refrence_author_num": author_num,
+            "refrence_genre": genres,
+            "refrence_genre_num": genre_num,
+            "embedding_query": self.semantic_input
+        }
+        
 class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Recommendation"
@@ -55,10 +84,11 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
 
         # rows a dependency already chose come through as-is; the rest of the
         # anchor is one composed query, run for rows here
-        books = list(parsed_dependents.books)
+        reference_books = list(ReferenceBook(**book) for book in parsed_dependents.books)
         if parsed_dependents.queries:
-            books += await self._materialize_books(parsed_dependents.queries)
-
+            reference_books += await self._materialize_books(parsed_dependents.queries)
+        self.output.args = reference_books
+        
         # Two parsers, two inputs. The reference analyzer reads the *documents*
         # and answers "what is the user's anchor like"; the argument parser
         # reads the user's *own words* and answers "what did they ask for on
@@ -67,7 +97,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         # and not into the combined block.
         
         parsed_args = await self.parse_arguments(query=query)
-        semantic_input = await self.analyze_references(books, parsed_dependents.reports)
+        semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
 
         # NOTE: parsed_args.semantic_input might not be needed
         search_text = self.build_search_text(semantic_input, parsed_args.semantic_input)
@@ -78,21 +108,26 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         # then do the similarity search
         await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
 
-        recommended_books = await self.similarity_search(
-            search_text, exclude_isbns=[book.isbn13 for book in books]
+        candidates = await self.similarity_search(
+            search_text, exclude_isbns=[book.isbn13 for book in reference_books]
         )
+        recommended_books = self.process_candidates(candidates)
         self.output.books = recommended_books
         self.output.num_books = len(recommended_books)
 
         rows = [book.model_dump() for book in recommended_books]
 
-        await self.response_to_user(recommended_books, books)
         await self.stream_books(rows)
 
         self.finalize_result()
+        
+        # ---------------------------
+        # NOTE: this should be in a generation section(?)
+        # putting this here for now
+        await self.response_to_user(self.output)
 
     async def analyze_references(
-        self, books: list[BookSummary], reports: list[str]
+        self, books: list[ReferenceBook], reports: list[str]
     ) -> str | None:
         """Fold the dependent books and reports into one description to embed.
 
@@ -121,13 +156,18 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         anchor to analyze."""
         return "\n\n".join(part for part in (analyzed, user_input) if part)
 
-    async def response_to_user(self, recommended_books, referenced_books):
-        # TODO: generate a user response here with LLM
+    async def response_to_user(self, result: RecommendationOutput):
+        """ Generate an llm response to the user """
         
-        from playground.app_mock.executors.books.recommend_books import mock_reply
-        await self.sse_stream.send_chars(
-            mock_reply
-        )
+        inputs  = result.args.to_summary()
+        output  = result.books.to_summary()
+
+        format_result = (
+                            f"input: {str(inputs)}\n",
+                            f"output: {str(output)}\n"
+                        )
+        
+                         
 
     async def similarity_search(self, search_text: str, exclude_isbns: list[str]):
         embedding = await self.llm_client.get_embeddings([search_text])
@@ -151,7 +191,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     # maybe make a seperate book workflow
     async def _materialize_books(
         self, upstream: list[DeferredBookQuery]
-    ) -> List[BookSummary]:
+    ) -> List[ReferenceBook]:
         """Run the composed upstream query for rows, and stream them."""
         anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
         self.output.query = anchor
@@ -165,10 +205,31 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
             # or give the users pre-defined options (random, ...)
             raise NotImplementedError("need to handle when there are more than 5 books")
 
+        # TODO: for now can just do the preview with top 5
+        # and just log the book
         rows = await self.store.materialize(anchor, limit=BookConstraints.default_limit)
-        books = [BookSummary.model_validate(row) for row in rows]
+        books = [ReferenceBook(**row) for row in rows]
         return books
+    
+    def process_candidates(self, candidates: list[BookSummary], referenced_books: list[ReferenceBook]) -> list[BookSummary]:
+        if not candidates:
+            raise ValueError("No books were returned from embedding search")
+        if len(candidates) <= MAX_RECOMMENDED_BOOKS:
+            return candidates
+        
+        referenced_authors = set(book.author for book in referenced_books)
+        same_author_count = 0
+        recommended_books = []
+        for book in candidates:
+            if book.authors in referenced_authors:
+                if same_author_count < MAX_ALLOWED_SAME_AUTHOR:
+                    recommended_books.append(book)
+                    same_author_count += 1
+            else:
+                recommended_books.append(book)
+        return recommended_books
+        
 
     def finalize_result(self):
-        ok = self.output.args is not None
+        ok = self.output.args is not None and self.output.books
         return super().finalize_result(ok=ok, message="parsed args okay")

@@ -4,6 +4,7 @@ from pydantic import Field
 from typing import Literal, Optional
 from .labels import AnalyzeRecommendNodeTypeEnum
 from db.schema import BooksFilter
+from collections import Counter
 
 # NOTE: this can inherit from the workflow itself?
 # then everything is in one place, but do we want that?
@@ -76,3 +77,19 @@ class RecommendationStrategy(BaseRequest):
 class RecommendationOutput(BookRecommendationOutput):
     """The books this node chose. An empty `books` means nothing in the
     catalog satisfied the anchor plus the filters."""
+    
+    def to_summary(self):
+        authors = [book.authors for book in self.books]
+        author_num = Counter(authors)
+        genres = [book.genre for book in self.books]
+        genre_num = Counter(genres)
+        max_page = max(book.num_page for book in self.books)
+        min_page = min(book.num_page for book in self.books)
+        return {
+            "authors": authors,
+            "author_num": author_num,
+            "genre": genres,
+            "genre_num": genre_num,
+            "max_page": max_page,
+            "min_page": min_page
+        }
