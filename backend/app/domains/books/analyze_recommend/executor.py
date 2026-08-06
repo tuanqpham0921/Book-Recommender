@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List, Dict
+from typing import Any, List
 
 from app.domains.node_executor import NodeExecutor
 from app.domains.books.schemas import BookSummary
@@ -17,6 +17,12 @@ from .schemas import RecommendationOutput, RecommendationStrategy
 
 logger = logging.getLogger(__name__)
 
+from dataclasses import dataclass
+
+@dataclass
+class RecommendationArguments:
+    semantic_input: str | None = None
+    
 
 class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
@@ -33,7 +39,11 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ) -> None:
         # TODO: move this to the books base workflow
         self.store = request_context.book_store
-
+        
+        # TODO: automatically make an args
+        # dataclass should be fine. Might put it in the class fields
+        self.output.args = RecommendationArguments()
+        
         await self.sse_stream.send_ui_loading("recommending books...")
 
         parsed_dependents = ParsedDependents.from_results(dependent_results)
@@ -55,10 +65,13 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         # top of it" — the twist ("but darker") and the measurable bounds. The
         # documents can't carry either, which is why the goal text goes here
         # and not into the combined block.
+        
         parsed_args = await self.parse_arguments(query=query)
         semantic_input = await self.analyze_references(books, parsed_dependents.reports)
 
+        # NOTE: parsed_args.semantic_input might not be needed
         search_text = self.build_search_text(semantic_input, parsed_args.semantic_input)
+        self.output.args.semantic_input = search_text
         if not search_text:
             raise ValueError("Nothing to search on: no references and no semantic input")
 
