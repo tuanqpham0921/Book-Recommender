@@ -4,10 +4,13 @@
 export const userInputSuggestions = [
     // Book similarity suggestions
     { id: 0, text: "Show me books similar to Pride and Prejudice" },
+    { id: 4, text: "Find books like 1984 or Brave New World" },
+    { id: 4, text: "Find books like 1984 or Brave New World, Dune, Brave New World" },
+
     { id: 1, text: "Find books similar to The Alchemist with more than 300 pages" },
     { id: 2, text: "Find horror novels like It by Stephen King" },
     { id: 3, text: "Find books similar to both Dune and Foundation" },
-    { id: 4, text: "Find books like 1984 or Brave New World" },
+    
 
     // Book comparison suggestions
     { id: 5, text: "compare Dune and The Iliad" },

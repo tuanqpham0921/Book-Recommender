@@ -14,6 +14,8 @@ from app.domains.planner.parse_intent import (
 
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from common.operation import OperationResult
+from common.utils.json_handler import load_json
+from config import FilesLocationConstants
 from app.common.prompt_loader import format_prompt
 from app.domains.base_request import BaseRequest
 
@@ -22,6 +24,48 @@ from .generation_node import GenerationNode, create_generation_nodes
 import logging
 
 logger = logging.getLogger(__name__)
+
+# TODO: remove for prod
+CACHE_DIR = FilesLocationConstants.PROJECT_ROOT / "playground" / "files" / "cache"
+cache_mapping = {
+    "Show me books similar to Pride and Prejudice": "Show me books similar to Pride and Prejudice",
+    "Find books like 1984 or Brave New World": "Find books like 1984 or Brave New World",
+    "Find books like 1984 or Brave New World, Dune, Brave New World": "Find books like 1984 or Brave New World, Dune, Brave New World"
+}
+
+
+def load_cached_parse_output(user_text: str) -> InitialParseOutput | None:
+    """Replay a recorded parse instead of calling the LLM, for the messages
+    listed in cache_mapping. Returns None when there is no usable cache entry,
+    so the caller falls through to the real parse workflow.
+
+    The files are whole PlannerWorkflow OperationResult dumps, so the parse
+    payload sits at output.parse_result."""
+    file_name = cache_mapping.get(user_text)
+    if not file_name:
+        return None
+
+    data = load_json(file_name, path=CACHE_DIR)
+    if not isinstance(data, dict):
+        return None
+
+    payload = (data.get("output") or {}).get("parse_result")
+    if not payload:
+        logger.warning(f"Cache entry {file_name} has no output.parse_result")
+        return None
+
+    # save_file() writes these with remove_empty=True, which drops empty
+    # lists — so a goal that depends on nothing comes back missing its
+    # required depends_on. Put it back before validating.
+    for key in ("accepted_goals", "refused_goals", "buffer_goals"):
+        for goal in payload.get(key) or []:
+            goal.setdefault("depends_on", [])
+
+    try:
+        return InitialParseOutput.model_validate(payload)
+    except Exception as e:
+        logger.warning(f"Could not replay cached parse {file_name}: {e}")
+        return None
 
 
 # NOTE: this is okay for now
@@ -73,30 +117,36 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
     async def run(self, request_context: RequestContext) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-
+        
         self.output.session_id = request_context.session_id
         self.messages.append(self.user_message)
 
-        parse_workflow = InitialParseWorkflow(
-            self.sse_stream, self.user_message, self.llm_client, messages=self.messages
-        )
-        parse_result = await self.run_async_step(
-            parse_workflow(), raise_on_failure=False
-        )
-        # narrow through a local: the workflow pre-initializes its output,
-        # so it is never None; parse_workflow.output raises if it ever were
-        parse_output = parse_workflow.output
-        self.output.parse_result = parse_output
+        parse_output = load_cached_parse_output(self.user_message.content)
+        if parse_output is None:
+            parse_workflow = InitialParseWorkflow(
+                self.sse_stream, self.user_message, self.llm_client, messages=self.messages
+            )
+            parse_result = await self.run_async_step(
+                parse_workflow(), raise_on_failure=False
+            )
 
-        if not parse_result.ok:
-            self.result.ok = False
-            self.result.message = self.initial_parse_failure_message
-            if parse_result.runtime_error:
-                self.result.runtime_error = parse_result.runtime_error
-                await self.sse_stream.send_error(self.initial_parse_failure_message)
+            # narrow through a local: the workflow pre-initializes its output,
+            # so it is never None; parse_workflow.output raises if it ever were
+            parse_output = parse_workflow.output
+            self.output.parse_result = parse_output
+
+            if not parse_result.ok:
+                self.result.ok = False
+                self.result.message = self.initial_parse_failure_message
+                if parse_result.runtime_error:
+                    self.result.runtime_error = parse_result.runtime_error
+                    await self.sse_stream.send_error(self.initial_parse_failure_message)
+                    return
+                # await self.sse_stream.send_chars(self.initial_parse_failure_message)
                 return
-            # await self.sse_stream.send_chars(self.initial_parse_failure_message)
-            return
+        else:
+            logger.info(f"Replaying cached parse for: {self.user_message.content}")
+            self.output.parse_result = parse_output
 
         system_goals = parse_output.accepted_goals
         if not system_goals:
