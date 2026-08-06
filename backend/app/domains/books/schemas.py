@@ -39,7 +39,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domains.node_executor import NodeWorkflowOutput
 from db.stores import DeferredBookQuery
 
-
+# TODO: this should be the book model (or something similar)
+# missing thumbnail
 class BookSummary(BaseModel):
     isbn13: str
     title: str
