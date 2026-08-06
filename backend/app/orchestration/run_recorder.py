@@ -76,16 +76,19 @@ async def record_chat_run(
         )
 
         if app_env == "development":
+            files = []
             row_cleaned = remove_empty_values(row)
-            save_file(row_cleaned, file_name=f"{row['chat_id']}")
+            files.append(row_cleaned)
+            # save_file(row_cleaned, file_name=f"{row['chat_id']}")
             # save_file(row_cleaned, file_name=f"chat_run_dev")
 
             if task_runner and task_runner.result:
                 result = to_serializable(task_runner.result)
                 result = remove_empty_values(result)
-                save_file(result, file_name=f"task_result_{row['chat_id']}")
+                files.append(result)
+                # save_file(result, file_name=f"task_result_{row['chat_id']}")
                 # save_file(result, file_name=f"task_reuslt_dev")
-
+            save_file(files, file_name=f"{row['chat_id']}")
 
         async with request_context.session_factory() as session:
             await ChatRunStore(session).insert_run(row)
