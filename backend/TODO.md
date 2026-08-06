@@ -10,17 +10,84 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+continue:
+    * check if Referncebook is a good idea
+    * set up the filter node that recommend can call independetly
+    * add in genre node so you know that the query builder work
+        * should be (title + genre) -> filter -> recommend - output
+                                                    ^
+                                                    |
+                                                    V
+                                                    filter
+    * format the sse events more clearly for UI
+    * then look at the arch and set things up more correctly
+        * re-usable functions, workflow / internal schemas
+    * add a answer to the planner field
+        * might go back to system with the extended to eval for sure
+
 TODO:
+    * re-name and re-define analyze recommend node to something better
+        * it should be like recommend based on references (book or analyze docs)
+
     * have the db or book domain caller load in the book model
         * summary is a function that return a book summary thing?
     * book store should hold sessions factories
         * each query is a session
         * so it doesn't just 1 session for a query
+    * create a compact mode tracer that filter out fields
+        * or even flattern the tree
+        * it can store only things like isbn and title
+        * no need for parse_arguments, and such
+
+cuurent issue
+    * the retrieval title Brave new World is not catching
+        * because the DB have Brave New World .. revisited
+        * might need to clean db books or add a new field or just add a regular book
+        * or might need to change the actual query to use ILIKE...
 
 Ideas:
+    * send the reference books isbn13 to the recommendation somehow
+        * or the query
+        * so you can have a why? button that will query the compare_node directly
+        * and just compare them for you, without having to call the planner
+        * this will need just the isbn13, it can cost a little bit to go to db again
+            * but caching and stuff can come later
+
     * possible to have the db query to have multiple calls in one
     * so instead of 50-100 pages, we can do 3 different ones at the same time
-    
+
+    * you could just expose the analyze nodes / action nodes
+        * compare, recommend, single book analysis (for q/a)
+        * then each of these can then call / query the planner themselves
+            * and it could have like book retrieval marker for example
+            * and the planner will only load in the query builder and search
+        * but this is for later, since you just need to know dependencies between analyze node
+        * tho it can cost a lot more
+            * recommend similar to book1 and book2, then compare book1 and book2
+            * which will be recommend(b1, b2), compare(b1, b2) where
+            * each call the planner seperately. you can cache and stuff but race conditions
+            * this is where entity classifier can help, for caching and re-using them
+
+
+    * or for multi-turn, you could have
+        previous_convo = original_use_msg
+        try:
+            while true:
+                planner = ... (prompt: here are the capabilities, get 10 goals at a time)
+                task runner = ...
+                reword = ...
+                previous_convo = reword
+        final:
+            internal_summary = "recommend book isbn13, the user wanted to pause..."
+        
+        this way you are looping but in a control way
+        so like you can only do 10 steps in one loop for example
+
+    * you might need a natural language field the data stuff
+        * so like "for this operation, it took me 10 seconds, using this amount of tokens"
+        * or I look at similar search db with {...}, and applied filter{...}
+        * not sure if this is needed tho, it could help with generation and passing in stuff
+        * might just be a function call and make as you go.
 
 
 currently
