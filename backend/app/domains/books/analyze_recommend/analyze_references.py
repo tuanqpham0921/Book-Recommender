@@ -31,6 +31,8 @@ from app.domains.books.schemas import BookSummary
 from clients import OpenAIParserRequest
 from db.stores import DeferredBookQuery
 
+from .schemas import ReferenceBook
+
 ANALYZE_REFERENCES_PROMPT_PATH = (
     "domains/books/analyze_recommend/prompts/analyze_references.txt"
 )
@@ -116,7 +118,7 @@ def _truncate(text: str, limit: int, collapse: bool = True) -> str:
     return text[:limit].rsplit(" ", 1)[0] + "…"
 
 
-def render_documents(books: list[BookSummary], reports: list[str]) -> str:
+def render_documents(books: list[ReferenceBook], reports: list[str]) -> str:
     """The document block the analyzer prompt reads.
 
     Books are grouped by title because the same title arriving twice is the

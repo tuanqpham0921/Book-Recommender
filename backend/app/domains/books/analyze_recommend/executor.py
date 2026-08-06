@@ -1,6 +1,5 @@
 import logging
 from typing import Any, List
-from pydantic import BaseModel
 
 from app.domains.node_executor import NodeExecutor
 from app.domains.books.schemas import BookSummary
@@ -14,45 +13,19 @@ from .analyze_references import (
     build_analysis_request,
     render_documents,
 )
-from .schemas import RecommendationOutput, RecommendationStrategy
-from dataclasses import dataclass, field
-from collections import Counter
+from .generate_response import (
+    build_response_request,
+    render_summaries,
+    summarize_references,
+)
+from .schemas import ReferenceBook, RecommendationOutput, RecommendationStrategy
 
 logger = logging.getLogger(__name__)
 
 MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
 
-class ReferenceBook(BaseModel):
-    isbn13: str
-    title: str
-    authors: str | None = None
-    categories: str | None = None
-    genre: str | None = None
-    is_children: bool | None = None
-    description: str | None = None
-    
 
-@dataclass
-class RecommendationArguments:
-    refereced_books: list[ReferenceBook] = field(default_factory=list)
-    semantic_input: str | None = None
-    
-    def to_summary(self):
-        titles = [book.title for book in self.books]
-        authors = [book.authors for book in self.books]
-        author_num = Counter(authors)
-        genres = [book.genre for book in self.books]
-        genre_num = Counter(genres)
-        return {
-            "referenced_titles": titles, 
-            "refrence_authors": authors,
-            "refrence_author_num": author_num,
-            "refrence_genre": genres,
-            "refrence_genre_num": genre_num,
-            "embedding_query": self.semantic_input
-        }
-        
 class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Recommendation"
@@ -68,11 +41,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     ) -> None:
         # TODO: move this to the books base workflow
         self.store = request_context.book_store
-        
-        # TODO: automatically make an args
-        # dataclass should be fine. Might put it in the class fields
-        self.output.args = RecommendationArguments()
-        
+
         await self.sse_stream.send_ui_loading("recommending books...")
 
         parsed_dependents = ParsedDependents.from_results(dependent_results)
@@ -84,24 +53,27 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
 
         # rows a dependency already chose come through as-is; the rest of the
         # anchor is one composed query, run for rows here
-        reference_books = list(ReferenceBook(**book) for book in parsed_dependents.books)
+        reference_books = [
+            ReferenceBook(**book.model_dump()) for book in parsed_dependents.books
+        ]
         if parsed_dependents.queries:
             reference_books += await self._materialize_books(parsed_dependents.queries)
-        self.output.args = reference_books
-        
+        self.output.references = reference_books
+
         # Two parsers, two inputs. The reference analyzer reads the *documents*
         # and answers "what is the user's anchor like"; the argument parser
         # reads the user's *own words* and answers "what did they ask for on
         # top of it" — the twist ("but darker") and the measurable bounds. The
         # documents can't carry either, which is why the goal text goes here
         # and not into the combined block.
-        
+
         parsed_args = await self.parse_arguments(query=query)
         semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
 
         # NOTE: parsed_args.semantic_input might not be needed
         search_text = self.build_search_text(semantic_input, parsed_args.semantic_input)
-        self.output.args.semantic_input = search_text
+        # kept apart from args.semantic_input on purpose — see RecommendationOutput
+        self.output.search_text = search_text
         if not search_text:
             raise ValueError("Nothing to search on: no references and no semantic input")
 
@@ -111,7 +83,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         candidates = await self.similarity_search(
             search_text, exclude_isbns=[book.isbn13 for book in reference_books]
         )
-        recommended_books = self.process_candidates(candidates)
+        recommended_books = self.process_candidates(candidates, reference_books)
         self.output.books = recommended_books
         self.output.num_books = len(recommended_books)
 
@@ -119,12 +91,14 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
 
         await self.stream_books(rows)
 
-        self.finalize_result()
-        
         # ---------------------------
         # NOTE: this should be in a generation section(?)
         # putting this here for now
         await self.response_to_user(self.output)
+
+        # last, not before the reply: this node owns the answer, so a run that
+        # found books and then failed to say anything about them is not ok
+        self.finalize_result()
 
     async def analyze_references(
         self, books: list[ReferenceBook], reports: list[str]
@@ -156,18 +130,29 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         anchor to analyze."""
         return "\n\n".join(part for part in (analyzed, user_input) if part)
 
-    async def response_to_user(self, result: RecommendationOutput):
-        """ Generate an llm response to the user """
-        
-        inputs  = result.args.to_summary()
-        output  = result.books.to_summary()
+    async def response_to_user(self, result: RecommendationOutput) -> None:
+        """Write the note that sits above the book cards, streaming it as it
+        is generated.
 
-        format_result = (
-                            f"input: {str(inputs)}\n",
-                            f"output: {str(output)}\n"
-                        )
-        
-                         
+        The model gets two summaries and no book descriptions — see
+        generate_response.py for why. The user's own phrasing comes off
+        `result.args`, which the argument parser filled and nothing since has
+        touched; `result.search_text` is the assembled anchor prose and is
+        deliberately not sent.
+        """
+        input_summary = summarize_references(
+            result.references, getattr(result.args, "semantic_input", None)
+        )
+        summary_text = render_summaries(input_summary, result.to_summary())
+
+        await self.sse_stream.send_ui_loading("writing up your recommendations...")
+        req = build_response_request(summary_text, self.sse_stream)
+        message = await self.run_llm_call(req)
+        self.add_details(
+            f"Wrote a {len((message.content or '').split())} word reply "
+            f"from {len(result.references)} references and "
+            f"{len(result.books)} recommendations"
+        )
 
     async def similarity_search(self, search_text: str, exclude_isbns: list[str]):
         embedding = await self.llm_client.get_embeddings([search_text])
@@ -217,7 +202,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         if len(candidates) <= MAX_RECOMMENDED_BOOKS:
             return candidates
         
-        referenced_authors = set(book.author for book in referenced_books)
+        referenced_authors = set(book.authors for book in referenced_books)
         same_author_count = 0
         recommended_books = []
         for book in candidates:
@@ -227,9 +212,13 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
                     same_author_count += 1
             else:
                 recommended_books.append(book)
+            
+            if len(recommended_books) == MAX_RECOMMENDED_BOOKS:
+                break
+                
         return recommended_books
         
 
     def finalize_result(self):
-        ok = self.output.args is not None and self.output.books
+        ok = self.output.args is not None and bool(self.output.books)
         return super().finalize_result(ok=ok, message="parsed args okay")

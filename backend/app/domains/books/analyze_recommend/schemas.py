@@ -1,10 +1,42 @@
 from app.domains.base_request import BaseRequest
 from app.domains.books.schemas import BookRecommendationOutput
-from pydantic import Field
-from typing import Literal, Optional
+from pydantic import BaseModel, Field
+from typing import Any, Iterable, Literal, Optional
 from .labels import AnalyzeRecommendNodeTypeEnum
 from db.schema import BooksFilter
 from collections import Counter
+
+
+def count_values(values: Iterable[str | None]) -> dict[str, int]:
+    """`{value: how many books had it}`, commonest first.
+
+    Blanks are dropped rather than counted as a group: "3 books with no genre"
+    is a fact about the catalog, not about the recommendation, and both
+    readers of these summaries (the run log and the response generator) would
+    be misled by it.
+    """
+    return dict(Counter(value for value in values if value).most_common())
+
+
+class ReferenceBook(BaseModel):
+    """A book the user pointed at, cut down to what this node reasons over.
+
+    `BookSummary` carries presentation and ranking fields — thumbnail, rating,
+    ratings count, year — that neither the reference analyzer nor the response
+    generator may use: one is asked for a description, the other for a friendly
+    reply, and metadata in either place is noise the model tries to explain.
+    What is left is identity (to exclude these books from the results) and
+    substance (to describe them).
+    """
+
+    isbn13: str
+    title: str
+    authors: str | None = None
+    categories: str | None = None
+    genre: str | None = None
+    is_children: bool | None = None
+    description: str | None = None
+
 
 # NOTE: this can inherit from the workflow itself?
 # then everything is in one place, but do we want that?
@@ -76,20 +108,37 @@ class RecommendationStrategy(BaseRequest):
 
 class RecommendationOutput(BookRecommendationOutput):
     """The books this node chose. An empty `books` means nothing in the
-    catalog satisfied the anchor plus the filters."""
-    
-    def to_summary(self):
-        authors = [book.authors for book in self.books]
-        author_num = Counter(authors)
-        genres = [book.genre for book in self.books]
-        genre_num = Counter(genres)
-        max_page = max(book.num_page for book in self.books)
-        min_page = min(book.num_page for book in self.books)
+    catalog satisfied the anchor plus the filters.
+
+    `references` and `search_text` are kept because this node's answer is not
+    checkable without them: "why these books" is only answerable against what
+    was pointed at and what was actually embedded. They also feed the response
+    generator, which explains the set to the user (generate_response.py).
+
+    Note `search_text` is not `args.semantic_input`. `args` stays exactly as
+    the argument parser filled it — the user's own words, which the eval suite
+    diffs — while `search_text` is the assembled anchor prose plus those words,
+    which is what the embedding actually saw.
+    """
+
+    references: list[ReferenceBook] = Field(default_factory=list)
+    search_text: str | None = None
+
+    def to_summary(self) -> dict[str, Any]:
+        """The *shape* of the chosen set, not the books in it.
+
+        Counts and ranges, deliberately: this feeds the response generator,
+        which is asked to characterize the set ("various authors, shorter and
+        longer reads") rather than list it. Titles here would only invite the
+        model to enumerate what the book cards on screen already show.
+        """
+        pages = [book.num_pages for book in self.books if book.num_pages]
         return {
-            "authors": authors,
-            "author_num": author_num,
-            "genre": genres,
-            "genre_num": genre_num,
-            "max_page": max_page,
-            "min_page": min_page
+            "num_books": len(self.books),
+            "authors": count_values(book.authors for book in self.books),
+            "genres": count_values(book.genre for book in self.books),
+            # None rather than 0 when the catalog has no page counts: a range
+            # of 0-0 reads as "very short books" to whatever consumes this
+            "min_pages": min(pages) if pages else None,
+            "max_pages": max(pages) if pages else None,
         }
