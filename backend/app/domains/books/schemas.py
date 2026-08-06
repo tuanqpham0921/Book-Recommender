@@ -53,6 +53,7 @@ class BookSummary(BaseModel):
     ratings_count: int | None = None
     is_children: bool | None = None
     description: str | None = None
+    thumbnail: str | None = None
 
 
 class BookRetrievalOutput(NodeWorkflowOutput):
