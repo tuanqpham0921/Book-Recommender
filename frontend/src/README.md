@@ -24,6 +24,14 @@ mounted once visited.
 `task.start`, `task.end`, `step.complete`, `error`, `complete` — handled in
 `ChatBot.jsx` via `parseSSEStream` from `utils/`.
 
+**`book_card.data` is pinned by `BookOut`** (`backend/app/api/schemas/external.py`):
+`isbn13`, `title`, `authors`, `categories`, `published_year`, `num_pages`,
+`average_rating`, `description`, `thumbnail`. That is the whole payload — the
+backend's internal `Book` model carries more catalog columns, and they are
+dropped at this boundary rather than shipped and ignored. A component reading
+a field outside that list gets `undefined`, so adding one means adding it to
+`BookOut` too.
+
 **Sections are flat except for tasks.** `task.start` / `task.end` bracket one
 executed node, and `content.delta` / `book_card` arriving between them nest
 inside that task's own `sections` list (`openContainer()` in `ChatBot.jsx`)

@@ -14,8 +14,9 @@ needs no `__init__` of its own.
 """
 from pydantic import Field
 from abc import ABC, abstractmethod
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Sequence, TypeVar, cast
 
+from app.api.schemas import BookOut
 from app.common.messages import APIMessage, AssistantMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
@@ -26,6 +27,12 @@ from app.common.prompt_loader import load_prompt
 from clients import OpenAIParserRequest
 import asyncio
 from sqlalchemy import Select
+
+if TYPE_CHECKING:
+    # Only for the annotation: app/domains/books/schemas.py imports
+    # NodeWorkflowOutput from this module, so importing Book at runtime would
+    # close the cycle.
+    from app.domains.books.schemas import Book
 
 class NodeWorkflowOutput(AppWorkflowOutput, ABC):
     """Domain payload stored on OperationResult.output."""
@@ -113,13 +120,25 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
             include_tool_description=False,
         )
         
-    async def stream_books(self, books: list[dict[str, Any]], delay: float = 0.0):
+    async def stream_books(
+        self, books: Sequence["Book | dict[str, Any]"], delay: float = 0.0
+    ) -> None:
         """Stream book cards to the frontend.
 
-        Takes the raw row dicts (`BookStore.preview` / `.materialize`) rather
-        than ORM objects, because the payload has to be JSON. `Book` would
-        serialize just as well — the dicts are simply what the store already
-        hands back, so validating and re-dumping them buys nothing here.
+        Takes either `Book` models or the raw row dicts the store hands back
+        (`BookStore.preview` / `.materialize`); both are validated into
+        `BookOut`, which is what the client actually receives and the only
+        place the UI's field names are pinned. Callers holding `Book` objects
+        should pass them as-is — calling `model_dump()` first just adds a
+        round trip through a dict this method would rebuild anyway.
+
+        Validating here rather than trusting the caller is what keeps internal
+        fields off the wire: a store row carries columns the UI never reads,
+        and `Book` carries `similarity_score`. Neither reaches the browser.
+
+        A row with no `isbn13` now raises instead of being sent. It is the
+        primary key and the React key the card list is built on, so a card
+        without one cannot render correctly regardless.
 
         `delay` defaults to 0 — a preview lands inside a collapsed section
         where nobody watches cards arrive one by one, and three nodes' worth of
@@ -128,11 +147,11 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
         """
         sent_isbn = set()
         for i, book in enumerate(books):
-            isbn13 = book.get("isbn13")
-            if isbn13 in sent_isbn:
+            card = BookOut.model_validate(book, from_attributes=True)
+            if card.isbn13 in sent_isbn:
                 continue
 
-            await self.sse_stream.send_book_card(position=i, data=book)
+            await self.sse_stream.send_book_card(position=i, data=card.model_dump())
             if delay:
                 await asyncio.sleep(delay)
-            sent_isbn.add(isbn13)
+            sent_isbn.add(card.isbn13)

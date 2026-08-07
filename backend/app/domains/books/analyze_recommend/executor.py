@@ -85,9 +85,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         self.output.books = recommended_books
         self.output.num_books = len(recommended_books)
 
-        rows = [book.model_dump() for book in recommended_books]
-
-        await self.stream_books(rows)
+        await self.stream_books(recommended_books)
 
         # ---------------------------
         # NOTE: this should be in a generation section(?)
