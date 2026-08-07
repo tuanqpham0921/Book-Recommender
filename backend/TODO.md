@@ -52,6 +52,8 @@ continue:
     OperationResult
         id: 
         ok:
+        # not sure about this it can be large
+        # the caller should already know
         input: ... (new and it can be dict or some type)
                    (for our arch specifically, this is where you can have:
                         query=...

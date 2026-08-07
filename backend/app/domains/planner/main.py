@@ -33,6 +33,15 @@ logger = logging.getLogger(__name__)
 # format this repo similar to books domains
 # cleaner and each can have a executor format and prompt thing
 
+# NOTE:
+# this repo is a pre-flight or initial parse
+# this should be executor.py that do things like
+#   * check the cache, small talks, decide to call the planner or not
+#   * clarification stuff
+# the planner it's own workflow thing, that will return a plan to the this
+# and the actual planner (planJane) should be outside of of app/domain
+# I think(?)
+
 # TODO: remove for prod
 CACHE_DIR = FilesLocationConstants.PROJECT_ROOT / "playground" / "files" / "cache"
 cache_mapping = {
