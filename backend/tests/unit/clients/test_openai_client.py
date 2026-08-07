@@ -132,8 +132,8 @@ class TestExecute:
         req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
-        assert isinstance(result.response.output, AssistantMessage)
-        assert result.response.output.content == "hello"
+        assert isinstance(result.result, AssistantMessage)
+        assert result.result.content == "hello"
 
     @pytest.mark.asyncio
     async def test_token_usage_propagated(self):

@@ -51,7 +51,7 @@ class TestPlannerWorkflowAddStep:
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(
             ok=True,
-            response=Response(output=InitialParseOutput()),
+            response=Response(result=InitialParseOutput()),
             token_usage=TokenUsage(total=100, prompt=60, completion=40),
         )
         orchestrator.add_step(step)
@@ -67,7 +67,7 @@ class TestPlannerWorkflowAddStep:
 
     def test_appends_to_result_steps(self, orchestrator):
         step = OperationResult(
-            ok=True, name="some_step", response=Response(output=InitialParseOutput())
+            ok=True, name="some_step", response=Response(result=InitialParseOutput())
         )
         orchestrator.add_step(step)
         assert step in orchestrator.result.steps

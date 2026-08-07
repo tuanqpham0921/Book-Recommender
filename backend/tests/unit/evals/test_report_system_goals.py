@@ -25,7 +25,7 @@ from evals.report_system_goals import (
 def make_planner(*goal_types, token_usage=None):
     planner = {
         "response": {
-            "output": {
+            "result": {
                 "parse_result": {
                     "accepted_goals": [
                         {"_id": f"goal_{i}", "target_node_type": goal_type}
@@ -75,13 +75,13 @@ class TestAcceptedGoalTypes:
 
     def test_missing_parse_result_is_empty(self):
         # e.g. the run errored before parsing finished
-        assert accepted_goal_types({"response": {"output": {}}}) == []
+        assert accepted_goal_types({"response": {"result": {}}}) == []
         assert accepted_goal_types(None) == []
 
     def test_malformed_goals_are_skipped(self):
         planner = {
             "response": {
-                "output": {
+                "result": {
                     "parse_result": {
                         "accepted_goals": [
                             {"target_node_type": "Retrieve_by_Title"},

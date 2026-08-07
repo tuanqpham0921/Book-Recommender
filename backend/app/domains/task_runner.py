@@ -131,7 +131,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                         raise_on_failure=False,
                     )
                 finally:
-                    output = step_result.response.output if step_result else None
+                    output = step_result.result if step_result else None
                     await self.sse_stream.send_task_end(
                         task_id=goal.id,
                         # every retrieval output carries num_books, so the
@@ -144,16 +144,16 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                     self.output.failed_task.append(goal.id)
                     continue
 
-                results[goal.id] = step_result.response.output
+                results[goal.id] = step_result.result
 
                 # NOTE: linking the result to the goal_id
                 # for debugging and visualization
                 # but do we want to pass in a reference to the task runner
                 # or here is fine
-                step_result.response.output.id = goal.id
-                step_result.response.output.depends_on = goal.depends_on.copy()
+                step_result.result.id = goal.id
+                step_result.result.depends_on = goal.depends_on.copy()
 
-                self.output.completed_task.append(step_result.response.output)
+                self.output.completed_task.append(step_result.result)
                 await self.sse_stream.send_divider()
 
         self.output.task_results = results

@@ -46,10 +46,10 @@ async def load_books(
     )
     checks.append(readiness)
 
-    checks.append(await bootstrap_schema(session_factory, readiness.response.output))
+    checks.append(await bootstrap_schema(session_factory, readiness.result))
 
     checks.append(
-        await store_books_from_csv(session_factory, csv_path, readiness.response.output)
+        await store_books_from_csv(session_factory, csv_path, readiness.result)
     )
 
     checks.append(

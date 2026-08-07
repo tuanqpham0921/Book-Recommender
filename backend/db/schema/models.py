@@ -79,7 +79,7 @@ class ChatRunModel(Base):
     runtime_error = Column(Text, nullable=True)
     duration_s = Column(Float, nullable=True)
     total_tokens = Column(Integer, nullable=True)
-    # promoted out of planner.response.output.diagram so the review page (and any
+    # promoted out of planner.response.result.diagram so the review page (and any
     # querying) doesn't need to unpack the JSONB envelope just to render it
     mermaid = Column(Text, nullable=True)
 

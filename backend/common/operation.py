@@ -142,7 +142,7 @@ class Time(BaseModel):
     duration: float | None = None
 
 class Response(BaseModel, Generic[OutputT]):
-    output: OutputT | None = None
+    result: OutputT | None = None
     output_type: str | None = None
 
 class OperationResult(BaseModel, Generic[OutputT]):
@@ -168,24 +168,28 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
     def check_output_type(self) -> None:
         # default there's no output
-        if self.response.output is None:
+        if self.result is None:
             return
 
         if self.response.output_type is None:
             raise TypeError(
-                f"Output of type {type(self.response.output).__name__} was produced "
+                f"Output of type {type(self.result).__name__} was produced "
                 "without a declared output_type"
             )
 
-        if type(self.response.output).__name__ != self.response.output_type:
+        if type(self.result).__name__ != self.response.output_type:
             raise TypeError(
-                f"Output {self.response.output} is of type "
-                f"{type(self.response.output).__name__} not of type "
+                f"Output {self.result} is of type "
+                f"{type(self.result).__name__} not of type "
                 f"{self.response.output_type}"
             )
 
     def add_details(self, *message):
         self.details.extend(message)
+        
+    @property
+    def result(self):
+        return self.response.result
 
 
 @overload
@@ -224,33 +228,35 @@ def task(
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
 
-                output = await func(*args, **kwargs)
+                result = await func(*args, **kwargs)
 
                 # custom operation result retuned from the task
                 # the task must validate ok itself
-                if isinstance(output, OperationResult):
-                    if log_info and not output.ok:
+                if isinstance(result, OperationResult):
+                    if log_info and not result.ok:
                         logger.warning(f"Task failed: {func_ref}")
 
-                    output.name = func_ref
-                    output.timing.duration = round(time.perf_counter() - time_start, 2)
-                    return output
+                    result.name = func_ref
+                    result.timing.duration = round(time.perf_counter() - time_start, 2)
+                    return result
 
                 # task did not return an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
                 result = OperationResult(
                     name=func_ref,
-                    response=Response(output=output, output_type=type(output).__name__),
+                    response=Response(result=result, output_type=type(result).__name__),
+                    token_usage=result.token_usage if (
+                        hasattr(result, "token_usage") 
+                        and 
+                        isinstance(result.token_usage, TokenUsage)
+                        )
+                        else None
                 )
                 result.timing.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
                 result.add_details(
                     "output is not an operation result, creating a default one"
                 )
-                if hasattr(output, "token_usage") and isinstance(
-                    output.token_usage, TokenUsage
-                ):
-                    result.token_usage = output.token_usage
                 return result
             except asyncio.CancelledError:
                 # client disconnected (e.g. page refresh) mid-task. Unlike

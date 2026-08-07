@@ -44,7 +44,7 @@ def _make_result_and_output() -> tuple[OperationResult, PlannerOutput]:
     )
     result = OperationResult(
         ok=True,
-        response=Response(output=output),
+        response=Response(result=output),
         token_usage=TokenUsage(total=42, prompt=30, completion=12),
     )
     result.timing.duration = 1.23
@@ -93,7 +93,7 @@ class TestBuildChatRunRow:
         assert row["tasks"] is None
         assert row["planner"]["ok"] is True
         assert (
-            row["planner"]["response"]["output"]["parse_result"]["accepted_goals"][0]["description"]
+            row["planner"]["response"]["result"]["parse_result"]["accepted_goals"][0]["description"]
             == "Find a book about machine learning topics"
         )
 
@@ -108,7 +108,7 @@ class TestBuildChatRunRow:
             output=output,
         )
 
-        goal = row["planner"]["response"]["output"]["parse_result"]["accepted_goals"][0]
+        goal = row["planner"]["response"]["result"]["parse_result"]["accepted_goals"][0]
         assert goal["_refusal"] is True
         assert goal["_refusal_reasons"] == ["just to populate a private attr"]
 

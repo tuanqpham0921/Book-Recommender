@@ -39,16 +39,18 @@ class Workflow(ABC, Generic[OutputT]):
             ),
         )
         if output_type is not None:
-            self.result.response.output = output_type()
+            self.result.response.result = output_type()
 
     def add_details(self, *message):
         self.result.add_details(message)
 
     @property
     def output(self) -> OutputT:
-        if self.result.response.output is None:
+        # self.result is this Workflow's OperationResult; .result on that is
+        # its own shorthand property for the payload (OperationResult.response.result)
+        if self.result.result is None:
             raise RuntimeError(f"{self.workflow_ref} output was not initialized")
-        return self.result.response.output
+        return self.result.result
 
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         if self._called:

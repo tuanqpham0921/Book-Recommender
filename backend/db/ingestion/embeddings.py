@@ -39,7 +39,7 @@ async def _store_batch_embeddings(
                 return OperationResult(
                     ok=False,
                     message=f"Failed to update embedding for book {isbn13}.",
-                    response=Response(output=0),
+                    response=Response(result=0),
                     steps=update_results,
                 )
 
@@ -48,7 +48,7 @@ async def _store_batch_embeddings(
     return OperationResult(
         ok=True,
         message=f"Embedded {len(isbn13_bucket)} books.",
-        response=Response(output=len(isbn13_bucket))
+        response=Response(result=len(isbn13_bucket))
     )
     
 async def _get_bucketed_embeddings(
@@ -155,11 +155,11 @@ async def embed_missing_books(
     for batch_result in batch_results:
         batch_result.name = f"embed_batch_{count}"
         steps.append(batch_result)
-        count += batch_result.response.output or 0
+        count += batch_result.result or 0
 
     return OperationResult(
         ok=count == num_missing,
         message= f"Embedded {count} books out of {num_missing}.",
-        response=Response(output=count),
+        response=Response(result=count),
         steps=steps
     )

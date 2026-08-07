@@ -2,7 +2,7 @@
 
 For every test_runs row (written by evals/run_suites.py) this joins the
 chat_runs row it points at, pulls the goal types the run actually accepted
-(planner.response.output.parse_result.accepted_goals[].target_node_type), and diffs
+(planner.response.result.parse_result.accepted_goals[].target_node_type), and diffs
 them against the case's expected_nodes in evals/suites/<suite_name>.json:
 matched / missing / extra, duplicates counted. Cases whose suite entry
 defines no expected_nodes are flagged rather than judged.
@@ -50,8 +50,8 @@ def accepted_goal_types(planner: Any) -> list[str]:
     if not isinstance(planner, dict):
         return []
     response = planner.get("response")
-    output = response.get("output") if isinstance(response, dict) else None
-    parse_result = output.get("parse_result") if isinstance(output, dict) else None
+    result = response.get("result") if isinstance(response, dict) else None
+    parse_result = result.get("parse_result") if isinstance(result, dict) else None
     goals = parse_result.get("accepted_goals") if isinstance(parse_result, dict) else None
     if not isinstance(goals, list):
         return []

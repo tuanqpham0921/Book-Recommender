@@ -11,7 +11,7 @@ async def _returns_plain_value():
 
 @task
 async def _returns_custom_result():
-    return OperationResult(ok=True, response=Response(output="custom_output"))
+    return OperationResult(ok=True, response=Response(result="custom_output"))
 
 
 @task
@@ -29,7 +29,7 @@ class TestTask:
         result = await _returns_plain_value()
         assert isinstance(result, OperationResult)
         assert result.ok is True
-        assert result.response.output == "hello"
+        assert result.result == "hello"
         assert result.timing.duration is not None
         assert result.name is not None
 
@@ -37,7 +37,7 @@ class TestTask:
         result = await _returns_custom_result()
         assert isinstance(result, OperationResult)
         assert result.ok is True
-        assert result.response.output == "custom_output"
+        assert result.result == "custom_output"
         assert result.timing.duration is not None
 
     async def test_captures_exception_as_failed_result(self):
@@ -72,7 +72,7 @@ class TestTask:
     async def test_none_return_produces_ok_result(self):
         result = await _returns_none()
         assert result.ok is True
-        assert result.response.output is None
+        assert result.result is None
 
 
 class TestTokenUsage:
@@ -238,30 +238,30 @@ class TestOperationResult:
         result = OperationResult()
         assert result.ok is False
         assert result.steps == []
-        assert result.response.output is None
+        assert result.result is None
         assert result.runtime_error is None
         assert result.timing.duration is None
         assert result.id.startswith("op_")
 
     def test_check_output_type_passes_on_type_match(self):
-        result = OperationResult(response=Response(output="hello", output_type="str"))
+        result = OperationResult(response=Response(result="hello", output_type="str"))
         result.check_output_type()  # must not raise
 
     def test_check_output_type_raises_on_type_mismatch(self):
-        result = OperationResult(response=Response(output=42, output_type="str"))
+        result = OperationResult(response=Response(result=42, output_type="str"))
         with pytest.raises(TypeError):
             result.check_output_type()
 
     def test_check_output_type_raises_when_declared_but_missing(self):
-        result = OperationResult(response=Response(output=None, output_type="str"))
+        result = OperationResult(response=Response(result=None, output_type="str"))
         result.check_output_type()
 
     def test_check_output_type_raises_on_undeclared_output(self):
-        result = OperationResult(response=Response(output="hello", output_type=None))
+        result = OperationResult(response=Response(result="hello", output_type=None))
         with pytest.raises(TypeError, match="without a declared output_type"):
             result.check_output_type()
 
     def test_check_output_type_skips_when_nothing_was_claimed(self):
         # failure envelopes legitimately carry neither output nor output_type
-        result = OperationResult(response=Response(output=None, output_type=None))
+        result = OperationResult(response=Response(result=None, output_type=None))
         result.check_output_type()  # must not raise

@@ -247,9 +247,9 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         await self.finalize_result(payload)
         
         # generate unable to help with
-        if self.result.response.output.out_of_scope:
+        if self.result.result.out_of_scope:
             await self.sse_stream.send_chars("\n\n I can't do:\n")
-            for unsupported in self.result.response.output.out_of_scope:
+            for unsupported in self.result.result.out_of_scope:
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
         
 

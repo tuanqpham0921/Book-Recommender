@@ -30,7 +30,7 @@ class _SuccessWorkflow(Workflow):
         super().__init__(output_type=str)
 
     async def run(self, *args, **kwargs):
-        self.result.response.output = "done"
+        self.result.response.result = "done"
         # fail-closed contract: workflows must declare success explicitly
         self.result.ok = True
 
@@ -91,7 +91,7 @@ class TestWorkflowExecution:
         # violation caught by check_output_type after run()
         class _UndeclaredOutput(Workflow):
             async def run(self, *args, **kwargs):
-                self.result.response.output = "done"
+                self.result.response.result = "done"
                 self.result.ok = True
 
         result = await _UndeclaredOutput()()
@@ -332,7 +332,7 @@ class TestCrashingSteps:
         assert result.ok is True
         assert len(result.steps) == 3
         assert [step.ok for step in result.steps] == [False, False, True]
-        assert result.steps[2].response.output == "succeeded on attempt 3"
+        assert result.steps[2].result == "succeeded on attempt 3"
         # the failed attempts remain in the trail for forensics
         assert result.steps[0].runtime_error.type == "ValueError"
 
@@ -398,7 +398,7 @@ class TestSingleUseGuard:
         with pytest.raises(RuntimeError):
             await wf()
         assert first_result.ok is True
-        assert first_result.response.output == "done"
+        assert first_result.result == "done"
 
     async def test_guard_fires_even_after_a_failed_first_call(self):
         # a workflow that failed is still "used" — retries must construct a

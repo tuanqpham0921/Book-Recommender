@@ -39,7 +39,8 @@ from app.orchestration.request_context import RequestContext
 from clients.base import BaseLLMClient
 
 class NodeWorkflowOutput(AppWorkflowOutput, ABC):
-    """Domain payload stored on OperationResult.response.output."""
+    """Domain payload stored on OperationResult.response.result, exposed via
+    the `.result` property (OperationResult.result)."""
     id: str = None
     args: BaseRequest = None
     depends_on: list[str] = Field(default=[])
