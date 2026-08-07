@@ -48,7 +48,7 @@ class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
         parsed_args: FindByTitleRetrieval = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )
-        self.output.args = parsed_args
+        self.result.args = parsed_args
 
         book_title = parsed_args.title
         if not book_title:
@@ -60,7 +60,7 @@ class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
 
         # a sample, not the answer — `num_books` is the size of the match, and
         # the gap between the two is what marks these rows as a preview
-        self.output.books = books
+        self.result.books = books
 
         await self.sse_stream.send_chars(
             f"- Found {total} books titled: {book_title}"
@@ -72,5 +72,5 @@ class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
     def finalize_result(self):
         # ok means "the query got built", not "something matched" — zero
         # matches is an answer this node reports, not a failure it raises.
-        ok = self.output.args is not None and self.output.query is not None
+        ok = self.result.args is not None and self.result.query is not None
         return super().finalize_result(ok=ok)

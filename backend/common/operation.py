@@ -245,18 +245,21 @@ def task(
                 result = OperationResult(
                     name=func_ref,
                     response=Response(result=result, output_type=type(result).__name__),
-                    token_usage=result.token_usage if (
-                        hasattr(result, "token_usage") 
-                        and 
-                        isinstance(result.token_usage, TokenUsage)
-                        )
-                        else None
                 )
                 result.timing.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
                 result.add_details(
                     "output is not an operation result, creating a default one"
                 )
+                # token_usage defaults via Field(default_factory=TokenUsage) —
+                # explicitly passing token_usage=None to the constructor above
+                # would fail validation, so this stays a post-construction,
+                # conditional assignment instead
+                raw_output = result.response.result
+                if hasattr(raw_output, "token_usage") and isinstance(
+                    raw_output.token_usage, TokenUsage
+                ):
+                    result.token_usage = raw_output.token_usage
                 return result
             except asyncio.CancelledError:
                 # client disconnected (e.g. page refresh) mid-task. Unlike

@@ -243,13 +243,13 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         self.process_parse_result(parse_result)
         # NOTE: the output needs to be added somewhere correctly
         
-        payload = self.output.to_llm_messages()
+        payload = self.result.to_llm_messages()
         await self.finalize_result(payload)
-        
+
         # generate unable to help with
-        if self.result.result.out_of_scope:
+        if self.result.out_of_scope:
             await self.sse_stream.send_chars("\n\n I can't do:\n")
-            for unsupported in self.result.result.out_of_scope:
+            for unsupported in self.result.out_of_scope:
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
         
 
@@ -284,7 +284,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # or a substantive reply (out-of-scope / refusals) was
         # streamed to the user. The orchestrator decides continuation from
         # accepted_goals, not from ok.
-        super().finalize_result(ok=bool(self.output.accepted_goals or payload))
+        super().finalize_result(ok=bool(self.result.accepted_goals or payload))
 
     def process_parse_result(
         self, parse_result: GoalParseRequest, confident_tuning: float = 0.5
@@ -294,11 +294,11 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             and not parse_result.out_of_scope
         ):
             logger.warning("Nothing was classified in the initial parse")
-            self.result.ok = False
-            self.result.add_details("Nothing was classified in the initial parse")
+            self.response.ok = False
+            self.response.add_details("Nothing was classified in the initial parse")
             raise RuntimeError("Nothing was classified in the initial parse")
 
-        self.output.out_of_scope = parse_result.out_of_scope
+        self.result.out_of_scope = parse_result.out_of_scope
 
         # overflow goals are valid, just over the model's limit — run them
         # through the same checks so they can fill capacity freed by refusals,
@@ -314,8 +314,8 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
                 )
             if reasons or goal._refusal:
                 goal.refuse(*reasons)
-                self.output.refused_goals.append(goal)
-            elif len(self.output.accepted_goals) < MAX_SYSTEM_GOALS:
-                self.output.accepted_goals.append(goal)
+                self.result.refused_goals.append(goal)
+            elif len(self.result.accepted_goals) < MAX_SYSTEM_GOALS:
+                self.result.accepted_goals.append(goal)
             else:
-                self.output.buffer_goals.append(goal)
+                self.result.buffer_goals.append(goal)

@@ -72,7 +72,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         InitialParseWorkflow/StrategyClassificationWorkflow."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        self.output.session_id = request_context.session_id
+        self.result.session_id = request_context.session_id
         results: dict[str, Any] = {}
         execution_order = planner_result.execution_order()
                 
@@ -101,7 +101,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                         f"Skipping task {goal.id} "
                         f"({goal.target_node_type.value}): {reason}"
                     )
-                    self.output.failed_task.append(goal.id)
+                    self.result.failed_task.append(goal.id)
                     continue
 
                 executor = executor_cls(
@@ -141,7 +141,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                     )
 
                 if not step_result.ok:
-                    self.output.failed_task.append(goal.id)
+                    self.result.failed_task.append(goal.id)
                     continue
 
                 results[goal.id] = step_result.result
@@ -153,13 +153,13 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                 step_result.result.id = goal.id
                 step_result.result.depends_on = goal.depends_on.copy()
 
-                self.output.completed_task.append(step_result.result)
+                self.result.completed_task.append(step_result.result)
                 await self.sse_stream.send_divider()
 
-        self.output.task_results = results
-        self.finalize_result(ok=not self.output.failed_task)
+        self.result.task_results = results
+        self.finalize_result(ok=not self.result.failed_task)
         
-        # await self.send_mermaid_parsed(self.output.completed_task, planner_result.generation_nodes)
+        # await self.send_mermaid_parsed(self.result.completed_task, planner_result.generation_nodes)
 
     async def send_mermaid_parsed(
         self,
@@ -189,5 +189,5 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
 
         await self.sse_stream.send_chars("\n\n## Task Details\n")
         await self.sse_stream.send_mermaid(diagram)
-        self.output.parsed_diagram = diagram
+        self.result.parsed_diagram = diagram
         return diagram

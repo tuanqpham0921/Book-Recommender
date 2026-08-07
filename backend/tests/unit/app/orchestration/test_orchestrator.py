@@ -33,7 +33,7 @@ def request_context():
 class TestOrchestratorRun:
     async def test_records_chat_run(self, request_context):
         mock_workflow = AsyncMock()
-        mock_workflow.result = OperationResult(ok=True)
+        mock_workflow.response = OperationResult(ok=True)
 
         with patch(
             "app.orchestration.orchestrator.PlannerWorkflow",
@@ -46,11 +46,11 @@ class TestOrchestratorRun:
 
         mock_record.assert_awaited_once_with(request_context, mock_workflow, ANY)
 
-    async def test_still_hands_off_to_record_chat_run_when_result_is_none(
+    async def test_still_hands_off_to_record_chat_run_when_response_is_none(
         self, request_context
     ):
         mock_workflow = AsyncMock()
-        mock_workflow.result = None
+        mock_workflow.response = None
 
         with patch(
             "app.orchestration.orchestrator.PlannerWorkflow",
@@ -61,6 +61,6 @@ class TestOrchestratorRun:
         ) as mock_record:
             await Orchestrator().run(request_context)
 
-        # _finalize has no result-is-None guard of its own; record_chat_run's
+        # _finalize has no response-is-None guard of its own; record_chat_run's
         # own guard (tested in test_run_recorder.py) is what skips persisting
         mock_record.assert_awaited_once_with(request_context, mock_workflow, ANY)

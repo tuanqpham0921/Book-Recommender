@@ -89,84 +89,84 @@ class TestProcessParseResult:
         # no usable content at all — the workflow's error handling takes over
         with pytest.raises(RuntimeError, match="Nothing was classified"):
             parse_wf.process_parse_result(_make_parse_result())
-        assert parse_wf.result.ok is False
+        assert parse_wf.response.ok is False
 
     def test_out_of_scope_only_does_not_trigger_empty_branch(self, parse_wf):
         parse_wf.process_parse_result(
             _make_parse_result(out_of_scope=["Cooking recipe"])
         )
-        assert parse_wf.output.out_of_scope == ["Cooking recipe"]
+        assert parse_wf.result.out_of_scope == ["Cooking recipe"]
 
     def test_out_of_scope_stored_on_output(self, parse_wf):
         parse_wf.process_parse_result(
             _make_parse_result(out_of_scope=["Cooking recipe request"])
         )
-        assert parse_wf.output.out_of_scope == ["Cooking recipe request"]
+        assert parse_wf.result.out_of_scope == ["Cooking recipe request"]
 
     def test_low_confidence_goal_goes_to_refused(self, parse_wf):
         goal = _make_goal(confidence=0.3)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert len(parse_wf.output.refused_goals) == 1
-        assert len(parse_wf.output.accepted_goals) == 0
+        assert len(parse_wf.result.refused_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 0
         assert goal._refusal is True
 
     def test_low_confidence_attaches_reason(self, parse_wf):
         goal = _make_goal(confidence=0.3)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
         assert any(
-            "confidence" in r for r in parse_wf.output.refused_goals[0].refusal_reasons
+            "confidence" in r for r in parse_wf.result.refused_goals[0].refusal_reasons
         )
 
     def test_confidence_exactly_at_default_threshold_is_accepted(self, parse_wf):
         # default confident_tuning=0.5; condition is `< 0.5`, so 0.5 itself passes
         goal = _make_goal(confidence=0.5)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert len(parse_wf.output.accepted_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 1
 
     def test_unsupported_node_type_goes_to_refused(self, parse_wf):
         goal = _make_goal(confidence=0.9, node_type=UnknownNodeTypeEnum.UNKNOWN)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert len(parse_wf.output.refused_goals) == 1
-        assert len(parse_wf.output.accepted_goals) == 0
+        assert len(parse_wf.result.refused_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 0
 
     def test_unsupported_node_type_attaches_reason(self, parse_wf):
         goal = _make_goal(confidence=0.9, node_type=UnknownNodeTypeEnum.UNKNOWN)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
         assert any(
-            "node type" in r for r in parse_wf.output.refused_goals[0].refusal_reasons
+            "node type" in r for r in parse_wf.result.refused_goals[0].refusal_reasons
         )
 
     def test_low_confidence_and_unsupported_type_attach_two_reasons(self, parse_wf):
         goal = _make_goal(confidence=0.3, node_type=UnknownNodeTypeEnum.UNKNOWN)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert len(parse_wf.output.refused_goals[0].refusal_reasons) >= 2
+        assert len(parse_wf.result.refused_goals[0].refusal_reasons) >= 2
 
     def test_pre_refused_goal_goes_to_refused(self, parse_wf):
         goal = _make_goal(confidence=0.9)
         goal.refuse("Manually refused before processing")
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert len(parse_wf.output.refused_goals) == 1
-        assert len(parse_wf.output.accepted_goals) == 0
+        assert len(parse_wf.result.refused_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 0
 
     def test_valid_goal_goes_to_accepted(self, parse_wf):
         goal = _make_goal(confidence=0.9, node_type=FindTitleNodeTypeEnum.REQUEST)
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert len(parse_wf.output.accepted_goals) == 1
-        assert len(parse_wf.output.refused_goals) == 0
+        assert len(parse_wf.result.accepted_goals) == 1
+        assert len(parse_wf.result.refused_goals) == 0
 
     def test_goals_beyond_max_go_to_buffer(self, parse_wf):
         for _ in range(MAX_SYSTEM_GOALS):
-            parse_wf.output.accepted_goals.append(_make_goal())
+            parse_wf.result.accepted_goals.append(_make_goal())
         parse_wf.process_parse_result(_make_parse_result(goals=[_make_goal()]))
-        assert len(parse_wf.output.buffer_goals) == 1
+        assert len(parse_wf.result.buffer_goals) == 1
 
     def test_refused_goal_does_not_go_to_buffer_when_accepted_is_full(self, parse_wf):
         for _ in range(MAX_SYSTEM_GOALS):
-            parse_wf.output.accepted_goals.append(_make_goal())
+            parse_wf.result.accepted_goals.append(_make_goal())
         bad_goal = _make_goal(confidence=0.1)
         parse_wf.process_parse_result(_make_parse_result(goals=[bad_goal]))
-        assert len(parse_wf.output.buffer_goals) == 0
-        assert bad_goal in parse_wf.output.refused_goals
+        assert len(parse_wf.result.buffer_goals) == 0
+        assert bad_goal in parse_wf.result.refused_goals
 
     def test_mixed_goals_split_correctly(self, parse_wf):
         parse_wf.process_parse_result(
@@ -177,56 +177,56 @@ class TestProcessParseResult:
                 ]
             )
         )
-        assert len(parse_wf.output.accepted_goals) == 1
-        assert len(parse_wf.output.refused_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 1
+        assert len(parse_wf.result.refused_goals) == 1
 
     def test_custom_confident_tuning_refuses_goal_below_threshold(self, parse_wf):
         goal = _make_goal(confidence=0.6)
         parse_wf.process_parse_result(
             _make_parse_result(goals=[goal]), confident_tuning=0.7
         )
-        assert len(parse_wf.output.refused_goals) == 1
+        assert len(parse_wf.result.refused_goals) == 1
 
     def test_custom_confident_tuning_accepts_goal_above_threshold(self, parse_wf):
         goal = _make_goal(confidence=0.8)
         parse_wf.process_parse_result(
             _make_parse_result(goals=[goal]), confident_tuning=0.7
         )
-        assert len(parse_wf.output.accepted_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 1
 
 
 class TestFinalizeResult:
     async def test_ok_true_when_accepted_goals_present(self, parse_wf):
-        parse_wf.output.accepted_goals.append(_make_goal())
+        parse_wf.result.accepted_goals.append(_make_goal())
         await parse_wf.finalize_result(payload={})
-        assert parse_wf.result.ok is True
+        assert parse_wf.response.ok is True
 
     async def test_ok_true_when_only_a_reply_payload(self, parse_wf):
         # out-of-scope / refusals streamed a reply — that is a handled
         # conversation, not a failure
         await parse_wf.finalize_result(payload={"out_of_scope": ["Cooking recipe"]})
-        assert parse_wf.result.ok is True
-        assert isinstance(parse_wf.result.ok, bool)
+        assert parse_wf.response.ok is True
+        assert isinstance(parse_wf.response.ok, bool)
 
     async def test_ok_false_when_no_goals_and_no_payload(self, parse_wf):
         await parse_wf.finalize_result(payload={})
-        assert parse_wf.result.ok is False
+        assert parse_wf.response.ok is False
 
 
 class TestToLlmMessages:
     def test_empty_output_returns_empty_dict(self, parse_wf):
-        assert parse_wf.output.to_llm_messages() == {}
+        assert parse_wf.result.to_llm_messages() == {}
 
     def test_out_of_scope_included_in_payload(self, parse_wf):
-        parse_wf.output.out_of_scope = ["Cooking recipes"]
-        result = parse_wf.output.to_llm_messages()
+        parse_wf.result.out_of_scope = ["Cooking recipes"]
+        result = parse_wf.result.to_llm_messages()
         assert "out_of_scope" in result
 
     def test_refused_goals_included_as_description_reason_tuples(self, parse_wf):
         goal = _make_goal()
         goal.refuse("Too low confidence")
-        parse_wf.output.refused_goals.append(goal)
-        result = parse_wf.output.to_llm_messages()
+        parse_wf.result.refused_goals.append(goal)
+        result = parse_wf.result.to_llm_messages()
         assert result["refused_goals"] == [(goal.description, goal.refusal_reasons)]
 
 
@@ -263,7 +263,7 @@ class TestRun:
 
         await parse_wf.run()
 
-        assert len(parse_wf.output.accepted_goals) == 1
+        assert len(parse_wf.result.accepted_goals) == 1
 
     async def test_result_ok_set_after_processing(self, parse_wf):
         parse_result = _make_parse_result(goals=[_make_goal()])
@@ -274,7 +274,7 @@ class TestRun:
 
         await parse_wf.run()
 
-        assert parse_wf.result.ok is True
+        assert parse_wf.response.ok is True
 
     async def test_out_of_scope_is_streamed_to_the_user(self, parse_wf):
         parse_result = _make_parse_result(
@@ -298,7 +298,7 @@ class TestInitialParseOutputHelpers:
     def test_accepted_goals_ids_returns_goal_ids(self, parse_wf):
         goal = _make_goal()
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
-        assert parse_wf.output.accepted_goals_ids() == [goal.id]
+        assert parse_wf.result.accepted_goals_ids() == [goal.id]
 
     def test_to_summary_counts_match(self, parse_wf):
         parse_wf.process_parse_result(
@@ -309,7 +309,7 @@ class TestInitialParseOutputHelpers:
                 ]
             )
         )
-        summary = parse_wf.output.to_summary()
+        summary = parse_wf.result.to_summary()
         assert summary["num_accepted_system"] == 1
         assert summary["num_rejected_system"] == 1
         assert summary["total_system_goals"] == 2

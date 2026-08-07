@@ -85,7 +85,7 @@ class NodeBaseWorkflow(AppBaseWorkflow[OutputT], ABC):
         dependent_results: dict[str, Any],
         request_context: RequestContext,
     ) -> None:
-        """Fill in `self.output` and call `self.finalize_result(ok=…)`.
+        """Fill in `self.result` and call `self.finalize_result(ok=…)`.
 
         `dependent_results` is keyed by the goal id of each node this one
         depends on — only the ones that actually produced a result, so a

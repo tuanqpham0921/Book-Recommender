@@ -30,9 +30,9 @@ class _SuccessWorkflow(Workflow):
         super().__init__(output_type=str)
 
     async def run(self, *args, **kwargs):
-        self.result.response.result = "done"
+        self.response.response.result = "done"
         # fail-closed contract: workflows must declare success explicitly
-        self.result.ok = True
+        self.response.ok = True
 
 
 class _ExceptionWorkflow(Workflow):
@@ -52,7 +52,7 @@ class _StepWorkflow(Workflow):
         )
         # fail-closed contract: declare success only if the work succeeded
         if step.ok:
-            self.result.ok = True
+            self.response.ok = True
 
 
 class _MultiStepWorkflow(Workflow):
@@ -91,8 +91,8 @@ class TestWorkflowExecution:
         # violation caught by check_output_type after run()
         class _UndeclaredOutput(Workflow):
             async def run(self, *args, **kwargs):
-                self.result.response.result = "done"
-                self.result.ok = True
+                self.response.response.result = "done"
+                self.response.ok = True
 
         result = await _UndeclaredOutput()()
         assert result.ok is False
@@ -325,7 +325,7 @@ class TestCrashingSteps:
                         flaky_step(), raise_on_failure=False
                     )
                     if step.ok:
-                        self.result.ok = True
+                        self.response.ok = True
                         return
 
         result = await _RetryWorkflow()()
@@ -358,7 +358,7 @@ class TestAddStep:
             )
         )
 
-        usage = wf.result.token_usage
+        usage = wf.response.token_usage
         assert usage.total == 30
         assert usage.prompt == 20
         assert usage.completion == 10
@@ -382,7 +382,7 @@ class TestCancellation:
 
 
 class TestSingleUseGuard:
-    """One instance = one execution: self.result accumulates for the life
+    """One instance = one execution: self.response accumulates for the life
     of the instance, so a second __call__ would stack the new run's output
     onto the first's instead of replacing it. Guard against that mistake."""
 
@@ -424,4 +424,4 @@ class TestWorkflowProperties:
     def test_workflow_name_includes_class_name_and_id(self):
         wf = _SuccessWorkflow()
         assert "_SuccessWorkflow" in wf.workflow_name
-        assert wf.result.id in wf.workflow_name
+        assert wf.response.id in wf.workflow_name

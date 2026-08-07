@@ -74,7 +74,7 @@ class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
         reference_books = list(parsed_dependents.books)
         if parsed_dependents.queries:
             reference_books += await self._materialize_books(parsed_dependents.queries)
-        self.output.references = reference_books
+        self.result.references = reference_books
 
         # Two parsers, two inputs. The reference analyzer reads the *documents*
         # and answers "what is the user's anchor like"; the argument parser
@@ -86,14 +86,14 @@ class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
         parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )
-        self.output.args = parsed_args
+        self.result.args = parsed_args
 
         semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
 
         # NOTE: parsed_args.semantic_input might not be needed
         search_text = self.build_search_text(semantic_input, parsed_args.semantic_input)
         # kept apart from args.semantic_input on purpose — see RecommendationOutput
-        self.output.search_text = search_text
+        self.result.search_text = search_text
         if not search_text:
             raise ValueError("Nothing to search on: no references and no semantic input")
 
@@ -104,15 +104,15 @@ class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
             search_text, exclude_isbns=[book.isbn13 for book in reference_books]
         )
         recommended_books = self.process_candidates(candidates, reference_books)
-        self.output.books = recommended_books
-        self.output.num_books = len(recommended_books)
+        self.result.books = recommended_books
+        self.result.num_books = len(recommended_books)
 
         await self.stream_books(recommended_books)
 
         # ---------------------------
         # NOTE: this should be in a generation section(?)
         # putting this here for now
-        await self.response_to_user(self.output)
+        await self.response_to_user(self.result)
 
         # last, not before the reply: this node owns the answer, so a run that
         # found books and then failed to say anything about them is not ok
@@ -237,5 +237,5 @@ class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
         
 
     def finalize_result(self):
-        ok = self.output.args is not None and bool(self.output.books)
+        ok = self.result.args is not None and bool(self.result.books)
         return super().finalize_result(ok=ok)

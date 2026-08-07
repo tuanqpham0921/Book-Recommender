@@ -135,7 +135,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
     async def run(self, request_context: RequestContext) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
         
-        self.output.session_id = request_context.session_id
+        self.result.session_id = request_context.session_id
         self.messages.append(self.user_message)
 
         parse_output = load_cached_parse_output(self.user_message.content)
@@ -148,43 +148,43 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             )
 
             # narrow through a local: the workflow pre-initializes its output,
-            # so it is never None; parse_workflow.output raises if it ever were
-            parse_output = parse_workflow.output
-            self.output.parse_result = parse_output
+            # so it is never None; parse_workflow.result raises if it ever were
+            parse_output = parse_workflow.result
+            self.result.parse_result = parse_output
 
             if not parse_result.ok:
-                self.result.ok = False
+                self.response.ok = False
                 if parse_result.runtime_error:
-                    self.result.runtime_error = parse_result.runtime_error
+                    self.response.runtime_error = parse_result.runtime_error
                     await self.sse_stream.send_error(self.initial_parse_failure_message)
                     return
                 # await self.sse_stream.send_chars(self.initial_parse_failure_message)
                 return
         else:
             logger.info(f"Replaying cached parse for: {self.user_message.content}")
-            self.output.parse_result = parse_output
+            self.result.parse_result = parse_output
 
         system_goals = parse_output.accepted_goals
         if not system_goals:
             # parse ok but nothing to plan — the parse workflow already
             # streamed the reply (small talk / out-of-scope / refusals)
-            self.result.ok = True
+            self.response.ok = True
             return
 
         # Attach the answer stage before anything is drawn, so both diagrams
         # show the plan the user actually gets — ending in an answer, not in a
         # retrieval. Depends only on goal ids, so it needs no parsed arguments.
         generation_nodes = create_generation_nodes(system_goals)
-        self.output.generation_nodes = generation_nodes
+        self.result.generation_nodes = generation_nodes
 
         await self.send_mermaid(system_goals, generation_nodes)
         # ------------------------------------------------------------------------------------------------
 
         # parsed_system_goals = await self.parse_goals_arguments(system_goals)
-        # self.result.output.parsed_results = parsed_system_goals
+        # self.result.parsed_results = parsed_system_goals
         # await self.send_mermaid_parsed(parsed_system_goals, generation_nodes)
 
-        self.result.ok = True
+        self.response.ok = True
 
 
     async def send_mermaid(
@@ -208,5 +208,5 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
         await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
         await self.sse_stream.send_mermaid(diagram)
-        self.output.diagram = diagram
+        self.result.diagram = diagram
         return diagram

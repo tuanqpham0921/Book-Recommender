@@ -69,7 +69,7 @@ class BookBaseWorkflow(NodeBaseWorkflow[BookOutputT], ABC):
 
     @abstractmethod
     async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
-        """Fill in `self.output` and call `self.finalize_result(ok=…)`.
+        """Fill in `self.result` and call `self.finalize_result(ok=…)`.
 
         The same contract as `NodeBaseWorkflow.run`, minus the request context:
         `self.store` is already bound, and `self.request_context` is there for
@@ -101,11 +101,11 @@ class BookBaseWorkflow(NodeBaseWorkflow[BookOutputT], ABC):
         assigns them, a node that goes on to compose ignores them. Leaving the
         assignment at the call site is what keeps that visible.
         """
-        self.output.query = query
-        self.output.query_sql = compile_sql(query.stmt)
+        self.result.query = query
+        self.result.query_sql = compile_sql(query.stmt)
 
         total, rows = await self.store.preview(query, limit=sample)
-        self.output.num_books = total
+        self.result.num_books = total
         return total, [Book.model_validate(row) for row in rows]
 
     async def stream_books(
