@@ -17,19 +17,26 @@ Anything specific to one domain belongs in that domain's own base instead —
 counts-first `preflight()` and `stream_books()`, and book slices subclass that.
 Keeping them out of here is what lets this module stay free of book models and
 of the API's wire schemas.
+
+**Building LLM requests is not this class's job either.** A slice builds its own
+`OpenAIParserRequest` — a module-level `build_arg_parser_request(query)` next to
+its executor — and hands it to `AppBaseWorkflow.run_llm_args_parse`, which is the
+single shared seam for parsing arguments. That is the same shape the analyze
+slice already uses for `build_analysis_request` / `build_response_request`, and
+it is what lets one node use a different model, prompt or message list without a
+flag on a base class. `ARG_PARSER_PROMPT_PATH` below is the one piece those
+builders share.
 """
 from pydantic import Field
 from abc import ABC, abstractmethod
 from typing import Any, TypeVar
 
-from app.common.messages import APIMessage, AssistantMessage
+from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.domains.base_request import BaseRequest
 from app.orchestration.request_context import RequestContext
 from clients.base import BaseLLMClient
-from app.common.prompt_loader import load_prompt
-from clients import OpenAIParserRequest
 
 class NodeWorkflowOutput(AppWorkflowOutput, ABC):
     """Domain payload stored on OperationResult.output."""
@@ -43,6 +50,11 @@ class NodeWorkflowOutput(AppWorkflowOutput, ABC):
 
 
 OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)
+
+# The shared "fill in this tool schema from the goal text" prompt. Lives here
+# because every node's argument parser uses it, but nothing here builds that
+# request — each slice does, so it can pick its own model, prompt and message
+# list. See the module docstring.
 ARG_PARSER_PROMPT_PATH = "domains/planner/prompts/1_argument_parser.txt"
 
 class NodeBaseWorkflow(AppBaseWorkflow[OutputT], ABC):
@@ -84,33 +96,3 @@ class NodeBaseWorkflow(AppBaseWorkflow[OutputT], ABC):
         depends on — only the ones that actually produced a result, so a
         dependency that failed is absent rather than None.
         """
-
-    async def parse_arguments(self, query: str) -> BaseRequest:
-        """parser for the node"""
-        req = self.build_arg_parser_request(query)
-        parsed_args = await self.run_llm_args_parse(req)
-        self.output.args = parsed_args
-        return parsed_args
-    
-    def build_arg_parser_request(self, query: str) -> OpenAIParserRequest:
-        """Build the LLM request that fills in this message"""
-        if not query:
-            raise ValueError("input error")
-
-        system_prompt = load_prompt(prompt_path=ARG_PARSER_PROMPT_PATH)
-        query = AssistantMessage(content=query)
-
-        return OpenAIParserRequest(
-            prompt=system_prompt,
-            model="gpt-5-nano",
-            reasoning_effort="minimal",
-            # NOTE: this should be a list of previous messages as well
-            # but for now we can just do clear and direct instructions
-            messages=[query],
-            tool_models=[self.tool_cls],
-            # The goal already picked the node type and tool_choice pins it, so the
-            # class docstring — which is there to help the planner choose between
-            # tools — would only be noise here. Field descriptions still ship.
-            max_completion_tokens=2000,
-            include_tool_description=False,
-        )

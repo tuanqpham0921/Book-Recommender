@@ -1,8 +1,12 @@
 import logging
 from typing import Any, List
 
+from app.common.messages import AssistantMessage
+from app.common.prompt_loader import load_prompt
+from app.domains.base_workflow import ARG_PARSER_PROMPT_PATH
 from app.domains.books.base_workflow import BookBaseWorkflow
 from app.domains.books.schemas import Book
+from clients import OpenAIParserRequest
 from config import BookConstraints
 from db.stores import DeferredBookQuery
 from db.stores.utils import compose
@@ -25,12 +29,37 @@ MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
 
 
+def build_arg_parser_request(query: str) -> OpenAIParserRequest:
+    """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
+
+    Reads the user's *own* words, unlike `build_analysis_request` next door,
+    which reads the documents the dependencies produced — see `execute`.
+    """
+    if not query:
+        raise ValueError("No query to parse arguments from")
+
+    return OpenAIParserRequest(
+        prompt=load_prompt(prompt_path=ARG_PARSER_PROMPT_PATH),
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
+        # the goal text is the planner's own work, not something the user typed.
+        # NOTE: this should carry the previous messages too; clear and direct
+        # instructions are enough while the conversation is single-turn.
+        messages=[AssistantMessage(content=query)],
+        tool_models=[RecommendationStrategy],
+        # The goal already picked the node type and tool_choice pins it, so the
+        # class docstring — which is there to help the planner choose between
+        # tools — would only be noise here. Field descriptions still ship.
+        include_tool_description=False,
+        max_completion_tokens=2000,
+    )
+
+
 class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Recommendation"
     # this node owns the answer — folding it away would hide the reply
     ui_section_collapsible = False
-    tool_cls = RecommendationStrategy
 
     async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
         await self.sse_stream.send_ui_loading("recommending books...")
@@ -56,7 +85,11 @@ class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
         # documents can't carry either, which is why the goal text goes here
         # and not into the combined block.
 
-        parsed_args = await self.parse_arguments(query=query)
+        parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
+            build_arg_parser_request(query)
+        )
+        self.output.args = parsed_args
+
         semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
 
         # NOTE: parsed_args.semantic_input might not be needed

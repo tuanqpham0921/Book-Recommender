@@ -41,7 +41,10 @@ books/find_by_title/
   task runner calls, and resolves the output type from
   `NodeBaseWorkflow[SomeOutput]`, so a slice's executor needs no `__init__`.
   Nothing about one domain goes in here — that is what the domain base above is
-  for.
+  for. It also holds no LLM-request building: a slice writes its own
+  `build_arg_parser_request(query)` and passes the result to
+  `AppBaseWorkflow.run_llm_args_parse`, which is the one shared seam. Only the
+  prompt path (`ARG_PARSER_PROMPT_PATH`) is shared.
 
 ## Naming: Base, Workflow, Executor
 
@@ -83,6 +86,13 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
    executor subclasses `BookBaseWorkflow[TheOutput]` and implements
    **`execute(query, dependent_results)`**, not `run()` — `run()` is where the
    store gets bound, so overriding it loses `self.store`.
+   If the node needs its request schema filled in from the goal text, add a
+   module-level `build_arg_parser_request(query) -> OpenAIParserRequest` beside
+   the executor (copy one of the existing two — they are near-identical today,
+   and that is on purpose: the duplication is what lets one node change model,
+   prompt or message list without a flag on a shared base). Call it as
+   `await self.run_llm_args_parse(build_arg_parser_request(query))` and assign
+   `self.output.args` yourself — nothing does that for you.
 2. Write the request schema's docstring for the LLM (include example queries;
    that's roadmap Phase 2 style). `make tools-catalog` audits every docstring for
    `Purpose: / Args: / Returns: / depends_on: / Use when: / Do not use: /

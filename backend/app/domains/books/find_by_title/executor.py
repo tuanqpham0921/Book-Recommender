@@ -1,13 +1,39 @@
 from typing import Any
 
+from app.common.messages import AssistantMessage
+from app.common.prompt_loader import load_prompt
+from app.domains.base_workflow import ARG_PARSER_PROMPT_PATH
 from app.domains.books.base_workflow import BookBaseWorkflow
+from clients import OpenAIParserRequest
+
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
+
+
+def build_arg_parser_request(query: str) -> OpenAIParserRequest:
+    """Ask the LLM to fill `FindByTitleRetrieval` in from the goal text."""
+    if not query:
+        raise ValueError("No query to parse arguments from")
+
+    return OpenAIParserRequest(
+        prompt=load_prompt(prompt_path=ARG_PARSER_PROMPT_PATH),
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
+        # the goal text is the planner's own work, not something the user typed.
+        # NOTE: this should carry the previous messages too; clear and direct
+        # instructions are enough while the conversation is single-turn.
+        messages=[AssistantMessage(content=query)],
+        tool_models=[FindByTitleRetrieval],
+        # The goal already picked the node type and tool_choice pins it, so the
+        # class docstring — which is there to help the planner choose between
+        # tools — would only be noise here. Field descriptions still ship.
+        include_tool_description=False,
+        max_completion_tokens=2000,
+    )
 
 
 class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
     ui_section_title = "Found books by title"
-    tool_cls = FindByTitleRetrieval
 
     async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
         """Count the matching titles and hand the query downstream — not the set.
@@ -18,7 +44,12 @@ class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
         intersecting two already-capped lists.
         """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-        parsed_args = await self.parse_arguments(query=query)
+
+        parsed_args: FindByTitleRetrieval = await self.run_llm_args_parse(
+            build_arg_parser_request(query)
+        )
+        self.output.args = parsed_args
+
         book_title = parsed_args.title
         if not book_title:
             raise ValueError("No title was parsed")

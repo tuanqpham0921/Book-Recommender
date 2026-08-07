@@ -201,8 +201,8 @@ def build_analysis_request(document_text: str) -> OpenAIParserRequest:
         prompt=load_prompt(prompt_path=ANALYZE_REFERENCES_PROMPT_PATH),
         model="gpt-5-mini",
         reasoning_effort="low",
-        # matches build_arg_parser_request: the documents are prior system
-        # work, not something the user typed
+        # matches build_arg_parser_request in executor.py: the documents are
+        # prior system work, not something the user typed
         messages=[AssistantMessage(content=document_text)],
         tool_models=[ReferenceAnalysis],
         max_completion_tokens=2000,

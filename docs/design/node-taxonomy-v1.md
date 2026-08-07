@@ -322,6 +322,30 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   `<node>/executor.py`/`<Node>Executor`, and so do `NodeSpec.executor` and the
   mocks. Written up in `backend/app/domains/README.md`.
 
+**Done (2026-08-07) — argument parsing moved into the slices:**
+
+- `NodeBaseWorkflow.parse_arguments()` and `build_arg_parser_request()` are gone,
+  and with them the `tool_cls` class attribute each executor declared to feed
+  them (it duplicated `NodeSpec.request` anyway). A slice now writes its own
+  module-level `build_arg_parser_request(query)` and calls
+  `AppBaseWorkflow.run_llm_args_parse(req)` directly — the same shape
+  `build_analysis_request` / `build_response_request` already had in the
+  analyze_recommend slice, so there is one way to build an LLM request instead of
+  two.
+- The slice also assigns `self.output.args` itself. That line used to be a side
+  effect of `parse_arguments`, which meant nothing at the call site said the
+  node's parsed arguments had been recorded.
+- **The tradeoff is deliberate duplication**: the two builders are near-identical
+  today (same prompt, `gpt-5-nano`, minimal reasoning, one `AssistantMessage`).
+  Held in a base class, per-node divergence — a bigger model for a node with a
+  harder schema, previous messages for a node that needs them — costs a flag or
+  an override hook each time. Held in the slice it costs nothing. Only
+  `ARG_PARSER_PROMPT_PATH` stays shared, in `app/domains/base_workflow.py`.
+- Direction of travel for `NodeBaseWorkflow`: it now pins the `run()` signature,
+  resolves the output type, and carries the UI section fields — nothing else.
+  The owner's note in `backend/TODO.md` ("you might not need node_workflow …
+  since a lot of that is for the app_workflow") is the next step past this one.
+
 **Still open (roadmap Phase 1):**
 
 - Remove `CompareStrategy` from `NODE_TYPE_TO_CLS`/catalog (class stays parked).
