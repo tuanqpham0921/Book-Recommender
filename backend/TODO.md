@@ -82,6 +82,7 @@ Ideas:
         
         this way you are looping but in a control way
         so like you can only do 10 steps in one loop for example
+        have the retrieval isbn13 and recommended books for continuation
 
     * you might need a natural language field the data stuff
         * so like "for this operation, it took me 10 seconds, using this amount of tokens"
@@ -89,7 +90,46 @@ Ideas:
         * not sure if this is needed tho, it could help with generation and passing in stuff
         * might just be a function call and make as you go.
 
+FOT:
+    * how would I do something like 
+        "compare Dune and It, recommend me books based which is longer/newer"
+            * these I can do, I just label the docs as meta-data or semantic analyze
+                * pass this as a document, and the orginal user query
+                * and semantic stuff is for description builder
+                * and filter docs are for the meta data filter parser
+        "compare Dune and It, recommend me something longer with 300 pages or less"
+        
+        * these are loop / agentic archtecture is much easier
+        * because you just go to compare re-write then go to recommendation next
+        * for the planner to work you'll need it to have
+            * recommend(query="some marker saying waiting on compare it and dune and recommend which ever is longer with less than 300 pages")
+            * then you have to process that and either ask for input
+        * wait this should work
+            * if the doc return "Dune is longer than It by 100 pages. So it wins the page comparision with It"
+            * then you just embed and find with the filter.
+            * you can have different analyze documents
+                answer = ...
+                winner = [book1...]
+        * you can't do themes based comparision or semantic comparisions
+            like "comapre which is better on dystopia or magic abilities"
+            you can only compare on metadata for now
 
+        * this should be okay as long as a node doesn't go node more than 1 away
+            * so you can't have
+
+                                this edge should be prune 
+                                (since it's already processed)
+            find[dune] ---V ------------------------V
+                          analyze[dune, it] -> recommend[...]
+            find[it] -----^
+            * not sure if there's a case of this
+
+        * there are 2 types of compare
+            1. just for general info (between dune and it which is longer)
+            2. to get a winner (recommend books similar to Dune and It on which one is shorter)
+                * recommend can only that this?
+                * it won't take the first since we're just doing meta data filter for now
+---
 currently
     * get the recommend (a collect node) set up
         * the collect node always have to make sure it's not too many

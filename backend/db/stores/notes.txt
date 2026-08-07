@@ -1,0 +1,6 @@
+' OR 1=1 --
+wild card %
+look at the compile and stuff
+
+might need the args saver after all
+    * to make sure when you load it back in

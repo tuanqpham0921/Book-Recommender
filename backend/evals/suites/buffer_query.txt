@@ -8,3 +8,118 @@ Books by Kazuo Ishiguro from the last decade.
 Books by Octavia Butler with a female protagonist.
 Show me thrillers by Gillian Flynn under 400 pages, and recommend similar ones over 500 pages.
 Recommend books like The Road that are under 200 pages and over 800 pages.
+
+========================================
+A good rule is that a query is **unanswerable** when it requires information your system **doesn't have** or asks for a capability it **doesn't implement**, rather than simply combining filters.
+
+Your example:
+
+> "Compare Dune and It, recommend me something longer with 300 pages or less."
+
+is actually **answerable**, although the constraints conflict. Your system can say:
+
+1. Compare *Dune* and *It*.
+2. Recommend books similar to one or both.
+3. Apply the page filter.
+4. Detect that "longer" and "300 pages or less" cannot both be true if both reference books are well over 300 pages, and either:
+
+   * ask for clarification, or
+   * explain that no books satisfy those constraints.
+
+That's a good test of reasoning and constraint handling.
+
+---
+
+Here are examples that should be **unanswerable** for a typical recommender.
+
+### Missing data
+
+Your database doesn't contain the required information.
+
+> Recommend books whose movie adaptation won an Oscar.
+
+> Find books written while the author lived in Paris.
+
+> Recommend books where the protagonist is left-handed.
+
+> Find books translated directly from Japanese instead of English.
+
+Unless you store those attributes, you can't answer.
+
+---
+
+### Subjective facts you don't know
+
+> Recommend books that will definitely make me cry.
+
+> Which book changed the most people's lives?
+
+> What's Stephen King's favorite novel?
+
+These require external knowledge or opinions.
+
+---
+
+### Impossible comparisons
+
+> Which book is objectively better, *Dune* or *The Lord of the Rings*?
+
+There is no objective answer.
+
+---
+
+### Contradictory constraints
+
+> Recommend books with fewer than 100 pages and more than 500 pages.
+
+> Find books published before 1950 and after 2020.
+
+These should return "no possible results."
+
+---
+
+### Unsupported operations
+
+If your system only supports retrieval and recommendations:
+
+> Generate a sequel to *Dune*.
+
+> Rewrite *It* as a comedy.
+
+> Explain every reference in chapter 17.
+
+Those aren't retrieval problems.
+
+---
+
+### Information outside your corpus
+
+If your dataset ends in 2024:
+
+> Recommend books published next month.
+
+> Compare the newest Brandon Sanderson release with *Dune*.
+
+---
+
+## Great stress tests
+
+These are especially useful because they require planning.
+
+> Compare *Dune*, *Hyperion*, and *The Left Hand of Darkness*. Recommend a standalone book shorter than all three but rated higher than each.
+
+---
+
+> Find books by authors who have written both fantasy and science fiction, but recommend only their mystery novels.
+
+---
+
+> Recommend books similar to *Dune*, excluding every author I've already mentioned, published after 2015, with at least 10,000 ratings, under 400 pages, and not part of a series.
+
+---
+
+> Recommend books that are simultaneously similar to *Dune* and *Pride and Prejudice*, but not similar to *Foundation*.
+
+---
+
+The hardest queries aren't necessarily impossible—they require your planner to decompose multiple retrievals, comparisons, set operations (intersection, union, difference), ranking, and filtering. Those are excellent benchmarks for evaluating a book recommendation system.

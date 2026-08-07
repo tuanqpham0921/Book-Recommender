@@ -42,6 +42,10 @@ ANALYZE_REFERENCES_PROMPT_PATH = (
 MAX_DOC_CHARS = 1500
 MAX_TOTAL_CHARS = 8000
 
+# NOTE:
+# should this be a workflow or just as utils functions?
+# workflow is nice because you have parsed_dependents as a step
+
 
 @dataclass
 class ParsedDependents:
@@ -52,6 +56,13 @@ class ParsedDependents:
     name with no class behind it, so `reports` is the seam for the first node
     that produces one — nothing here has to change when it lands.
     """
+    
+    # TODO: have a rejected or .ok = False
+    # this is for the dependents results
+    # so you don't have to run this if all the dependents have no output
+    # if there are stuff like recommend(brave new world, dune)
+    # you can still generate, since I didn't find brave new world, I can only
+    # here are some books similar to Dune...
 
     # what to fetch rows from — the anchor for the similarity search
     queries: list[DeferredBookQuery] = field(default_factory=list)
@@ -153,7 +164,8 @@ def render_documents(books: list[ReferenceBook], reports: list[str]) -> str:
 
     return _truncate("\n\n".join(blocks), MAX_TOTAL_CHARS, collapse=False)
 
-
+# TODO: rename this to ideal_book_description 
+# or something similar
 class ReferenceAnalysis(BaseModel):
     """The single description to embed, synthesized from the reference
     documents. Not a node request — it never reaches the planner, so it carries

@@ -25,6 +25,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# NOTE:
+# this should be renamed to executor.py
+# reserve main.py for endpoint if you want it to be a different service
+
+# TODO:
+# format this repo similar to books domains
+# cleaner and each can have a executor format and prompt thing
+
 # TODO: remove for prod
 CACHE_DIR = FilesLocationConstants.PROJECT_ROOT / "playground" / "files" / "cache"
 cache_mapping = {
