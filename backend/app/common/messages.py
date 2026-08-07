@@ -90,7 +90,7 @@ class ToolMessage(BaseMessage):
             logger.warning(
                 f"Tool {tool_name} returned an operation result, not a raw output"
             )
-            output = output.output
+            output = output.response.output
 
         return cls(
             name=tool_name,

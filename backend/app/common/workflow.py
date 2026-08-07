@@ -19,7 +19,7 @@ OutputT = TypeVar("OutputT", bound="AppWorkflowOutput")
 
 
 class AppWorkflowOutput(BaseModel, ABC):
-    """Domain payload stored on OperationResult.output."""
+    """Domain payload stored on OperationResult.response.output."""
 
     @abstractmethod
     def to_summary(self) -> dict[str, Any]:
@@ -71,7 +71,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
             self.llm_client.execute(req, save_payload=save_payload)
         )
         # run_async_step raised on failure, so output carries the message
-        msg = cast(AssistantMessage, result.output)
+        msg = cast(AssistantMessage, result.response.output)
         self.messages.append(msg)
         return msg
     
@@ -113,6 +113,6 @@ class AppBaseWorkflow(Workflow[OutputT]):
         result = await self.run_async_step(
             ToolMessage.execute(tool_call, **kwargs)
         )
-        tool_msg = cast(ToolMessage, result.output)
+        tool_msg = cast(ToolMessage, result.response.output)
         self.messages.append(tool_msg)
         return tool_msg

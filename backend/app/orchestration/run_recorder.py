@@ -38,7 +38,7 @@ def build_chat_run_row(
         "user_message": user_message,
         "ok": result.ok,
         "runtime_error": result.runtime_error.type if result.runtime_error else None,
-        "duration_s": result.duration,
+        "duration_s": result.timing.duration,
         "total_tokens": result.token_usage.total,
         "mermaid": output.diagram,
         "planner": to_serializable(result),

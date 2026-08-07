@@ -9,7 +9,7 @@ from app.common.sse_stream import SSEStream
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
-from common.operation import OperationResult, RuntimeErrorInfo, TokenUsage
+from common.operation import OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
 
@@ -51,7 +51,7 @@ class TestPlannerWorkflowAddStep:
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(
             ok=True,
-            output=InitialParseOutput(),
+            response=Response(output=InitialParseOutput()),
             token_usage=TokenUsage(total=100, prompt=60, completion=40),
         )
         orchestrator.add_step(step)
@@ -66,7 +66,9 @@ class TestPlannerWorkflowAddStep:
         assert msg in orchestrator.messages
 
     def test_appends_to_result_steps(self, orchestrator):
-        step = OperationResult(ok=True, name="some_step", output=InitialParseOutput())
+        step = OperationResult(
+            ok=True, name="some_step", response=Response(output=InitialParseOutput())
+        )
         orchestrator.add_step(step)
         assert step in orchestrator.result.steps
 

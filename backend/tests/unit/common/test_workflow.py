@@ -30,7 +30,7 @@ class _SuccessWorkflow(Workflow):
         super().__init__(output_type=str)
 
     async def run(self, *args, **kwargs):
-        self.result.output = "done"
+        self.result.response.output = "done"
         # fail-closed contract: workflows must declare success explicitly
         self.result.ok = True
 
@@ -73,8 +73,8 @@ class TestWorkflowExecution:
 
     async def test_successful_run_records_duration(self):
         result = await _SuccessWorkflow()()
-        assert result.duration is not None
-        assert result.duration >= 0
+        assert result.timing.duration is not None
+        assert result.timing.duration >= 0
 
     async def test_exception_in_run_sets_ok_false(self):
         result = await _ExceptionWorkflow()()
@@ -84,14 +84,14 @@ class TestWorkflowExecution:
 
     async def test_exception_in_run_still_records_duration(self):
         result = await _ExceptionWorkflow()()
-        assert result.duration is not None
+        assert result.timing.duration is not None
 
     async def test_undeclared_output_fails_the_workflow(self):
         # producing output without declaring output_type is a contract
         # violation caught by check_output_type after run()
         class _UndeclaredOutput(Workflow):
             async def run(self, *args, **kwargs):
-                self.result.output = "done"
+                self.result.response.output = "done"
                 self.result.ok = True
 
         result = await _UndeclaredOutput()()
@@ -332,7 +332,7 @@ class TestCrashingSteps:
         assert result.ok is True
         assert len(result.steps) == 3
         assert [step.ok for step in result.steps] == [False, False, True]
-        assert result.steps[2].output == "succeeded on attempt 3"
+        assert result.steps[2].response.output == "succeeded on attempt 3"
         # the failed attempts remain in the trail for forensics
         assert result.steps[0].runtime_error.type == "ValueError"
 
@@ -398,7 +398,7 @@ class TestSingleUseGuard:
         with pytest.raises(RuntimeError):
             await wf()
         assert first_result.ok is True
-        assert first_result.output == "done"
+        assert first_result.response.output == "done"
 
     async def test_guard_fires_even_after_a_failed_first_call(self):
         # a workflow that failed is still "used" — retries must construct a

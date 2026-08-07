@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import update
 from db.schema import BookModel
 from db.ingestion.utils import count_csv_data_rows, iter_books_from_csv
-from common.operation import OperationResult, task
+from common.operation import OperationResult, Response, task
 from db.readiness import ReadinessResult
 import logging
 from typing import Any, AsyncIterator
@@ -42,7 +42,7 @@ async def insert_batch(
     return OperationResult(
         ok=rowcount > 0,
         message=f"Stored {rowcount} books out.",
-        output=rowcount,
+        response=Response(output=rowcount),
         details=[f"batch_length: {len(batch)}"]
     )
 
@@ -72,7 +72,7 @@ async def store_books_from_csv(
     for batch in iter_books_from_csv(csv_path):
         total_books += len(batch)        
         batch_result = await insert_batch(batch, session_factory)
-        total_books_stored += batch_result.output
+        total_books_stored += batch_result.response.output
         batch_result.name += f"--batch-{i}"
         
         steps.append(batch_result)
@@ -84,9 +84,9 @@ async def store_books_from_csv(
         "csv_row_count": csv_row_count,
     }
     return OperationResult(
-        ok= total_books_stored == total_books, 
-        message=f"Stored {total_books_stored} books out of {total_books}.", 
-        output=result,
+        ok= total_books_stored == total_books,
+        message=f"Stored {total_books_stored} books out of {total_books}.",
+        response=Response(output=result),
         steps=steps
     )
     
@@ -109,7 +109,7 @@ async def store_book_embedding(
     return OperationResult(
         ok=True,
         message=f"Updated embedding for book {isbn13}.",
-        output=isbn13
+        response=Response(output=isbn13)
     )
     
 async def iter_missing_embeddings(

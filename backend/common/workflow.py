@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from common.operation import OperationResult, RuntimeErrorInfo
+from common.operation import OperationResult, Response, RuntimeErrorInfo
 import asyncio
 import logging
 import time
@@ -34,19 +34,21 @@ class Workflow(ABC, Generic[OutputT]):
         # intialize an envolope in memory to modify
         self.result: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
-            output_type=output_type.__name__ if output_type is not None else None,
+            response=Response(
+                output_type=output_type.__name__ if output_type is not None else None
+            ),
         )
         if output_type is not None:
-            self.result.output = output_type()
-            
+            self.result.response.output = output_type()
+
     def add_details(self, *message):
         self.result.add_details(message)
 
     @property
     def output(self) -> OutputT:
-        if self.result.output is None:
+        if self.result.response.output is None:
             raise RuntimeError(f"{self.workflow_ref} output was not initialized")
-        return self.result.output
+        return self.result.response.output
 
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         if self._called:
@@ -93,7 +95,7 @@ class Workflow(ABC, Generic[OutputT]):
             # inside finally would swallow BaseExceptions (e.g. asyncio
             # cancellation) that the except clauses deliberately let through
             self.result.name = self.workflow_ref
-            self.result.duration = round(time.perf_counter() - time_start, 2)
+            self.result.timing.duration = round(time.perf_counter() - time_start, 2)
 
         return self.result
 

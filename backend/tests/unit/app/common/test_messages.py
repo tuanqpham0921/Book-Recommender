@@ -15,7 +15,7 @@ from app.common.messages import (
     ToolMessage,
     UserMessage,
 )
-from common.operation import OperationResult, TokenUsage
+from common.operation import OperationResult, Response, TokenUsage
 
 
 class _FakeResult(BaseModel):
@@ -187,19 +187,19 @@ class TestToolMessageExecute:
     async def test_output_is_tool_message(self):
         tool_call = self._make_tool_call("FindByTitle", {"title": "Dune"})
         result = await ToolMessage.execute(tool_call)
-        assert isinstance(result.output, ToolMessage)
+        assert isinstance(result.response.output, ToolMessage)
 
     async def test_tool_message_has_correct_name_and_id(self):
         tool_call = self._make_tool_call("FindByTitle", "some output")
         result = await ToolMessage.execute(tool_call)
-        msg = result.output
+        msg = result.response.output
         assert msg.name == "FindByTitle"
         assert msg.tool_call_id == "call_abc123"
 
     async def test_tool_message_content_is_tool_output(self):
         tool_call = self._make_tool_call("FindByTitle", {"isbn": "123"})
         result = await ToolMessage.execute(tool_call)
-        assert result.output.content == {"isbn": "123"}
+        assert result.response.output.content == {"isbn": "123"}
 
     async def test_kwargs_forwarded_to_tool(self):
         tool_instance = AsyncMock(return_value="ok")
@@ -213,16 +213,18 @@ class TestToolMessageExecute:
 
     async def test_unwraps_operation_result_output(self):
         tool_call = self._make_tool_call(
-            "FindByTitle", OperationResult(ok=True, output={"title": "Dune"})
+            "FindByTitle",
+            OperationResult(ok=True, response=Response(output={"title": "Dune"})),
         )
         result = await ToolMessage.execute(tool_call)
-        assert result.output.content == {"title": "Dune"}
+        assert result.response.output.content == {"title": "Dune"}
 
     async def test_unwraps_operation_result_logs_warning(self, caplog):
         import logging
 
         tool_call = self._make_tool_call(
-            "FindByTitle", OperationResult(ok=True, output="some result")
+            "FindByTitle",
+            OperationResult(ok=True, response=Response(output="some result")),
         )
         with caplog.at_level(logging.WARNING, logger="app.common.messages"):
             await ToolMessage.execute(tool_call)

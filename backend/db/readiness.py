@@ -8,7 +8,7 @@ from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
-from common.operation import OperationResult, task
+from common.operation import OperationResult, Response, task
 from pydantic import BaseModel, Field
 from db.stores.book_store import BookStore
 
@@ -67,7 +67,7 @@ async def _check_table_rows(
         ok=ok,
         message=(f"Table {fqtn} has {row_count} rows (need at least {min_rows})."),
         details=[f"row_count: {row_count}", f"min_rows: {min_rows}"],
-        output=row_count,
+        response=Response(output=row_count),
     )
     
 
@@ -101,7 +101,7 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
             if ok
             else f"Missing PostgreSQL extensions: {', '.join(missing)}."
         ),
-        output=result,
+        response=Response(output=result),
     )
     
 
@@ -161,7 +161,7 @@ async def is_ready(
         extensions = await _check_table_extensions(session)
         checks.append(extensions)
         result.need_extensions = not extensions.ok
-        result.missing_extensions = extensions.output["missing"]
+        result.missing_extensions = extensions.response.output["missing"]
         
     
     async with session_factory() as session:
@@ -173,16 +173,16 @@ async def is_ready(
             name="num_missing_embeddings",
             ok=num_missing == 0,
             message="No books missing embeddings." if num_missing == 0 else f"Found {num_missing} books missing embeddings.",
-            output=num_missing,
+            response=Response(output=num_missing),
         ))
         result.num_missing_embeddings = num_missing
         
     ok = all(check.ok for check in checks)
     return OperationResult(
         ok=ok, 
-        message="Database is ready." if ok else "Database is not ready.", 
+        message="Database is ready." if ok else "Database is not ready.",
         steps=checks,
-        output=result,
+        response=Response(output=result),
     )
 
 

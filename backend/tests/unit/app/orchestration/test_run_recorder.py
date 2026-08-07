@@ -16,7 +16,7 @@ from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.orchestration.request_context import RequestContext
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
 from clients import OpenAIClient
-from common.operation import OperationResult, TokenUsage
+from common.operation import OperationResult, Response, TokenUsage
 from db.stores.book_store import BookStore
 
 
@@ -44,10 +44,10 @@ def _make_result_and_output() -> tuple[OperationResult, PlannerOutput]:
     )
     result = OperationResult(
         ok=True,
-        output=output,
+        response=Response(output=output),
         token_usage=TokenUsage(total=42, prompt=30, completion=12),
     )
-    result.duration = 1.23
+    result.timing.duration = 1.23
     return result, output
 
 
@@ -93,7 +93,7 @@ class TestBuildChatRunRow:
         assert row["tasks"] is None
         assert row["planner"]["ok"] is True
         assert (
-            row["planner"]["output"]["parse_result"]["accepted_goals"][0]["description"]
+            row["planner"]["response"]["output"]["parse_result"]["accepted_goals"][0]["description"]
             == "Find a book about machine learning topics"
         )
 
@@ -108,7 +108,7 @@ class TestBuildChatRunRow:
             output=output,
         )
 
-        goal = row["planner"]["output"]["parse_result"]["accepted_goals"][0]
+        goal = row["planner"]["response"]["output"]["parse_result"]["accepted_goals"][0]
         assert goal["_refusal"] is True
         assert goal["_refusal_reasons"] == ["just to populate a private attr"]
 

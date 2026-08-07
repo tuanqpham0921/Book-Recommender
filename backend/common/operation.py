@@ -150,36 +150,38 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
     id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
     parent_id: str | None = None
-    
-    timing: Time = Field(default=Time())
-    
+
+    timing: Time = Field(default_factory=Time)
+
     name: str | None = None
-    
+
     # request: dict[str, any] | None = None
 
     ok: bool = False
     steps: list[Any] = Field(default_factory=list)
     details: list[str] = Field(default_factory=list)
 
-    response: Response = Field(default_factory=Response(OutputT))
+    response: Response[OutputT] = Field(default_factory=Response)
 
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     runtime_error: RuntimeErrorInfo | None = None
 
     def check_output_type(self) -> None:
         # default there's no output
-        if self.output is None:
+        if self.response.output is None:
             return
 
-        if self.output_type is None:
+        if self.response.output_type is None:
             raise TypeError(
-                f"Output of type {type(self.output).__name__} was produced "
+                f"Output of type {type(self.response.output).__name__} was produced "
                 "without a declared output_type"
             )
 
-        if type(self.output).__name__ != self.output_type:
+        if type(self.response.output).__name__ != self.response.output_type:
             raise TypeError(
-                f"Output {self.output} is of type {type(self.output).__name__} not of type {self.output_type}"
+                f"Output {self.response.output} is of type "
+                f"{type(self.response.output).__name__} not of type "
+                f"{self.response.output_type}"
             )
 
     def add_details(self, *message):
@@ -231,15 +233,16 @@ def task(
                         logger.warning(f"Task failed: {func_ref}")
 
                     output.name = func_ref
-                    output.duration = round(time.perf_counter() - time_start, 2)
+                    output.timing.duration = round(time.perf_counter() - time_start, 2)
                     return output
 
                 # task did not return an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
                 result = OperationResult(
-                    name=func_ref, output=output, output_type=type(output).__name__
+                    name=func_ref,
+                    response=Response(output=output, output_type=type(output).__name__),
                 )
-                result.duration = round(time.perf_counter() - time_start, 2)
+                result.timing.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
                 result.add_details(
                     "output is not an operation result, creating a default one"
@@ -265,7 +268,7 @@ def task(
                 result = OperationResult(name=func_ref)
                 result.ok = False
                 result.runtime_error = RuntimeErrorInfo.from_exception(e)
-                result.duration = round(time.perf_counter() - time_start, 2)
+                result.timing.duration = round(time.perf_counter() - time_start, 2)
                 return result
 
         return wrapper

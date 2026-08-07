@@ -1,5 +1,5 @@
 import pytest
-from common.operation import task, OperationResult, RuntimeErrorInfo, TokenUsage
+from common.operation import task, OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import to_serializable
 from config.pricing import MODEL_PRICES, PER_MILLION, UNKNOWN_MODEL
 
@@ -11,7 +11,7 @@ async def _returns_plain_value():
 
 @task
 async def _returns_custom_result():
-    return OperationResult(ok=True, output="custom_output")
+    return OperationResult(ok=True, response=Response(output="custom_output"))
 
 
 @task
@@ -29,16 +29,16 @@ class TestTask:
         result = await _returns_plain_value()
         assert isinstance(result, OperationResult)
         assert result.ok is True
-        assert result.output == "hello"
-        assert result.duration is not None
+        assert result.response.output == "hello"
+        assert result.timing.duration is not None
         assert result.name is not None
 
     async def test_passthrough_when_returns_operation_result(self):
         result = await _returns_custom_result()
         assert isinstance(result, OperationResult)
         assert result.ok is True
-        assert result.output == "custom_output"
-        assert result.duration is not None
+        assert result.response.output == "custom_output"
+        assert result.timing.duration is not None
 
     async def test_captures_exception_as_failed_result(self):
         result = await _raises_value_error()
@@ -46,7 +46,7 @@ class TestTask:
         assert result.ok is False
         assert result.runtime_error is not None
         assert "something went wrong" in result.runtime_error.message
-        assert result.duration is not None
+        assert result.timing.duration is not None
 
     async def test_runtime_error_is_structured(self):
         result = await _raises_value_error()
@@ -72,7 +72,7 @@ class TestTask:
     async def test_none_return_produces_ok_result(self):
         result = await _returns_none()
         assert result.ok is True
-        assert result.output is None
+        assert result.response.output is None
 
 
 class TestTokenUsage:
@@ -238,30 +238,30 @@ class TestOperationResult:
         result = OperationResult()
         assert result.ok is False
         assert result.steps == []
-        assert result.output is None
+        assert result.response.output is None
         assert result.runtime_error is None
-        assert result.duration is None
+        assert result.timing.duration is None
         assert result.id.startswith("op_")
 
     def test_check_output_type_passes_on_type_match(self):
-        result = OperationResult(output="hello", output_type="str")
+        result = OperationResult(response=Response(output="hello", output_type="str"))
         result.check_output_type()  # must not raise
 
     def test_check_output_type_raises_on_type_mismatch(self):
-        result = OperationResult(output=42, output_type="str")
+        result = OperationResult(response=Response(output=42, output_type="str"))
         with pytest.raises(TypeError):
             result.check_output_type()
 
     def test_check_output_type_raises_when_declared_but_missing(self):
-        result = OperationResult(output=None, output_type="str")
+        result = OperationResult(response=Response(output=None, output_type="str"))
         result.check_output_type()
 
     def test_check_output_type_raises_on_undeclared_output(self):
-        result = OperationResult(output="hello", output_type=None)
+        result = OperationResult(response=Response(output="hello", output_type=None))
         with pytest.raises(TypeError, match="without a declared output_type"):
             result.check_output_type()
 
     def test_check_output_type_skips_when_nothing_was_claimed(self):
         # failure envelopes legitimately carry neither output nor output_type
-        result = OperationResult(output=None, output_type=None)
+        result = OperationResult(response=Response(output=None, output_type=None))
         result.check_output_type()  # must not raise
