@@ -1,10 +1,10 @@
 from typing import Any
 
-from app.domains.books.executor import BookNodeExecutor
+from app.domains.books.base_workflow import BookBaseWorkflow
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
 
 
-class FindByTitleExecutor(BookNodeExecutor[FindByTitleOutput]):
+class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
     ui_section_title = "Found books by title"
     tool_cls = FindByTitleRetrieval

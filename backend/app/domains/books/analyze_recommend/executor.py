@@ -1,7 +1,7 @@
 import logging
 from typing import Any, List
 
-from app.domains.books.executor import BookNodeExecutor
+from app.domains.books.base_workflow import BookBaseWorkflow
 from app.domains.books.schemas import Book
 from config import BookConstraints
 from db.stores import DeferredBookQuery
@@ -25,7 +25,7 @@ MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
 
 
-class RecommendBooksExecutor(BookNodeExecutor[RecommendationOutput]):
+class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Recommendation"
     # this node owns the answer — folding it away would hide the reply

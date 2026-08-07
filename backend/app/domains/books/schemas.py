@@ -36,7 +36,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domains.node_executor import NodeWorkflowOutput
+from app.domains.base_workflow import NodeWorkflowOutput
 from db.stores import DeferredBookQuery
 
 class Book(BaseModel):
@@ -93,8 +93,9 @@ class BookRetrievalOutput(NodeWorkflowOutput):
 
     Counts-first, per docs/design/execution-pipeline-v1.md: a retrieval node
     fills in `num_books` and `query` and puts at most a small sample of rows in
-    `books` — `BookNodeExecutor.preflight` (books/executor.py) does all of that
-    in one round trip. Only the last node in a plan runs `query` for the set.
+    `books` — `BookBaseWorkflow.preflight` (books/base_workflow.py) does all of
+    that in one round trip. Only the last node in a plan runs `query` for the
+    full set.
 
     **`num_books` vs `len(books)` is therefore the load-bearing comparison**:
     `num_books` is the size of the match, `len(books)` is the size of the fetch.

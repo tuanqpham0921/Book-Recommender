@@ -8,12 +8,12 @@ request. Subclassing this at least makes a missing `run()` a load-time error;
 the parameter *names* are still only enforced by convention, so keep them in
 step with the call site in `task_runner.py`.
 
-Declare the output in the class header (`NodeExecutor[FindByTitleOutput]`) and
-`AppBaseWorkflow` resolves it from the generic parameter, so a slice's executor
-needs no `__init__` of its own.
+Declare the output in the class header (`NodeBaseWorkflow[FindByTitleOutput]`)
+and `AppBaseWorkflow` resolves it from the generic parameter, so a slice's
+executor needs no `__init__` of its own.
 
 Anything specific to one domain belongs in that domain's own base instead —
-`books/executor.py` (`BookNodeExecutor`) holds the store binding, the
+`books/base_workflow.py` (`BookBaseWorkflow`) holds the store binding, the
 counts-first `preflight()` and `stream_books()`, and book slices subclass that.
 Keeping them out of here is what lets this module stay free of book models and
 of the API's wire schemas.
@@ -45,7 +45,7 @@ class NodeWorkflowOutput(AppWorkflowOutput, ABC):
 OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)
 ARG_PARSER_PROMPT_PATH = "domains/planner/prompts/1_argument_parser.txt"
 
-class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
+class NodeBaseWorkflow(AppBaseWorkflow[OutputT], ABC):
     success_message = "Node completed successfully"
     failure_message = "Node failed"
     ui_loading_message = "Working..."

@@ -12,7 +12,7 @@ A capability is a **vertical slice**: one folder holding everything about one no
 books/find_by_title/
 ├── labels.py     # the planner-facing name, as a one-member str Enum
 ├── schemas.py    # request schema (docstring = tool description) + output schema
-├── executor.py   # the executor that runs it (book nodes: a BookNodeExecutor)
+├── executor.py   # the executor that runs it (book nodes: a BookBaseWorkflow)
 └── __init__.py   # SPEC = NodeSpec(...) tying the three together
 ```
 
@@ -30,17 +30,39 @@ books/find_by_title/
   subclasses the shape it claims in its docstring. One entity model per domain:
   don't add a narrower variant for a single consumer — narrow at the point of
   use instead (see `Book`'s docstring).
-- `<domain>/executor.py` — the domain's executor base, holding what every node in
-  it repeats. `books/executor.py` is `BookNodeExecutor`: it binds `self.store`
+- `<domain>/base_workflow.py` — the domain's base, holding what every node in it
+  repeats. `books/base_workflow.py` is `BookBaseWorkflow`: it binds `self.store`
   from the request context, and adds `preflight()` (stamp a deferred query on the
   output, get the match size and a small sample in one round trip) and
   `stream_books()` (cards to the browser, validated through `BookOut`).
 - `base_request.py` — `BaseRequest`, shared fields + validation.
-- `node_executor.py` — `NodeExecutor`, the domain-agnostic base underneath those.
-  It pins the `run(task, dependent_results, request_context)` signature the task
-  runner calls, and resolves the output type from `NodeExecutor[SomeOutput]`, so a
-  slice's executor needs no `__init__`. Nothing about one domain goes in here —
-  that is what the domain base above is for.
+- `base_workflow.py` — `NodeBaseWorkflow`, the domain-agnostic base underneath
+  those. It pins the `run(task, dependent_results, request_context)` signature the
+  task runner calls, and resolves the output type from
+  `NodeBaseWorkflow[SomeOutput]`, so a slice's executor needs no `__init__`.
+  Nothing about one domain goes in here — that is what the domain base above is
+  for.
+
+## Naming: Base, Workflow, Executor
+
+**`Base` is the word that marks a reusable base class** — not `Workflow`. The
+ladder is `Workflow` → `AppBaseWorkflow` → `NodeBaseWorkflow` →
+`BookBaseWorkflow`, each in a `workflow.py`/`base_workflow.py` file. Everything
+without `Base` in its name is a concrete unit of work, and plenty of those are
+`*Workflow` too: `PlannerWorkflow`, `InitialParseWorkflow`,
+`StrategyClassificationWorkflow`, `TaskRunnerWorkflow`.
+
+**`Executor` is the subset of those the planner can dispatch.** A
+`FindByTitleExecutor` is a workflow like `PlannerWorkflow` is, but it is also a
+*node*: it has a request schema, a `NodeSpec`, a place in the tool catalog, and
+the task runner reaches it through `EXECUTORS_CLS_MAPPING` rather than calling
+it directly. That is the distinction the second word is carrying — node vs.
+pipeline step, not concrete vs. reusable. Rename it away and the class name
+stops telling you the planner can reach it.
+
+So: `<node>/executor.py` holding `<Node>Executor`, and `NodeSpec.executor` /
+`EXECUTORS_CLS_MAPPING` pointing at them; `base_workflow.py` holding the bases
+they build on.
 - `node_types.py` — just `UnknownNodeTypeEnum`. `NodeTypeEnum` is built in
   `app/registry.py`; it cannot live here without an import cycle back through the
   slices.
@@ -57,7 +79,7 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
 ## Adding a node (the standard path)
 
 1. Create the folder `<domain>/<node>/` with the four files above. A book node's
-   executor subclasses `BookNodeExecutor[TheOutput]` and implements
+   executor subclasses `BookBaseWorkflow[TheOutput]` and implements
    **`execute(query, dependent_results)`**, not `run()` — `run()` is where the
    store gets bound, so overriding it loses `self.store`.
 2. Write the request schema's docstring for the LLM (include example queries;

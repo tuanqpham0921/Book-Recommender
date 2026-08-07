@@ -1,8 +1,8 @@
-"""What every book node's executor shares — the domain layer of the base class.
+"""What every book node's executor shares — the books layer of the base class.
 
-`NodeExecutor` (app/domains/node_executor.py) pins the call signature for *any*
-node in any domain. This adds the three things only a book node needs, each of
-which every book slice was otherwise repeating by hand:
+`NodeBaseWorkflow` (app/domains/base_workflow.py) pins the call signature for
+*any* node in any domain. This adds the three things only a book node needs,
+each of which every book slice was otherwise repeating by hand:
 
 - **`self.store`** — bound before the slice's own code runs, so a book node
   opens with its work instead of `self.store = request_context.book_store` and
@@ -12,16 +12,16 @@ which every book slice was otherwise repeating by hand:
   ask how big the match is, and take a small sample of it — one round trip.
 - **`stream_books()`** — book cards to the browser, validated through `BookOut`.
 
-Living here rather than on `NodeExecutor` is also what puts `Book` back in
+Living here rather than on `NodeBaseWorkflow` is also what puts `Book` back in
 normal import reach: `books/schemas.py` imports `NodeWorkflowOutput` from
-`node_executor`, so that module could only name `Book` under `TYPE_CHECKING` —
+`base_workflow`, so that module could only name `Book` under `TYPE_CHECKING` —
 and it had no business importing the API's wire schema either. This module sits
 below both and imports them plainly.
 
 A node whose output is not book-shaped — a written report, `AnalyzeBooksOutput`
 in the shape vocabulary — does not belong here: `preflight` writes fields only
 `BookRetrievalOutput` has, which is what the type bound says. Subclass
-`NodeExecutor` directly, or widen the bound when such a node is real.
+`NodeBaseWorkflow` directly, or widen the bound when such a node is real.
 """
 
 from abc import ABC, abstractmethod
@@ -29,7 +29,7 @@ from typing import Any, Sequence, TypeVar
 
 from app.api.schemas import BookOut
 from app.domains.books.schemas import Book, BookRetrievalOutput
-from app.domains.node_executor import NodeExecutor
+from app.domains.base_workflow import NodeBaseWorkflow
 from app.orchestration.request_context import RequestContext
 from config import BookConstraints
 from db.stores import DeferredBookQuery
@@ -40,8 +40,8 @@ import asyncio
 BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
 
 
-class BookNodeExecutor(NodeExecutor[BookOutputT], ABC):
-    """Base for every executor in the books domain."""
+class BookBaseWorkflow(NodeBaseWorkflow[BookOutputT], ABC):
+    """Base for every node executor in the books domain."""
 
     # Bound per request in `run()`, not in `__init__`: the store belongs to the
     # request-scoped database session, and an executor is constructed before
@@ -71,7 +71,7 @@ class BookNodeExecutor(NodeExecutor[BookOutputT], ABC):
     async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
         """Fill in `self.output` and call `self.finalize_result(ok=…)`.
 
-        The same contract as `NodeExecutor.run`, minus the request context:
+        The same contract as `NodeBaseWorkflow.run`, minus the request context:
         `self.store` is already bound, and `self.request_context` is there for
         the rest of it.
 

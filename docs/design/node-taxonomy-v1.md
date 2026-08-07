@@ -283,7 +283,8 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   as `Retrieve_By_Title` (capital `By`) against a codebase that says
   `Retrieve_by_Title` everywhere would have silently broken the
   `report_system_goals` golden diff.
-- Executors subclass [`NodeExecutor`](../../backend/app/domains/node_executor.py),
+- Executors subclass `NodeExecutor` (renamed `NodeBaseWorkflow` on 2026-08-07,
+  see below — [`app/domains/base_workflow.py`](../../backend/app/domains/base_workflow.py)),
   which pins the `run(task, dependent_results, request_context)` signature the
   task runner calls and resolves the output type from the generic parameter.
 - The output-shape vocabulary is now partly real classes:
@@ -295,8 +296,8 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
 
 **Done (2026-08-07) — a books-domain executor base:**
 
-- [`app/domains/books/executor.py`](../../backend/app/domains/books/executor.py)
-  adds `BookNodeExecutor`, one layer under `NodeExecutor`, holding the three
+- [`app/domains/books/base_workflow.py`](../../backend/app/domains/books/base_workflow.py)
+  adds `BookBaseWorkflow`, one layer under `NodeBaseWorkflow`, holding the three
   things every book node was repeating: `self.store` (bound from the request
   context before the slice runs), `preflight()` and `stream_books()`. Book slices
   implement **`execute(query, dependent_results)`**; `run()` belongs to the base
@@ -306,9 +307,20 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   a single `BookStore.preview` round trip. It deliberately does not assign
   `output.books` — whether a sample is the node's answer is the caller's call, so
   that line stays visible in the slice.
-- `stream_books()` moved off `NodeExecutor` with it. The domain-agnostic base no
-  longer imports `Book` (it could only do so under `TYPE_CHECKING`, since
-  `books/schemas.py` imports back into it) or the API's `BookOut`.
+- `stream_books()` moved off the generic base with it, which no longer imports
+  `Book` (it could only do so under `TYPE_CHECKING`, since `books/schemas.py`
+  imports back into it) or the API's `BookOut`.
+- Both bases were renamed to say what they are: `node_executor.py`/`NodeExecutor`
+  → `base_workflow.py`/`NodeBaseWorkflow`, matching `AppBaseWorkflow` one layer
+  up. **Only the two bases changed**, after weighing a full sweep of "executor"
+  → "workflow" (87 Python references, 27 files) and rejecting it. The rule that
+  came out of that: **`Base` marks a reusable base class**, since concrete work
+  is named `*Workflow` throughout the planner (`PlannerWorkflow`,
+  `TaskRunnerWorkflow`); **`Executor` marks the subset of concrete workflows the
+  planner can dispatch** — a node with a request schema, a `NodeSpec` and a
+  catalog entry, reached through `EXECUTORS_CLS_MAPPING`. So slices keep
+  `<node>/executor.py`/`<Node>Executor`, and so do `NodeSpec.executor` and the
+  mocks. Written up in `backend/app/domains/README.md`.
 
 **Still open (roadmap Phase 1):**
 
