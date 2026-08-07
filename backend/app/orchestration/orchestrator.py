@@ -28,7 +28,7 @@ class Orchestrator:
         sse_stream = request_context.sse_stream
         # created (not just returned from a helper) so that a cancellation
         # mid-await below still leaves this bound for the finally block —
-        # PlannerWorkflow mutates its own .response in place and
+        # PlannerWorkflow mutates its own .record in place and
         # re-raises on cancellation rather than returning it
         conversation_orchestrator = None
         task_runner = None
@@ -54,7 +54,7 @@ class Orchestrator:
 
             planner_result = conversation_orchestrator.result.parse_result
             if (
-                conversation_orchestrator.response.ok
+                conversation_orchestrator.record.ok
                 and planner_result
                 and planner_result.accepted_goals
             ):
@@ -90,8 +90,8 @@ class Orchestrator:
             )
             raise
         except TimeoutError:
-            if conversation_orchestrator and conversation_orchestrator.response:
-                conversation_orchestrator.response.add_details(
+            if conversation_orchestrator and conversation_orchestrator.record:
+                conversation_orchestrator.record.add_details(
                     "Orchestration Task timed out"
                 )
 

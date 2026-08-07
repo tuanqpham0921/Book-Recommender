@@ -33,7 +33,7 @@ def request_context():
 class TestOrchestratorRun:
     async def test_records_chat_run(self, request_context):
         mock_workflow = AsyncMock()
-        mock_workflow.response = OperationResult(ok=True)
+        mock_workflow.record = OperationResult(ok=True)
 
         with patch(
             "app.orchestration.orchestrator.PlannerWorkflow",
@@ -50,7 +50,7 @@ class TestOrchestratorRun:
         self, request_context
     ):
         mock_workflow = AsyncMock()
-        mock_workflow.response = None
+        mock_workflow.record = None
 
         with patch(
             "app.orchestration.orchestrator.PlannerWorkflow",

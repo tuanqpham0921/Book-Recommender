@@ -55,9 +55,9 @@ class TestPlannerWorkflowAddStep:
             token_usage=TokenUsage(total=100, prompt=60, completion=40),
         )
         orchestrator.add_step(step)
-        assert orchestrator.response.token_usage.total == 100
-        assert orchestrator.response.token_usage.prompt == 60
-        assert orchestrator.response.token_usage.completion == 40
+        assert orchestrator.record.token_usage.total == 100
+        assert orchestrator.record.token_usage.prompt == 60
+        assert orchestrator.record.token_usage.completion == 40
 
     def test_shared_messages_list_appended_by_children(self, orchestrator):
         # TODO: fix this
@@ -70,7 +70,7 @@ class TestPlannerWorkflowAddStep:
             ok=True, name="some_step", response=Response(result=InitialParseOutput())
         )
         orchestrator.add_step(step)
-        assert step in orchestrator.response.steps
+        assert step in orchestrator.record.steps
 
 
 def _make_runtime_error(message: str) -> RuntimeErrorInfo:
@@ -90,7 +90,7 @@ def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
 
 
 class TestPlannerWorkflowRuntimeErrorPropagation:
-    """self.response.runtime_error must come from whichever child step
+    """self.record.runtime_error must come from whichever child step
     actually crashed."""
 
     async def test_parse_failure_runtime_error_propagates(self, orchestrator):
@@ -106,7 +106,7 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
         ):
             await orchestrator.run(request_context=MagicMock(session_id="sess_1"))
 
-        assert orchestrator.response.runtime_error is parse_error
+        assert orchestrator.record.runtime_error is parse_error
 
 
 class TestPlannerOutputJsonRoundTrip:

@@ -65,7 +65,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
         self.app_env = app_env
 
     def finalize_result(self, *, ok: bool) -> None:
-        self.response.ok = ok
+        self.record.ok = ok
 
     async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         result = await self.run_async_step(

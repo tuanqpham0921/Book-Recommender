@@ -52,12 +52,12 @@ async def record_chat_run(
     task_runner: TaskRunnerWorkflow | None = None,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
-    if not request_context or workflow is None or workflow.response is None:
+    if not request_context or workflow is None or workflow.record is None:
         user_message_id = (
             request_context.user_message.id if request_context else "unknown"
         )
         logger.warning(
-            f"record_chat_run: missing request_context or workflow.response for chat_id={user_message_id}"
+            f"record_chat_run: missing request_context or workflow.record for chat_id={user_message_id}"
         )
         return
 
@@ -70,9 +70,9 @@ async def record_chat_run(
             session_id=request_context.session_id,
             user_chat_id=request_context.user_message.id,
             user_message=request_context.user_message.content,
-            result=workflow.response,
+            result=workflow.record,
             output=workflow.result,
-            tasks=task_runner.response if task_runner is not None else None,
+            tasks=task_runner.record if task_runner is not None else None,
         )
 
         if app_env == "development":
@@ -82,8 +82,8 @@ async def record_chat_run(
             # save_file(row_cleaned, file_name=f"{row['chat_id']}")
             # save_file(row_cleaned, file_name=f"chat_run_dev")
 
-            if task_runner and task_runner.response:
-                result = to_serializable(task_runner.response)
+            if task_runner and task_runner.record:
+                result = to_serializable(task_runner.record)
                 result = remove_empty_values(result)
                 files.append(result)
                 # save_file(result, file_name=f"task_result_{row['chat_id']}")

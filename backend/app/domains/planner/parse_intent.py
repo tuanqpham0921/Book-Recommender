@@ -294,8 +294,8 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             and not parse_result.out_of_scope
         ):
             logger.warning("Nothing was classified in the initial parse")
-            self.response.ok = False
-            self.response.add_details("Nothing was classified in the initial parse")
+            self.record.ok = False
+            self.record.add_details("Nothing was classified in the initial parse")
             raise RuntimeError("Nothing was classified in the initial parse")
 
         self.result.out_of_scope = parse_result.out_of_scope

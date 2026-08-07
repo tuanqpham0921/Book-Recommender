@@ -19,7 +19,7 @@ class StepFailure(RuntimeError):
 
 
 class Workflow(ABC, Generic[OutputT]):
-    """One instance = one execution. self.response (and subclass output
+    """One instance = one execution. self.record (and subclass output
     fields like accepted_goals) accumulate for the life of the instance and
     are never reset, so calling __call__ more than once on the same instance
     stacks the second run's output onto the first's instead of replacing it.
@@ -31,27 +31,27 @@ class Workflow(ABC, Generic[OutputT]):
         self.output_type = output_type
         self._called = False
 
-        # intialize an envolope in memory to modify
-        self.response: OperationResult[OutputT] = OperationResult(
+        # intialize a record envolope in memory to modify
+        self.record: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
             response=Response(
                 output_type=output_type.__name__ if output_type is not None else None
             ),
         )
         if output_type is not None:
-            self.response.response.result = output_type()
+            self.record.response.result = output_type()
 
     def add_details(self, *message):
-        self.response.add_details(message)
+        self.record.add_details(message)
 
     @property
     def result(self) -> OutputT:
-        # self.response is this Workflow's OperationResult envelope; .result
+        # self.record is this Workflow's OperationResult envelope; .result
         # on that is its own shorthand property for the payload
         # (OperationResult.response.result)
-        if self.response.result is None:
+        if self.record.result is None:
             raise RuntimeError(f"{self.workflow_ref} output was not initialized")
-        return self.response.result
+        return self.record.result
 
     async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         if self._called:
@@ -68,7 +68,7 @@ class Workflow(ABC, Generic[OutputT]):
             self.check_output_type()
 
             # not runtime failure, app still runs
-            if not self.response.ok:
+            if not self.record.ok:
                 self.logger.warning(f"Workflow failed: {self.workflow_name}")
             else:
                 self.logger.info(f"Finished workflow: {self.workflow_name}")
@@ -77,30 +77,30 @@ class Workflow(ABC, Generic[OutputT]):
             # what we have so a caller can still record a partial run, then
             # re-raise — swallowing this would stop the task from actually
             # being cancelled (see the no-`return`-in-finally note below).
-            self.response.ok = False
+            self.record.ok = False
             self.add_details("asyncio Cancelled")
             self.logger.warning(f"Workflow cancelled: {self.workflow_name}")
-            self.response.runtime_error = RuntimeErrorInfo.from_exception(e)
+            self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
             raise
         except StepFailure as e:
             # controlled abort — the failing step's envelope already
-            self.response.ok = False
+            self.record.ok = False
             self.logger.warning(f"Workflow stopped: {e}")
             # NOTE just make the StepFailure a runtime error
-            self.response.runtime_error = RuntimeErrorInfo.from_exception(e)
+            self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
         except Exception as e:
-            self.response.ok = False
+            self.record.ok = False
             # run-time failure: a genuine crash in run() itself
             self.logger.exception(f"Workflow failed: {e}")
-            self.response.runtime_error = RuntimeErrorInfo.from_exception(e)
+            self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
         finally:
             # final formatting of the result — no `return` here: a return
             # inside finally would swallow BaseExceptions (e.g. asyncio
             # cancellation) that the except clauses deliberately let through
-            self.response.name = self.workflow_ref
-            self.response.timing.duration = round(time.perf_counter() - time_start, 2)
+            self.record.name = self.workflow_ref
+            self.record.timing.duration = round(time.perf_counter() - time_start, 2)
 
-        return self.response
+        return self.record
 
     @abstractmethod
     async def run(self, *args: Any, **kwargs: Any) -> None:
@@ -122,11 +122,11 @@ class Workflow(ABC, Generic[OutputT]):
         if step_result.ok:
             return step_result
 
-        self.response.ok = False
-        self.response.add_details(f"FAILED STEP:{step_result.name}")
+        self.record.ok = False
+        self.record.add_details(f"FAILED STEP:{step_result.name}")
         if raise_on_failure:
             # names the step only: the step's own envelope is already in
-            # self.response.steps with its details and runtime_error, and this
+            # self.record.steps with its details and runtime_error, and this
             # string is what lands in the parent's runtime_error.message
             raise StepFailure(f"Step failed: {step_result.name}")
         return step_result
@@ -135,8 +135,8 @@ class Workflow(ABC, Generic[OutputT]):
         if not isinstance(step, OperationResult):
             raise ValueError(f"Step is of type {type(step)} not OperationResult")
 
-        self.response.token_usage += step.token_usage
-        self.response.steps.append(step)
+        self.record.token_usage += step.token_usage
+        self.record.steps.append(step)
 
     @property
     def workflow_ref(self) -> str:
@@ -144,11 +144,11 @@ class Workflow(ABC, Generic[OutputT]):
 
     @property
     def workflow_name(self) -> str:
-        return f"{type(self).__name__}:{self.response.id}"
+        return f"{type(self).__name__}:{self.record.id}"
 
     @property
     def logger(self) -> logging.Logger:
         return logging.getLogger(self.workflow_ref)
 
     def check_output_type(self) -> None:
-        self.response.check_output_type()
+        self.record.check_output_type()

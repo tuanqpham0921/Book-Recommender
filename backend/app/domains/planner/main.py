@@ -153,9 +153,9 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
             self.result.parse_result = parse_output
 
             if not parse_result.ok:
-                self.response.ok = False
+                self.record.ok = False
                 if parse_result.runtime_error:
-                    self.response.runtime_error = parse_result.runtime_error
+                    self.record.runtime_error = parse_result.runtime_error
                     await self.sse_stream.send_error(self.initial_parse_failure_message)
                     return
                 # await self.sse_stream.send_chars(self.initial_parse_failure_message)
@@ -168,7 +168,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
         if not system_goals:
             # parse ok but nothing to plan — the parse workflow already
             # streamed the reply (small talk / out-of-scope / refusals)
-            self.response.ok = True
+            self.record.ok = True
             return
 
         # Attach the answer stage before anything is drawn, so both diagrams
@@ -184,7 +184,7 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
         # self.result.parsed_results = parsed_system_goals
         # await self.send_mermaid_parsed(parsed_system_goals, generation_nodes)
 
-        self.response.ok = True
+        self.record.ok = True
 
 
     async def send_mermaid(

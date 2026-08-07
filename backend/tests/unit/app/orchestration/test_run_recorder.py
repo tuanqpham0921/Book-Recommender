@@ -54,7 +54,7 @@ def _make_result_and_output() -> tuple[OperationResult, PlannerOutput]:
 def _make_workflow():
     result, output = _make_result_and_output()
     workflow = MagicMock()
-    workflow.response = result
+    workflow.record = result
     workflow.result = output
     return workflow
 
@@ -116,10 +116,10 @@ class TestBuildChatRunRow:
 class TestRecordChatRun:
     async def test_missing_workflow_result_records_nothing(self):
         # app_env="development" (not "test") so this exercises the
-        # workflow.response-is-None guard specifically, not the env-based skip
+        # workflow.record-is-None guard specifically, not the env-based skip
         ctx = _make_request_context("development")
         workflow = MagicMock()
-        workflow.response = None
+        workflow.record = None
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
             "app.orchestration.run_recorder.ChatRunStore"

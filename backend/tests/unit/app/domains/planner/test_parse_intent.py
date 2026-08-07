@@ -89,7 +89,7 @@ class TestProcessParseResult:
         # no usable content at all — the workflow's error handling takes over
         with pytest.raises(RuntimeError, match="Nothing was classified"):
             parse_wf.process_parse_result(_make_parse_result())
-        assert parse_wf.response.ok is False
+        assert parse_wf.record.ok is False
 
     def test_out_of_scope_only_does_not_trigger_empty_branch(self, parse_wf):
         parse_wf.process_parse_result(
@@ -199,18 +199,18 @@ class TestFinalizeResult:
     async def test_ok_true_when_accepted_goals_present(self, parse_wf):
         parse_wf.result.accepted_goals.append(_make_goal())
         await parse_wf.finalize_result(payload={})
-        assert parse_wf.response.ok is True
+        assert parse_wf.record.ok is True
 
     async def test_ok_true_when_only_a_reply_payload(self, parse_wf):
         # out-of-scope / refusals streamed a reply — that is a handled
         # conversation, not a failure
         await parse_wf.finalize_result(payload={"out_of_scope": ["Cooking recipe"]})
-        assert parse_wf.response.ok is True
-        assert isinstance(parse_wf.response.ok, bool)
+        assert parse_wf.record.ok is True
+        assert isinstance(parse_wf.record.ok, bool)
 
     async def test_ok_false_when_no_goals_and_no_payload(self, parse_wf):
         await parse_wf.finalize_result(payload={})
-        assert parse_wf.response.ok is False
+        assert parse_wf.record.ok is False
 
 
 class TestToLlmMessages:
@@ -274,7 +274,7 @@ class TestRun:
 
         await parse_wf.run()
 
-        assert parse_wf.response.ok is True
+        assert parse_wf.record.ok is True
 
     async def test_out_of_scope_is_streamed_to_the_user(self, parse_wf):
         parse_result = _make_parse_result(
