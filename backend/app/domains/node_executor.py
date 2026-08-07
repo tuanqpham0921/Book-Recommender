@@ -11,12 +11,17 @@ step with the call site in `task_runner.py`.
 Declare the output in the class header (`NodeExecutor[FindByTitleOutput]`) and
 `AppBaseWorkflow` resolves it from the generic parameter, so a slice's executor
 needs no `__init__` of its own.
+
+Anything specific to one domain belongs in that domain's own base instead —
+`books/executor.py` (`BookNodeExecutor`) holds the store binding, the
+counts-first `preflight()` and `stream_books()`, and book slices subclass that.
+Keeping them out of here is what lets this module stay free of book models and
+of the API's wire schemas.
 """
 from pydantic import Field
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Sequence, TypeVar, cast
+from typing import Any, TypeVar
 
-from app.api.schemas import BookOut
 from app.common.messages import APIMessage, AssistantMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
@@ -25,14 +30,6 @@ from app.orchestration.request_context import RequestContext
 from clients.base import BaseLLMClient
 from app.common.prompt_loader import load_prompt
 from clients import OpenAIParserRequest
-import asyncio
-from sqlalchemy import Select
-
-if TYPE_CHECKING:
-    # Only for the annotation: app/domains/books/schemas.py imports
-    # NodeWorkflowOutput from this module, so importing Book at runtime would
-    # close the cycle.
-    from app.domains.books.schemas import Book
 
 class NodeWorkflowOutput(AppWorkflowOutput, ABC):
     """Domain payload stored on OperationResult.output."""
@@ -119,39 +116,3 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
             max_completion_tokens=2000,
             include_tool_description=False,
         )
-        
-    async def stream_books(
-        self, books: Sequence["Book | dict[str, Any]"], delay: float = 0.0
-    ) -> None:
-        """Stream book cards to the frontend.
-
-        Takes either `Book` models or the raw row dicts the store hands back
-        (`BookStore.preview` / `.materialize`); both are validated into
-        `BookOut`, which is what the client actually receives and the only
-        place the UI's field names are pinned. Callers holding `Book` objects
-        should pass them as-is — calling `model_dump()` first just adds a
-        round trip through a dict this method would rebuild anyway.
-
-        Validating here rather than trusting the caller is what keeps internal
-        fields off the wire: a store row carries columns the UI never reads,
-        and `Book` carries `similarity_score`. Neither reaches the browser.
-
-        A row with no `isbn13` now raises instead of being sent. It is the
-        primary key and the React key the card list is built on, so a card
-        without one cannot render correctly regardless.
-
-        `delay` defaults to 0 — a preview lands inside a collapsed section
-        where nobody watches cards arrive one by one, and three nodes' worth of
-        smoothing is seconds of dead time. Pass a delay for the final answer,
-        where the streaming is the point.
-        """
-        sent_isbn = set()
-        for i, book in enumerate(books):
-            card = BookOut.model_validate(book, from_attributes=True)
-            if card.isbn13 in sent_isbn:
-                continue
-
-            await self.sse_stream.send_book_card(position=i, data=card.model_dump())
-            if delay:
-                await asyncio.sleep(delay)
-            sent_isbn.add(card.isbn13)

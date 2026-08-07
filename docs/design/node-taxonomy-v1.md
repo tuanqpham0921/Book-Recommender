@@ -293,6 +293,23 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   reserved names with no class — no registered node produces either yet. This
   closes half of the gap the old `output_schemas.py` module docstring described.
 
+**Done (2026-08-07) — a books-domain executor base:**
+
+- [`app/domains/books/executor.py`](../../backend/app/domains/books/executor.py)
+  adds `BookNodeExecutor`, one layer under `NodeExecutor`, holding the three
+  things every book node was repeating: `self.store` (bound from the request
+  context before the slice runs), `preflight()` and `stream_books()`. Book slices
+  implement **`execute(query, dependent_results)`**; `run()` belongs to the base
+  now, which is what makes the store binding impossible to forget.
+- `preflight(query)` is the counts-first opening move as one call: it stamps
+  `query`/`query_sql`/`num_books` on the output and returns `(total, sample)` from
+  a single `BookStore.preview` round trip. It deliberately does not assign
+  `output.books` — whether a sample is the node's answer is the caller's call, so
+  that line stays visible in the slice.
+- `stream_books()` moved off `NodeExecutor` with it. The domain-agnostic base no
+  longer imports `Book` (it could only do so under `TYPE_CHECKING`, since
+  `books/schemas.py` imports back into it) or the API's `BookOut`.
+
 **Still open (roadmap Phase 1):**
 
 - Remove `CompareStrategy` from `NODE_TYPE_TO_CLS`/catalog (class stays parked).

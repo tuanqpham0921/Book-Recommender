@@ -1,26 +1,16 @@
 from typing import Any
 
-from app.domains.node_executor import NodeExecutor
-from app.domains.books.schemas import Book
-from app.orchestration.request_context import RequestContext
+from app.domains.books.executor import BookNodeExecutor
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
-from db.stores.utils import compile_sql
 
-class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
+
+class FindByTitleExecutor(BookNodeExecutor[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
     ui_section_title = "Found books by title"
     tool_cls = FindByTitleRetrieval
 
-    async def run(
-        self,
-        query: str,
-        dependent_results: dict[str, Any],
-        # TODO: this can move to a book store workflow, __init__
-        request_context: RequestContext,
-    ) -> None:
-        self.store = request_context.book_store
-        
-        """Count the matching titles and hand the query downstream — no rows.
+    async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
+        """Count the matching titles and hand the query downstream — not the set.
 
         The count is what makes a "4,000 matched, narrow it down?" pause
         possible before any large result set is built; the query is what lets
@@ -34,25 +24,17 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
             raise ValueError("No title was parsed")
         await self.sse_stream.send_ui_loading(f"finding book titled: {book_title}")
 
-        store = request_context.book_store
-        deferred = store.title_query(title=book_title)
+        deferred = self.store.title_query(title=book_title)
+        total, books = await self.preflight(deferred)
 
-        self.output.query = deferred
-        self.output.query_sql = compile_sql(deferred.stmt)
-
-        # one round trip for both: the size of the match, and a few of them to
-        # show under it so the number comes with evidence
-        total, rows = await store.preview(deferred)
-        
-        # TODO: this is fine, tho we want to document this clearly (as batch)
-        # as a batching, and return a structured output
-        self.output.num_books = total
-        self.output.preview = [Book.model_validate(row) for row in rows]
+        # a sample, not the answer — `num_books` is the size of the match, and
+        # the gap between the two is what marks these rows as a preview
+        self.output.books = books
 
         await self.sse_stream.send_chars(
-            f"- Found {self.output.num_books} books titled: {book_title}"
+            f"- Found {total} books titled: {book_title}"
         )
-        await self.stream_books(rows)
+        await self.stream_books(books)
 
         self.finalize_result()
 
@@ -61,5 +43,3 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
         # matches is an answer this node reports, not a failure it raises.
         ok = self.output.args is not None and self.output.query is not None
         return super().finalize_result(ok=ok)
-
-

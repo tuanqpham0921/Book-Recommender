@@ -12,7 +12,7 @@ A capability is a **vertical slice**: one folder holding everything about one no
 books/find_by_title/
 ├── labels.py     # the planner-facing name, as a one-member str Enum
 ├── schemas.py    # request schema (docstring = tool description) + output schema
-├── executor.py   # the NodeExecutor that runs it
+├── executor.py   # the executor that runs it (book nodes: a BookNodeExecutor)
 └── __init__.py   # SPEC = NodeSpec(...) tying the three together
 ```
 
@@ -30,11 +30,17 @@ books/find_by_title/
   subclasses the shape it claims in its docstring. One entity model per domain:
   don't add a narrower variant for a single consumer — narrow at the point of
   use instead (see `Book`'s docstring).
+- `<domain>/executor.py` — the domain's executor base, holding what every node in
+  it repeats. `books/executor.py` is `BookNodeExecutor`: it binds `self.store`
+  from the request context, and adds `preflight()` (stamp a deferred query on the
+  output, get the match size and a small sample in one round trip) and
+  `stream_books()` (cards to the browser, validated through `BookOut`).
 - `base_request.py` — `BaseRequest`, shared fields + validation.
-- `node_executor.py` — `NodeExecutor`, the base every slice's executor subclasses.
+- `node_executor.py` — `NodeExecutor`, the domain-agnostic base underneath those.
   It pins the `run(task, dependent_results, request_context)` signature the task
   runner calls, and resolves the output type from `NodeExecutor[SomeOutput]`, so a
-  slice's executor needs no `__init__`.
+  slice's executor needs no `__init__`. Nothing about one domain goes in here —
+  that is what the domain base above is for.
 - `node_types.py` — just `UnknownNodeTypeEnum`. `NodeTypeEnum` is built in
   `app/registry.py`; it cannot live here without an import cycle back through the
   slices.
@@ -50,7 +56,10 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
 
 ## Adding a node (the standard path)
 
-1. Create the folder `<domain>/<node>/` with the four files above.
+1. Create the folder `<domain>/<node>/` with the four files above. A book node's
+   executor subclasses `BookNodeExecutor[TheOutput]` and implements
+   **`execute(query, dependent_results)`**, not `run()` — `run()` is where the
+   store gets bound, so overriding it loses `self.store`.
 2. Write the request schema's docstring for the LLM (include example queries;
    that's roadmap Phase 2 style). `make tools-catalog` audits every docstring for
    `Purpose: / Args: / Returns: / depends_on: / Use when: / Do not use: /

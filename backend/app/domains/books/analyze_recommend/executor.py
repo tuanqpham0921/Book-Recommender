@@ -1,12 +1,11 @@
 import logging
 from typing import Any, List
 
-from app.domains.node_executor import NodeExecutor
+from app.domains.books.executor import BookNodeExecutor
 from app.domains.books.schemas import Book
-from app.orchestration.request_context import RequestContext
 from config import BookConstraints
 from db.stores import DeferredBookQuery
-from db.stores.utils import compile_sql, compose
+from db.stores.utils import compose
 from .analyze_references import (
     ParsedDependents,
     ReferenceAnalysis,
@@ -26,22 +25,14 @@ MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
 
 
-class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
+class RecommendBooksExecutor(BookNodeExecutor[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Recommendation"
     # this node owns the answer — folding it away would hide the reply
     ui_section_collapsible = False
     tool_cls = RecommendationStrategy
 
-    async def run(
-        self,
-        query: str,
-        dependent_results: dict[str, Any],
-        request_context: RequestContext,
-    ) -> None:
-        # TODO: move this to the books base workflow
-        self.store = request_context.book_store
-
+    async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
         await self.sse_stream.send_ui_loading("recommending books...")
 
         parsed_dependents = ParsedDependents.from_results(dependent_results)
@@ -167,29 +158,28 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         ]
         return books
 
-    # TODO: this is re-usable should be in a workflow
-    # for analyze nodes
-    # maybe make a seperate book workflow
     async def _materialize_books(
         self, upstream: list[DeferredBookQuery]
     ) -> List[Book]:
-        """Run the composed upstream query for rows, and stream them."""
-        anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
-        self.output.query = anchor
-        self.output.query_sql = compile_sql(anchor.stmt)
+        """Pool the upstream queries into one anchor and fetch its books.
 
-        num_books = await self.store.count(anchor)
+        `preflight` returns the size of the pool and the rows in a single round
+        trip, so below the cap the sample *is* the anchor and there is nothing
+        left to materialize separately. Note what it stamps on the output —
+        `query`/`query_sql`/`num_books` describe the *references* here;
+        `execute()` overwrites `num_books` with the recommendation's own count
+        once it has one.
+        """
+        anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
+        num_books, books = await self.preflight(
+            anchor, sample=BookConstraints.default_limit
+        )
         self.add_details(f"Dependent results has {num_books} books in total")
         if num_books > 5:
-            ...
             # TODO: for now, re-query and only get the top rated
             # or give the users pre-defined options (random, ...)
             raise NotImplementedError("need to handle when there are more than 5 books")
 
-        # TODO: for now can just do the preview with top 5
-        # and just log the book
-        rows = await self.store.materialize(anchor, limit=BookConstraints.default_limit)
-        books = [Book.model_validate(row) for row in rows]
         return books
 
     def process_candidates(self, candidates: list[Book], referenced_books: list[Book]) -> list[Book]:

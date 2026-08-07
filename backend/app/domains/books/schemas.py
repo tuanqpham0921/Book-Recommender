@@ -91,16 +91,18 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     `books` is a real answer — it means nothing matched, not that the node
     failed.
 
-    Counts-first, per docs/design/execution-pipeline-v1.md: retrieval fills in
-    `num_books`, `preview` and `query`, and leaves `books` empty. Only the last
-    node in a plan runs `query` for rows, so a populated `books` means "these
-    rows were actually fetched", not "this is everything that matched" —
-    `num_books` is the size of the match, `len(books)` is the size of the fetch.
+    Counts-first, per docs/design/execution-pipeline-v1.md: a retrieval node
+    fills in `num_books` and `query` and puts at most a small sample of rows in
+    `books` — `BookNodeExecutor.preflight` (books/executor.py) does all of that
+    in one round trip. Only the last node in a plan runs `query` for the set.
 
-    `preview` is a handful of those matches shown under the count in the UI, so
-    "1,240 books" comes with evidence of what they look like. It is a *sample*,
-    ranked for recognizability rather than correctness — never treat it as the
-    node's answer, and never let a downstream node read it instead of `query`.
+    **`num_books` vs `len(books)` is therefore the load-bearing comparison**:
+    `num_books` is the size of the match, `len(books)` is the size of the fetch.
+    When they differ, `books` is a handful of rows shown under the count in the
+    UI so "1,240 books" comes with evidence of what they look like — ranked for
+    recognizability rather than correctness, and not the node's answer. Anything
+    downstream that needs the real set has to go through `query` instead of
+    reading those rows.
 
     `query` is `exclude=True` on purpose: `to_serializable` (common/utils/
     format.py) skips excluded fields but does walk private attrs, so a
@@ -115,17 +117,19 @@ class BookRetrievalOutput(NodeWorkflowOutput):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    books: list[Book] = Field(default_factory=list)
+    books: list[Book] = Field(
+        default_factory=list,
+        description="rows actually fetched — the whole match, or a sample of it",
+    )
     num_books: int = 0
     query_sql: str | None = None
     query: DeferredBookQuery | None = Field(default=None, exclude=True)
-    preview: list[Book] = Field(default_factory=list)
 
-    def to_summary(self) -> dict[str, Any]:
+    def to_summary(self, preview_num = 3) -> dict[str, Any]:
         return {
             "num_books": self.num_books,
             "num_fetched": len(self.books),
-            "preview": [book.title for book in self.preview],
+            "preview": [book.title for book in self.books[:preview_num]],
         }
 
 
