@@ -136,23 +136,33 @@ class RuntimeErrorInfo(BaseModel):
             message=str(e),
             traceback="".join(traceback.format_exception(e)),
         )
+        
+class Time(BaseModel):
+    start_time: str = Field(default_factory=now_iso)
+    duration: float | None = None
 
+class Response(BaseModel, Generic[OutputT]):
+    output: OutputT | None = None
+    output_type: str | None = None
 
 class OperationResult(BaseModel, Generic[OutputT]):
     """Outcome of a single named check or step."""
 
     id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
-    start_time: str = Field(default_factory=now_iso)
+    parent_id: str | None = None
+    
+    timing: Time = Field(default=Time())
+    
     name: str | None = None
+    
+    # request: dict[str, any] | None = None
 
     ok: bool = False
     steps: list[Any] = Field(default_factory=list)
     details: list[str] = Field(default_factory=list)
 
-    output: OutputT | None = None
-    output_type: str | None = None
+    response: Response = Field(default_factory=Response(OutputT))
 
-    duration: float | None = None
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     runtime_error: RuntimeErrorInfo | None = None
 
