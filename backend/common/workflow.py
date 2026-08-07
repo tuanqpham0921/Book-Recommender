@@ -64,7 +64,7 @@ class Workflow(ABC, Generic[OutputT]):
 
             # not runtime failure, app still runs
             if not self.result.ok:
-                self.logger.warning(f"Workflow failed: {self.result.message}")
+                self.logger.warning(f"Workflow failed: {self.workflow_name}")
             else:
                 self.logger.info(f"Finished workflow: {self.workflow_name}")
         except asyncio.CancelledError as e:
@@ -73,7 +73,7 @@ class Workflow(ABC, Generic[OutputT]):
             # re-raise — swallowing this would stop the task from actually
             # being cancelled (see the no-`return`-in-finally note below).
             self.result.ok = False
-            self.result.message = "asyncio Cancelled"
+            self.add_details("asyncio Cancelled")
             self.logger.warning(f"Workflow cancelled: {self.workflow_name}")
             self.result.runtime_error = RuntimeErrorInfo.from_exception(e)
             raise
@@ -81,14 +81,12 @@ class Workflow(ABC, Generic[OutputT]):
             # controlled abort — the failing step's envelope already
             self.result.ok = False
             self.logger.warning(f"Workflow stopped: {e}")
-            self.result.message = str(e)
             # NOTE just make the StepFailure a runtime error
             self.result.runtime_error = RuntimeErrorInfo.from_exception(e)
         except Exception as e:
             self.result.ok = False
             # run-time failure: a genuine crash in run() itself
             self.logger.exception(f"Workflow failed: {e}")
-            self.result.message = f"Workflow failed: {e}"
             self.result.runtime_error = RuntimeErrorInfo.from_exception(e)
         finally:
             # final formatting of the result — no `return` here: a return
@@ -120,10 +118,12 @@ class Workflow(ABC, Generic[OutputT]):
             return step_result
 
         self.result.ok = False
-        self.result.message = f"Step failed: {step_result.name}: {step_result.message}"
         self.result.add_details(f"FAILED STEP:{step_result.name}")
         if raise_on_failure:
-            raise StepFailure(self.result.message)
+            # names the step only: the step's own envelope is already in
+            # self.result.steps with its details and runtime_error, and this
+            # string is what lands in the parent's runtime_error.message
+            raise StepFailure(f"Step failed: {step_result.name}")
         return step_result
 
     def add_step(self, step: OperationResult[Any]) -> None:

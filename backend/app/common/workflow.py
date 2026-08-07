@@ -26,9 +26,6 @@ class AppWorkflowOutput(BaseModel, ABC):
         ...
 
 class AppBaseWorkflow(Workflow[OutputT]):
-    success_message = "Workflow completed successfully"
-    failure_message = "Workflow failed"
-
     @classmethod
     def _generic_output_type(cls) -> type | None:
         """The OutputT a subclass pinned in `AppBaseWorkflow[SomeOutput]`.
@@ -66,11 +63,8 @@ class AppBaseWorkflow(Workflow[OutputT]):
         self.messages: list[APIMessage] = messages if messages is not None else []
         self.app_env = app_env
 
-    def finalize_result(self, *, ok: bool, message: str | None = None) -> None:
+    def finalize_result(self, *, ok: bool) -> None:
         self.result.ok = ok
-        self.result.message = message or (
-            self.success_message if ok else self.failure_message
-        )
 
     async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         result = await self.run_async_step(

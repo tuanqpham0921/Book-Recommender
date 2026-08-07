@@ -146,7 +146,6 @@ class OperationResult(BaseModel, Generic[OutputT]):
     name: str | None = None
 
     ok: bool = False
-    message: str | None = None
     steps: list[Any] = Field(default_factory=list)
     details: list[str] = Field(default_factory=list)
 
@@ -216,10 +215,10 @@ def task(
                 output = await func(*args, **kwargs)
 
                 # custom operation result retuned from the task
-                # the task must validate ok and message
+                # the task must validate ok itself
                 if isinstance(output, OperationResult):
                     if log_info and not output.ok:
-                        logger.warning(f"Task failed: {output.message}")
+                        logger.warning(f"Task failed: {func_ref}")
 
                     output.name = func_ref
                     output.duration = round(time.perf_counter() - time_start, 2)
@@ -232,7 +231,6 @@ def task(
                 )
                 result.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
-                result.message = f"Task {func_ref} completed successfully"
                 result.add_details(
                     "output is not an operation result, creating a default one"
                 )
@@ -256,7 +254,6 @@ def task(
 
                 result = OperationResult(name=func_ref)
                 result.ok = False
-                result.message = f"Task failed: {e}"
                 result.runtime_error = RuntimeErrorInfo.from_exception(e)
                 result.duration = round(time.perf_counter() - time_start, 2)
                 return result

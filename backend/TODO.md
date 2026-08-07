@@ -99,9 +99,13 @@ TODO:
         * no need for parse_arguments, and such
     * add a add_details(msg, log=true)
         * not sure what should get monitor and log yet
-    * might need to remove message in operation result all together
+    * ~~might need to remove message in operation result all together~~ DONE 2026-08-07
         * it's just noise and extra overhead
             * details should contain the buffer messages
+        * gone from OperationResult, and with it success_message/failure_message
+          on every workflow and the message= arg on finalize_result
+        * failure text now reads off runtime_error.message (which the review
+          page and report.py actually consume)
 
 cuurent issue
     * the retrieval title Brave new World is not catching

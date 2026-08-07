@@ -207,4 +207,4 @@ class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
 
     def finalize_result(self):
         ok = self.output.args is not None and bool(self.output.books)
-        return super().finalize_result(ok=ok, message="parsed args okay")
+        return super().finalize_result(ok=ok)

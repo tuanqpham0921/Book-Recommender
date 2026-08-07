@@ -11,7 +11,7 @@ async def _returns_plain_value():
 
 @task
 async def _returns_custom_result():
-    return OperationResult(ok=True, message="custom message", output="custom_output")
+    return OperationResult(ok=True, output="custom_output")
 
 
 @task
@@ -37,7 +37,6 @@ class TestTask:
         result = await _returns_custom_result()
         assert isinstance(result, OperationResult)
         assert result.ok is True
-        assert result.message == "custom message"
         assert result.output == "custom_output"
         assert result.duration is not None
 
@@ -45,8 +44,8 @@ class TestTask:
         result = await _raises_value_error()
         assert isinstance(result, OperationResult)
         assert result.ok is False
-        assert "something went wrong" in result.message
         assert result.runtime_error is not None
+        assert "something went wrong" in result.runtime_error.message
         assert result.duration is not None
 
     async def test_runtime_error_is_structured(self):
@@ -238,7 +237,6 @@ class TestOperationResult:
         # fail-closed: an envelope is failed until someone declares success
         result = OperationResult()
         assert result.ok is False
-        assert result.message is None
         assert result.steps == []
         assert result.output is None
         assert result.runtime_error is None

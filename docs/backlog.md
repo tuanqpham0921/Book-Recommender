@@ -169,9 +169,15 @@ From the owner's design notes — these need real design thought, not drive-by f
    `OperationResult` reference before running, let it mutate) — requires rethinking
    result append/overwrite semantics. *(Cross-referenced in roadmap deferred:
    checkpoint/resume.)*
-5. `self.result` message overwriting is lossy — figure out message vs details; maybe
-   push prior text to details as "prev message: …", and stop overwriting in
-   app/workflow.
+5. ~~`self.result` message overwriting is lossy — figure out message vs details.~~
+   **Done (2026-08-07):** resolved by deleting `OperationResult.message` outright
+   rather than making the overwrite lossless. Every layer (`@task`, `Workflow.__call__`,
+   `run_async_step`, `finalize_result`, each workflow's own `success_message`/
+   `failure_message`) wrote the field and nothing read it back — not the API, not
+   `record_chat_run`, not the review page, not the eval reports — so the "lossy
+   overwrite" only ever destroyed text no consumer saw. Free-text now goes in `details`
+   via `add_details`, and failure text is on `runtime_error.message`, which *is* read
+   (review page, `report.py`).
 - Once resume/checkpoint exists: DAG processing may move into model validation so the
   orchestrator can pick up and continue; steps become config describing what runs next.
 

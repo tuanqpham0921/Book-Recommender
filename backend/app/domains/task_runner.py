@@ -43,8 +43,6 @@ class TaskRunnerOutput(AppWorkflowOutput):
 
 
 class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
-    success_message = "Task runner completed successfully"
-    failure_message = "Task runner failed"
     ui_loading_message = "Running tasks..."
 
     def __init__(

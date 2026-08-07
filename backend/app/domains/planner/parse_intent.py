@@ -211,8 +211,6 @@ class InitialParseOutput(AppWorkflowOutput):
 
 
 class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
-    success_message = "Initial parse completed successfully"
-    failure_message = "Initial parse failed"
     ui_loading_message = "Thinking..."
     intent_reject_message = (
         "I can't help with that request. Please try again with a book-related question."

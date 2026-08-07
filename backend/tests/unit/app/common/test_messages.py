@@ -237,4 +237,4 @@ class TestToolMessageExecute:
 
         result = await ToolMessage.execute(tool_call)
         assert result.ok is False
-        assert "db error" in result.message
+        assert "db error" in result.runtime_error.message

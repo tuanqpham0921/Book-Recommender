@@ -101,9 +101,9 @@ Each capability is a **vertical slice** — one folder under `app/domains/<domai
 
 Infrastructure abstractions in `common/` that centralize logging, error catching, and structured output — so production code never crashes silently and every result carries consistent metadata.
 
-- **`OperationResult[T]`** (`common/operation.py`) — universal result envelope: `ok`, `message`, `output`, `steps`, `run_time_error`, `duration`, `id`. All steps and workflows return this. Parent callers access child output via `.output`.
+- **`OperationResult[T]`** (`common/operation.py`) — universal result envelope: `ok`, `output`, `steps`, `details`, `runtime_error`, `duration`, `token_usage`, `id`. All steps and workflows return this. Parent callers access child output via `.output`. There is deliberately **no `message` field** — it was write-only noise that every layer overwrote; free-text goes in `details` (via `add_details`), and failure text lives on `runtime_error.message`.
 - **`Workflow`** (`common/workflow.py`) — for multi-step async processes. Subclass and override `run()`. Centralizes start/error logging and catches runtime exceptions without crashing. Each `Workflow` owns one `OperationResult` in memory; steps append to `.steps` as they complete. `UserFacingBaseWorkflow` adds SSE streaming helpers.
-- **`@task` decorator** (`common/operation.py`) — for single async functions. Wraps the function, catches exceptions, and returns `OperationResult`. To add detail or custom messages from inside a `@task`, return a custom `OperationResult` directly — the decorator detects this and passes it through unchanged.
+- **`@task` decorator** (`common/operation.py`) — for single async functions. Wraps the function, catches exceptions, and returns `OperationResult`. To set `ok` yourself or attach `details`/`output` from inside a `@task`, return a custom `OperationResult` directly — the decorator detects this and passes it through unchanged.
 
 ### Domain / Node Type System
 

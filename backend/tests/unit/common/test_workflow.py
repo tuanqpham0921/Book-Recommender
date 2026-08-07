@@ -31,7 +31,6 @@ class _SuccessWorkflow(Workflow):
 
     async def run(self, *args, **kwargs):
         self.result.output = "done"
-        self.result.message = "success"
         # fail-closed contract: workflows must declare success explicitly
         self.result.ok = True
 
@@ -80,8 +79,8 @@ class TestWorkflowExecution:
     async def test_exception_in_run_sets_ok_false(self):
         result = await _ExceptionWorkflow()()
         assert result.ok is False
-        assert "workflow exploded" in result.message
         assert result.runtime_error is not None
+        assert "workflow exploded" in result.runtime_error.message
 
     async def test_exception_in_run_still_records_duration(self):
         result = await _ExceptionWorkflow()()
@@ -111,29 +110,27 @@ class TestRunAsyncStep:
         assert result.steps[0].name == "my_step"
 
     async def test_failed_step_sets_result_ok_false(self):
-        step = OperationResult(ok=False, name="bad_step", message="bad")
+        step = OperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=False)()
         assert result.ok is False
 
-    async def test_failed_step_sets_informative_message(self):
-        step = OperationResult(ok=False, name="bad_step", message="bad")
+    async def test_failed_step_names_the_step_in_details(self):
+        step = OperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=False)()
-        assert result.message is not None
-        assert "bad_step" in result.message
-        assert "bad" in result.message
+        assert "FAILED STEP:bad_step" in result.details
 
     async def test_failed_step_with_raise_is_a_controlled_abort(self):
         # StepFailure is control flow, not a crash: the parent envelope must
         # NOT carry runtime_error — the step's own envelope has the details
-        step = OperationResult(ok=False, name="bad_step", message="bad")
+        step = OperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=True)()
         assert result.ok is False
         assert result.runtime_error is not None
-        assert result.message is not None
-        assert "bad_step" in result.message
+        assert result.runtime_error.type == "StepFailure"
+        assert "bad_step" in result.runtime_error.message
 
     async def test_failed_step_without_raise_still_appended(self):
-        step = OperationResult(ok=False, name="bad_step", message="bad")
+        step = OperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=False)()
         assert len(result.steps) == 1
 
@@ -149,7 +146,7 @@ class TestRunAsyncStep:
     async def test_bad_step_does_not_stop_later_steps_without_raise(self):
         steps = [
             OperationResult(ok=True, name="step_1"),
-            OperationResult(ok=False, name="bad_step", message="bad"),
+            OperationResult(ok=False, name="bad_step"),
             OperationResult(ok=True, name="step_3"),
         ]
         result = await _MultiStepWorkflow(steps, raise_on_failure=False)()
@@ -161,7 +158,7 @@ class TestRunAsyncStep:
     async def test_bad_step_stop_later_steps_with_raise(self):
         steps = [
             OperationResult(ok=True, name="step_1"),
-            OperationResult(ok=False, name="bad_step", message="bad"),
+            OperationResult(ok=False, name="bad_step"),
             OperationResult(ok=True, name="step_3"),
         ]
         result = await _MultiStepWorkflow(steps, raise_on_failure=True)()
@@ -171,14 +168,14 @@ class TestRunAsyncStep:
 
     async def test_later_success_does_not_clear_an_earlier_failure(self):
         steps = [
-            OperationResult(ok=False, name="bad_step", message="bad"),
+            OperationResult(ok=False, name="bad_step"),
             OperationResult(ok=True, name="step_2"),
         ]
         result = await _MultiStepWorkflow(steps)()
         # the parent stays failed unless the workflow explicitly declares
         # success after handling the failure (fail-closed contract)
         assert result.ok is False
-        assert "bad_step" in result.message
+        assert "FAILED STEP:bad_step" in result.details
 
 
 class TestCrashingSteps:
@@ -307,9 +304,9 @@ class TestCrashingSteps:
         result = await wf()
         assert wf.continued_past_step is False
         assert result.ok is False
-        assert result.message is not None
-        assert "Step failed" in result.message
-        assert "flaky_step" in result.message
+        assert result.runtime_error.type == "StepFailure"
+        assert "Step failed" in result.runtime_error.message
+        assert "flaky_step" in result.runtime_error.message
         # controlled abort: the crash details live on the step, not the parent
         assert result.runtime_error is not None
         assert result.steps[0].runtime_error.type == "ValueError"
@@ -329,7 +326,6 @@ class TestCrashingSteps:
                     )
                     if step.ok:
                         self.result.ok = True
-                        self.result.message = step.message
                         return
 
         result = await _RetryWorkflow()()

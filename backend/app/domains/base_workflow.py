@@ -46,8 +46,6 @@ OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)
 ARG_PARSER_PROMPT_PATH = "domains/planner/prompts/1_argument_parser.txt"
 
 class NodeBaseWorkflow(AppBaseWorkflow[OutputT], ABC):
-    success_message = "Node completed successfully"
-    failure_message = "Node failed"
     ui_loading_message = "Working..."
 
     # How this node's step is titled in the UI's task list. `TaskRunnerWorkflow`
