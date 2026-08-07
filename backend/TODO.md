@@ -11,6 +11,66 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 continue:
+    * follow the format with out all the super init stuff
+    
+    * cleaning up your workflow
+        * app_workflow should hold llm, tool calls, parser level
+            * parser can take a generic prompt fill this schema if none are provided
+            * should also take in the req and stuff?
+
+        * for your system
+            * the output should have
+            input:
+                natural_langage_field
+                dependent_results (or artifacts or docs)?
+            parsed_args:
+                things needed for the output
+                it could be None, single schema, or multiple schemas
+            output:
+                * this can return schemas (planner, books types) or natural language
+            * this should be standardized for all the nodes gneration
+                * you can have a generic prompt
+                * or pass in a custom prompt, models, ects...
+                * and the parsed_args and output just do to_summary() -> response
+
+        * you might not need node_workflow
+            * since a lot of that is for the app_workflow
+            * and the you can put common useable functions
+                * format artifacts,
+                * generate a response
+                * ui_colapsable (so parse intent isn't not showable(?))
+        * remove the generation node attached
+
+    * you might not need the parse_intent(?)
+        * the planner main is an executor to keep it the same shape?
+        * parsed_intent is a goal setter
+            * and it could just be a utils like refernce analyze? or you want it to be a workflow as well
+        * even the planner can take it dependent results or artifacts context. so you can pick up or continue
+            * but for now if it's there just log
+
+    so i imagine the op result to be like
+    OperationResult
+        id: 
+        ok:
+        input: ... (new and it can be dict or some type)
+                   (for our arch specifically, this is where you can have:
+                        query=...
+                        dependent_results=... (or artifacts or context)
+                   )
+        steps = [
+            do what ever it needs in here
+        ]
+        output = ... same as before
+                     but for this app nodes
+                     it should return:
+                     sometype:
+                        parsed_args= some type to call .to_summary()
+                        output = sometype? or call result?
+
+
+
+    ----------
+    
     * set up the filter node that recommend can call independetly
     * add in genre node so you know that the query builder work
         * should be (title + genre) -> filter -> recommend - output
@@ -37,6 +97,11 @@ TODO:
         * or even flattern the tree
         * it can store only things like isbn and title
         * no need for parse_arguments, and such
+    * add a add_details(msg, log=true)
+        * not sure what should get monitor and log yet
+    * might need to remove message in operation result all together
+        * it's just noise and extra overhead
+            * details should contain the buffer messages
 
 cuurent issue
     * the retrieval title Brave new World is not catching
