@@ -70,8 +70,9 @@ they build on.
   `args_parser.py` (goal → typed request), `main.py` (`PlannerWorkflow`: runs it,
   renders the Mermaid diagram, streams it). Prompts live in `planner/prompts/*.txt`.
 - `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan via
-  `registry.EXECUTORS_CLS_MAPPING`. Implemented, currently disabled in the orchestrator
-  (executors are still mocks — see `playground/README.md`).
+  `registry.EXECUTORS_CLS_MAPPING`, which points at the real slice executors. The
+  mocks under `playground/app_mock/` are legacy eval-testing scaffolding — ignore
+  them.
 
 Request schemas describe *what* to do; **executors** (the *how*) are reached
 through the slice's `NodeSpec` — schemas contain no execution logic.

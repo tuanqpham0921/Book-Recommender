@@ -171,14 +171,13 @@ NODE_EXECUTORS_CLS_MAPPING: dict[type, type] = {
     s.request: s.executor for s in SPECS if s.executor is not None
 }
 
-# NOTE: temporary — the live mapping points at the mock executors under
-# playground/app_mock, because the slice executors in
-# app/domains/**/executor.py are still stubs that raise NotImplementedError.
+# The live mapping — the real slice executors. The mock path below is legacy:
+# playground/app_mock was the stand-in used for eval testing before the slices
+# had executors, and is no longer maintained. Don't flip back to it.
 EXECUTORS_CLS_MAPPING = NODE_EXECUTORS_CLS_MAPPING
 
-# # NOTE: Flip this for playground cls
-# from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
-# EXECUTORS_CLS_MAPPING = MOCK_EXECUTORS_CLS_MAPPING
+# # from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
+# # EXECUTORS_CLS_MAPPING = MOCK_EXECUTORS_CLS_MAPPING
 
 
 def main() -> None:
