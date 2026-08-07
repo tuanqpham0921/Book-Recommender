@@ -58,11 +58,17 @@ response generation that always gets attached when the intent is to find books")
 | `Retrieve_Developer_Info` | `DeveloperInfoRequest` | Kept |
 
 Every retrieval node's structured result is typed via
-`app/domains/books/schemas/output_schemas.py` (`BookSummary` + one `Output` class per
-node) — the contract downstream nodes and eval/review tooling see. It deliberately
-excludes `description`, `thumbnail`, and `embedding`: those are presentation/internal
-fields (thumbnail still streams to the UI separately via `send_book_card`), not
-reasoning inputs.
+`app/domains/books/schemas.py` (`Book` + one `Output` class per node) — the contract
+downstream nodes and eval/review tooling see. `Book` carries every `books` column
+except `embedding`; that one omission is load-bearing, since these models are
+serialized into `chat_runs` JSONB and a per-book vector would bloat every run record.
+
+There is deliberately **no narrower book model** (revised 2026-08-07). An earlier
+`BookSummary`/`ReferenceBook` pair tried to keep presentation fields out of the LLM
+prompts, but the prompt-facing renderers already select fields by hand, so the types
+were never what enforced it — only a second field list free to drift from the first,
+which it did. Narrowing belongs at the point of use: a renderer picking fields, or
+`model_dump(include=...)`.
 
 **Deferred, not yet dimensioned:** `published_year`, `average_rating`, `num_pages`,
 `ratings_count`, `is_children`, `categories` are real `BookModel` columns without their
@@ -281,7 +287,7 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   which pins the `run(task, dependent_results, request_context)` signature the
   task runner calls and resolves the output type from the generic parameter.
 - The output-shape vocabulary is now partly real classes:
-  `app/domains/books/schemas.py` defines `BookSummary`, `BookRetrievalOutput` and
+  `app/domains/books/schemas.py` defines `Book`, `BookRetrievalOutput` and
   `BookRecommendationOutput`, and each node's output subclasses the shape its
   docstring claims. `AnalyzeBooksOutput` and `ActionConfirmationOutput` remain
   reserved names with no class — no registered node produces either yet. This

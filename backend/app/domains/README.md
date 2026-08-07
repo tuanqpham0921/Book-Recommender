@@ -25,9 +25,11 @@ books/find_by_title/
   everything from it: `NODE_TYPE_TO_CLS`, the tier class tuples, `CATALOG_TIERS`,
   `AnyStrategyRequest`, `NodeTypeEnum` and the executor mapping. None of those
   are hand-maintained per node.
-- `<domain>/schemas.py` — output shapes shared across that domain's slices
-  (`BookSummary`, `BookRetrievalOutput`, …). A slice's own output subclasses the
-  shape it claims in its docstring.
+- `<domain>/schemas.py` — the domain's entity model plus the output shapes shared
+  across its slices (`Book`, `BookRetrievalOutput`, …). A slice's own output
+  subclasses the shape it claims in its docstring. One entity model per domain:
+  don't add a narrower variant for a single consumer — narrow at the point of
+  use instead (see `Book`'s docstring).
 - `base_request.py` — `BaseRequest`, shared fields + validation.
 - `node_executor.py` — `NodeExecutor`, the base every slice's executor subclasses.
   It pins the `run(task, dependent_results, request_context)` signature the task

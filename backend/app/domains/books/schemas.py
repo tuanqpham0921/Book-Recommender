@@ -1,9 +1,9 @@
 """Shared result payloads for the book domain — the contract downstream nodes
 (e.g. Analyze_Recommend reading a dependency's result) and eval/review tooling
-see. Deliberately excludes description/thumbnail/embedding: those are
-presentation/internal fields, not reasoning inputs. Full book-card data
-(including thumbnail) is streamed to the UI separately via
-SSEStream.send_book_card and doesn't go through these models.
+see. `Book` is the one book model: every books-table column except the
+embedding. Narrowing happens where a consumer needs it — a prompt renderer
+picking the fields it wants, or `model_dump(include=...)` — never by declaring
+a second, smaller model. See `Book`'s docstring for why.
 
 ## The output-shape vocabulary
 
@@ -39,11 +39,34 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domains.node_executor import NodeWorkflowOutput
 from db.stores import DeferredBookQuery
 
-# TODO: this should be the book model (or something similar)
-# missing thumbnail
-class BookSummary(BaseModel):
+class Book(BaseModel):
+    """One book, as everything above the database layer sees it: every column
+    of the `books` table except the embedding, matching what
+    `BookModel.to_dict()` (db/schema/models.py) hands back.
+
+    **The embedding's absence is load-bearing, not an oversight.** These models
+    are serialized into `chat_runs` JSONB by `record_chat_run`; a 1536-float
+    vector per book would bloat every run record for something no reader of it
+    can use. Do not add the field "for completeness" — if a caller needs
+    vectors, it should go to the store.
+
+    There is deliberately no narrower book model. An earlier `ReferenceBook`
+    tried to keep presentation fields away from the LLM prompts, but the
+    prompt-facing renderers already select fields by hand
+    (analyze_recommend/analyze_references.py, generate_response.py), so the
+    type was never the thing enforcing it — it was a second field list free to
+    drift from this one, and it did. Narrow at the point of use instead.
+
+    Field names are a **persisted contract**: they land in `chat_runs.tasks`
+    and are read back by the review page and the eval reports, so a rename
+    silently breaks readers against older rows. Every field needs a default
+    except the two that identify a book, because `Workflow.__init__` builds
+    output envelopes before there is anything to put in them.
+    """
+
     isbn13: str
     title: str
+    isbn10: str | None = None
     authors: str | None = None
     categories: str | None = None
     genre: str | None = None
@@ -54,6 +77,13 @@ class BookSummary(BaseModel):
     is_children: bool | None = None
     description: str | None = None
     thumbnail: str | None = None
+    title_and_subtiles: str | None = None
+
+    # Not a column: `BookStore.search_by_embedding` attaches it to the row, and
+    # it is the only record of how close a recommendation actually was — kept
+    # so "why these books" stays answerable from the run log. None on a book
+    # that arrived by any other route.
+    similarity_score: float | None = None
 
 
 class BookRetrievalOutput(NodeWorkflowOutput):
@@ -85,11 +115,11 @@ class BookRetrievalOutput(NodeWorkflowOutput):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    books: list[BookSummary] = Field(default_factory=list)
+    books: list[Book] = Field(default_factory=list)
     num_books: int = 0
     query_sql: str | None = None
     query: DeferredBookQuery | None = Field(default=None, exclude=True)
-    preview: list[BookSummary] = Field(default_factory=list)
+    preview: list[Book] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
         return {

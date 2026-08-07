@@ -1,7 +1,7 @@
 from typing import Any
 
 from app.domains.node_executor import NodeExecutor
-from app.domains.books.schemas import BookSummary
+from app.domains.books.schemas import Book
 from app.orchestration.request_context import RequestContext
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
 from db.stores.utils import compile_sql
@@ -47,7 +47,7 @@ class FindByTitleExecutor(NodeExecutor[FindByTitleOutput]):
         # TODO: this is fine, tho we want to document this clearly (as batch)
         # as a batching, and return a structured output
         self.output.num_books = total
-        self.output.preview = [BookSummary.model_validate(row) for row in rows]
+        self.output.preview = [Book.model_validate(row) for row in rows]
 
         await self.sse_stream.send_chars(
             f"- Found {self.output.num_books} books titled: {book_title}"

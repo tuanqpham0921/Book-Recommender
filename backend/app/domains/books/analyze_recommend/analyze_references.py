@@ -27,11 +27,9 @@ from pydantic import BaseModel, Field
 
 from app.common.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
-from app.domains.books.schemas import BookSummary
+from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
 from db.stores import DeferredBookQuery
-
-from .schemas import ReferenceBook
 
 ANALYZE_REFERENCES_PROMPT_PATH = (
     "domains/books/analyze_recommend/prompts/analyze_references.txt"
@@ -67,7 +65,7 @@ class ParsedDependents:
     # what to fetch rows from — the anchor for the similarity search
     queries: list[DeferredBookQuery] = field(default_factory=list)
     # rows a dependency already chose (BookRecommendationOutput), used as-is
-    books: list[BookSummary] = field(default_factory=list)
+    books: list[Book] = field(default_factory=list)
     # written reports about books (AnalyzeBooksOutput, reserved)
     reports: list[str] = field(default_factory=list)
     # "<task id>: <class name>" for anything this node can't read
@@ -129,8 +127,14 @@ def _truncate(text: str, limit: int, collapse: bool = True) -> str:
     return text[:limit].rsplit(" ", 1)[0] + "…"
 
 
-def render_documents(books: list[ReferenceBook], reports: list[str]) -> str:
+def render_documents(books: list[Book], reports: list[str]) -> str:
     """The document block the analyzer prompt reads.
+
+    Only `title` and `description` are read off each book. That selection is
+    what keeps thumbnails, ratings and years out of the prompt — the model is
+    asked for a description, and metadata here is noise it tries to explain.
+    The narrowing lives in this function on purpose; a narrower book model
+    would only restate it one layer further away (app/domains/books/schemas.py).
 
     Books are grouped by title because the same title arriving twice is the
     normal case, not a duplicate: the catalog holds several editions of a book

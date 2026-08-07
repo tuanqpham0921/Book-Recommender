@@ -27,7 +27,9 @@ from app.common.prompt_loader import load_prompt
 from app.common.sse_stream import SSEStream
 from clients.openai_requests import OpenAIChatRequest
 
-from .schemas import ReferenceBook, count_values
+from app.domains.books.schemas import Book
+
+from .schemas import count_values
 
 RESPONSE_PROMPT_PATH = "domains/books/analyze_recommend/prompts/response_prompt.txt"
 
@@ -37,9 +39,14 @@ MAX_RESPONSE_TOKENS = 600
 
 
 def summarize_references(
-    references: Iterable[ReferenceBook], semantic_input: str | None
+    references: Iterable[Book], semantic_input: str | None
 ) -> dict[str, Any]:
     """The input half: what the user pointed at, and what they asked for on top.
+
+    Only `title`, `authors` and `genre` are read off each book — that selection
+    is what keeps descriptions and identifiers out of the reply, per this
+    module's docstring. It belongs here rather than in a narrower book model,
+    which could only restate the same list further from the prompt.
 
     `semantic_input` is the user's own phrase as the argument parser read it
     ("but darker"), *not* the anchor prose that was embedded. The anchor is a
@@ -53,7 +60,7 @@ def summarize_references(
     Dune and Dune") and double its author — "Jane Austen (2)" for a user who
     named one novel reads as a much stronger preference than they expressed.
     """
-    by_title: dict[str, ReferenceBook] = {}
+    by_title: dict[str, Book] = {}
     for book in references:
         by_title.setdefault(book.title, book)
     unique = list(by_title.values())

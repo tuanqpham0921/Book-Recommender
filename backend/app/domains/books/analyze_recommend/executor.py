@@ -2,7 +2,7 @@ import logging
 from typing import Any, List
 
 from app.domains.node_executor import NodeExecutor
-from app.domains.books.schemas import BookSummary
+from app.domains.books.schemas import Book
 from app.orchestration.request_context import RequestContext
 from config import BookConstraints
 from db.stores import DeferredBookQuery
@@ -18,7 +18,7 @@ from .generate_response import (
     render_summaries,
     summarize_references,
 )
-from .schemas import ReferenceBook, RecommendationOutput, RecommendationStrategy
+from .schemas import RecommendationOutput, RecommendationStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +53,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
 
         # rows a dependency already chose come through as-is; the rest of the
         # anchor is one composed query, run for rows here
-        reference_books = [
-            ReferenceBook(**book.model_dump()) for book in parsed_dependents.books
-        ]
+        reference_books = list(parsed_dependents.books)
         if parsed_dependents.queries:
             reference_books += await self._materialize_books(parsed_dependents.queries)
         self.output.references = reference_books
@@ -101,7 +99,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         self.finalize_result()
 
     async def analyze_references(
-        self, books: list[ReferenceBook], reports: list[str]
+        self, books: list[Book], reports: list[str]
     ) -> str | None:
         """Fold the dependent books and reports into one description to embed.
 
@@ -165,7 +163,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         rows = await self.store.search_by_embedding(embedding)
         excluded = set(exclude_isbns)
         books = [
-            BookSummary.model_validate(row)
+            Book.model_validate(row)
             for row in rows
             if row.get("isbn13") not in excluded
         ]
@@ -176,7 +174,7 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
     # maybe make a seperate book workflow
     async def _materialize_books(
         self, upstream: list[DeferredBookQuery]
-    ) -> List[ReferenceBook]:
+    ) -> List[Book]:
         """Run the composed upstream query for rows, and stream them."""
         anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
         self.output.query = anchor
@@ -193,10 +191,10 @@ class RecommendBooksExecutor(NodeExecutor[RecommendationOutput]):
         # TODO: for now can just do the preview with top 5
         # and just log the book
         rows = await self.store.materialize(anchor, limit=BookConstraints.default_limit)
-        books = [ReferenceBook(**row) for row in rows]
+        books = [Book.model_validate(row) for row in rows]
         return books
-    
-    def process_candidates(self, candidates: list[BookSummary], referenced_books: list[ReferenceBook]) -> list[BookSummary]:
+
+    def process_candidates(self, candidates: list[Book], referenced_books: list[Book]) -> list[Book]:
         if not candidates:
             raise ValueError("No books were returned from embedding search")
         if len(candidates) <= MAX_RECOMMENDED_BOOKS:

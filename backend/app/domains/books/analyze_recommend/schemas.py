@@ -1,6 +1,6 @@
 from app.domains.base_request import BaseRequest
-from app.domains.books.schemas import BookRecommendationOutput
-from pydantic import BaseModel, Field
+from app.domains.books.schemas import Book, BookRecommendationOutput
+from pydantic import Field
 from typing import Any, Iterable, Literal, Optional
 from .labels import AnalyzeRecommendNodeTypeEnum
 from db.schema import BooksFilter
@@ -16,26 +16,6 @@ def count_values(values: Iterable[str | None]) -> dict[str, int]:
     be misled by it.
     """
     return dict(Counter(value for value in values if value).most_common())
-
-
-class ReferenceBook(BaseModel):
-    """A book the user pointed at, cut down to what this node reasons over.
-
-    `BookSummary` carries presentation and ranking fields — thumbnail, rating,
-    ratings count, year — that neither the reference analyzer nor the response
-    generator may use: one is asked for a description, the other for a friendly
-    reply, and metadata in either place is noise the model tries to explain.
-    What is left is identity (to exclude these books from the results) and
-    substance (to describe them).
-    """
-
-    isbn13: str
-    title: str
-    authors: str | None = None
-    categories: str | None = None
-    genre: str | None = None
-    is_children: bool | None = None
-    description: str | None = None
 
 
 # NOTE: this can inherit from the workflow itself?
@@ -121,7 +101,7 @@ class RecommendationOutput(BookRecommendationOutput):
     which is what the embedding actually saw.
     """
 
-    references: list[ReferenceBook] = Field(default_factory=list)
+    references: list[Book] = Field(default_factory=list)
     search_text: str | None = None
 
     def to_summary(self) -> dict[str, Any]:

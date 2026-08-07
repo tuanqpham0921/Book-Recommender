@@ -11,7 +11,6 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 continue:
-    * check if Referncebook is a good idea
     * set up the filter node that recommend can call independetly
     * add in genre node so you know that the query builder work
         * should be (title + genre) -> filter -> recommend - output

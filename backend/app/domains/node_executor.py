@@ -116,9 +116,10 @@ class NodeExecutor(AppBaseWorkflow[OutputT], ABC):
     async def stream_books(self, books: list[dict[str, Any]], delay: float = 0.0):
         """Stream book cards to the frontend.
 
-        Takes the raw row dicts (`BookStore.preview` / `.materialize`), not
-        `BookSummary` and not ORM objects: the card renders `thumbnail`, which
-        `BookSummary` deliberately drops, and the payload has to be JSON.
+        Takes the raw row dicts (`BookStore.preview` / `.materialize`) rather
+        than ORM objects, because the payload has to be JSON. `Book` would
+        serialize just as well — the dicts are simply what the store already
+        hands back, so validating and re-dumping them buys nothing here.
 
         `delay` defaults to 0 — a preview lands inside a collapsed section
         where nobody watches cards arrive one by one, and three nodes' worth of
