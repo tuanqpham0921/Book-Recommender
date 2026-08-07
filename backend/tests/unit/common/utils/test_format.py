@@ -3,7 +3,11 @@ from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel, PrivateAttr
 
-from common.utils.format import remove_empty_values, to_serializable
+from common.utils.format import (
+    remove_empty_values,
+    strip_zero_token_usage,
+    to_serializable,
+)
 
 
 class TestToSerializable:
@@ -235,3 +239,48 @@ class TestRemoveEmptyValues:
         result = remove_empty_values(to_serializable(m))
         assert result["_set_field"] == "hello"
         assert "_none_field" not in result
+
+
+class TestStripZeroTokenUsage:
+    def test_drops_all_zero_token_usage(self):
+        data = {
+            "name": "some_step",
+            "token_usage": {
+                "total": 0,
+                "prompt": 0,
+                "completion": 0,
+                "cached": 0,
+                "reasoning_tokens": 0,
+                "cost_usd": 0.0,
+            },
+        }
+        assert strip_zero_token_usage(data) == {"name": "some_step"}
+
+    def test_keeps_token_usage_with_any_nonzero_field(self):
+        data = {"token_usage": {"total": 5, "prompt": 5, "completion": 0}}
+        assert strip_zero_token_usage(data) == data
+
+    def test_only_matches_the_token_usage_key(self):
+        # same all-zero shape under a different key must survive — this is
+        # a name-scoped rule, not a generic "drop all-zero dicts" rule
+        data = {"other_counts": {"a": 0, "b": 0}}
+        assert strip_zero_token_usage(data) == data
+
+    def test_recurses_into_nested_steps(self):
+        data = {
+            "steps": [
+                {"name": "db_check", "token_usage": {"total": 0, "prompt": 0}},
+                {"name": "llm_call", "token_usage": {"total": 10, "prompt": 10}},
+            ]
+        }
+        assert strip_zero_token_usage(data) == {
+            "steps": [
+                {"name": "db_check"},
+                {"name": "llm_call", "token_usage": {"total": 10, "prompt": 10}},
+            ]
+        }
+
+    def test_does_not_match_already_empty_dict(self):
+        # remove_empty_values would already have dropped this; guard against
+        # standalone use where it hasn't
+        assert strip_zero_token_usage({"token_usage": {}}) == {"token_usage": {}}

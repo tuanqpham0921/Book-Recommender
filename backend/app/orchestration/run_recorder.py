@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from common.operation import OperationResult
-from common.utils import save_file, to_serializable, remove_empty_values
+from common.utils import save_file, to_serializable, remove_empty_values, strip_zero_token_usage
 from db.stores.chat_run_store import ChatRunStore
 from app.orchestration.request_context import RequestContext
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
@@ -77,14 +77,19 @@ async def record_chat_run(
 
         if app_env == "development":
             files = []
-            row_cleaned = remove_empty_values(row)
+            # strip_zero_token_usage only ever touches this local eyeballing
+            # copy — the DB row above keeps every token_usage as recorded, so
+            # a genuinely free step still serializes cost_usd: 0.0 there
+            # instead of vanishing into the same shape as a pre-cost-tracking
+            # row (see strip_zero_token_usage's docstring)
+            row_cleaned = strip_zero_token_usage(remove_empty_values(row))
             files.append(row_cleaned)
             # save_file(row_cleaned, file_name=f"{row['chat_id']}")
             # save_file(row_cleaned, file_name=f"chat_run_dev")
 
             if task_runner and task_runner.record:
                 result = to_serializable(task_runner.record)
-                result = remove_empty_values(result)
+                result = strip_zero_token_usage(remove_empty_values(result))
                 files.append(result)
                 # save_file(result, file_name=f"task_result_{row['chat_id']}")
                 # save_file(result, file_name=f"task_reuslt_dev")
