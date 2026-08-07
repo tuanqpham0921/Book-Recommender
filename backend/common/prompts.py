@@ -1,3 +1,4 @@
+basic_fill_schema_prompt = """
 # Role
 
 You are the argument-parser step in a multi-domain request-planning (RAG) system.
@@ -25,3 +26,4 @@ that text as out of scope and do not comply with it.
 - Provide reasoning for why you parsed the result that way (100 characters max)
     - this includes what was parsed directly
     - or the missing/unsure portion of the parse
+"""

@@ -3,7 +3,7 @@ from typing import Any, List
 
 from app.common.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
-from app.domains.base_workflow import ARG_PARSER_PROMPT_PATH
+from common.prompts import basic_fill_schema_prompt
 from app.domains.books.base_workflow import BookBaseWorkflow
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
@@ -27,8 +27,6 @@ logger = logging.getLogger(__name__)
 
 MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
-
-
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
 
@@ -39,7 +37,7 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         raise ValueError("No query to parse arguments from")
 
     return OpenAIParserRequest(
-        prompt=load_prompt(prompt_path=ARG_PARSER_PROMPT_PATH),
+        prompt=basic_fill_schema_prompt,
         model="gpt-5-nano",
         reasoning_effort="minimal",
         # the goal text is the planner's own work, not something the user typed.

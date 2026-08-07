@@ -51,12 +51,6 @@ class NodeWorkflowOutput(AppWorkflowOutput, ABC):
 
 OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)
 
-# The shared "fill in this tool schema from the goal text" prompt. Lives here
-# because every node's argument parser uses it, but nothing here builds that
-# request — each slice does, so it can pick its own model, prompt and message
-# list. See the module docstring.
-ARG_PARSER_PROMPT_PATH = "domains/planner/prompts/1_argument_parser.txt"
-
 class NodeBaseWorkflow(AppBaseWorkflow[OutputT], ABC):
     ui_loading_message = "Working..."
 
