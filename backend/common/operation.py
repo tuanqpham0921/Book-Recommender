@@ -213,7 +213,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
         payload = self.result
         summary = {
             "id": self.id,
-            "name": self.name,
+            "name": self.name.split(".")[-1],
             "ok": self.ok,
             "duration": self.duration,
             # `or None` so a step that made no LLM call (a DB read, a
