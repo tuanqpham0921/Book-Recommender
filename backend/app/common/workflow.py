@@ -22,6 +22,11 @@ class AppWorkflowOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.response.result, exposed via
     the `.result` property (OperationResult.result)."""
 
+    # TODO:
+    # change this to @property summary()
+    # make an @artifact or to @llm (?) 
+    # seems like right now artifiacts are summaries
+    # not sure if there's a case where I specific need to seperate them
     @abstractmethod
     def to_summary(self) -> dict[str, Any]:
         ...

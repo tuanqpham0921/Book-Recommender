@@ -160,6 +160,15 @@ Ideas:
         * not sure if this is needed tho, it could help with generation and passing in stuff
         * might just be a function call and make as you go.
 
+Performance Ideas
+    * you can have pre-made graphs common ones are
+        * find title -> recommend
+        * find ... -> recommend
+        * recommend me something (simple queries)
+    * not sure how to speed up the recommendation part tho
+        * because you don't have a lot of data
+        * so you need to analyze the docs and search
+
 FOT:
     * how would I do something like 
         "compare Dune and It, recommend me books based which is longer/newer"
