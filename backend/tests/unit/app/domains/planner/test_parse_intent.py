@@ -300,7 +300,7 @@ class TestInitialParseOutputHelpers:
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))
         assert parse_wf.result.accepted_goals_ids() == [goal.id]
 
-    def test_to_summary_counts_match(self, parse_wf):
+    def test_to_summary_reports_accepted_types_and_refusal_count(self, parse_wf):
         parse_wf.process_parse_result(
             _make_parse_result(
                 goals=[
@@ -310,6 +310,7 @@ class TestInitialParseOutputHelpers:
             )
         )
         summary = parse_wf.result.to_summary()
-        assert summary["num_accepted_system"] == 1
+        # the accepted half is named, not counted — which node types the run
+        # chose is the thing a trace is read for; refusals stay a count
+        assert summary["accepted_types"] == [FindTitleNodeTypeEnum.REQUEST]
         assert summary["num_rejected_system"] == 1
-        assert summary["total_system_goals"] == 2
