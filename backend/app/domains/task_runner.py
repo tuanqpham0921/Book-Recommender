@@ -36,8 +36,8 @@ class TaskRunnerOutput(AppWorkflowOutput):
 
     def to_summary(self) -> dict[str, Any]:
         return {
-            "goal.ids": list(self.task_results.keys()),
-            "failed_task.ids": self.failed_task,
+            "completed_tasks": list(self.task_results.keys()),
+            "failed_task": self.failed_task,
         }
 
 
