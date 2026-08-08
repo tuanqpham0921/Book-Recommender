@@ -5,7 +5,7 @@ import time
 from typing import Any, Generic, TypeVar
 from typing import Coroutine
 
-from airglider.task import OperationResult, Response, RuntimeErrorInfo
+from .schemas import OperationResult, Response, RuntimeErrorInfo
 from .exception import StepFailure
 
 OutputT = TypeVar("OutputT")

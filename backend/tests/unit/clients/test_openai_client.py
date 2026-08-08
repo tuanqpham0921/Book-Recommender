@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
-from airglider.task import OperationResult
+from airglider import OperationResult
 from app.common.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
@@ -13,11 +13,12 @@ FAKE_MODEL = "gpt-4.1-mini"
 
 def async_iter(items):
     """Return an async iterable over items."""
+
     async def _gen():
         for item in items:
             yield item
-    return _gen()
 
+    return _gen()
 
 
 def make_settings(**overrides):
@@ -44,7 +45,9 @@ def make_fake_completion(content="hi", total=10, prompt=7, completion=3, cached=
         prompt_tokens_details=MagicMock(cached_tokens=cached),
     )
     message = MagicMock(content=content, tool_calls=None, refusal=None)
-    completion = MagicMock(id="cmpl-123", choices=[MagicMock(message=message)], usage=usage)
+    completion = MagicMock(
+        id="cmpl-123", choices=[MagicMock(message=message)], usage=usage
+    )
     return completion
 
 
@@ -92,12 +95,17 @@ class TestGetEmbeddings:
     async def test_raises_when_input_too_long(self):
         self.client.max_tokens = 1
         with pytest.raises(ValueError, match="too long"):
-            await self.client.get_embeddings(["a very long text that exceeds one token"])
+            await self.client.get_embeddings(
+                ["a very long text that exceeds one token"]
+            )
 
     @pytest.mark.asyncio
     async def test_returns_embeddings(self):
         fake_response = MagicMock()
-        fake_response.data = [MagicMock(embedding=[0.1, 0.2]), MagicMock(embedding=[0.3, 0.4])]
+        fake_response.data = [
+            MagicMock(embedding=[0.1, 0.2]),
+            MagicMock(embedding=[0.3, 0.4]),
+        ]
         self.client.client.embeddings.create = AsyncMock(return_value=fake_response)
 
         result = await self.client.get_embeddings(["hello", "world"])
@@ -105,7 +113,9 @@ class TestGetEmbeddings:
 
     @pytest.mark.asyncio
     async def test_reraises_api_error(self):
-        self.client.client.embeddings.create = AsyncMock(side_effect=RuntimeError("API down"))
+        self.client.client.embeddings.create = AsyncMock(
+            side_effect=RuntimeError("API down")
+        )
         with pytest.raises(RuntimeError, match="API down"):
             await self.client.get_embeddings(["hello"])
 
@@ -149,7 +159,9 @@ class TestExecute:
 
     @pytest.mark.asyncio
     async def test_cached_tokens_propagated(self):
-        fake_completion = make_fake_completion(total=10, prompt=8, completion=2, cached=6)
+        fake_completion = make_fake_completion(
+            total=10, prompt=8, completion=2, cached=6
+        )
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
         req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})

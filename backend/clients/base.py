@@ -3,11 +3,11 @@ from typing import Any
 
 import asyncio
 from pydantic import BaseModel, ConfigDict
-from app.common.messages import APIMessage
+from app.common.messages import APIMessage, AssistantMessage
 from app.common.sse_stream import SSEStream
-from airglider.task import OperationResult
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,8 +20,7 @@ class BaseLLMRequest(BaseModel, ABC):
     sse_stream: SSEStream | None = None
 
     @abstractmethod
-    def to_payload(self) -> dict[str, Any]:
-        ...
+    def to_payload(self) -> dict[str, Any]: ...
 
 
 class BaseLLMClient(ABC):
@@ -34,7 +33,7 @@ class BaseLLMClient(ABC):
     @abstractmethod
     async def execute(
         self, req: BaseLLMRequest, save_payload: bool = False
-    ) -> OperationResult[Any]:
+    ) -> AssistantMessage:
         """Execute a request (stream or not). Implementations are @task
         decorated, so callers receive an OperationResult envelope whose
         output is the AssistantMessage."""

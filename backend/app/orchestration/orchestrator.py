@@ -8,7 +8,7 @@ from app.orchestration.request_context import RequestContext
 from app.domains.planner import PlannerWorkflow
 from app.domains.task_runner import TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
-from airglider.task import OperationResult, RuntimeErrorInfo
+from airglider import OperationResult, RuntimeErrorInfo
 
 logger = logging.getLogger(__name__)
 

@@ -8,9 +8,10 @@ from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
-from airglider.task import OperationResult, Response, task
+from airglider import OperationResult, Response, task
 from pydantic import BaseModel, Field
 from db.stores.book_store import BookStore
+
 
 @task
 async def _check_table(
@@ -33,13 +34,14 @@ async def _check_table(
         {"fqtn": fqtn},
     )
     exists = bool(result.scalar())
-    
+
     return OperationResult(
         name="table",
         ok=exists,
         message=f"Table {fqtn} exists." if exists else f"Table {fqtn} not found.",
         details=[f"schema: {schema}", f"table: {table}"],
     )
+
 
 @task
 async def _check_table_rows(
@@ -58,7 +60,7 @@ async def _check_table_rows(
         min_rows: The minimum number of rows the table should have.
     """
     fqtn = f"{schema}.{table}"
-    
+
     result = await session.execute(text(f"SELECT COUNT(*) FROM {schema}.{table}"))
     row_count = int(result.scalar() or 0)
     ok = row_count >= min_rows
@@ -69,7 +71,7 @@ async def _check_table_rows(
         details=[f"row_count: {row_count}", f"min_rows: {min_rows}"],
         response=Response(result=row_count),
     )
-    
+
 
 @task
 async def _check_table_extensions(session: AsyncSession) -> OperationResult:
@@ -80,9 +82,7 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
     """
     required_extensions = list(REQUIRED_EXTENSIONS)
     result = await session.execute(
-        text(
-            "SELECT extname FROM pg_extension WHERE extname = ANY(:extensions)"
-            ),
+        text("SELECT extname FROM pg_extension WHERE extname = ANY(:extensions)"),
         {"extensions": required_extensions},
     )
     found = {row[0] for row in result.fetchall()}
@@ -103,7 +103,6 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
         ),
         response=Response(result=result),
     )
-    
 
 
 class ReadinessResult(BaseModel):
@@ -114,7 +113,8 @@ class ReadinessResult(BaseModel):
     num_missing_embeddings: int = 0
 
     missing_extensions: list[str] = Field(default_factory=list)
-    
+
+
 @task
 async def is_ready(
     session_factory: async_sessionmaker[AsyncSession],
@@ -133,7 +133,7 @@ async def is_ready(
     """
     checks: list[OperationResult] = []
     result = ReadinessResult()
-    
+
     if not await check_connection(session_factory):
         raise ValueError("Database connection failed")
     result.database_connected = True
@@ -142,9 +142,9 @@ async def is_ready(
         # check if table exists and schema is correct
         table_check = await _check_table(session, schema=schema, table=table)
         checks.append(table_check)
-        
+
         result.need_db_bootstrap = not table_check.ok
-        
+
     async with session_factory() as session:
         # check if table has rows
         rows = await _check_table_rows(
@@ -155,31 +155,36 @@ async def is_ready(
         )
         checks.append(rows)
         result.enough_rows = rows.ok
-    
+
     async with session_factory() as session:
         # check if required extensions are installed
         extensions = await _check_table_extensions(session)
         checks.append(extensions)
         result.need_extensions = not extensions.ok
         result.missing_extensions = extensions.result["missing"]
-        
-    
+
     async with session_factory() as session:
         # check if embeddings are present
         book_store = BookStore(session)
         # TODO: we can change this when book store implement @task decorator
         num_missing = await book_store.get_num_book_missing_embeddings()
-        checks.append(OperationResult(
-            name="num_missing_embeddings",
-            ok=num_missing == 0,
-            message="No books missing embeddings." if num_missing == 0 else f"Found {num_missing} books missing embeddings.",
-            response=Response(result=num_missing),
-        ))
+        checks.append(
+            OperationResult(
+                name="num_missing_embeddings",
+                ok=num_missing == 0,
+                message=(
+                    "No books missing embeddings."
+                    if num_missing == 0
+                    else f"Found {num_missing} books missing embeddings."
+                ),
+                response=Response(result=num_missing),
+            )
+        )
         result.num_missing_embeddings = num_missing
-        
+
     ok = all(check.ok for check in checks)
     return OperationResult(
-        ok=ok, 
+        ok=ok,
         message="Database is ready." if ok else "Database is not ready.",
         steps=checks,
         response=Response(result=result),

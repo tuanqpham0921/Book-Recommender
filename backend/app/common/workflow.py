@@ -3,8 +3,7 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from typing import Any, Generic, TypeVar, cast, get_args
 
-from airglider.task import OperationResult, TokenUsage
-from airglider.base_glider import Workflow
+from airglider import Workflow, OperationResult, TokenUsage
 from app.common.messages import (
     APIMessage,
     AssistantMessage,
@@ -24,12 +23,12 @@ class AppWorkflowOutput(BaseModel, ABC):
 
     # TODO:
     # change this to @property summary()
-    # make an @artifact or to @llm (?) 
+    # make an @artifact or to @llm (?)
     # seems like right now artifiacts are summaries
     # not sure if there's a case where I specific need to seperate them
     @abstractmethod
-    def to_summary(self) -> dict[str, Any]:
-        ...
+    def to_summary(self) -> dict[str, Any]: ...
+
 
 class AppBaseWorkflow(Workflow[OutputT]):
     @classmethod
@@ -72,7 +71,9 @@ class AppBaseWorkflow(Workflow[OutputT]):
     def finalize_result(self, *, ok: bool) -> None:
         self.record.ok = ok
 
-    async def run_llm_call(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
+    async def run_llm_call(
+        self, req: BaseLLMRequest, save_payload: bool = False
+    ) -> AssistantMessage:
         result = await self.run_async_step(
             self.llm_client.execute(req, save_payload=save_payload)
         )
@@ -80,15 +81,17 @@ class AppBaseWorkflow(Workflow[OutputT]):
         msg = cast(AssistantMessage, result.result)
         self.messages.append(msg)
         return msg
-    
-    async def run_llm_args_parse(self, req: BaseLLMRequest, save_payload: bool = False) -> ParsedFunctionToolCall:
+
+    async def run_llm_args_parse(
+        self, req: BaseLLMRequest, save_payload: bool = False
+    ) -> ParsedFunctionToolCall:
         assistant_msg = await self.run_llm_call(req, save_payload=save_payload)
         tool_calls = assistant_msg.tool_calls
         if not tool_calls:
             # previously an unguarded [0] on None — same failure semantics
             # (runtime error caught by the workflow), clearer message
             raise ValueError("LLM response contained no tool calls")
-        
+
         # NOTE: the output needs to be added somewhere correctly
         # you may not want to add it right away? because you need to process it?
         # or is this the workflow output?
@@ -103,7 +106,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
         # for retries and catching errors
         self.record_tool_call(tool_call=tool_calls[0])
         return tool_calls[0].function.parsed_arguments
-    
+
     def record_tool_call(self, tool_call: ParsedFunctionToolCall) -> None:
         self.messages.append(
             ToolMessage(
@@ -116,9 +119,7 @@ class AppBaseWorkflow(Workflow[OutputT]):
     async def run_tool_call(
         self, tool_call: ParsedFunctionToolCall, **kwargs
     ) -> ToolMessage:
-        result = await self.run_async_step(
-            ToolMessage.execute(tool_call, **kwargs)
-        )
+        result = await self.run_async_step(ToolMessage.execute(tool_call, **kwargs))
         tool_msg = cast(ToolMessage, result.result)
         self.messages.append(tool_msg)
         return tool_msg

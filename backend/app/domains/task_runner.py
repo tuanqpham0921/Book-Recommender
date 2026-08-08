@@ -7,7 +7,6 @@ from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.orchestration.request_context import RequestContext
-from airglider.base_glider import StepFailure
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from clients.openai_client import OpenAIClient
 from app.common.messages import AssistantMessage, APIMessage
@@ -16,9 +15,10 @@ from app.domains.planner.generation_node import GenerationNode, create_generatio
 from typing import Any, cast
 from app.domains.planner.parse_intent import SystemGoal
 from dataclasses import dataclass
-from airglider.task import OperationResult
+from airglider import OperationResult
 
 logger = logging.getLogger(__name__)
+
 
 # TODO: do the link later
 @dataclass
@@ -26,11 +26,12 @@ class TaskRecord:
     goal: SystemGoal
     result: OperationResult
 
+
 class TaskRunnerOutput(AppWorkflowOutput):
     session_id: str | None = None
     task_results: dict[str, Any] = Field(default_factory=dict)
     failed_task: list[str] = Field(default_factory=list)
-    
+
     completed_task: list[BaseRequest] = Field(default_factory=list)
     parsed_diagram: str | None = None
 
@@ -39,7 +40,6 @@ class TaskRunnerOutput(AppWorkflowOutput):
             "completed_tasks": list(self.task_results.keys()),
             "failed_task": self.failed_task,
         }
-
 
 
 class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
@@ -75,7 +75,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
         self.result.session_id = request_context.session_id
         results: dict[str, Any] = {}
         execution_order = planner_result.execution_order()
-                
+
         for layer, goals_layer in execution_order.items():
             for goal in goals_layer:
 
@@ -84,7 +84,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
                     for dep_id in goal.get_depends_on()
                     if dep_id in results
                 }
-                
+
                 # Two hops, not one: the goal carries a node type name, while
                 # EXECUTORS_CLS_MAPPING is keyed by request schema class.
                 request_cls = NODE_TYPE_TO_CLS.get(goal.target_node_type.value)
@@ -158,7 +158,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
 
         self.result.task_results = results
         self.finalize_result(ok=not self.result.failed_task)
-        
+
         # await self.send_mermaid_parsed(self.result.completed_task, planner_result.generation_nodes)
 
     async def send_mermaid_parsed(

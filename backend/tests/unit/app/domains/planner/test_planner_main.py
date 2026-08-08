@@ -9,7 +9,7 @@ from app.common.sse_stream import SSEStream
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
-from airglider.task import OperationResult, Response, RuntimeErrorInfo, TokenUsage
+from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
 

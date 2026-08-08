@@ -5,9 +5,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Any, Literal, Union, cast
 
+from airglider import OperationResult, TokenUsage
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
-from airglider import OperationResult, TokenUsage, task
+from airglider import task
 from common.utils import to_serializable, remove_empty_values, uuid_8
 
 logger = logging.getLogger(__name__)

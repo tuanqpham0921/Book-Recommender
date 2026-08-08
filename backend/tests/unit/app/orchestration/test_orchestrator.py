@@ -13,7 +13,7 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
 from app.orchestration.request_context import RequestContext
 from clients import OpenAIClient
-from airglider.task import OperationResult
+from airglider import OperationResult
 from db.stores.book_store import BookStore
 
 
@@ -44,9 +44,7 @@ class TestOrchestratorRun:
         ) as mock_record:
             await Orchestrator().run(request_context)
 
-        mock_record.assert_awaited_once_with(
-            request_context, ANY, mock_workflow, ANY
-        )
+        mock_record.assert_awaited_once_with(request_context, ANY, mock_workflow, ANY)
 
     async def test_still_hands_off_to_record_chat_run_when_response_is_none(
         self, request_context
@@ -65,6 +63,4 @@ class TestOrchestratorRun:
 
         # _finalize has no response-is-None guard of its own; record_chat_run's
         # own guard (tested in test_run_recorder.py) is what skips persisting
-        mock_record.assert_awaited_once_with(
-            request_context, ANY, mock_workflow, ANY
-        )
+        mock_record.assert_awaited_once_with(request_context, ANY, mock_workflow, ANY)

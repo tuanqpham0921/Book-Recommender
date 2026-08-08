@@ -13,11 +13,8 @@ from app.domains.planner.parse_intent import (
 )
 
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
-from airglider.task import OperationResult
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
-from app.common.prompt_loader import format_prompt
-from app.domains.base_request import BaseRequest
 
 from .generation_node import GenerationNode, create_generation_nodes
 
@@ -47,7 +44,7 @@ CACHE_DIR = FilesLocationConstants.PROJECT_ROOT / "playground" / "files" / "cach
 cache_mapping = {
     "Show me books similar to Pride and Prejudice": "Show me books similar to Pride and Prejudice",
     "Find books like 1984 or Brave New World": "Find books like 1984 or Brave New World",
-    "Find books like 1984 or Brave New World, Dune, Brave New World": "Find books like 1984 or Brave New World, Dune, Brave New World"
+    "Find books like 1984 or Brave New World, Dune, Brave New World": "Find books like 1984 or Brave New World, Dune, Brave New World",
 }
 
 
@@ -104,10 +101,9 @@ class PlannerOutput(AppWorkflowOutput):
         # the summary still has to render for that run, it's the one you read
         return {"plan": self.parse_result.to_summary() if self.parse_result else None}
 
-
     def execution_order(self):
         return self.parse_result.execution_order()
-    
+
     def accepted_goals_ids(self) -> list[str]:
         return self.parse_result.accepted_goals_ids()
 
@@ -137,14 +133,17 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
 
     async def run(self, request_context: RequestContext) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
-        
+
         self.result.session_id = request_context.session_id
         self.messages.append(self.user_message)
 
         parse_output = load_cached_parse_output(self.user_message.content)
         if parse_output is None:
             parse_workflow = InitialParseWorkflow(
-                self.sse_stream, self.user_message, self.llm_client, messages=self.messages
+                self.sse_stream,
+                self.user_message,
+                self.llm_client,
+                messages=self.messages,
             )
             parse_result = await self.run_async_step(
                 parse_workflow(), raise_on_failure=False
@@ -188,7 +187,6 @@ class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
         # await self.send_mermaid_parsed(parsed_system_goals, generation_nodes)
 
         self.record.ok = True
-
 
     async def send_mermaid(
         self, system_goals: list, generation_nodes: list[GenerationNode] | None = None
