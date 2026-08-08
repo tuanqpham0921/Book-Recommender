@@ -1,18 +1,13 @@
-import json
-from typing import Any, cast
+from typing import Any
 
 from pydantic import Field
 
-from app.common.sse_stream import SSEStream
-from app.common.messages import APIMessage, AssistantMessage, UserMessage
-from clients.openai_client import OpenAIClient
-from app.orchestration.request_context import RequestContext
 from app.domains.planner.parse_intent import (
     InitialParseWorkflow,
     InitialParseOutput,
 )
 
-from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
+from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
 
@@ -108,7 +103,7 @@ class PlannerOutput(NodeWorkflowOutput):
         return self.parse_result.accepted_goals_ids()
 
 
-class PlannerWorkflow(NodeBaseWorkflow[PlannerOutput]):
+class PlannerWorkflow(AppWorkflow[PlannerOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )
@@ -116,37 +111,18 @@ class PlannerWorkflow(NodeBaseWorkflow[PlannerOutput]):
     strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
     task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
 
-    def __init__(
-        self,
-        sse_stream: SSEStream,
-        user_message: UserMessage,
-        llm_client: OpenAIClient,
-        app_env: str | None = None,
-    ):
-        super().__init__(
-            llm_client=llm_client,
-            sse_stream=sse_stream,
-            output_type=PlannerOutput,
-            app_env=app_env,
-        )
-        self.user_message = user_message
-
-    async def run(self, request_context: RequestContext) -> None:
+    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        self.result.session_id = request_context.session_id
+        self.result.session_id = self.session_id
         self.messages.append(self.user_message)
 
-        parse_output = load_cached_parse_output(self.user_message.content)
+        parse_output = load_cached_parse_output(query)
         if parse_output is None:
-            parse_workflow = InitialParseWorkflow(
-                self.sse_stream,
-                self.user_message,
-                self.llm_client,
-                messages=self.messages,
-            )
+            parse_workflow = InitialParseWorkflow(self.ctx, messages=self.messages)
             parse_result = await self.run_async_step(
-                parse_workflow(), raise_on_failure=False
+                parse_workflow(query=query, artifacts=artifacts),
+                raise_on_failure=False,
             )
 
             # narrow through a local: the workflow pre-initializes its output,
@@ -163,7 +139,7 @@ class PlannerWorkflow(NodeBaseWorkflow[PlannerOutput]):
                 # await self.sse_stream.send_chars(self.initial_parse_failure_message)
                 return
         else:
-            logger.info(f"Replaying cached parse for: {self.user_message.content}")
+            logger.info(f"Replaying cached parse for: {query}")
             self.result.parse_result = parse_output
 
         system_goals = parse_output.accepted_goals

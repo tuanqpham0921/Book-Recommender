@@ -1,26 +1,18 @@
-import json
 import logging
-from typing import Any, Optional, Literal, cast
+from typing import Any, Literal
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     PrivateAttr,
-    field_validator,
-    model_validator,
-    ValidationError,
 )
 
-from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
-from app.common.prompt_loader import format_prompt, load_prompt
-from app.common.sse_stream import SSEStream
-from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
+from app.common.messages import UserMessage
+from app.common.prompt_loader import format_prompt
+from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import NODE_TYPE_TO_CLS, NodeTypeEnum, format_node_type_catalog
 from clients import OpenAIParserRequest
-from clients.base import BaseLLMClient
-from clients.openai_requests import OpenAIChatRequest
-from common.utils import uuid_8
 from .node_types import PlannerNodeTypeEnum
 from app.domains.field_types import (
     MIN_CONFIDENCE,
@@ -29,7 +21,6 @@ from app.domains.field_types import (
     ConfidenceFloat,
     DescriptionStr,
     ReasoningStr,
-    OptionalStr,
 )
 from .prompts.example import planner_example
 
@@ -210,7 +201,7 @@ class InitialParseOutput(NodeWorkflowOutput):
         return order
 
 
-class InitialParseWorkflow(NodeBaseWorkflow[InitialParseOutput]):
+class InitialParseWorkflow(AppWorkflow[InitialParseOutput]):
     ui_loading_message = "Thinking..."
     intent_reject_message = (
         "I can't help with that request. Please try again with a book-related question."
@@ -219,25 +210,10 @@ class InitialParseWorkflow(NodeBaseWorkflow[InitialParseOutput]):
 
     tool_models: list[type] = [GoalParseRequest]
 
-    def __init__(
-        self,
-        sse_stream: SSEStream,
-        user_message: UserMessage,
-        llm_client: BaseLLMClient,
-        messages=None,
-    ):
-        super().__init__(
-            llm_client=llm_client,
-            sse_stream=sse_stream,
-            output_type=InitialParseOutput,
-            messages=messages,
-        )
-        self.user_message = user_message
-
-    async def run(self) -> None:
+    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        parse_result = await self._run_llm_args_parse()
+        parse_result = await self._run_llm_args_parse(query)
         # parsed_arguments is typed `object | None` by the openai lib; the
         # parser validated it against GoalParseRequest, so the cast holds
         self.process_parse_result(parse_result)
@@ -252,7 +228,7 @@ class InitialParseWorkflow(NodeBaseWorkflow[InitialParseOutput]):
             for unsupported in self.result.out_of_scope:
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
 
-    async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
+    async def _run_llm_args_parse(self, query: str) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
             prompt_path=GOAL_GENERATOR_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
@@ -271,7 +247,11 @@ class InitialParseWorkflow(NodeBaseWorkflow[InitialParseOutput]):
             reasoning_effort="none",
             # NOTE: this should be a list of previous messages as well
             # but for now we can just do clear and direct instructions
-            messages=[self.user_message],
+            #
+            # `query`, not `self.user_message` — identical on the wire
+            # (to_openai_dict emits only role/content), but it means a query
+            # the planner rewrote or clarified is what actually gets parsed.
+            messages=[UserMessage(content=query)],
             tool_models=[GoalParseRequest],
             max_completion_tokens=1000,
         )

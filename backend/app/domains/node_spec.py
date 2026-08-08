@@ -17,7 +17,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
+    from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
     from app.domains.base_request import BaseRequest
 
 
@@ -47,7 +47,7 @@ class NodeSpec:
     tier: NodeTier
     request: type["BaseRequest"]
     output: type["NodeWorkflowOutput"]
-    executor: type["NodeBaseWorkflow"] | None = None
+    executor: type["AppWorkflow"] | None = None
 
     def __post_init__(self) -> None:
         field = self.request.model_fields.get("node_type")

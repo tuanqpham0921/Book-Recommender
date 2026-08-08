@@ -1,11 +1,10 @@
 """Tests for PlannerWorkflow step/output routing."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.common.messages import AssistantMessage, UserMessage
-from app.common.sse_stream import SSEStream
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
@@ -14,12 +13,9 @@ from common.utils import load_json, save_file
 
 
 @pytest.fixture
-def orchestrator():
-    return PlannerWorkflow(
-        sse_stream=SSEStream(),
-        user_message=UserMessage(content="test"),
-        llm_client=MagicMock(),
-    )
+def orchestrator(make_request_context):
+    # make_request_context comes from tests/conftest.py
+    return PlannerWorkflow(make_request_context(user_message=UserMessage(content="test")))
 
 
 def _make_goal():
@@ -105,7 +101,7 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
             "app.domains.planner.main.InitialParseWorkflow",
             return_value=parse_workflow,
         ):
-            await orchestrator.run(request_context=MagicMock(session_id="sess_1"))
+            await orchestrator.run(query="test", artifacts={})
 
         assert orchestrator.record.runtime_error is parse_error
 

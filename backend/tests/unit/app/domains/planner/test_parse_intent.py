@@ -247,7 +247,7 @@ class TestRun:
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
         parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg())
 
-        await parse_wf.run()
+        await parse_wf.run(query="test message", artifacts={})
 
         parse_wf.sse_stream.send_ui_loading.assert_called_once_with(
             parse_wf.ui_loading_message
@@ -261,7 +261,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run()
+        await parse_wf.run(query="test message", artifacts={})
 
         assert len(parse_wf.result.accepted_goals) == 1
 
@@ -272,7 +272,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run()
+        await parse_wf.run(query="test message", artifacts={})
 
         assert parse_wf.record.ok is True
 
@@ -286,7 +286,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run()
+        await parse_wf.run(query="test message", artifacts={})
 
         streamed = "".join(
             call.args[0] for call in parse_wf.sse_stream.send_chars.call_args_list

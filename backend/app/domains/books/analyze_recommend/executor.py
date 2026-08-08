@@ -4,7 +4,7 @@ from typing import Any, List
 from app.common.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
 from common.prompts import basic_fill_schema_prompt
-from app.domains.books.base_workflow import BookBaseWorkflow
+from app.domains.books.base_workflow import BookWorkflow
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
 from config import BookConstraints
@@ -53,16 +53,16 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     )
 
 
-class RecommendBooksExecutor(BookBaseWorkflow[RecommendationOutput]):
+class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Recommendation"
     # this node owns the answer — folding it away would hide the reply
     ui_section_collapsible = False
 
-    async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
+    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
         await self.sse_stream.send_ui_loading("recommending books...")
 
-        parsed_dependents = ParsedDependents.from_results(dependent_results)
+        parsed_dependents = ParsedDependents.from_results(artifacts)
         self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
         if parsed_dependents.unknown:
             logger.warning(

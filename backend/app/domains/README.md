@@ -12,7 +12,7 @@ A capability is a **vertical slice**: one folder holding everything about one no
 books/find_by_title/
 ├── labels.py     # the planner-facing name, as a one-member str Enum
 ├── schemas.py    # request schema (docstring = tool description) + output schema
-├── executor.py   # the executor that runs it (book nodes: a BookBaseWorkflow)
+├── executor.py   # the executor that runs it (book nodes: a BookWorkflow)
 └── __init__.py   # SPEC = NodeSpec(...) tying the three together
 ```
 
@@ -31,29 +31,51 @@ books/find_by_title/
   don't add a narrower variant for a single consumer — narrow at the point of
   use instead (see `Book`'s docstring).
 - `<domain>/base_workflow.py` — the domain's base, holding what every node in it
-  repeats. `books/base_workflow.py` is `BookBaseWorkflow`: it binds `self.store`
-  from the request context, and adds `preflight()` (stamp a deferred query on the
-  output, get the match size and a small sample in one round trip) and
-  `stream_books()` (cards to the browser, validated through `BookOut`).
+  repeats. `books/base_workflow.py` is `BookWorkflow`: it exposes `self.store`
+  (a property off the request context), and adds `preflight()` (stamp a deferred
+  query on the output, get the match size and a small sample in one round trip)
+  and `stream_books()` (cards to the browser, validated through `BookOut`).
 - `base_request.py` — `BaseRequest`, shared fields + validation.
-- `base_workflow.py` — `NodeBaseWorkflow`, the domain-agnostic base underneath
-  those. It pins the `run(task, dependent_results, request_context)` signature the
-  task runner calls, and resolves the output type from
-  `NodeBaseWorkflow[SomeOutput]`, so a slice's executor needs no `__init__`.
-  Nothing about one domain goes in here — that is what the domain base above is
-  for. It also holds no LLM-request building: a slice writes its own
-  `build_arg_parser_request(query)` and passes the result to
-  `NodeBaseWorkflow.run_llm_args_parse`, which is the one shared seam. Only the
-  prompt path (`ARG_PARSER_PROMPT_PATH`) is shared.
+- `base_workflow.py` — `AppWorkflow`, the domain-agnostic base underneath those.
+  It pins the **`run(query, artifacts)`** signature *every* unit of work in the
+  app answers to, and resolves the output type from `AppWorkflow[SomeOutput]`,
+  so a slice's executor needs no `__init__`. Nothing about one domain goes in
+  here — that is what the domain base above is for. It also holds no
+  LLM-request building: a slice writes its own `build_arg_parser_request(query)`
+  and passes the result to `AppWorkflow.run_llm_args_parse`, which is the one
+  shared seam. Only the prompt path (`ARG_PARSER_PROMPT_PATH`) is shared.
 
-## Naming: Base, Workflow, Executor
+## One call shape: `run(query, artifacts)`
 
-**`Base` is the word that marks a reusable base class** — not `Workflow`. The
-ladder is `Workflow` → `NodeBaseWorkflow` → `NodeBaseWorkflow` →
-`BookBaseWorkflow`, each in a `workflow.py`/`base_workflow.py` file. Everything
-without `Base` in its name is a concrete unit of work, and plenty of those are
-`*Workflow` too: `PlannerWorkflow`, `InitialParseWorkflow`,
-`StrategyClassificationWorkflow`, `TaskRunnerWorkflow`.
+The planner, the parse step, the task runner and every node executor take the
+same two arguments. `query` is whatever invoked this node — the user's text at
+the top of a turn, a goal description further down. `artifacts` is what the
+nodes before it produced, keyed by their goal id. A node's job is then always
+the same: parse that input, reject it, or continue with it.
+
+**Select artifacts by type, never by key.** `self.require_artifact(artifacts,
+SomeOutput)` returns it typed or raises `StepFailure` (a controlled abort, not a
+crash) — that is the reject arm, written once. Keys are provenance only, which
+is what lets a node be fed by one upstream node or five without the caller and
+the callee agreeing on a string. `ParsedDependents.from_results` in the
+analyze_recommend slice follows the same rule.
+
+**Services are not constructor arguments.** `AppWorkflow.__init__(ctx, messages)`
+is the only `__init__` in the app layer; `sse_stream`, `llm_client`, `app_env`,
+`session_id`, `user_message` — and `store` on `BookWorkflow` — are properties
+off the `RequestContext` it holds. A workflow that needs a new service adds
+nothing to any call site.
+
+## Naming: Workflow, Executor
+
+The ladder is `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`, each in a
+`workflow.py`/`base_workflow.py` file. Concrete units of work are `*Workflow`
+too: `PlannerWorkflow`, `InitialParseWorkflow`, `TaskRunnerWorkflow`.
+
+(There used to be a rule that `Base` marks a reusable base class. It was retired
+when the ladder collapsed to three levels — the file a class lives in already
+says whether it is a base, and `AppBaseWorkflow`/`BookBaseWorkflow` read worse
+than the thing they name.)
 
 **`Executor` is the subset of those the planner can dispatch.** A
 `FindByTitleExecutor` is a workflow like `PlannerWorkflow` is, but it is also a
@@ -83,9 +105,11 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
 ## Adding a node (the standard path)
 
 1. Create the folder `<domain>/<node>/` with the four files above. A book node's
-   executor subclasses `BookBaseWorkflow[TheOutput]` and implements
-   **`execute(query, dependent_results)`**, not `run()` — `run()` is where the
-   store gets bound, so overriding it loses `self.store`.
+   executor subclasses `BookWorkflow[TheOutput]` and implements
+   **`run(query, artifacts)`** — the one call shape, same as everything else.
+   (There is no `execute()` hook any more: it existed only to keep `run()` from
+   being overridden while `run()` was where `self.store` got bound. `store` is a
+   property now, so there is nothing to lose.)
    If the node needs its request schema filled in from the goal text, add a
    module-level `build_arg_parser_request(query) -> OpenAIParserRequest` beside
    the executor (copy one of the existing two — they are near-identical today,

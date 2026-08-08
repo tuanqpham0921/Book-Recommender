@@ -3,16 +3,11 @@ from typing import Any
 
 from pydantic import Field
 
-from app.common.messages import APIMessage
-from app.common.sse_stream import SSEStream
-from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
-from app.orchestration.request_context import RequestContext
+from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
-from clients.openai_client import OpenAIClient
-from app.common.messages import AssistantMessage, APIMessage
 from app.domains.base_request import BaseRequest
-from app.domains.planner.generation_node import GenerationNode, create_generation_nodes
-from typing import Any, cast
+from app.domains.planner.generation_node import GenerationNode
+from app.domains.planner.main import PlannerOutput
 from app.domains.planner.parse_intent import SystemGoal
 from dataclasses import dataclass
 from airglider import OperationResult
@@ -42,44 +37,33 @@ class TaskRunnerOutput(NodeWorkflowOutput):
         }
 
 
-class TaskRunnerWorkflow(NodeBaseWorkflow[TaskRunnerOutput]):
+class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     ui_loading_message = "Running tasks..."
 
-    def __init__(
-        self,
-        sse_stream: SSEStream,
-        llm_client: OpenAIClient,
-        messages: list[APIMessage] | None = None,
-        app_env: str | None = None,
-    ):
-        super().__init__(
-            llm_client=llm_client,
-            sse_stream=sse_stream,
-            output_type=TaskRunnerOutput,
-            messages=messages,
-            app_env=app_env,
-        )
-
-    async def run(
-        self,
-        request_context: RequestContext,
-        planner_result: None,
-    ) -> None:
+    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
         """Execute accepted tasks in dependency order, feeding each task the
-        results of the tasks it depends on. Each task runs as its own
-        NodeBaseWorkflow sharing self.messages, so its result lands on the
-        same trace as the planner's — same pattern PlannerWorkflow uses for
-        InitialParseWorkflow/StrategyClassificationWorkflow."""
+        artifacts of the tasks it depends on. Each task runs as its own
+        AppWorkflow sharing self.messages, so its result lands on the same
+        trace as the planner's — same pattern PlannerWorkflow uses for
+        InitialParseWorkflow.
+
+        The plan arrives as an artifact rather than a named parameter, which is
+        what lets this node keep the same `run(query, artifacts)` shape as
+        every node it dispatches. `query` is carried for that uniformity; the
+        work here is driven entirely by the plan.
+        """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        self.result.session_id = request_context.session_id
+        plan = self.require_artifact(artifacts, PlannerOutput)
+
+        self.result.session_id = self.session_id
         results: dict[str, Any] = {}
-        execution_order = planner_result.execution_order()
+        execution_order = plan.execution_order()
 
         for layer, goals_layer in execution_order.items():
             for goal in goals_layer:
 
-                dependent_results = {
+                dep_artifacts = {
                     dep_id: results[dep_id]
                     for dep_id in goal.get_depends_on()
                     if dep_id in results
@@ -104,12 +88,7 @@ class TaskRunnerWorkflow(NodeBaseWorkflow[TaskRunnerOutput]):
                     self.result.failed_task.append(goal.id)
                     continue
 
-                executor = executor_cls(
-                    sse_stream=self.sse_stream,
-                    llm_client=self.llm_client,
-                    messages=self.messages,
-                    app_env=self.app_env,
-                )
+                executor = executor_cls(self.ctx, messages=self.messages)
 
                 # The runner owns both ends of the UI's task section, not the
                 # executors: one place to keep them paired, and a node that
@@ -123,11 +102,7 @@ class TaskRunnerWorkflow(NodeBaseWorkflow[TaskRunnerOutput]):
                 step_result = None
                 try:
                     step_result = await self.run_async_step(
-                        executor(
-                            query=goal.description,
-                            dependent_results=dependent_results,
-                            request_context=request_context,
-                        ),
+                        executor(query=goal.description, artifacts=dep_artifacts),
                         raise_on_failure=False,
                     )
                 finally:

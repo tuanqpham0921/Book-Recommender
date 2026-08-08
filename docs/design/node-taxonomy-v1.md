@@ -346,6 +346,53 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   The owner's note in `backend/TODO.md` ("you might not need node_workflow …
   since a lot of that is for the app_workflow") is the next step past this one.
 
+**Done (2026-08-08) — one call shape, and services off the context:**
+
+That "next step past this one" landed, and went further than merging the two
+bases. `AppBaseWorkflow` and `NodeBaseWorkflow` are now a single **`AppWorkflow`**
+(`app/domains/base_workflow.py`), `BookBaseWorkflow` is **`BookWorkflow`**, and
+the ladder is three deep: `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`.
+
+- **`run(query, artifacts)` is the signature of *every* unit of work**, not just
+  the dispatchable ones. The planner, the parse step, the task runner and both
+  book executors answer to it. Previously there were four different `run`
+  signatures against one `__call__` passthrough. The shape is
+  `node(input)` — a node parses its input, rejects it, or continues with it —
+  which is what lets a node sit at any position in a plan.
+- **The plan reaches `TaskRunnerWorkflow` as an artifact**, not a named
+  `planner_result` parameter. Artifacts are **selected by type**
+  (`require_artifact(artifacts, PlannerOutput)`), never by key, generalizing the
+  rule `ParsedDependents.from_results` already followed — it iterates
+  `dependent_results` and dispatches on the value's shape, ignoring the key.
+  Keys stay provenance. `require_artifact` raising `StepFailure` *is* the reject
+  arm, written once instead of per node.
+- **Services stopped being constructor arguments.** `AppWorkflow.__init__(ctx,
+  messages)` is the only `__init__` in the app layer; `sse_stream`,
+  `llm_client`, `app_env`, `session_id`, `user_message` and `BookWorkflow.store`
+  are properties off the `RequestContext`. Four bespoke `__init__`s went away —
+  they existed only to unpack a context the caller already had and forward its
+  pieces down by hand. Properties rather than assignments meant ~50 existing
+  `self.<service>` reads needed no edit.
+- **`BookWorkflow.execute()` is gone**; slices implement `run()` directly. The
+  hook existed only to stop a slice from overriding the `run()` that bound
+  `self.store`. With `store` a property there is nothing to lose. The comment
+  justifying late binding ("an executor is constructed before that session is
+  handed to it") was already false — the task runner constructs each executor
+  *inside* its own `run()`, where the context has been in scope the whole time.
+- **The `Base`-marks-a-reusable-base-class rule is retired.** It was written when
+  the ladder was four deep; at three, the file a class lives in already says
+  whether it is a base, and `AppBaseWorkflow`/`BookBaseWorkflow` read worse than
+  what they name. `Executor` still marks the subset the planner can dispatch.
+- Two bugs fell out of the merge. `_generic_output_type` had been *called but
+  undefined* since `AppBaseWorkflow` was deleted, so **no book executor could be
+  constructed at all** — nothing outside a live request ever built one.
+  `NodeWorkflowOutput.id`/`.args` were non-Optional with `None` defaults, so any
+  output rejected its own `model_dump_json` on reload — the same defect
+  `InitialParseOutput.out_of_scope` already carried a note about, and it would
+  have bitten replaying `chat_runs` rows. `tests/unit/app/domains/test_app_workflow.py`
+  now parameterizes over the live registry so a new slice is covered the day it
+  is registered.
+
 **Still open (roadmap Phase 1):**
 
 - Remove `CompareStrategy` from `NODE_TYPE_TO_CLS`/catalog (class stays parked).

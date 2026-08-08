@@ -52,14 +52,11 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            conversation_orchestrator = PlannerWorkflow(
-                sse_stream,
-                request_context.user_message,
-                request_context.llm_client,
-                app_env=request_context.app_env,
-            )
+            conversation_orchestrator = PlannerWorkflow(request_context)
             await asyncio.wait_for(
-                conversation_orchestrator(request_context=request_context),
+                conversation_orchestrator(
+                    query=request_context.user_message.content, artifacts={}
+                ),
                 timeout=CONVERSATION_TIMEOUT,
             )
 
@@ -69,15 +66,13 @@ class Orchestrator:
                 and planner_result
                 and planner_result.accepted_goals
             ):
-                task_runner = TaskRunnerWorkflow(
-                    sse_stream,
-                    request_context.llm_client,
-                    app_env=request_context.app_env,
-                )
+                task_runner = TaskRunnerWorkflow(request_context)
                 await asyncio.wait_for(
                     task_runner(
-                        request_context=request_context,
-                        planner_result=conversation_orchestrator.result,
+                        query=request_context.user_message.content,
+                        # the plan travels as an artifact, selected by type on
+                        # the other side — no shared key between the two
+                        artifacts=conversation_orchestrator.artifact,
                     ),
                     timeout=CONVERSATION_TIMEOUT,
                 )

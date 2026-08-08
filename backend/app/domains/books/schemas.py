@@ -93,7 +93,7 @@ class BookRetrievalOutput(NodeWorkflowOutput):
 
     Counts-first, per docs/design/execution-pipeline-v1.md: a retrieval node
     fills in `num_books` and `query` and puts at most a small sample of rows in
-    `books` — `BookBaseWorkflow.preflight` (books/base_workflow.py) does all of
+    `books` — `BookWorkflow.preflight` (books/base_workflow.py) does all of
     that in one round trip. Only the last node in a plan runs `query` for the
     full set.
 

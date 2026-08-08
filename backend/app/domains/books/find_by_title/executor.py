@@ -2,7 +2,7 @@ from typing import Any
 
 from app.common.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
-from app.domains.books.base_workflow import BookBaseWorkflow
+from app.domains.books.base_workflow import BookWorkflow
 from clients import OpenAIParserRequest
 
 from .schemas import FindByTitleOutput, FindByTitleRetrieval
@@ -31,11 +31,11 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     )
 
 
-class FindByTitleExecutor(BookBaseWorkflow[FindByTitleOutput]):
+class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
     ui_section_title = "Found books by title"
 
-    async def execute(self, query: str, dependent_results: dict[str, Any]) -> None:
+    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
         """Count the matching titles and hand the query downstream — not the set.
 
         The count is what makes a "4,000 matched, narrow it down?" pause
