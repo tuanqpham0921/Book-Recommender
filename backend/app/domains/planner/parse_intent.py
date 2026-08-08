@@ -179,9 +179,8 @@ class InitialParseOutput(AppWorkflowOutput):
 
     def to_summary(self) -> dict[str, Any]:
         return {
-            "total_system_goals": len(self.accepted_goals) + len(self.refused_goals),
+            "accepted_types": [goal.target_node_type for goal in self.accepted_goals],
             "num_rejected_system": len(self.refused_goals),
-            "num_accepted_system": len(self.accepted_goals),
             "out_of_scope": self.out_of_scope,
         }
 
