@@ -7,7 +7,7 @@ import pytest
 from app.common.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
-from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
+from app.domains.planner.parse_intent import PlanJaneOutput, SystemGoal
 from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
@@ -37,7 +37,7 @@ def _make_orchestration_output() -> PlannerOutput:
     goal = _make_goal()
     return PlannerOutput(
         session_id="sess_1",
-        parse_result=InitialParseOutput(accepted_goals=[goal]),
+        parse_result=PlanJaneOutput(accepted_goals=[goal]),
         diagram="graph TD;\nA-->B;",
     )
 
@@ -50,7 +50,7 @@ class TestPlannerWorkflowSteps:
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(
             ok=True,
-            response=Response(result=InitialParseOutput()),
+            response=Response(result=PlanJaneOutput()),
             token_usage=TokenUsage(total=100, prompt=60, completion=40),
         )
         orchestrator.record.add_step(step)
@@ -66,7 +66,7 @@ class TestPlannerWorkflowSteps:
 
     def test_appends_to_result_steps(self, orchestrator):
         step = OperationResult(
-            ok=True, name="some_step", response=Response(result=InitialParseOutput())
+            ok=True, name="some_step", response=Response(result=PlanJaneOutput())
         )
         orchestrator.record.add_step(step)
         assert step in orchestrator.record.steps
@@ -96,7 +96,7 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
         parse_error = _make_runtime_error("parse crashed")
         parse_workflow = _mock_child_workflow(
             OperationResult(ok=False, runtime_error=parse_error),
-            InitialParseOutput(),
+            PlanJaneOutput(),
         )
 
         with patch(

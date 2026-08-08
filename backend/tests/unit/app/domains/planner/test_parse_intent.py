@@ -2,9 +2,9 @@
 
 Scoped to what `minimal_end_to_end_v1` actually implements. Removed with the
 code they covered: `small_talk` (gone from GoalParseRequest and
-InitialParseOutput), the `_overflow_system_goals` / `_invalid_system_goals`
+PlanJaneOutput), the `_overflow_system_goals` / `_invalid_system_goals`
 capture (goals over MAX_SYSTEM_GOALS are now rejected by the field's
-max_length instead), `InitialParseOutput.reasoning`, and
+max_length instead), `PlanJaneOutput.reasoning`, and
 `generate_user_response`.
 """
 
@@ -294,7 +294,7 @@ class TestRun:
         assert "Cooking recipe" in streamed
 
 
-class TestInitialParseOutputHelpers:
+class TestPlanJaneOutputHelpers:
     def test_accepted_goals_ids_returns_goal_ids(self, parse_wf):
         goal = _make_goal()
         parse_wf.process_parse_result(_make_parse_result(goals=[goal]))

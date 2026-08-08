@@ -388,7 +388,7 @@ the ladder is three deep: `airglider.Workflow` → `AppWorkflow` → `BookWorkfl
   constructed at all** — nothing outside a live request ever built one.
   `NodeWorkflowOutput.id`/`.args` were non-Optional with `None` defaults, so any
   output rejected its own `model_dump_json` on reload — the same defect
-  `InitialParseOutput.out_of_scope` already carried a note about, and it would
+  `PlanJaneOutput.out_of_scope` already carried a note about, and it would
   have bitten replaying `chat_runs` rows. `tests/unit/app/domains/test_app_workflow.py`
   now parameterizes over the live registry so a new slice is covered the day it
   is registered.

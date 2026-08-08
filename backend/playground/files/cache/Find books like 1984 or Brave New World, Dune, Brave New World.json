@@ -157,7 +157,7 @@
           }
         ]
       },
-      "output_type": "InitialParseOutput",
+      "output_type": "PlanJaneOutput",
       "duration": 3.48,
       "token_usage": {
         "total": 4048,

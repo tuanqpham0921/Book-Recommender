@@ -4,7 +4,7 @@ from pydantic import Field
 
 from app.domains.planner.parse_intent import (
     PlanJaneExecutor,
-    InitialParseOutput,
+    PlanJaneOutput,
 )
 
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
@@ -43,7 +43,7 @@ cache_mapping = {
 }
 
 
-def load_cached_parse_output(user_text: str) -> InitialParseOutput | None:
+def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
     """Replay a recorded parse instead of calling the LLM, for the messages
     listed in cache_mapping. Returns None when there is no usable cache entry,
     so the caller falls through to the real parse workflow.
@@ -71,7 +71,7 @@ def load_cached_parse_output(user_text: str) -> InitialParseOutput | None:
             goal.setdefault("depends_on", [])
 
     try:
-        return InitialParseOutput.model_validate(payload)
+        return PlanJaneOutput.model_validate(payload)
     except Exception as e:
         logger.warning(f"Could not replay cached parse {file_name}: {e}")
         return None
@@ -83,7 +83,7 @@ def load_cached_parse_output(user_text: str) -> InitialParseOutput | None:
 # maybe also referenced books or things from processing the steps
 class PlannerOutput(NodeWorkflowOutput):
     session_id: str | None = None
-    parse_result: InitialParseOutput | None = None
+    parse_result: PlanJaneOutput | None = None
     diagram: str | None = None
 
     # The terminal answer stage, appended by the planner rather than chosen by

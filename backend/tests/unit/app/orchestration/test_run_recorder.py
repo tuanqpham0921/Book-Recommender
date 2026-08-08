@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerOutput
-from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
+from app.domains.planner.parse_intent import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
 from airglider import OperationResult, Response, TokenUsage
 
@@ -32,7 +32,7 @@ def _make_planner_record() -> OperationResult:
     goal = _make_goal()
     output = PlannerOutput(
         session_id="sess_1",
-        parse_result=InitialParseOutput(accepted_goals=[goal]),
+        parse_result=PlanJaneOutput(accepted_goals=[goal]),
         diagram="graph TD;",
     )
     return OperationResult(

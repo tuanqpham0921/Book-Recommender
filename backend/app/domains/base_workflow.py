@@ -60,7 +60,7 @@ class NodeWorkflowOutput(BaseModel, ABC):
     # Optional, not `str = None` / `BaseRequest = None`: model_dump_json emits
     # `null` for these when unset, and a non-optional annotation then rejects
     # its own dump on reload — which is how chat_runs rows and the parse cache
-    # get replayed (see InitialParseOutput.out_of_scope for the same note).
+    # get replayed (see PlanJaneOutput.out_of_scope for the same note).
     id: str | None = None
     args: BaseRequest | None = None
     depends_on: list[str] = Field(default_factory=list)

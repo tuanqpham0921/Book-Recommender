@@ -158,7 +158,7 @@ class GoalParseRequest(BaseModel):
 # task_1 -> task_2
 # if task_1 is rejected then task_2 should not still depend on or run
 # you need the previous pruning
-class InitialParseOutput(NodeWorkflowOutput):
+class PlanJaneOutput(NodeWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
     refused_goals: list[SystemGoal] = Field(default_factory=list)
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
@@ -201,7 +201,7 @@ class InitialParseOutput(NodeWorkflowOutput):
         return order
 
 
-class PlanJaneExecutor(AppWorkflow[InitialParseOutput]):
+class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
     ui_loading_message = "Thinking..."
     intent_reject_message = (
         "I can't help with that request. Please try again with a book-related question."
