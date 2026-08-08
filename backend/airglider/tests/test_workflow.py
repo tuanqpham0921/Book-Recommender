@@ -1,8 +1,7 @@
 import asyncio
 
 import pytest
-from airgliderbase_glider import Workflow, StepFailure
-from airglider import OperationResult, TokenUsage, task
+from airglider import OperationResult, StepFailure, TokenUsage, Workflow, task
 
 
 def _make_flaky_task(fail_times: int):

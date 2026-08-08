@@ -197,9 +197,14 @@ tests:
 tests-integration:
 	poetry run pytest -s tests/integration/
 
+# the airglider library's own suite — no app imports, runs standalone
+.PHONY: tests-airglider
+tests-airglider:
+	poetry run pytest -s airglider/tests/
+
 .PHONY: tests-all
 tests-all:
-	poetry run pytest -s tests/unit/ tests/integration/
+	poetry run pytest -s tests/unit/ tests/integration/ airglider/tests/
 
 .PHONY: typecheck
 typecheck:

@@ -4,7 +4,8 @@ import asyncio
 import logging
 from pathlib import Path
 
-from common import setup_logging, task, OperationResult
+from airglider import OperationResult, task
+from common import setup_logging
 from common.context import AppContext
 from common.utils import save_file
 

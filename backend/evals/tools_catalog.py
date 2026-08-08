@@ -52,7 +52,7 @@ from app.registry import (  # noqa: E402
     class_docstring,
     format_node_type_catalog,
 )
-from config.pricing import PRICES_CHECKED_ON, cost_of  # noqa: E402
+from airglider import PRICES_CHECKED_ON, cost_of  # noqa: E402
 from evals.common import current_git_sha, truncate  # noqa: E402
 
 # Long enough for a Purpose: line to survive mostly intact, short enough that
@@ -231,7 +231,7 @@ def prompt_costs(block_tokens: int) -> list[dict]:
 
 def _dollars(value: float | None) -> str:
     """Unpriced models render as `?`, never as $0 — the distinction
-    config/pricing.py draws between unknown spend and free spend."""
+    airglider/src/config.py draws between unknown spend and free spend."""
     return f"${value:.6f}" if value is not None else "?"
 
 
@@ -247,7 +247,7 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         f"- generated: {generated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}",
         f"- commit: `{git_sha}`",
         f"- tokenizer: `{encoder.name}` (via `--model {model}`)",
-        f"- rates checked: {PRICES_CHECKED_ON} (`config/pricing.py`)",
+        f"- rates checked: {PRICES_CHECKED_ON} (`airglider/src/config.py`)",
         "",
         "Read from the live registry, not from a recorded run — this describes "
         "the code as it stands at the commit above.",

@@ -8,7 +8,7 @@ question instead: did it run, how long did it take, how many tokens, split
 across which models, and what did it cost.
 
 Dollar figures come from `cost_usd`, stamped onto each run's token_usage at
-the time it was recorded (see config/pricing.py). Runs recorded before cost
+the time it was recorded (see airglider/src/config.py). Runs recorded before cost
 tracking landed have no `cost_usd` and are counted as unpriced rather than
 free — the summary says how many, so a total is never quietly understated.
 
@@ -182,7 +182,7 @@ def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
         lines += [
             f"> ⚠️ **Costs below are understated.** No rate for {named} when these "
             "runs were recorded, so their tokens are counted but their spend is "
-            "not. Add them to `config/pricing.py` — re-running this report will "
+            "not. Add them to `airglider/src/config.py` — re-running this report will "
             "not backfill it, since `cost_usd` is frozen at record time.",
             "",
         ]

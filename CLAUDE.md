@@ -97,13 +97,17 @@ Each capability is a **vertical slice** — one folder under `app/domains/<domai
 
 `GET /health` · `GET /ping` · `GET /ready` — health/readiness. `POST /session/new` — mints a session id. `POST /session/{session_id}/message` — SSE chat. `GET /chat_runs` — review queue (least-reviewed first). `PUT /feedback/review` — upsert one review per (chat_id, session_id). `GET /feedback?chat_id=` — list reviews for a run. That is the whole surface — there is no `/add_feedback` and no `/chat_runs/tests`. No auth exists yet (pre-deploy blocker, docs/backlog.md).
 
-### Workflow / Operation Pattern
+### Workflow / Operation Pattern — the `airglider` library
 
-Infrastructure abstractions in `common/` that centralize logging, error catching, and structured output — so production code never crashes silently and every result carries consistent metadata.
+These abstractions live in **`backend/airglider/`**, a self-contained library extracted from the old `common/operation.py` + `common/workflow.py`. They centralize logging, error catching, and structured output — so production code never crashes silently and every result carries consistent metadata.
 
-- **`OperationResult[T]`** (`common/operation.py`) — universal result envelope: `ok`, `output`, `steps`, `details`, `runtime_error`, `duration`, `token_usage`, `id`. All steps and workflows return this. Parent callers access child output via `.output`. There is deliberately **no `message` field** — it was write-only noise that every layer overwrote; free-text goes in `details` (via `add_details`), and failure text lives on `runtime_error.message`. **`add_step()` lives here, not on `Workflow`** — it appends a child envelope and rolls its `token_usage` up, so a non-`Workflow` caller (the `Orchestrator`) can build a root envelope over workflows that each own their own record. **`to_summary()`** renders that tree recursively as one small dict per envelope (id/name/ok/duration/tokens/error plus the payload's own `to_summary`, empties dropped) — a readable companion to the full tree, never a replacement for it.
-- **`Workflow`** (`common/workflow.py`) — for multi-step async processes. Subclass and override `run()`. Centralizes start/error logging and catches runtime exceptions without crashing. Each `Workflow` owns one `OperationResult` in memory; steps append to `.steps` (via `self.record.add_step`) as they complete. `UserFacingBaseWorkflow` adds SSE streaming helpers.
-- **`@task` decorator** (`common/operation.py`) — for single async functions. Wraps the function, catches exceptions, and returns `OperationResult`. To set `ok` yourself or attach `details`/`output` from inside a `@task`, return a custom `OperationResult` directly — the decorator detects this and passes it through unchanged.
+**Always import from the package root — `from airglider import OperationResult, Workflow, task`.** Never reach into `airglider.src.*`; the internal layout is free to move. `airglider/__init__.py` is the whole public surface, so a symbol that isn't re-exported there is not part of the API (adding one means adding it to that file's `__all__`).
+
+**airglider imports nothing from the app** — that is the invariant that keeps it extractable, and it is worth preserving when editing. It therefore owns the serialization/identity helpers its record tree is built with (`to_serializable`, `remove_empty_values`, `strip_zero_token_usage`, `now_iso`, `uuid_8`) and the model price table (`airglider/src/config.py` — moved from the old `config/pricing.py`). `common/utils` re-exports the helpers rather than keeping a second copy, so app code importing them from either place gets the same function. Its own tests live in `airglider/tests/` (run via `make tests-airglider`, and folded into `make tests-all`), not under `tests/`.
+
+- **`OperationResult[T]`** — universal result envelope: `ok`, `output`, `steps`, `details`, `runtime_error`, `duration`, `token_usage`, `id`. All steps and workflows return this. Parent callers access child output via `.output`. There is deliberately **no `message` field** — it was write-only noise that every layer overwrote; free-text goes in `details` (via `add_details`), and failure text lives on `runtime_error.message`. **`add_step()` lives here, not on `Workflow`** — it appends a child envelope and rolls its `token_usage` up, so a non-`Workflow` caller (the `Orchestrator`) can build a root envelope over workflows that each own their own record. **`to_summary()`** renders that tree recursively as one small dict per envelope (id/short name/ok/duration/tokens/error plus the payload's own `to_summary`, empties dropped) — a readable companion to the full tree, never a replacement for it.
+- **`Workflow`** — for multi-step async processes. Subclass and override `run()`. Centralizes start/error logging and catches runtime exceptions without crashing. Each `Workflow` owns one `OperationResult` in memory; steps append to `.steps` (via `self.record.add_step`) as they complete. `UserFacingBaseWorkflow` adds SSE streaming helpers.
+- **`@task` decorator** — for single async functions. Wraps the function, catches exceptions, and returns `OperationResult`. To set `ok` yourself or attach `details`/`output` from inside a `@task`, return a custom `OperationResult` directly — the decorator detects this and passes it through unchanged.
 
 ### Domain / Node Type System
 
@@ -126,6 +130,7 @@ Infrastructure abstractions in `common/` that centralize logging, error catching
 
 ### Config
 
+- Model rates are **not** here — they moved to `airglider/src/config.py`; import via `from airglider import cost_of, PRICES_CHECKED_ON`
 - **`Settings`** (`config/settings/main.py`) — pydantic-settings, loaded from `config/.env`; has `app`, `openai`, `sqlalchemy` sub-settings
 - **`FilesLocationConstants`** / **`AppConfig`** etc. — path and domain constants from `config/constants.py`
 - Import via `from config import settings, FilesLocationConstants`

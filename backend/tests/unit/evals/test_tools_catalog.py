@@ -204,7 +204,7 @@ class TestPromptCosts:
         assert large == pytest.approx(small * 2)
 
     def test_unpriced_model_yields_none_not_zero(self, monkeypatch):
-        # matches config/pricing.py: unknown spend must never render as free
+        # matches airglider/src/config.py: unknown spend must never render as free
         monkeypatch.setattr(
             tools_catalog, "CATALOG_CONSUMERS", (("gpt-9-omega", 1, "somewhere"),)
         )

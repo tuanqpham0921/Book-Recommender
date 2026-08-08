@@ -3,11 +3,23 @@ from enum import Enum
 from pathlib import Path
 from pydantic import BaseModel, PrivateAttr
 
-from common.utils.format import (
+from airglider import (
+    now_iso,
     remove_empty_values,
     strip_zero_token_usage,
     to_serializable,
+    uuid_8,
 )
+
+
+class TestIdentifiers:
+    def test_now_iso_is_a_string(self):
+        assert isinstance(now_iso(), str)
+
+    def test_uuid_8_is_eight_chars(self):
+        id = uuid_8()
+        assert isinstance(id, str)
+        assert len(id) == 8
 
 
 class TestToSerializable:

@@ -1,9 +1,6 @@
-
 from pydantic import BaseModel, model_validator, Field
 
-# NOTE: this should not be linked to others
-# so airglider can be stand alone
-from config.pricing import UNKNOWN_MODEL, cost_of
+from ..config import UNKNOWN_MODEL, cost_of
 
 class ModelUsage(BaseModel):
     """Token counts attributable to a single model."""
@@ -47,8 +44,9 @@ class TokenUsage(ModelUsage):
     counts alone can't express once more than one model is in play.
 
     `cost_usd` and `unpriced_models` are stored fields rather than properties
-    on purpose — `common.utils.to_serializable` walks `model_fields` and would
-    drop computed ones, so a property would never reach the chat_runs JSONB.
+    on purpose — a serializer that walks `model_fields` (the host app's
+    `to_serializable`) drops computed ones, so a property would never reach the
+    persisted record.
     Both are recomputed on construction and after every `+=`.
     """
 

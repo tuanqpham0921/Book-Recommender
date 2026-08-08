@@ -7,7 +7,7 @@ from app.common.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
 # always sets it) and execute() reads it back to attribute token spend, so the
-# fakes must carry one too. Priced in config.pricing, so cost is exercised.
+# fakes must carry one too. Priced in airglider.src.config, so cost is exercised.
 FAKE_MODEL = "gpt-4.1-mini"
 
 

@@ -93,7 +93,7 @@ catalog tokens) and docstrings missing a canonical section — a missing `Do not
 [docs/eval-strategy.md](../../docs/eval-strategy.md).
 
 Dollar figures come from `cost_usd`, stamped onto each run's `token_usage` when it was
-recorded (rates in [config/pricing.py](../config/pricing.py)) — **frozen at record time**,
+recorded (rates in [airglider/src/config.py](../airglider/src/config.py)) — **frozen at record time**,
 so re-running a report never backfills or reprices history. Two distinct gaps get called
 out rather than hidden:
 
@@ -101,7 +101,7 @@ out rather than hidden:
   summary row, never as free;
 - a run whose `token_usage.unpriced_models` is non-empty still *has* a cost, just too low
   — the report prints an explicit "costs are understated" warning naming the models. Add
-  them to `config/pricing.py`; only future runs will be right.
+  them to `airglider/src/config.py`; only future runs will be right.
 
 ## Repo sizing (`app_docs/`)
 

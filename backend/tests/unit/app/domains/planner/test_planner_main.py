@@ -47,7 +47,7 @@ def _make_orchestration_output() -> PlannerOutput:
 class TestPlannerWorkflowSteps:
     # storing the parse output moved from an add_step override into
     # run() itself — see PlannerWorkflow.run. add_step itself now lives on
-    # OperationResult (common/operation.py), where steps/token_usage do.
+    # OperationResult (airglider), where steps/token_usage do.
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(

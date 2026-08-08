@@ -2,10 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Generic, ParamSpec, TypeVar
 from .error_info import RuntimeErrorInfo
 from .token_usage import TokenUsage
-
-# NOTE: 
-# move these into a seperate so airglider can be standalone
-from common.utils import now_iso, remove_empty_values, uuid_8
+from ..utils import now_iso, remove_empty_values, uuid_8
 
 OutputT = TypeVar("OutputT")
 P = ParamSpec("P")
@@ -87,7 +84,11 @@ class OperationResult(BaseModel, Generic[OutputT]):
         payload = self.result
         summary = {
             "id": self.id,
-            "name": self.name.split(".")[-1],
+            # leaf of the dotted ref only — the full module path is in the
+            # unabridged tree, and repeating it at every level is what made
+            # the trace hard to scan. `name` is optional on the model, so an
+            # unnamed envelope drops the key rather than raising here.
+            "name": self.name.split(".")[-1] if self.name else None,
             "ok": self.ok,
             "duration": self.duration,
             # `or None` so a step that made no LLM call (a DB read, a

@@ -1,10 +1,28 @@
-# Utilies to help with serlizing and cleaning values
-from typing import Any
-from pydantic import BaseModel
+"""Serialization and identity helpers for record trees.
 
+Self-contained on purpose: airglider imports nothing from the host app, so
+these live here rather than being borrowed from a shared `utils` package. The
+host is free to re-export them (see `common/utils/`) instead of keeping a
+second copy.
+"""
+
+import uuid
 from dataclasses import fields, is_dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+
+def now_iso() -> str:
+    """The current UTC time in ISO 8601 format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def uuid_8() -> str:
+    return str(uuid.uuid4())[:8]
 
 
 def to_serializable(value: Any) -> Any:
@@ -86,20 +104,19 @@ def strip_zero_token_usage(value: Any) -> Any:
 
     Scoped to that one key by name rather than folded into
     `remove_empty_values`: 0 and False survive that function on purpose
-    (`ok: False`, `num_books: 0` are real answers, not absence — see
+    (`ok: False`, a genuine count of 0 are real answers, not absence — see
     test_preserves_zero_and_false), so a generic "drop zero scalars" rule
     would be wrong there. `token_usage` is the one place an all-zero shape
-    really does mean "nothing to report" — a DB check or combine-tier step
-    that made no LLM call — so it gets a name-scoped rule instead of a
-    general one.
+    really does mean "nothing to report" — a step that made no LLM call — so
+    it gets a name-scoped rule instead of a general one.
 
-    Dev-log readability only. Never apply this before the DB write: an
+    Log readability only. Never apply this before persisting a record: an
     envelope that genuinely spent $0 must still serialize `cost_usd: 0.0`
-    there, not vanish into the same shape as a pre-cost-tracking row with no
-    `token_usage` key at all — that distinction is what lets
-    evals/report.py average real zeros without quietly counting unknown
-    spend as free (see `token_counts`'s docstring). Run this only after
-    `remove_empty_values`, on the copy written to the local dev file.
+    there, not vanish into the same shape as a record written before cost
+    tracking existed, with no `token_usage` key at all. That distinction is
+    what lets a spend report average real zeros without quietly counting
+    unknown spend as free. Run this only after `remove_empty_values`, on the
+    copy written to a local file.
     """
     if isinstance(value, dict):
         cleaned = {key: strip_zero_token_usage(item) for key, item in value.items()}
