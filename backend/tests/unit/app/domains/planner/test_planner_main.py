@@ -1,4 +1,4 @@
-"""Tests for PlannerWorkflow.add_step output routing."""
+"""Tests for PlannerWorkflow step/output routing."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -44,9 +44,10 @@ def _make_orchestration_output() -> PlannerOutput:
     )
 
 
-class TestPlannerWorkflowAddStep:
+class TestPlannerWorkflowSteps:
     # storing the parse output moved from an add_step override into
-    # run() itself — see PlannerWorkflow.run
+    # run() itself — see PlannerWorkflow.run. add_step itself now lives on
+    # OperationResult (common/operation.py), where steps/token_usage do.
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
         step = OperationResult(
@@ -54,7 +55,7 @@ class TestPlannerWorkflowAddStep:
             response=Response(result=InitialParseOutput()),
             token_usage=TokenUsage(total=100, prompt=60, completion=40),
         )
-        orchestrator.add_step(step)
+        orchestrator.record.add_step(step)
         assert orchestrator.record.token_usage.total == 100
         assert orchestrator.record.token_usage.prompt == 60
         assert orchestrator.record.token_usage.completion == 40
@@ -69,7 +70,7 @@ class TestPlannerWorkflowAddStep:
         step = OperationResult(
             ok=True, name="some_step", response=Response(result=InitialParseOutput())
         )
-        orchestrator.add_step(step)
+        orchestrator.record.add_step(step)
         assert step in orchestrator.record.steps
 
 

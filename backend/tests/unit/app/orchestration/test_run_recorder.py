@@ -35,27 +35,33 @@ def _make_goal():
     return goal
 
 
-def _make_result_and_output() -> tuple[OperationResult, PlannerOutput]:
+def _make_planner_record() -> OperationResult:
     goal = _make_goal()
     output = PlannerOutput(
         session_id="sess_1",
         parse_result=InitialParseOutput(accepted_goals=[goal]),
         diagram="graph TD;",
     )
-    result = OperationResult(
+    return OperationResult(
         ok=True,
         response=Response(result=output),
         token_usage=TokenUsage(total=42, prompt=30, completion=12),
     )
-    result.timing.duration = 1.23
-    return result, output
 
 
-def _make_workflow():
-    result, output = _make_result_and_output()
+def _make_root_record(planner: OperationResult) -> OperationResult:
+    """The orchestrator's root envelope, built the way Orchestrator.run builds
+    it: the planner record hung on as a step, then ok/duration stamped."""
+    record = OperationResult(name="orchestrator_chat_1", ok=True)
+    record.add_step(planner)
+    record.timing.duration = 1.23
+    return record
+
+
+def _make_workflow(planner: OperationResult):
     workflow = MagicMock()
-    workflow.record = result
-    workflow.result = output
+    workflow.record = planner
+    workflow.result = planner.result
     return workflow
 
 
@@ -73,14 +79,14 @@ def _make_request_context(app_env: str) -> RequestContext:
 
 class TestBuildChatRunRow:
     def test_maps_workflow_onto_columns(self):
-        result, output = _make_result_and_output()
+        planner = _make_planner_record()
 
         row = build_chat_run_row(
             session_id="sess_1",
             user_chat_id="chat_1",
             user_message="Find me a book",
-            result=result,
-            output=output,
+            record=_make_root_record(planner),
+            planner=planner,
         )
 
         assert row["chat_id"] == "chat_1"
@@ -88,6 +94,7 @@ class TestBuildChatRunRow:
         assert row["user_message"] == "Find me a book"
         assert row["ok"] is True
         assert row["duration_s"] == 1.23
+        # promoted from the root envelope, which rolled the planner's up
         assert row["total_tokens"] == 42
         assert row["mermaid"] == "graph TD;"
         assert row["tasks"] is None
@@ -97,15 +104,35 @@ class TestBuildChatRunRow:
             == "Find a book about machine learning topics"
         )
 
-    def test_serialization_preserves_private_attrs(self):
-        result, output = _make_result_and_output()
+    def test_planner_column_stays_the_planner_envelope(self):
+        # evals/report_system_goals.py — the golden test — reads accepted goals
+        # at this exact path. Re-rooting the column on the orchestrator record
+        # would empty every diff silently, so pin the path, not just the value.
+        planner = _make_planner_record()
 
         row = build_chat_run_row(
             session_id="sess_1",
             user_chat_id="chat_1",
             user_message="Find me a book",
-            result=result,
-            output=output,
+            record=_make_root_record(planner),
+            planner=planner,
+        )
+
+        from evals.report_system_goals import accepted_goal_types
+
+        assert accepted_goal_types(row["planner"]) == [
+            FindTitleNodeTypeEnum.REQUEST.value
+        ]
+
+    def test_serialization_preserves_private_attrs(self):
+        planner = _make_planner_record()
+
+        row = build_chat_run_row(
+            session_id="sess_1",
+            user_chat_id="chat_1",
+            user_message="Find me a book",
+            record=_make_root_record(planner),
+            planner=planner,
         )
 
         goal = row["planner"]["response"]["result"]["parse_result"]["accepted_goals"][0]
@@ -114,28 +141,29 @@ class TestBuildChatRunRow:
 
 
 class TestRecordChatRun:
-    async def test_missing_workflow_result_records_nothing(self):
+    async def test_missing_record_records_nothing(self):
         # app_env="development" (not "test") so this exercises the
-        # workflow.record-is-None guard specifically, not the env-based skip
+        # record-is-None guard specifically, not the env-based skip
         ctx = _make_request_context("development")
-        workflow = MagicMock()
-        workflow.record = None
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
             "app.orchestration.run_recorder.ChatRunStore"
         ) as mock_store_cls:
-            await record_chat_run(ctx, workflow)
+            await record_chat_run(ctx, None)
 
         mock_save.assert_not_called()
         mock_store_cls.assert_not_called()
 
     async def test_test_env_records_nothing(self):
         ctx = _make_request_context("test")
+        planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
             "app.orchestration.run_recorder.ChatRunStore"
         ) as mock_store_cls:
-            await record_chat_run(ctx, _make_workflow())
+            await record_chat_run(
+                ctx, _make_root_record(planner), _make_workflow(planner)
+            )
 
         mock_save.assert_not_called()
         mock_store_cls.assert_not_called()
@@ -143,34 +171,47 @@ class TestRecordChatRun:
 
     async def test_development_writes_file_and_db(self):
         ctx = _make_request_context("development")
+        planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
             "app.orchestration.run_recorder.ChatRunStore"
         ) as mock_store_cls:
             mock_store_cls.return_value.insert_run = AsyncMock()
-            await record_chat_run(ctx, _make_workflow())
+            await record_chat_run(
+                ctx, _make_root_record(planner), _make_workflow(planner)
+            )
 
         mock_save.assert_called_once()
+        # the readable trace and the full row travel together, one file
+        payload = mock_save.call_args.args[0]
+        assert set(payload) == {"summary", "chat_run"}
+        assert payload["summary"]["steps"][0]["ok"] is True
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 
     async def test_production_writes_db_only(self):
         ctx = _make_request_context("production")
+        planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
             "app.orchestration.run_recorder.ChatRunStore"
         ) as mock_store_cls:
             mock_store_cls.return_value.insert_run = AsyncMock()
-            await record_chat_run(ctx, _make_workflow())
+            await record_chat_run(
+                ctx, _make_root_record(planner), _make_workflow(planner)
+            )
 
         mock_save.assert_not_called()
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 
     async def test_db_failure_is_swallowed(self):
         ctx = _make_request_context("production")
+        planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.ChatRunStore") as mock_store_cls:
             mock_store_cls.return_value.insert_run = AsyncMock(
                 side_effect=RuntimeError("db down")
             )
             # must not raise — recording never breaks the chat response
-            await record_chat_run(ctx, _make_workflow())
+            await record_chat_run(
+                ctx, _make_root_record(planner), _make_workflow(planner)
+            )

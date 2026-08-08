@@ -24,40 +24,51 @@ def build_chat_run_row(
     session_id: str,
     user_chat_id: str,
     user_message: str,
-    result: OperationResult[PlannerOutput],
-    output: PlannerOutput,
+    record: OperationResult,
+    planner: OperationResult[PlannerOutput] | None,
     tasks: OperationResult[TaskRunnerOutput] | None = None,
 ) -> dict[str, Any]:
-    """Map a finished conversation (+ optional task run) onto ChatRunModel
-    columns. Promoted stats (ok, duration, tokens, mermaid) up front for
-    cheap querying; the full-fidelity JSONB envelopes (planner, tasks) last."""
+    """Map a finished turn onto ChatRunModel columns. Promoted stats (ok,
+    duration, tokens, mermaid) up front for cheap querying; the full-fidelity
+    JSONB envelopes (planner, tasks) last.
+
+    The promoted stats come from `record` — the orchestrator's root envelope —
+    so they cover the whole turn including task execution. The two JSONB
+    columns stay the individual workflow envelopes rather than that root: the
+    golden-test report reads accepted goals at the fixed path
+    `planner.response.result.parse_result` (evals/report_system_goals.py), and
+    re-rooting the column would silently empty every diff.
+    """
+    output = planner.result if planner else None
     return {
         "chat_id": user_chat_id,
         "session_id": session_id,
         "created_at": datetime.now(timezone.utc),
         "user_message": user_message,
-        "ok": result.ok,
-        "runtime_error": result.runtime_error.type if result.runtime_error else None,
-        "duration_s": result.timing.duration,
-        "total_tokens": result.token_usage.total,
-        "mermaid": output.diagram,
-        "planner": to_serializable(result),
+        "ok": record.ok,
+        "runtime_error": record.runtime_error.type if record.runtime_error else None,
+        "duration_s": record.duration,
+        "total_tokens": record.token_usage.total,
+        "mermaid": output.diagram if output else None,
+        "planner": to_serializable(planner) if planner is not None else None,
         "tasks": to_serializable(tasks) if tasks is not None else None,
     }
 
 
 async def record_chat_run(
     request_context: RequestContext,
-    workflow: PlannerWorkflow,
+    record: OperationResult,
+    planner: PlannerWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
-    if not request_context or workflow is None or workflow.record is None:
+    if not request_context or record is None:
         user_message_id = (
             request_context.user_message.id if request_context else "unknown"
         )
         logger.warning(
-            f"record_chat_run: missing request_context or workflow.record for chat_id={user_message_id}"
+            f"record_chat_run: missing request_context or record "
+            f"for chat_id={user_message_id}"
         )
         return
 
@@ -70,30 +81,28 @@ async def record_chat_run(
             session_id=request_context.session_id,
             user_chat_id=request_context.user_message.id,
             user_message=request_context.user_message.content,
-            result=workflow.record,
-            output=workflow.result,
+            record=record,
+            planner=planner.record if planner is not None else None,
             tasks=task_runner.record if task_runner is not None else None,
         )
 
         if app_env == "development":
-            files = []
+            # summary first, then the same full tree the DB gets: the summary
+            # is for reading the shape of a run at a glance, the row is what
+            # you drop into when a step needs explaining.
+            #
             # strip_zero_token_usage only ever touches this local eyeballing
             # copy — the DB row above keeps every token_usage as recorded, so
             # a genuinely free step still serializes cost_usd: 0.0 there
             # instead of vanishing into the same shape as a pre-cost-tracking
             # row (see strip_zero_token_usage's docstring)
-            row_cleaned = strip_zero_token_usage(remove_empty_values(row))
-            files.append(row_cleaned)
-            # save_file(row_cleaned, file_name=f"{row['chat_id']}")
-            # save_file(row_cleaned, file_name=f"chat_run_dev")
-
-            if task_runner and task_runner.record:
-                result = to_serializable(task_runner.record)
-                result = strip_zero_token_usage(remove_empty_values(result))
-                files.append(result)
-                # save_file(result, file_name=f"task_result_{row['chat_id']}")
-                # save_file(result, file_name=f"task_reuslt_dev")
-            save_file(files, file_name=f"{row['chat_id']}")
+            save_file(
+                {
+                    "summary": record.to_summary(),
+                    "chat_run": strip_zero_token_usage(remove_empty_values(row)),
+                },
+                file_name=row["chat_id"],
+            )
 
         async with request_context.session_factory() as session:
             await ChatRunStore(session).insert_run(row)

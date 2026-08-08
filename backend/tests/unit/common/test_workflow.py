@@ -338,20 +338,22 @@ class TestCrashingSteps:
 
 
 class TestAddStep:
+    # add_step lives on OperationResult, not Workflow — a workflow reaches it
+    # through the envelope it owns (self.record), same as add_details
     def test_rejects_non_operation_result(self):
         wf = _SuccessWorkflow()
         with pytest.raises(ValueError):
-            wf.add_step("not a result")
+            wf.record.add_step("not a result")
 
     def test_aggregates_token_usage_across_steps(self):
         wf = _SuccessWorkflow()
-        wf.add_step(
+        wf.record.add_step(
             OperationResult(
                 ok=True,
                 token_usage=TokenUsage(total=10, prompt=8, completion=2, cached=8),
             )
         )
-        wf.add_step(
+        wf.record.add_step(
             OperationResult(
                 ok=True,
                 token_usage=TokenUsage(total=20, prompt=12, completion=8, cached=2),

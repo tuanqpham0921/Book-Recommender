@@ -42,7 +42,7 @@ class Workflow(ABC, Generic[OutputT]):
             self.record.response.result = output_type()
 
     def add_details(self, *message):
-        self.record.add_details(message)
+        self.record.add_details(*message)
 
     @property
     def result(self) -> OutputT:
@@ -117,7 +117,7 @@ class Workflow(ABC, Generic[OutputT]):
         # default is True more most cases
 
         step_result = await function
-        self.add_step(step_result)
+        self.record.add_step(step_result)
 
         if step_result.ok:
             return step_result
@@ -130,13 +130,6 @@ class Workflow(ABC, Generic[OutputT]):
             # string is what lands in the parent's runtime_error.message
             raise StepFailure(f"Step failed: {step_result.name}")
         return step_result
-
-    def add_step(self, step: OperationResult[Any]) -> None:
-        if not isinstance(step, OperationResult):
-            raise ValueError(f"Step is of type {type(step)} not OperationResult")
-
-        self.record.token_usage += step.token_usage
-        self.record.steps.append(step)
 
     @property
     def workflow_ref(self) -> str:

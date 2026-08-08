@@ -98,10 +98,13 @@ class PlannerOutput(AppWorkflowOutput):
     # the LLM — one per sink in the goal graph. See generation_node.py.
     generation_nodes: list[GenerationNode] = Field(default_factory=list)
 
-    # TODO: implement this
     def to_summary(self) -> dict[str, Any]:
-        return {}
-    
+        # NOTE: we'll have more later
+        # parse_result is None when the turn errored before parsing finished —
+        # the summary still has to render for that run, it's the one you read
+        return {"plan": self.parse_result.to_summary() if self.parse_result else None}
+
+
     def execution_order(self):
         return self.parse_result.execution_order()
     

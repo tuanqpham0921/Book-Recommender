@@ -126,11 +126,16 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     query_sql: str | None = None
     query: DeferredBookQuery | None = Field(default=None, exclude=True)
 
-    def to_summary(self, preview_num = 3) -> dict[str, Any]:
+    def to_summary(self, preview_num: int = 3) -> dict[str, Any]:
         return {
             "num_books": self.num_books,
             "num_fetched": len(self.books),
-            "preview": [book.title for book in self.books[:preview_num]],
+            # isbn13 alongside the title so a trace line identifies the exact
+            # row — titles alone collide across editions
+            "preview": [
+                {"isbn13": book.isbn13, "title": book.title}
+                for book in self.books[:preview_num]
+            ],
         }
 
 
