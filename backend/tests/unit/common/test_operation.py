@@ -1,5 +1,5 @@
 import pytest
-from common.operation import task, OperationResult, Response, RuntimeErrorInfo, TokenUsage
+from airglider.task import task, OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import to_serializable
 from config.pricing import MODEL_PRICES, PER_MILLION, UNKNOWN_MODEL
 

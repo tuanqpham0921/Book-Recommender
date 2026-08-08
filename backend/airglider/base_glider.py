@@ -1,22 +1,14 @@
 from abc import ABC, abstractmethod
-from common.operation import OperationResult, Response, RuntimeErrorInfo
 import asyncio
 import logging
 import time
 from typing import Any, Generic, TypeVar
-
-
 from typing import Coroutine
 
+from airglider.task import OperationResult, Response, RuntimeErrorInfo
+from .exception import StepFailure
+
 OutputT = TypeVar("OutputT")
-
-
-class StepFailure(RuntimeError):
-    """Control-flow only: raised by run_async_step to abort a workflow's
-    remaining steps after a step failed. The failing step's own envelope
-    already records the details (including runtime_error if it crashed), so
-    __call__ logs a single summary line and does not stamp runtime_error."""
-
 
 class Workflow(ABC, Generic[OutputT]):
     """One instance = one execution. self.record (and subclass output

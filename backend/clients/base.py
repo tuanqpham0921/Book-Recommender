@@ -5,7 +5,7 @@ import asyncio
 from pydantic import BaseModel, ConfigDict
 from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
-from common.operation import OperationResult
+from airglider.task import OperationResult
 
 import logging
 logger = logging.getLogger(__name__)

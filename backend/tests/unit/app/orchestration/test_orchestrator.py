@@ -13,7 +13,7 @@ from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
 from app.orchestration.request_context import RequestContext
 from clients import OpenAIClient
-from common.operation import OperationResult
+from airglider.task import OperationResult
 from db.stores.book_store import BookStore
 
 

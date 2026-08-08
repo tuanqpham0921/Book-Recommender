@@ -8,7 +8,7 @@ from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
-from common.operation import OperationResult, Response, task
+from airglider.task import OperationResult, Response, task
 from pydantic import BaseModel, Field
 from db.stores.book_store import BookStore
 

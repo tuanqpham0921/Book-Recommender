@@ -13,7 +13,7 @@ from app.domains.planner.parse_intent import (
 )
 
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
-from common.operation import OperationResult
+from airglider.task import OperationResult
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
 from app.common.prompt_loader import format_prompt

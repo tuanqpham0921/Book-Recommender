@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from common.operation import OperationResult
+from airglider.task import OperationResult
 from common.utils import save_file, to_serializable, remove_empty_values, strip_zero_token_usage
 from db.stores.chat_run_store import ChatRunStore
 from app.orchestration.request_context import RequestContext

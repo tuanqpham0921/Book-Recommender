@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import update
 from db.schema import BookModel
 from db.ingestion.utils import count_csv_data_rows, iter_books_from_csv
-from common.operation import OperationResult, Response, task
+from airglider.task import OperationResult, Response, task
 from db.readiness import ReadinessResult
 import logging
 from typing import Any, AsyncIterator

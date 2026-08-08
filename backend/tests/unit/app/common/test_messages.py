@@ -15,7 +15,7 @@ from app.common.messages import (
     ToolMessage,
     UserMessage,
 )
-from common.operation import OperationResult, Response, TokenUsage
+from airglider.task import OperationResult, Response, TokenUsage
 
 
 class _FakeResult(BaseModel):

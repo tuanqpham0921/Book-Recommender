@@ -3,8 +3,8 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from typing import Any, Generic, TypeVar, cast, get_args
 
-from common.operation import OperationResult, TokenUsage
-from common.workflow import Workflow
+from airglider.task import OperationResult, TokenUsage
+from airglider.base_glider import Workflow
 from app.common.messages import (
     APIMessage,
     AssistantMessage,

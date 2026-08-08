@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from clients.openai_client import OpenAIClient
 from db.stores.book_store import BookStore
 from db.schema import BookModel
-from common.operation import OperationResult, Response, task
+from airglider.task import OperationResult, Response, task
 from typing import Any, AsyncIterator
 import logging, asyncio
 logger = logging.getLogger(__name__)

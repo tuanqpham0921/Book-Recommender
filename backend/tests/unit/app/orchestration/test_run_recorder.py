@@ -16,7 +16,7 @@ from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
 from app.orchestration.request_context import RequestContext
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
 from clients import OpenAIClient
-from common.operation import OperationResult, Response, TokenUsage
+from airglider.task import OperationResult, Response, TokenUsage
 from db.stores.book_store import BookStore
 
 

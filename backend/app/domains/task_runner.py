@@ -7,7 +7,7 @@ from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
 from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
 from app.orchestration.request_context import RequestContext
-from common.workflow import StepFailure
+from airglider.base_glider import StepFailure
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from clients.openai_client import OpenAIClient
 from app.common.messages import AssistantMessage, APIMessage
@@ -16,7 +16,7 @@ from app.domains.planner.generation_node import GenerationNode, create_generatio
 from typing import Any, cast
 from app.domains.planner.parse_intent import SystemGoal
 from dataclasses import dataclass
-from common.operation import OperationResult
+from airglider.task import OperationResult
 
 logger = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal, Union, cast
 
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
-from common.operation import OperationResult, TokenUsage, task
+from airglider import OperationResult, TokenUsage, task
 from common.utils import to_serializable, remove_empty_values, uuid_8
 
 logger = logging.getLogger(__name__)

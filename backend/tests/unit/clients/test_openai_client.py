@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
-from common.operation import OperationResult
+from airglider.task import OperationResult
 from app.common.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
