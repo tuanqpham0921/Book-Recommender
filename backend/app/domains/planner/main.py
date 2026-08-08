@@ -12,7 +12,7 @@ from app.domains.planner.parse_intent import (
     InitialParseOutput,
 )
 
-from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
+from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
 
@@ -86,7 +86,7 @@ def load_cached_parse_output(user_text: str) -> InitialParseOutput | None:
 # we don't need parse_result, and strategy_result or diagram
 # this should store conversation summary, failed tasks, internal summary message for llm
 # maybe also referenced books or things from processing the steps
-class PlannerOutput(AppWorkflowOutput):
+class PlannerOutput(NodeWorkflowOutput):
     session_id: str | None = None
     parse_result: InitialParseOutput | None = None
     diagram: str | None = None
@@ -108,7 +108,7 @@ class PlannerOutput(AppWorkflowOutput):
         return self.parse_result.accepted_goals_ids()
 
 
-class PlannerWorkflow(AppBaseWorkflow[PlannerOutput]):
+class PlannerWorkflow(NodeBaseWorkflow[PlannerOutput]):
     initial_parse_failure_message = (
         "I couldn't understand your request. Please try again."
     )

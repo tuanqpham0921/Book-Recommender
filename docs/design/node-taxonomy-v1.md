@@ -311,7 +311,7 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   `Book` (it could only do so under `TYPE_CHECKING`, since `books/schemas.py`
   imports back into it) or the API's `BookOut`.
 - Both bases were renamed to say what they are: `node_executor.py`/`NodeExecutor`
-  → `base_workflow.py`/`NodeBaseWorkflow`, matching `AppBaseWorkflow` one layer
+  → `base_workflow.py`/`NodeBaseWorkflow`, matching `NodeBaseWorkflow` one layer
   up. **Only the two bases changed**, after weighing a full sweep of "executor"
   → "workflow" (87 Python references, 27 files) and rejecting it. The rule that
   came out of that: **`Base` marks a reusable base class**, since concrete work
@@ -328,7 +328,7 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   and with them the `tool_cls` class attribute each executor declared to feed
   them (it duplicated `NodeSpec.request` anyway). A slice now writes its own
   module-level `build_arg_parser_request(query)` and calls
-  `AppBaseWorkflow.run_llm_args_parse(req)` directly — the same shape
+  `NodeBaseWorkflow.run_llm_args_parse(req)` directly — the same shape
   `build_analysis_request` / `build_response_request` already had in the
   analyze_recommend slice, so there is one way to build an LLM request instead of
   two.

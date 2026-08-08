@@ -15,7 +15,7 @@ from pydantic import (
 from app.common.messages import AssistantMessage, APIMessage, ToolMessage, UserMessage
 from app.common.prompt_loader import format_prompt, load_prompt
 from app.common.sse_stream import SSEStream
-from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
+from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
 from app.registry import NODE_TYPE_TO_CLS, NodeTypeEnum, format_node_type_catalog
 from clients import OpenAIParserRequest
 from clients.base import BaseLLMClient
@@ -64,15 +64,16 @@ class SystemGoal(BaseModel):
     Constraints: exactly one target_node_type per goal — a multi-part
     request becomes separate goals, not one goal with multiple types.
     """
-    
+
     node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = (
         PlannerNodeTypeEnum.SYSTEM_GOAL
     )
-    
-    id: str = Field(...,
-                description="assign an id for this goal",
-                json_schema_extra={"example": ["1", "2"]}
-                )
+
+    id: str = Field(
+        ...,
+        description="assign an id for this goal",
+        json_schema_extra={"example": ["1", "2"]},
+    )
 
     description: DescriptionStr = Field(
         ...,
@@ -98,7 +99,7 @@ class SystemGoal(BaseModel):
     depends_on: list[str] = Field(
         ...,
         description="List of goals_id must be completed before this",
-        json_schema_extra={"example": ["1", "2"]}
+        json_schema_extra={"example": ["1", "2"]},
     )
 
     _refusal: bool = PrivateAttr(default=False)
@@ -116,7 +117,7 @@ class SystemGoal(BaseModel):
     def refuse(self, *reasons: str) -> None:
         self._refusal = True
         self._refusal_reasons.extend(reasons)
-        
+
     def get_depends_on(self):
         return self.depends_on
 
@@ -138,9 +139,7 @@ class GoalParseRequest(BaseModel):
     in-domain part of the message should map to exactly one goal.
     """
 
-    model_config = ConfigDict(
-        json_schema_extra=planner_example
-    )
+    model_config = ConfigDict(json_schema_extra=planner_example)
 
     node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = (
         PlannerNodeTypeEnum.PARSE_INTENT
@@ -150,24 +149,25 @@ class GoalParseRequest(BaseModel):
         default_factory=list,
         max_length=MAX_SYSTEM_GOALS,
     )
-    
+
     reasoning: ReasoningStr = Field(
         ...,
         max_length=MAX_STRING_LENGTH,
         json_schema_extra={"example": "Direct match to a supported capability"},
     )
-    
+
     out_of_scope: list[str] = Field(
         default=None,
         max_length=5,
         json_schema_extra={"example": "What's the weather like today?"},
     )
 
+
 # NOTE: there's a bug if
 # task_1 -> task_2
 # if task_1 is rejected then task_2 should not still depend on or run
 # you need the previous pruning
-class InitialParseOutput(AppWorkflowOutput):
+class InitialParseOutput(NodeWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
     refused_goals: list[SystemGoal] = Field(default_factory=list)
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
@@ -197,19 +197,20 @@ class InitialParseOutput(AppWorkflowOutput):
             ]
 
         return payload
-    
+
     # TODO:
     # this is wrong, you need the indegree
     def execution_order(self):
         from collections import defaultdict
+
         order = defaultdict(list)
-        
+
         for node in self.accepted_goals:
             order[len(node.depends_on)].append(node)
         return order
 
 
-class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
+class InitialParseWorkflow(NodeBaseWorkflow[InitialParseOutput]):
     ui_loading_message = "Thinking..."
     intent_reject_message = (
         "I can't help with that request. Please try again with a book-related question."
@@ -241,7 +242,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         # parser validated it against GoalParseRequest, so the cast holds
         self.process_parse_result(parse_result)
         # NOTE: the output needs to be added somewhere correctly
-        
+
         payload = self.result.to_llm_messages()
         await self.finalize_result(payload)
 
@@ -250,17 +251,16 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
             await self.sse_stream.send_chars("\n\n I can't do:\n")
             for unsupported in self.result.out_of_scope:
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
-        
 
     async def _run_llm_args_parse(self) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
             prompt_path=GOAL_GENERATOR_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
         )
-        
+
         # NOTE: toggle on for prompting experiments
         # system_prompt = load_prompt(prompt_path=PLAYGORUND_PROMPT_PATH)
-        
+
         # NOTE: using gpt4.1 because the system goals sees the whole catalog
         # it's very important that this part is done correctly
         # cache hit rate is high, and output generation is lower
@@ -268,12 +268,12 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
         req = OpenAIParserRequest(
             prompt=system_prompt,
             model="gpt-5.6-terra",
-            reasoning_effort = "none",
+            reasoning_effort="none",
             # NOTE: this should be a list of previous messages as well
             # but for now we can just do clear and direct instructions
             messages=[self.user_message],
             tool_models=[GoalParseRequest],
-            max_completion_tokens = 1000,
+            max_completion_tokens=1000,
         )
         tool_call = await self.run_llm_args_parse(req)
         return tool_call
@@ -288,10 +288,7 @@ class InitialParseWorkflow(AppBaseWorkflow[InitialParseOutput]):
     def process_parse_result(
         self, parse_result: GoalParseRequest, confident_tuning: float = 0.5
     ) -> None:
-        if (
-            len(parse_result.system_goals) == 0
-            and not parse_result.out_of_scope
-        ):
+        if len(parse_result.system_goals) == 0 and not parse_result.out_of_scope:
             logger.warning("Nothing was classified in the initial parse")
             self.record.ok = False
             self.record.add_details("Nothing was classified in the initial parse")

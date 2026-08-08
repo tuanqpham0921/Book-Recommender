@@ -43,13 +43,13 @@ books/find_by_title/
   Nothing about one domain goes in here — that is what the domain base above is
   for. It also holds no LLM-request building: a slice writes its own
   `build_arg_parser_request(query)` and passes the result to
-  `AppBaseWorkflow.run_llm_args_parse`, which is the one shared seam. Only the
+  `NodeBaseWorkflow.run_llm_args_parse`, which is the one shared seam. Only the
   prompt path (`ARG_PARSER_PROMPT_PATH`) is shared.
 
 ## Naming: Base, Workflow, Executor
 
 **`Base` is the word that marks a reusable base class** — not `Workflow`. The
-ladder is `Workflow` → `AppBaseWorkflow` → `NodeBaseWorkflow` →
+ladder is `Workflow` → `NodeBaseWorkflow` → `NodeBaseWorkflow` →
 `BookBaseWorkflow`, each in a `workflow.py`/`base_workflow.py` file. Everything
 without `Base` in its name is a concrete unit of work, and plenty of those are
 `*Workflow` too: `PlannerWorkflow`, `InitialParseWorkflow`,

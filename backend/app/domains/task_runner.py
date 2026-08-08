@@ -5,7 +5,7 @@ from pydantic import Field
 
 from app.common.messages import APIMessage
 from app.common.sse_stream import SSEStream
-from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
+from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
 from app.orchestration.request_context import RequestContext
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from clients.openai_client import OpenAIClient
@@ -27,7 +27,7 @@ class TaskRecord:
     result: OperationResult
 
 
-class TaskRunnerOutput(AppWorkflowOutput):
+class TaskRunnerOutput(NodeWorkflowOutput):
     session_id: str | None = None
     task_results: dict[str, Any] = Field(default_factory=dict)
     failed_task: list[str] = Field(default_factory=list)
@@ -42,7 +42,7 @@ class TaskRunnerOutput(AppWorkflowOutput):
         }
 
 
-class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
+class TaskRunnerWorkflow(NodeBaseWorkflow[TaskRunnerOutput]):
     ui_loading_message = "Running tasks..."
 
     def __init__(
@@ -67,7 +67,7 @@ class TaskRunnerWorkflow(AppBaseWorkflow[TaskRunnerOutput]):
     ) -> None:
         """Execute accepted tasks in dependency order, feeding each task the
         results of the tasks it depends on. Each task runs as its own
-        AppBaseWorkflow sharing self.messages, so its result lands on the
+        NodeBaseWorkflow sharing self.messages, so its result lands on the
         same trace as the planner's — same pattern PlannerWorkflow uses for
         InitialParseWorkflow/StrategyClassificationWorkflow."""
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
