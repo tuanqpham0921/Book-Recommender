@@ -15,7 +15,9 @@ from common.utils import load_json, save_file
 @pytest.fixture
 def orchestrator(make_request_context):
     # make_request_context comes from tests/conftest.py
-    return PlannerWorkflow(make_request_context(user_message=UserMessage(content="test")))
+    return PlannerWorkflow(
+        make_request_context(user_message=UserMessage(content="test"))
+    )
 
 
 def _make_goal():
@@ -78,7 +80,7 @@ def _make_runtime_error(message: str) -> RuntimeErrorInfo:
 
 
 def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
-    """A stand-in for an InitialParseWorkflow instance: calling it (as
+    """A stand-in for an PlanJaneExecutor instance: calling it (as
     run_async_step does) awaits to step_result, while .result (accessed
     directly by PlannerWorkflow.run) returns output."""
     workflow = AsyncMock(return_value=step_result)
@@ -98,7 +100,7 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
         )
 
         with patch(
-            "app.domains.planner.main.InitialParseWorkflow",
+            "app.domains.planner.main.PlanJaneExecutor",
             return_value=parse_workflow,
         ):
             await orchestrator.run(query="test", artifacts={})

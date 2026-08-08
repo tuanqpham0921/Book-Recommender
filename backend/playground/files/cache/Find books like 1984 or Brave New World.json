@@ -8,7 +8,7 @@
     {
       "id": "op_27f4ae29",
       "start_time": "2026-08-06T14:34:20.121041+00:00",
-      "name": "app.domains.planner.parse_intent.InitialParseWorkflow",
+      "name": "app.domains.planner.parse_intent.PlanJaneExecutor",
       "ok": true,
       "message": "Initial parse completed successfully",
       "steps": [

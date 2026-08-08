@@ -45,7 +45,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         artifacts of the tasks it depends on. Each task runs as its own
         AppWorkflow sharing self.messages, so its result lands on the same
         trace as the planner's — same pattern PlannerWorkflow uses for
-        InitialParseWorkflow.
+        PlanJaneExecutor.
 
         The plan arrives as an artifact rather than a named parameter, which is
         what lets this node keep the same `run(query, artifacts)` shape as

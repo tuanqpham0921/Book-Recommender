@@ -83,7 +83,7 @@ read in one node and a write in another quietly stop sharing a transaction.
 
 The ladder is `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`, each in a
 `workflow.py`/`base_workflow.py` file. Concrete units of work are `*Workflow`
-too: `PlannerWorkflow`, `InitialParseWorkflow`, `TaskRunnerWorkflow`.
+too: `PlannerWorkflow`, `PlanJaneExecutor`, `TaskRunnerWorkflow`.
 
 (There used to be a rule that `Base` marks a reusable base class. It was retired
 when the ladder collapsed to three levels — the file a class lives in already

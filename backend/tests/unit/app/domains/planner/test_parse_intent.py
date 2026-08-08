@@ -1,4 +1,4 @@
-"""Tests for InitialParseWorkflow.process_parse_result and GoalParseRequest validators.
+"""Tests for PlanJaneExecutor.process_parse_result and GoalParseRequest validators.
 
 Scoped to what `minimal_end_to_end_v1` actually implements. Removed with the
 code they covered: `small_talk` (gone from GoalParseRequest and

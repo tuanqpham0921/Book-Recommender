@@ -3,7 +3,7 @@ from typing import Any
 from pydantic import Field
 
 from app.domains.planner.parse_intent import (
-    InitialParseWorkflow,
+    PlanJaneExecutor,
     InitialParseOutput,
 )
 
@@ -119,7 +119,7 @@ class PlannerWorkflow(AppWorkflow[PlannerOutput]):
 
         parse_output = load_cached_parse_output(query)
         if parse_output is None:
-            parse_workflow = InitialParseWorkflow(self.ctx, messages=self.messages)
+            parse_workflow = PlanJaneExecutor(self.ctx, messages=self.messages)
             parse_result = await self.run_async_step(
                 parse_workflow(query=query, artifacts=artifacts),
                 raise_on_failure=False,
