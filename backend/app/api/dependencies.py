@@ -102,7 +102,8 @@ async def get_request_context_factory(
             session_id=session_id,
             user_message=user_message,
             llm_client=llm_client,
-            book_store=book_store,
+            # keyed by class; a node asks for its own with require_store()
+            stores={BookStore: book_store},
             sse_stream=sse_stream,
             session_factory=session_factory,
         )

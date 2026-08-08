@@ -29,7 +29,11 @@ def make_request_context():
             session_id="sess_1",
             user_message=UserMessage(content="Find me a book"),
             llm_client=MagicMock(spec=OpenAIClient),
-            book_store=MagicMock(spec=BookStore),
+            # keyed explicitly: `type(MagicMock(spec=BookStore))` is MagicMock,
+            # not BookStore, so the key cannot be derived from the value here.
+            # require_store still isinstance-checks it, which a spec'd mock
+            # satisfies.
+            stores={BookStore: MagicMock(spec=BookStore)},
             sse_stream=SSEStream(),
             session_factory=MagicMock(spec=async_sessionmaker),
         )

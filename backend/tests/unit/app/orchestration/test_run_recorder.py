@@ -5,19 +5,12 @@ development → file + DB, prod → DB only, DB failures swallowed)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.common.messages import UserMessage
-from app.common.sse_stream import SSEStream
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerOutput
 from app.domains.planner.parse_intent import InitialParseOutput, SystemGoal
-from app.orchestration.request_context import RequestContext
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
-from clients import OpenAIClient
 from airglider import OperationResult, Response, TokenUsage
-from db.stores.book_store import BookStore
 
 
 def _make_goal():
@@ -63,18 +56,6 @@ def _make_workflow(planner: OperationResult):
     workflow.record = planner
     workflow.result = planner.result
     return workflow
-
-
-def _make_request_context(app_env: str) -> RequestContext:
-    return RequestContext(
-        app_env=app_env,
-        session_id="sess_1",
-        user_message=UserMessage(content="Find me a book"),
-        llm_client=MagicMock(spec=OpenAIClient),
-        book_store=MagicMock(spec=BookStore),
-        sse_stream=SSEStream(),
-        session_factory=MagicMock(spec=async_sessionmaker),
-    )
 
 
 class TestBuildChatRunRow:
@@ -143,10 +124,10 @@ class TestBuildChatRunRow:
 
 
 class TestRecordChatRun:
-    async def test_missing_record_records_nothing(self):
+    async def test_missing_record_records_nothing(self, make_request_context):
         # app_env="development" (not "test") so this exercises the
         # record-is-None guard specifically, not the env-based skip
-        ctx = _make_request_context("development")
+        ctx = make_request_context(app_env="development")
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
             "app.orchestration.run_recorder.ChatRunStore"
@@ -156,8 +137,8 @@ class TestRecordChatRun:
         mock_save.assert_not_called()
         mock_store_cls.assert_not_called()
 
-    async def test_test_env_records_nothing(self):
-        ctx = _make_request_context("test")
+    async def test_test_env_records_nothing(self, make_request_context):
+        ctx = make_request_context(app_env="test")
         planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
@@ -171,8 +152,8 @@ class TestRecordChatRun:
         mock_store_cls.assert_not_called()
         ctx.session_factory.assert_not_called()
 
-    async def test_development_writes_file_and_db(self):
-        ctx = _make_request_context("development")
+    async def test_development_writes_file_and_db(self, make_request_context):
+        ctx = make_request_context(app_env="development")
         planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
@@ -190,8 +171,8 @@ class TestRecordChatRun:
         assert payload["summary"]["steps"][0]["ok"] is True
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 
-    async def test_production_writes_db_only(self):
-        ctx = _make_request_context("production")
+    async def test_production_writes_db_only(self, make_request_context):
+        ctx = make_request_context(app_env="production")
         planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.save_file") as mock_save, patch(
@@ -205,8 +186,8 @@ class TestRecordChatRun:
         mock_save.assert_not_called()
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 
-    async def test_db_failure_is_swallowed(self):
-        ctx = _make_request_context("production")
+    async def test_db_failure_is_swallowed(self, make_request_context):
+        ctx = make_request_context(app_env="production")
         planner = _make_planner_record()
 
         with patch("app.orchestration.run_recorder.ChatRunStore") as mock_store_cls:

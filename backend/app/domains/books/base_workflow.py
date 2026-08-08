@@ -4,9 +4,10 @@
 unit of work in the app. This adds the three things only a book node needs,
 each of which every book slice was otherwise repeating by hand:
 
-- **`self.store`** — the request-scoped book store, so a book node opens with
-  its work instead of `self.store = request_context.book_store` and a TODO
-  about where that line belongs.
+- **`self.store`** — the request-scoped book store, resolved by class through
+  `ctx.require_store(BookStore)`, so a book node opens with its work instead of
+  a binding line and a TODO about where it belongs — and cannot quietly end up
+  holding another domain's store.
 - **`preflight()`** — the counts-first opening move
   (docs/design/execution-pipeline-v1.md): stamp the built query on the output,
   ask how big the match is, and take a small sample of it — one round trip.
@@ -53,8 +54,14 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         context has been in scope the whole time. Reading it lazily also means
         a slice can implement `run()` directly instead of an `execute()` hook
         that existed only to keep the binding from being skipped.
+
+        `require_store` names the class rather than reading a `book_store`
+        field, so this cannot quietly resolve to another domain's store. It is
+        a shorthand for the common case of one store per node — a node needing
+        two should call `self.ctx.require_store(...)` at the point of use
+        instead of adding a second property here.
         """
-        return self.ctx.book_store
+        return self.ctx.require_store(BookStore)
 
     async def preflight(
         self, query: DeferredBookQuery, sample: int = BookConstraints.default_limit

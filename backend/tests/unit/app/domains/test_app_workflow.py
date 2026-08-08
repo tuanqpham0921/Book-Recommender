@@ -15,12 +15,15 @@ are what the uniform `run(query, artifacts)` shape rests on:
 """
 
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import EXECUTORS_CLS_MAPPING
 from airglider import StepFailure
+from db.stores.base_store import BaseStore
+from db.stores.book_store import BookStore
 
 
 @pytest.mark.parametrize(
@@ -51,8 +54,43 @@ def test_registered_executor_reads_services_off_the_context(
     assert wf.sse_stream is request_context.sse_stream
     assert wf.llm_client is request_context.llm_client
     assert wf.app_env == request_context.app_env
-    # book nodes reach the request-scoped store the same way
-    assert wf.store is request_context.book_store
+
+
+@pytest.mark.parametrize(
+    "executor_cls",
+    EXECUTORS_CLS_MAPPING.values(),
+    ids=lambda cls: cls.__name__,
+)
+def test_registered_executor_resolves_its_own_store(executor_cls, request_context):
+    """A node's `store` shorthand must resolve to the store class its own
+    property is annotated with — not to whatever store happens to be on the
+    request. `require_store` is what makes this checkable at all; without it a
+    mis-wired domain base would only fail at the first query."""
+    wf = executor_cls(request_context)
+    declared = type(wf).store.fget.__annotations__["return"]
+
+    assert isinstance(wf.store, declared)
+    assert wf.store is request_context.stores[declared]
+
+
+def test_require_store_rejects_a_store_the_request_does_not_have(request_context):
+    class _AbsentStore(BaseStore):
+        pass
+
+    with pytest.raises(LookupError, match="_AbsentStore"):
+        request_context.require_store(_AbsentStore)
+
+
+def test_require_store_rejects_a_mis_keyed_store(make_request_context):
+    class _OtherStore(BaseStore):
+        pass
+
+    # the value is checked, not just the key — so a mapping wired to the wrong
+    # store fails here rather than at the first query, and says so in terms of
+    # what it actually found
+    ctx = make_request_context(stores={_OtherStore: MagicMock(spec=BookStore)})
+    with pytest.raises(LookupError, match="holds a BookStore, not a _OtherStore"):
+        ctx.require_store(_OtherStore)
 
 
 class _Output(NodeWorkflowOutput):

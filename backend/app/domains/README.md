@@ -62,9 +62,22 @@ analyze_recommend slice follows the same rule.
 
 **Services are not constructor arguments.** `AppWorkflow.__init__(ctx, messages)`
 is the only `__init__` in the app layer; `sse_stream`, `llm_client`, `app_env`,
-`session_id`, `user_message` — and `store` on `BookWorkflow` — are properties
-off the `RequestContext` it holds. A workflow that needs a new service adds
-nothing to any call site.
+`session_id` and `user_message` are properties off the `RequestContext` it
+holds. A workflow that needs a new service adds nothing to any call site.
+
+**Stores are selected by type too.** `RequestContext.stores` is a
+`dict[type, BaseStore]`; a node asks for its own with
+`ctx.require_store(BookStore)`, and `BookWorkflow.store` is the one-line
+shorthand for the common case of one store per node. A node needing *two*
+should call `require_store` at the point of use rather than add a second
+property. The check is on the value, not the key, so a domain base wired to
+another domain's store raises there instead of failing at the first query —
+and `RequestContext` never grows a field per domain.
+
+Those stores are constructed on the FastAPI request-scoped session (see
+`get_sqlalchemy_session` in `app/api/dependencies.py`). **Don't rebuild them
+lazily from `ctx.session_factory`** — that opens a *different* session, so a
+read in one node and a write in another quietly stop sharing a transaction.
 
 ## Naming: Workflow, Executor
 
