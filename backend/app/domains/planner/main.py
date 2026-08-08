@@ -2,7 +2,7 @@ from typing import Any
 
 from pydantic import Field
 
-from app.domains.planner.parse_intent import (
+from app.domains.planner.planjane import (
     PlanJaneExecutor,
     PlanJaneOutput,
 )

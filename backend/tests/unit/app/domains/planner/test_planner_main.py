@@ -7,7 +7,7 @@ import pytest
 from app.common.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planner.main import PlannerWorkflow, PlannerOutput
-from app.domains.planner.parse_intent import PlanJaneOutput, SystemGoal
+from app.domains.planner.planjane import PlanJaneOutput, SystemGoal
 from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 

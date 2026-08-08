@@ -3,7 +3,7 @@
 import pytest
 
 from app.common.messages import UserMessage
-from app.domains.planner.parse_intent import PlanJaneExecutor
+from app.domains.planner.planjane import PlanJaneExecutor
 
 
 @pytest.fixture

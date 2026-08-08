@@ -14,7 +14,7 @@ import pytest
 
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_types import UnknownNodeTypeEnum
-from app.domains.planner.parse_intent import (
+from app.domains.planner.planjane import (
     GoalParseRequest,
     SystemGoal,
     MAX_SYSTEM_GOALS,

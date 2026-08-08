@@ -11,7 +11,7 @@ from app.domains.planner.generation_node import (
     create_generation_nodes,
     find_sink_goals,
 )
-from app.domains.planner.parse_intent import SystemGoal
+from app.domains.planner.planjane import SystemGoal
 
 
 def goal(goal_id: str, node_type: str, depends_on: list[str]) -> SystemGoal:

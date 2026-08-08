@@ -8,7 +8,7 @@ from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from app.domains.base_request import BaseRequest
 from app.domains.planner.generation_node import GenerationNode
 from app.domains.planner.main import PlannerOutput
-from app.domains.planner.parse_intent import SystemGoal
+from app.domains.planner.planjane import SystemGoal
 from dataclasses import dataclass
 from airglider import OperationResult
 

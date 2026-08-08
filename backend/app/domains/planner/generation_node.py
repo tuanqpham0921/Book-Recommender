@@ -17,7 +17,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from .parse_intent import SystemGoal
+from .planjane import SystemGoal
 
 GENERATION_ID_PREFIX = "gen_"
 
