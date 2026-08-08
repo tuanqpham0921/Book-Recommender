@@ -228,23 +228,23 @@ def task(
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
 
-                result = await func(*args, **kwargs)
+                raw_output = await func(*args, **kwargs)
 
                 # custom operation result retuned from the task
                 # the task must validate ok itself
-                if isinstance(result, OperationResult):
-                    if log_info and not result.ok:
+                if isinstance(raw_output, OperationResult):
+                    if log_info and not raw_output.ok:
                         logger.warning(f"Task failed: {func_ref}")
 
-                    result.name = func_ref
-                    result.timing.duration = round(time.perf_counter() - time_start, 2)
+                    raw_output.name = func_ref
+                    raw_output.timing.duration = round(time.perf_counter() - time_start, 2)
                     return result
 
                 # task did not return an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
                 result = OperationResult(
                     name=func_ref,
-                    response=Response(result=result, output_type=type(result).__name__),
+                    response=Response(result=raw_output, output_type=type(raw_output).__name__),
                 )
                 result.timing.duration = round(time.perf_counter() - time_start, 2)
                 result.ok = True
@@ -255,11 +255,14 @@ def task(
                 # explicitly passing token_usage=None to the constructor above
                 # would fail validation, so this stays a post-construction,
                 # conditional assignment instead
-                raw_output = result.response.result
                 if hasattr(raw_output, "token_usage") and isinstance(
                     raw_output.token_usage, TokenUsage
                 ):
-                    result.token_usage = raw_output.token_usage
+                    result.token_usage = raw_output.token_usage.model_copy()
+                    raw_output.token_usage = None
+                    # this should work because @task decorator is one step only
+                    # it might be an issue if you need to load it back exactly
+                    result.add_details("promoted raw output token usage to wrapper")
                 return result
             except asyncio.CancelledError:
                 # client disconnected (e.g. page refresh) mid-task. Unlike
