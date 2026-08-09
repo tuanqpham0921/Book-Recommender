@@ -106,11 +106,10 @@ they build on.
   slices.
 - `planjane/` — **the planner**. `schemas.py` (`SystemGoal`, `GoalParseRequest` —
   the tool call the LLM fills in), `executor.py` (`PlanJaneExecutor`: message →
-  goals), plus the two pieces of plan *presentation* it owns —
-  `generation_node.py` (the terminal answer stage appended to every sink) and
-  `mermaid.py` (the diagram). Prompts live in `planjane/prompts/*.txt`.
-  The schemas are split from the executor so `generation_node.py` can import
-  `SystemGoal` without a cycle back through `PlanJaneOutput.generation_nodes`.
+  goals), and `mermaid.py` (the diagram — plan *presentation*, which the planner
+  owns because the diagram is the plan rendered). Prompts live in
+  `planjane/prompts/*.txt`. Schemas are split from the executor to match the
+  slice layout used elsewhere (`schemas.py` + `executor.py`).
 
   What decides *whether* to call PlanJane — cache, small talk, out of scope —
   is `app/orchestration/triage.py`, not here: it is not a capability, and

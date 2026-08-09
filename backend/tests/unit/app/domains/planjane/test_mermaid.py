@@ -1,4 +1,4 @@
-"""Tests for app/common/mermaid.py diagram generation."""
+"""Tests for app/domains/planjane/mermaid.py diagram generation."""
 
 from app.domains.planjane.mermaid import (
     choose_orientation,

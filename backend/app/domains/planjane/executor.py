@@ -10,7 +10,6 @@ from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
 
-from .generation_node import GenerationNode, create_generation_nodes
 from .mermaid import get_goals_mermaid_diagram
 from .schemas import MAX_SYSTEM_GOALS, GoalParseRequest, SystemGoal
 
@@ -33,10 +32,6 @@ class PlanJaneOutput(NodeWorkflowOutput):
     # unset, and a non-optional annotation then rejects its own dump on reload
     # — which is how chat_runs rows get replayed.
     out_of_scope: list[str] | None = None
-
-    # The terminal answer stage, appended by the planner rather than chosen by
-    # the LLM — one per sink in the goal graph. See generation_node.py.
-    generation_nodes: list["GenerationNode"] = Field(default_factory=list)
 
     # The rendered plan. Lives on the plan, not on whatever called the planner:
     # drawing the plan is plan presentation.
@@ -103,32 +98,20 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
 
         if self.result.accepted_goals:
-            await self.present_plan()
+            await self.send_mermaid(self.result.accepted_goals)
 
-    async def present_plan(self) -> None:
-        """Attach the answer stage and draw the plan.
-
-        Both live here rather than on the caller: a generation node is part of
-        the plan (every sink gets one, so the diagram ends in an answer instead
-        of a retrieval), and the diagram is that plan rendered. A caller that
-        drew plan diagrams would still be doing the planner's job.
-        """
-        
-
-        self.result.generation_nodes = create_generation_nodes(self.result.accepted_goals)
-        await self.send_mermaid(self.result.accepted_goals, self.result.generation_nodes)
-
-    async def send_mermaid(
-        self, system_goals: list, generation_nodes: list["GenerationNode"] | None = None
-    ) -> str | None:
+    async def send_mermaid(self, system_goals: list) -> str | None:
         """Render the accepted system goals as a Mermaid flowchart and stream
         it to the client. Returns the diagram string, or None when there is
-        nothing to draw or generation failed (never raises into the request)."""
-        
+        nothing to draw or generation failed (never raises into the request).
 
+        Drawing the plan lives here rather than on the caller: the diagram *is*
+        the plan rendered, so a caller that drew it would be doing the planner's
+        job.
+        """
         diagram = None
         try:
-            diagram = get_goals_mermaid_diagram(system_goals, generation_nodes)
+            diagram = get_goals_mermaid_diagram(system_goals)
         except Exception as e:
             logger.warning(f"Error generating Mermaid diagram: {e}")
             return None

@@ -6,7 +6,6 @@ from pydantic import Field
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from app.domains.base_request import BaseRequest
-from app.domains.planjane.generation_node import GenerationNode
 from app.domains.planjane import PlanJaneOutput
 from app.domains.planjane.executor import SystemGoal
 from dataclasses import dataclass
@@ -134,12 +133,11 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         self.result.task_results = results
         self.finalize_result(ok=not self.result.failed_task)
 
-        # await self.send_mermaid_parsed(self.result.completed_task, planner_result.generation_nodes)
+        # await self.send_mermaid_parsed(self.result.completed_task)
 
     async def send_mermaid_parsed(
         self,
         parsed_system_goals: list[BaseRequest],
-        generation_nodes: list[GenerationNode] | None = None,
     ) -> str | None:
         """Render the parsed task requests as a Mermaid flowchart and stream it
         to the client. Same contract as send_mermaid — returns the diagram, or
@@ -153,7 +151,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
         diagram = None
         try:
-            diagram = get_parsed_mermaid_diagram(parsed_system_goals, generation_nodes)
+            diagram = get_parsed_mermaid_diagram(parsed_system_goals)
         except Exception as e:
             logger.warning(f"Error generating parsed Mermaid diagram: {e}")
             return None

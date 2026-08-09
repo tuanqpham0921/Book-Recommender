@@ -153,7 +153,18 @@ open `Analyze_Compare` question in
 pending exactly this node, and the "retrieve ×2 → analyze ×2 → compare" plan shape cannot
 be evaluated until per-book analysis exists.
 
-### Generation node
+### Generation node — **removed 2026-08-08**
+
+> **Status: reverted.** `generation_node.py`, `PlanJaneOutput.generation_nodes` and the
+> tests are deleted; recover them from git history if this is revisited. The section
+> below is kept as the record of what was decided and why, since the reasoning (a fixed
+> stage costs no catalog tokens and cannot be misrouted; every sink is the attachment
+> point; 160 goldens would have to carry it as a goal) is what any second attempt should
+> start from. What the plan renders today is goals only.
+>
+> The generic hook it used — `extra_nodes` on `get_goals_mermaid_diagram` /
+> `get_parsed_mermaid_diagram` (`app/domains/planjane/mermaid.py`) — is still there and
+> now has no caller. It is the seam any future planner-attached node would use.
 
 Owns the final answer. Sketched fields: the **portion of the query** it is answering
 (`str`), plus the upstream outputs it renders. Every retrieval and analyze node just

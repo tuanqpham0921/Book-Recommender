@@ -1,9 +1,9 @@
 """The planner's tool-call schemas — what the LLM fills in, and the goal model.
 
-Split from `executor.py` so `generation_node.py` can import `SystemGoal`
-without importing the executor: `PlanJaneOutput` carries `list[GenerationNode]`,
-so the other direction has to stay one-way. This is also the slice layout the
-rest of the repo uses (`schemas.py` + `executor.py`).
+Split from `executor.py` to match the slice layout the rest of the repo uses
+(`schemas.py` = what the LLM fills in, `executor.py` = what runs). The split
+originally also broke an import cycle through the generation-node module; that
+module is gone, so the layout convention is the whole reason now.
 """
 
 import logging
@@ -20,7 +20,7 @@ from app.domains.field_types import (
     DescriptionStr,
     ReasoningStr,
 )
-from .node_types import PlannerNodeTypeEnum
+from .labels import PlannerNodeTypeEnum
 from .prompts.example import planner_example
 
 logger = logging.getLogger(__name__)
@@ -128,8 +128,8 @@ class GoalParseRequest(BaseModel):
 
     model_config = ConfigDict(json_schema_extra=planner_example)
 
-    node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = (
-        PlannerNodeTypeEnum.PARSE_INTENT
+    node_type: Literal[PlannerNodeTypeEnum.PLAN_JANE] = (
+        PlannerNodeTypeEnum.PLAN_JANE
     )
 
     system_goals: list[SystemGoal] = Field(
