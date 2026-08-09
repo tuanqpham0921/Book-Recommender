@@ -116,6 +116,7 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         smoothing is seconds of dead time. Pass a delay for the final answer,
         where the streaming is the point.
         """
+        # TODO: need to make sure this doesn't crash on fail input
         sent_isbn = set()
         for i, book in enumerate(books):
             card = BookOut.model_validate(book, from_attributes=True)

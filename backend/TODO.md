@@ -11,6 +11,14 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 continue:
+    * work on establishing the input for workflow contract
+        * don't over do it but parse dependents is an example
+        * maybe the task_runner handle that collection
+        * and input cls can be in node spec
+    * reduce the codebase (comments and stuff)
+        * mainly for claude and compact
+        * update the docs for this branch
+
     * follow the format with out all the super init stuff
     
     * cleaning up your workflow
