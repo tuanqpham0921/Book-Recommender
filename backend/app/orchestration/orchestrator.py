@@ -3,9 +3,9 @@ import logging
 import time
 
 from app.common.sse_stream import SSEStream
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 
-from app.domains.planner import PlannerWorkflow
+from app.orchestration.triage import TriageWorkflow
 from app.domains.task_runner import TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
 from airglider import OperationResult, RuntimeErrorInfo
@@ -30,7 +30,7 @@ class Orchestrator:
         sse_stream = request_context.sse_stream
         # created (not just returned from a helper) so that a cancellation
         # mid-await below still leaves this bound for the finally block —
-        # PlannerWorkflow mutates its own .record in place and
+        # TriageWorkflow mutates its own .record in place and
         # re-raises on cancellation rather than returning it
         conversation_orchestrator = None
         task_runner = None
@@ -52,7 +52,7 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            conversation_orchestrator = PlannerWorkflow(request_context)
+            conversation_orchestrator = TriageWorkflow(request_context)
             await asyncio.wait_for(
                 conversation_orchestrator(
                     query=request_context.user_message.content, artifacts={}
@@ -158,7 +158,7 @@ class Orchestrator:
     async def _finalize(
         request_context: RequestContext,
         record: OperationResult,
-        conversation_orchestrator: PlannerWorkflow | None,
+        conversation_orchestrator: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
         sse_stream: SSEStream,
     ) -> None:

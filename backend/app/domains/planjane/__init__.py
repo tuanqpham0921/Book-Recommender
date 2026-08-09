@@ -1,5 +1,24 @@
-from .main import PlannerWorkflow
+"""PlanJane — the planner. Turns a user message into an ordered plan of goals.
+
+What decides *whether* to call it (cache, small talk, out of scope) is not in
+here: that is `app/orchestration/triage.py`, one layer up.
+"""
+
+from .executor import (
+    GoalParseRequest,
+    MAX_SYSTEM_GOALS,
+    PlanJaneExecutor,
+    PlanJaneOutput,
+    SystemGoal,
+)
+from .generation_node import GenerationNode, create_generation_nodes
 
 __all__ = [
-    "PlannerWorkflow",
+    "PlanJaneExecutor",
+    "PlanJaneOutput",
+    "GoalParseRequest",
+    "SystemGoal",
+    "MAX_SYSTEM_GOALS",
+    "GenerationNode",
+    "create_generation_nodes",
 ]

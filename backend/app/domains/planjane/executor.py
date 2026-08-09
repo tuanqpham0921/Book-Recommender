@@ -1,157 +1,23 @@
 import logging
-from typing import Any, Literal
+from typing import Any
+
 from openai.types.chat import ParsedFunctionToolCall
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    PrivateAttr,
-)
+from pydantic import Field
 
 from app.common.messages import UserMessage
 from app.common.prompt_loader import format_prompt
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
-from app.registry import NODE_TYPE_TO_CLS, NodeTypeEnum, format_node_type_catalog
+from app.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
 from clients import OpenAIParserRequest
-from .node_types import PlannerNodeTypeEnum
-from app.domains.field_types import (
-    MIN_CONFIDENCE,
-    MAX_CONFIDENCE,
-    MAX_STRING_LENGTH,
-    ConfidenceFloat,
-    DescriptionStr,
-    ReasoningStr,
-)
-from .prompts.example import planner_example
+
+from .generation_node import GenerationNode, create_generation_nodes
+from .mermaid import get_goals_mermaid_diagram
+from .schemas import MAX_SYSTEM_GOALS, GoalParseRequest, SystemGoal
 
 logger = logging.getLogger(__name__)
 
-GOAL_GENERATOR_PROMPT_PATH = "domains/planner/prompts/0_goal_generator.txt"
+GOAL_GENERATOR_PROMPT_PATH = "domains/planjane/prompts/0_goal_generator.txt"
 # PLAYGORUND_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
-
-MAX_SYSTEM_GOALS = 10
-
-
-class SystemGoal(BaseModel):
-    """Purpose: One parsed goal from the user's message — a capability the
-    system should attempt, with the confidence that it maps cleanly to a
-    supported node type. One entry in GoalParseRequest.system_goals.
-
-    Args:
-        id: A short id for this goal, in the form '1', '2', ... — other
-            goals reference it through their depends_on.
-        description: A short and instructive decription of this node.
-        confidence: How confident the system is that it can fulfill this goal.
-        reasoning: A short justification for choosing this goal (up to 100
-            characters).
-        target_node_type: The single capability name from the catalog that
-            fulfills this goal.
-        depends_on: Ids of the goals that must complete before this one;
-            an empty list when it depends on nothing.
-
-    Returns: One candidate goal that the argument parser later fills in with
-    typed arguments, or refuses.
-
-    Constraints: exactly one target_node_type per goal — a multi-part
-    request becomes separate goals, not one goal with multiple types.
-    """
-
-    node_type: Literal[PlannerNodeTypeEnum.SYSTEM_GOAL] = (
-        PlannerNodeTypeEnum.SYSTEM_GOAL
-    )
-
-    id: str = Field(
-        ...,
-        description="assign an id for this goal",
-        json_schema_extra={"example": ["1", "2"]},
-    )
-
-    description: DescriptionStr = Field(
-        ...,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Find Dune by title"},
-    )
-    reasoning: ReasoningStr = Field(
-        ...,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Direct match to a supported capability"},
-    )
-    confidence: ConfidenceFloat = Field(
-        ...,
-        ge=MIN_CONFIDENCE,
-        le=MAX_CONFIDENCE,
-        json_schema_extra={"example": 1.0},
-    )
-
-    target_node_type: NodeTypeEnum = Field(
-        ...,
-        json_schema_extra={"example": "Retrieve_by_Title"},
-    )
-    depends_on: list[str] = Field(
-        ...,
-        description="List of goals_id must be completed before this",
-        json_schema_extra={"example": ["1", "2"]},
-    )
-
-    _refusal: bool = PrivateAttr(default=False)
-    _refusal_reasons: list[str] = PrivateAttr(default_factory=list)
-    # _id: str = PrivateAttr(default_factory=lambda: f"goal_{uuid_8()}")
-
-    # @property
-    # def id(self) -> str:
-    #     return self._id
-
-    @property
-    def refusal_reasons(self) -> list[str]:
-        return self._refusal_reasons
-
-    def refuse(self, *reasons: str) -> None:
-        self._refusal = True
-        self._refusal_reasons.extend(reasons)
-
-    def get_depends_on(self):
-        return self.depends_on
-
-
-class GoalParseRequest(BaseModel):
-    """Purpose: Goals parse of the user's message — the tool call for the
-    parse-intent LLM step. Splits the message into system_goals (mapped
-    capabilities), and out_of_scope content.
-
-    Args:
-        out_of_scope: The out-of-domain portion of the message, when present.
-        system_goals: One SystemGoal per capability the message maps to;
-            empty when nothing in-domain was found.
-
-    Returns: The parsed breakdown — system_goals feed the argument parser
-    and execution; out_of_scope feeds the response step.
-
-    Constraints: at most MAX_SYSTEM_GOALS (10) goals per call; every
-    in-domain part of the message should map to exactly one goal.
-    """
-
-    model_config = ConfigDict(json_schema_extra=planner_example)
-
-    node_type: Literal[PlannerNodeTypeEnum.PARSE_INTENT] = (
-        PlannerNodeTypeEnum.PARSE_INTENT
-    )
-
-    system_goals: list[SystemGoal] = Field(
-        default_factory=list,
-        max_length=MAX_SYSTEM_GOALS,
-    )
-
-    reasoning: ReasoningStr = Field(
-        ...,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Direct match to a supported capability"},
-    )
-
-    out_of_scope: list[str] = Field(
-        default=None,
-        max_length=5,
-        json_schema_extra={"example": "What's the weather like today?"},
-    )
 
 
 # NOTE: there's a bug if
@@ -167,6 +33,14 @@ class PlanJaneOutput(NodeWorkflowOutput):
     # unset, and a non-optional annotation then rejects its own dump on reload
     # — which is how chat_runs rows get replayed.
     out_of_scope: list[str] | None = None
+
+    # The terminal answer stage, appended by the planner rather than chosen by
+    # the LLM — one per sink in the goal graph. See generation_node.py.
+    generation_nodes: list["GenerationNode"] = Field(default_factory=list)
+
+    # The rendered plan. Lives on the plan, not on whatever called the planner:
+    # drawing the plan is plan presentation.
+    diagram: str | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {
@@ -227,6 +101,46 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
             await self.sse_stream.send_chars("\n\n I can't do:\n")
             for unsupported in self.result.out_of_scope:
                 await self.sse_stream.send_chars(f"- {unsupported}\n")
+
+        if self.result.accepted_goals:
+            await self.present_plan()
+
+    async def present_plan(self) -> None:
+        """Attach the answer stage and draw the plan.
+
+        Both live here rather than on the caller: a generation node is part of
+        the plan (every sink gets one, so the diagram ends in an answer instead
+        of a retrieval), and the diagram is that plan rendered. A caller that
+        drew plan diagrams would still be doing the planner's job.
+        """
+        
+
+        self.result.generation_nodes = create_generation_nodes(self.result.accepted_goals)
+        await self.send_mermaid(self.result.accepted_goals, self.result.generation_nodes)
+
+    async def send_mermaid(
+        self, system_goals: list, generation_nodes: list["GenerationNode"] | None = None
+    ) -> str | None:
+        """Render the accepted system goals as a Mermaid flowchart and stream
+        it to the client. Returns the diagram string, or None when there is
+        nothing to draw or generation failed (never raises into the request)."""
+        
+
+        diagram = None
+        try:
+            diagram = get_goals_mermaid_diagram(system_goals, generation_nodes)
+        except Exception as e:
+            logger.warning(f"Error generating Mermaid diagram: {e}")
+            return None
+
+        if not diagram:
+            logger.info("No Mermaid diagram generated (empty or invalid)")
+            return None
+
+        await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
+        await self.sse_stream.send_mermaid(diagram)
+        self.result.diagram = diagram
+        return diagram
 
     async def _run_llm_args_parse(self, query: str) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(

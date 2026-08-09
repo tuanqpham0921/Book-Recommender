@@ -154,7 +154,7 @@ class TestCostAttribution:
         assert roll.cost_usd == round(a.cost_usd + b.cost_usd, 6)
 
     def test_nested_rollup_does_not_double_count(self):
-        # PlannerWorkflow merging a child workflow merges buckets, not calls
+        # TriageWorkflow merging a child workflow merges buckets, not calls
         child = TokenUsage()
         child += TokenUsage(model="gpt-4.1-mini", total=100, prompt=80, completion=20)
 

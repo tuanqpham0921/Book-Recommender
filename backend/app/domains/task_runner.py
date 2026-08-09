@@ -6,9 +6,9 @@ from pydantic import Field
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
 from app.domains.base_request import BaseRequest
-from app.domains.planner.generation_node import GenerationNode
-from app.domains.planner.main import PlannerOutput
-from app.domains.planner.planjane import SystemGoal
+from app.domains.planjane.generation_node import GenerationNode
+from app.domains.planjane import PlanJaneOutput
+from app.domains.planjane.executor import SystemGoal
 from dataclasses import dataclass
 from airglider import OperationResult
 
@@ -44,7 +44,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         """Execute accepted tasks in dependency order, feeding each task the
         artifacts of the tasks it depends on. Each task runs as its own
         AppWorkflow sharing self.messages, so its result lands on the same
-        trace as the planner's — same pattern PlannerWorkflow uses for
+        trace as the planner's — same pattern TriageWorkflow uses for
         PlanJaneExecutor.
 
         The plan arrives as an artifact rather than a named parameter, which is
@@ -54,7 +54,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        plan = self.require_artifact(artifacts, PlannerOutput)
+        plan = self.require_artifact(artifacts, PlanJaneOutput)
 
         self.result.session_id = self.session_id
         results: dict[str, Any] = {}
@@ -149,7 +149,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         its goal's id and depends_on, so only the box contents differ (typed
         arguments instead of the goal description).
         """
-        from app.common.mermaid import get_parsed_mermaid_diagram
+        from app.domains.planjane.mermaid import get_parsed_mermaid_diagram
 
         diagram = None
         try:

@@ -1,6 +1,6 @@
 # backend/app/domains
 
-The node type system — what the planner can plan with — plus the planner pipeline
+The node type system — what the planner can plan with — plus PlanJane, the planner
 itself. The V1 node set and its rationale live in
 [docs/design/node-taxonomy-v1.md](../../../docs/design/node-taxonomy-v1.md).
 
@@ -83,7 +83,7 @@ read in one node and a write in another quietly stop sharing a transaction.
 
 The ladder is `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`, each in a
 `workflow.py`/`base_workflow.py` file. Concrete units of work are `*Workflow`
-too: `PlannerWorkflow`, `PlanJaneExecutor`, `TaskRunnerWorkflow`.
+too: `TriageWorkflow`, `TaskRunnerWorkflow`.
 
 (There used to be a rule that `Base` marks a reusable base class. It was retired
 when the ladder collapsed to three levels — the file a class lives in already
@@ -91,7 +91,7 @@ says whether it is a base, and `AppBaseWorkflow`/`BookBaseWorkflow` read worse
 than the thing they name.)
 
 **`Executor` is the subset of those the planner can dispatch.** A
-`FindByTitleExecutor` is a workflow like `PlannerWorkflow` is, but it is also a
+`FindByTitleExecutor` is a workflow like `TriageWorkflow` is, but it is also a
 *node*: it has a request schema, a `NodeSpec`, a place in the tool catalog, and
 the task runner reaches it through `EXECUTORS_CLS_MAPPING` rather than calling
 it directly. That is the distinction the second word is carrying — node vs.
@@ -104,9 +104,17 @@ they build on.
 - `node_types.py` — just `UnknownNodeTypeEnum`. `NodeTypeEnum` is built in
   `app/registry.py`; it cannot live here without an import cycle back through the
   slices.
-- `planner/` — the pipeline: `parse_intent.py` (message → goals),
-  `args_parser.py` (goal → typed request), `main.py` (`PlannerWorkflow`: runs it,
-  renders the Mermaid diagram, streams it). Prompts live in `planner/prompts/*.txt`.
+- `planjane/` — **the planner**. `schemas.py` (`SystemGoal`, `GoalParseRequest` —
+  the tool call the LLM fills in), `executor.py` (`PlanJaneExecutor`: message →
+  goals), plus the two pieces of plan *presentation* it owns —
+  `generation_node.py` (the terminal answer stage appended to every sink) and
+  `mermaid.py` (the diagram). Prompts live in `planjane/prompts/*.txt`.
+  The schemas are split from the executor so `generation_node.py` can import
+  `SystemGoal` without a cycle back through `PlanJaneOutput.generation_nodes`.
+
+  What decides *whether* to call PlanJane — cache, small talk, out of scope —
+  is `app/orchestration/triage.py`, not here: it is not a capability, and
+  nothing in `EXECUTORS_CLS_MAPPING` will ever point at it.
 - `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan via
   `registry.EXECUTORS_CLS_MAPPING`, which points at the real slice executors. The
   mocks under `playground/app_mock/` are legacy eval-testing scaffolding — ignore

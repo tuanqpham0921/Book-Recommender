@@ -18,8 +18,8 @@ from common.utils import (
     strip_zero_token_usage,
 )
 from db.stores.chat_run_store import ChatRunStore
-from app.orchestration.request_context import RequestContext
-from app.domains.planner.main import PlannerWorkflow, PlannerOutput
+from app.common.request_context import RequestContext
+from app.orchestration.triage import TriageWorkflow, TriageOutput
 from app.domains.task_runner import TaskRunnerWorkflow, TaskRunnerOutput
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def build_chat_run_row(
     user_chat_id: str,
     user_message: str,
     record: OperationResult,
-    planner: OperationResult[PlannerOutput] | None,
+    planner: OperationResult[TriageOutput] | None,
     tasks: OperationResult[TaskRunnerOutput] | None = None,
 ) -> dict[str, Any]:
     """Map a finished turn onto ChatRunModel columns. Promoted stats (ok,
@@ -63,7 +63,7 @@ def build_chat_run_row(
 async def record_chat_run(
     request_context: RequestContext,
     record: OperationResult,
-    planner: PlannerWorkflow | None = None,
+    planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""

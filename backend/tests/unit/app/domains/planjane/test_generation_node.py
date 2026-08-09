@@ -5,13 +5,13 @@ The whole file is really one assertion in several shapes: "end of the DAG" means
 first two tests are the concrete plans an earlier level-bucketing cut got wrong.
 """
 
-from app.domains.planner.generation_node import (
+from app.domains.planjane.generation_node import (
     GenerationNode,
     GenerationTypeEnum,
     create_generation_nodes,
     find_sink_goals,
 )
-from app.domains.planner.planjane import SystemGoal
+from app.domains.planjane.executor import SystemGoal
 
 
 def goal(goal_id: str, node_type: str, depends_on: list[str]) -> SystemGoal:

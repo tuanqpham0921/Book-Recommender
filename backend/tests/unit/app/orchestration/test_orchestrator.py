@@ -20,7 +20,7 @@ class TestOrchestratorRun:
         mock_workflow.artifact = {}
 
         with patch(
-            "app.orchestration.orchestrator.PlannerWorkflow",
+            "app.orchestration.orchestrator.TriageWorkflow",
             return_value=mock_workflow,
         ), patch(
             "app.orchestration.orchestrator.record_chat_run",
@@ -38,7 +38,7 @@ class TestOrchestratorRun:
         mock_workflow.artifact = {}
 
         with patch(
-            "app.orchestration.orchestrator.PlannerWorkflow",
+            "app.orchestration.orchestrator.TriageWorkflow",
             return_value=mock_workflow,
         ), patch(
             "app.orchestration.orchestrator.record_chat_run",

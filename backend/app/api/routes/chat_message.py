@@ -15,7 +15,7 @@ from app.api.dependencies import (
     get_request_context_factory,
     get_orchestrator,
 )
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 """Tests for app/common/mermaid.py diagram generation."""
 
-from app.common.mermaid import (
+from app.domains.planjane.mermaid import (
     choose_orientation,
     clean_string_mermaid,
     mermaid_id,
@@ -11,7 +11,7 @@ from app.common.mermaid import (
 from app.domains.base_request import BaseRequest
 from app.domains.books.find_by_title import FindByTitleRetrieval
 from app.domains.node_types import UnknownNodeTypeEnum
-from app.domains.planner.planjane import SystemGoal
+from app.domains.planjane.executor import SystemGoal
 
 
 def _make_goal(id_str, target_node_type, depends_on=None, description="A goal description"):

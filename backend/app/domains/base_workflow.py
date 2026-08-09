@@ -46,7 +46,7 @@ from app.common.messages import (
 )
 from app.common.sse_stream import SSEStream
 from app.domains.base_request import BaseRequest
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 from clients.base import BaseLLMRequest
 from clients.openai_client import OpenAIClient
 from openai.types.chat import ParsedFunctionToolCall

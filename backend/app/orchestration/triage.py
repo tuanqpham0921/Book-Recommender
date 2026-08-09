@@ -1,38 +1,28 @@
+"""Triage — what happens to a turn before, and instead of, planning.
+
+Sits between `Orchestrator` (transport: SSE lifecycle, timeouts, cancellation,
+recording) and `PlanJane` (produce a plan). Its job is to decide **whether to
+plan at all**: replay a cached plan, answer small talk, refuse out-of-scope, or
+hand the turn to the planner.
+
+It lives here rather than in `app/domains/` because it is not a capability —
+nothing in `EXECUTORS_CLS_MAPPING` will ever point at it, and its only domain
+knowledge is which planner to call. It is a separate `AppWorkflow` rather than
+methods on `Orchestrator` because `Orchestrator` owns no envelope: folding the
+decisions in would mean a cache hit or a refusal produced no step in the trace
+tree, and `chat_runs.planner` would lose its shape.
+"""
+
+import logging
 from typing import Any
 
-from pydantic import Field
-
-from app.domains.planner.planjane import (
-    PlanJaneExecutor,
-    PlanJaneOutput,
-)
-
+from app.common.request_context import RequestContext  # noqa: F401  (re-export shape)
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.planjane import PlanJaneExecutor, PlanJaneOutput
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
 
-from .generation_node import GenerationNode, create_generation_nodes
-
-import logging
-
 logger = logging.getLogger(__name__)
-
-# NOTE:
-# this should be renamed to executor.py
-# reserve main.py for endpoint if you want it to be a different service
-
-# TODO:
-# format this repo similar to books domains
-# cleaner and each can have a executor format and prompt thing
-
-# NOTE:
-# this repo is a pre-flight or initial parse
-# this should be executor.py that do things like
-#   * check the cache, small talks, decide to call the planner or not
-#   * clarification stuff
-# the planner it's own workflow thing, that will return a plan to the this
-# and the actual planner (planJane) should be outside of of app/domain
-# I think(?)
 
 # TODO: remove for prod
 CACHE_DIR = FilesLocationConstants.PROJECT_ROOT / "playground" / "files" / "cache"
@@ -44,12 +34,12 @@ cache_mapping = {
 
 
 def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
-    """Replay a recorded parse instead of calling the LLM, for the messages
+    """Replay a recorded plan instead of calling the LLM, for the messages
     listed in cache_mapping. Returns None when there is no usable cache entry,
-    so the caller falls through to the real parse workflow.
+    so the caller falls through to the real planner.
 
-    The files are whole PlannerWorkflow OperationResult dumps, so the parse
-    payload sits at output.parse_result."""
+    The files are whole triage OperationResult dumps, so the plan payload sits
+    at output.parse_result."""
     file_name = cache_mapping.get(user_text)
     if not file_name:
         return None
@@ -73,28 +63,36 @@ def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
     try:
         return PlanJaneOutput.model_validate(payload)
     except Exception as e:
-        logger.warning(f"Could not replay cached parse {file_name}: {e}")
+        logger.warning(f"Could not replay cached plan {file_name}: {e}")
         return None
 
 
 # NOTE: this is okay for now
-# we don't need parse_result, and strategy_result or diagram
-# this should store conversation summary, failed tasks, internal summary message for llm
-# maybe also referenced books or things from processing the steps
-class PlannerOutput(NodeWorkflowOutput):
+# this should store conversation summary, failed tasks, internal summary message
+# for llm — maybe also referenced books or things from processing the steps
+class TriageOutput(NodeWorkflowOutput):
     session_id: str | None = None
-    parse_result: PlanJaneOutput | None = None
-    diagram: str | None = None
 
-    # The terminal answer stage, appended by the planner rather than chosen by
-    # the LLM — one per sink in the goal graph. See generation_node.py.
-    generation_nodes: list[GenerationNode] = Field(default_factory=list)
+    # The plan, when triage decided to produce one. None means the turn was
+    # handled without planning (or failed before the planner returned).
+    #
+    # Field name kept as `parse_result` on purpose: it is a *serialized* path.
+    # evals/report_system_goals.py reads accepted goals at
+    # planner.response.result.parse_result, the checked-in cache files key on
+    # it, and every recorded chat_runs row carries it. Renaming it to `plan`
+    # means changing all four in lockstep — worth doing, not worth doing
+    # silently as part of a file move.
+    parse_result: PlanJaneOutput | None = None
 
     def to_summary(self) -> dict[str, Any]:
-        # NOTE: we'll have more later
-        # parse_result is None when the turn errored before parsing finished —
-        # the summary still has to render for that run, it's the one you read
         return {"plan": self.parse_result.to_summary() if self.parse_result else None}
+
+    @property
+    def diagram(self) -> str | None:
+        """The plan's Mermaid diagram. Rendered by PlanJane, which owns plan
+        presentation; surfaced here because `chat_runs.mermaid` is promoted out
+        of this envelope (run_recorder.py) and the review page reads it."""
+        return self.parse_result.diagram if self.parse_result else None
 
     def execution_order(self):
         return self.parse_result.execution_order()
@@ -103,13 +101,21 @@ class PlannerOutput(NodeWorkflowOutput):
         return self.parse_result.accepted_goals_ids()
 
 
-class PlannerWorkflow(AppWorkflow[PlannerOutput]):
-    initial_parse_failure_message = (
-        "I couldn't understand your request. Please try again."
-    )
+class TriageWorkflow(AppWorkflow[TriageOutput]):
+    planner_failure_message = "I couldn't understand your request. Please try again."
     ui_loading_message = "Starting conversation..."
-    strategy_classification_failure_message = "I can't find any relevant strategies for your request. Please try again with more specific keywords."
-    task_planner_failure_message = "I tried to create a plan, but it was too large or invalid. Try narrowing your request."
+
+    @property
+    def artifact(self) -> dict[str, Any]:
+        """What triage hands downstream is the **plan**, not its own envelope.
+
+        The task runner executes a plan; it should not have to know a triage
+        layer exists — and if it required `TriageOutput` it would have to import
+        upward out of `app/domains/` into this package. Empty when the turn was
+        handled without planning, which `require_artifact` then rejects.
+        """
+        plan = self.result.parse_result
+        return {plan.id or type(plan).__name__: plan} if plan else {}
 
     async def run(self, query: str, artifacts: dict[str, Any]) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
@@ -117,73 +123,30 @@ class PlannerWorkflow(AppWorkflow[PlannerOutput]):
         self.result.session_id = self.session_id
         self.messages.append(self.user_message)
 
-        parse_output = load_cached_parse_output(query)
-        if parse_output is None:
-            parse_workflow = PlanJaneExecutor(self.ctx, messages=self.messages)
-            parse_result = await self.run_async_step(
-                parse_workflow(query=query, artifacts=artifacts),
-                raise_on_failure=False,
-            )
-
-            # narrow through a local: the workflow pre-initializes its output,
-            # so it is never None; parse_workflow.result raises if it ever were
-            parse_output = parse_workflow.result
-            self.result.parse_result = parse_output
-
-            if not parse_result.ok:
-                self.record.ok = False
-                if parse_result.runtime_error:
-                    self.record.runtime_error = parse_result.runtime_error
-                    await self.sse_stream.send_error(self.initial_parse_failure_message)
-                    return
-                # await self.sse_stream.send_chars(self.initial_parse_failure_message)
-                return
-        else:
-            logger.info(f"Replaying cached parse for: {query}")
-            self.result.parse_result = parse_output
-
-        system_goals = parse_output.accepted_goals
-        if not system_goals:
-            # parse ok but nothing to plan — the parse workflow already
-            # streamed the reply (small talk / out-of-scope / refusals)
+        cached = load_cached_parse_output(query)
+        if cached is not None:
+            logger.info(f"Replaying cached plan for: {query}")
+            self.result.parse_result = cached
             self.record.ok = True
             return
 
-        # Attach the answer stage before anything is drawn, so both diagrams
-        # show the plan the user actually gets — ending in an answer, not in a
-        # retrieval. Depends only on goal ids, so it needs no parsed arguments.
-        generation_nodes = create_generation_nodes(system_goals)
-        self.result.generation_nodes = generation_nodes
+        planner = PlanJaneExecutor(self.ctx, messages=self.messages)
+        planner_record = await self.run_async_step(
+            planner(query=query, artifacts=artifacts),
+            raise_on_failure=False,
+        )
 
-        await self.send_mermaid(system_goals, generation_nodes)
-        # ------------------------------------------------------------------------------------------------
+        # narrow through a local: the workflow pre-initializes its output, so it
+        # is never None; planner.result raises if it ever were
+        self.result.parse_result = planner.result
 
-        # parsed_system_goals = await self.parse_goals_arguments(system_goals)
-        # self.result.parsed_results = parsed_system_goals
-        # await self.send_mermaid_parsed(parsed_system_goals, generation_nodes)
+        if not planner_record.ok:
+            self.record.ok = False
+            if planner_record.runtime_error:
+                self.record.runtime_error = planner_record.runtime_error
+                await self.sse_stream.send_error(self.planner_failure_message)
+            return
 
+        # ok with no goals is a handled turn, not a failure — PlanJane already
+        # streamed the reply (small talk / out-of-scope / refusals)
         self.record.ok = True
-
-    async def send_mermaid(
-        self, system_goals: list, generation_nodes: list[GenerationNode] | None = None
-    ) -> str | None:
-        """Render the accepted system goals as a Mermaid flowchart and stream
-        it to the client. Returns the diagram string, or None when there is
-        nothing to draw or generation failed (never raises into the request)."""
-        from app.common.mermaid import get_goals_mermaid_diagram
-
-        diagram = None
-        try:
-            diagram = get_goals_mermaid_diagram(system_goals, generation_nodes)
-        except Exception as e:
-            logger.warning(f"Error generating Mermaid diagram: {e}")
-            return None
-
-        if not diagram:
-            logger.info("No Mermaid diagram generated (empty or invalid)")
-            return None
-
-        await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
-        await self.sse_stream.send_mermaid(diagram)
-        self.result.diagram = diagram
-        return diagram

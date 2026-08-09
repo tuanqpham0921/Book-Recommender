@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.common.messages import UserMessage
 from app.common.sse_stream import SSEStream
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 from clients import OpenAIClient
 from db.stores.book_store import BookStore
 

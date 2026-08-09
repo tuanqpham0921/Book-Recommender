@@ -94,7 +94,7 @@ async def get_request_context_factory(
 ):
     """Factory to create request contexts with runtime arguments."""
     from app.common.messages import UserMessage
-    from app.orchestration.request_context import RequestContext
+    from app.common.request_context import RequestContext
 
     async def create_context(session_id: str, user_message: UserMessage):
         return RequestContext(

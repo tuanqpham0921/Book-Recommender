@@ -1,4 +1,4 @@
-"""Tests for PlannerWorkflow step/output routing."""
+"""Tests for TriageWorkflow step/output routing."""
 
 from unittest.mock import AsyncMock, patch
 
@@ -6,8 +6,8 @@ import pytest
 
 from app.common.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
-from app.domains.planner.main import PlannerWorkflow, PlannerOutput
-from app.domains.planner.planjane import PlanJaneOutput, SystemGoal
+from app.orchestration.triage import TriageWorkflow, TriageOutput
+from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
 from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
@@ -15,7 +15,7 @@ from common.utils import load_json, save_file
 @pytest.fixture
 def orchestrator(make_request_context):
     # make_request_context comes from tests/conftest.py
-    return PlannerWorkflow(
+    return TriageWorkflow(
         make_request_context(user_message=UserMessage(content="test"))
     )
 
@@ -33,18 +33,20 @@ def _make_goal():
     return goal
 
 
-def _make_orchestration_output() -> PlannerOutput:
+def _make_orchestration_output() -> TriageOutput:
     goal = _make_goal()
-    return PlannerOutput(
+    return TriageOutput(
         session_id="sess_1",
-        parse_result=PlanJaneOutput(accepted_goals=[goal]),
-        diagram="graph TD;\nA-->B;",
+        # diagram lives on the plan now — TriageOutput.diagram reads through
+        parse_result=PlanJaneOutput(
+            accepted_goals=[goal], diagram="graph TD;\nA-->B;"
+        ),
     )
 
 
-class TestPlannerWorkflowSteps:
+class TestTriageWorkflowSteps:
     # storing the parse output moved from an add_step override into
-    # run() itself — see PlannerWorkflow.run. add_step itself now lives on
+    # run() itself — see TriageWorkflow.run. add_step itself now lives on
     # OperationResult (airglider), where steps/token_usage do.
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
@@ -82,13 +84,13 @@ def _make_runtime_error(message: str) -> RuntimeErrorInfo:
 def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
     """A stand-in for an PlanJaneExecutor instance: calling it (as
     run_async_step does) awaits to step_result, while .result (accessed
-    directly by PlannerWorkflow.run) returns output."""
+    directly by TriageWorkflow.run) returns output."""
     workflow = AsyncMock(return_value=step_result)
     workflow.result = output
     return workflow
 
 
-class TestPlannerWorkflowRuntimeErrorPropagation:
+class TestTriageWorkflowRuntimeErrorPropagation:
     """self.record.runtime_error must come from whichever child step
     actually crashed."""
 
@@ -100,7 +102,7 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
         )
 
         with patch(
-            "app.domains.planner.main.PlanJaneExecutor",
+            "app.orchestration.triage.PlanJaneExecutor",
             return_value=parse_workflow,
         ):
             await orchestrator.run(query="test", artifacts={})
@@ -108,8 +110,8 @@ class TestPlannerWorkflowRuntimeErrorPropagation:
         assert orchestrator.record.runtime_error is parse_error
 
 
-class TestPlannerOutputJsonRoundTrip:
-    """model_dump_json / model_validate_json round-trip of PlannerOutput.
+class TestTriageOutputJsonRoundTrip:
+    """model_dump_json / model_validate_json round-trip of TriageOutput.
 
     Public fields survive reload. Private attrs (PrivateAttr, e.g. `_refusal`)
     are NOT part of the pydantic schema, so `model_dump_json` never emits them
@@ -118,7 +120,7 @@ class TestPlannerOutputJsonRoundTrip:
 
     def test_top_level_fields_survive(self):
         output = _make_orchestration_output()
-        restored = PlannerOutput.model_validate_json(output.model_dump_json())
+        restored = TriageOutput.model_validate_json(output.model_dump_json())
 
         assert restored.session_id == output.session_id
         assert restored.diagram == output.diagram
@@ -127,7 +129,7 @@ class TestPlannerOutputJsonRoundTrip:
         output = _make_orchestration_output()
         original_goal = output.parse_result.accepted_goals[0]
 
-        restored = PlannerOutput.model_validate_json(output.model_dump_json())
+        restored = TriageOutput.model_validate_json(output.model_dump_json())
         restored_goal = restored.parse_result.accepted_goals[0]
 
         assert restored_goal.description == original_goal.description
@@ -139,7 +141,7 @@ class TestPlannerOutputJsonRoundTrip:
         original_goal = output.parse_result.accepted_goals[0]
         assert original_goal._refusal is True
 
-        restored = PlannerOutput.model_validate_json(output.model_dump_json())
+        restored = TriageOutput.model_validate_json(output.model_dump_json())
         restored_goal = restored.parse_result.accepted_goals[0]
 
         # `id` is a public field now, so it does survive — unlike the refusal
@@ -149,7 +151,7 @@ class TestPlannerOutputJsonRoundTrip:
         assert restored_goal._refusal_reasons == []
 
 
-class TestPlannerOutputSaveFileRoundTrip:
+class TestTriageOutputSaveFileRoundTrip:
     """save_file/load_json (common.utils) go through to_serializable, which
     walks __pydantic_private__ - so unlike model_dump_json/model_validate_json,
     private attrs (_refusal, _refusal_reasons, ...) do survive this round

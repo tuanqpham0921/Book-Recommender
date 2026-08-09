@@ -5,7 +5,7 @@ from typing import Any
 from app.common.messages import AssistantMessage, ToolMessage
 from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
 from app.domains.base_request import BaseRequest
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 
 
 class MockExecutorOutput(NodeWorkflowOutput):
