@@ -49,6 +49,13 @@ The host's `common/utils` **re-exports** the helpers rather than keeping a secon
 copy, so `from common.utils import to_serializable` and `from airglider import
 to_serializable` are the same function and cannot drift.
 
+## Mermaid is not in here
+
+It briefly was. It now lives at `app/domains/planjane/dial/`, because PlanJane
+is the only thing that draws a diagram and is headed for being a service of its
+own — the renderer has to travel with it. `dial/format.py` still imports
+nothing but `airglider`, so nothing about that move loosened this package.
+
 ## Pricing is the one piece of policy
 
 `src/config.py` holds a snapshot of one provider's prices on one date. Counting

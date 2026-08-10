@@ -29,7 +29,6 @@ class TaskRunnerOutput(NodeWorkflowOutput):
     failed_task: list[str] = Field(default_factory=list)
 
     completed_task: list[BaseRequest] = Field(default_factory=list)
-    parsed_diagram: str | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {
@@ -98,8 +97,6 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
         self.result.task_results = results
         self.finalize_result(ok=not self.result.failed_task)
-
-        # await self.send_mermaid_parsed(self.result.completed_task)
 
     def _resolve_executor(self, goal: SystemGoal) -> type[AppWorkflow] | None:
         """The executor class for this goal's node type, or None if it can't
@@ -200,33 +197,3 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         output.id = goal.id
         output.depends_on = goal.depends_on.copy()
         return output
-
-    async def send_mermaid_parsed(
-        self,
-        parsed_system_goals: list[BaseRequest],
-    ) -> str | None:
-        """Render the parsed task requests as a Mermaid flowchart and stream it
-        to the client. Same contract as send_mermaid — returns the diagram, or
-        None when there is nothing to draw or generation failed.
-
-        The graph has the same shape as the goal diagram: each request carries
-        its goal's id and depends_on, so only the box contents differ (typed
-        arguments instead of the goal description).
-        """
-        from app.domains.planjane.mermaid import get_parsed_mermaid_diagram
-
-        diagram = None
-        try:
-            diagram = get_parsed_mermaid_diagram(parsed_system_goals)
-        except Exception as e:
-            logger.warning(f"Error generating parsed Mermaid diagram: {e}")
-            return None
-
-        if not diagram:
-            logger.info("No parsed Mermaid diagram generated (empty or invalid)")
-            return None
-
-        await self.sse_stream.send_chars("\n\n## Task Details\n")
-        await self.sse_stream.send_mermaid(diagram)
-        self.result.parsed_diagram = diagram
-        return diagram

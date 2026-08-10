@@ -109,11 +109,23 @@ pointing at it; `base_workflow.py` holding the bases they build on.
   `app/registry.py`; it cannot live here without an import cycle back through the
   slices.
 - `planjane/` — **the planner**. `schemas.py` (`SystemGoal`, `GoalParseRequest` —
-  the tool call the LLM fills in), `executor.py` (`PlanJaneExecutor`: message →
-  goals), and `mermaid.py` (the diagram — plan *presentation*, which the planner
-  owns because the diagram is the plan rendered). Prompts live in
-  `planjane/prompts/*.txt`. Schemas are split from the executor to match the
-  slice layout used elsewhere (`schemas.py` + `executor.py`).
+  the tool call the LLM fills in) and `executor.py` (`PlanJaneExecutor`:
+  message → goals, plus `PlanJaneOutput.execution_order`, the dependency
+  layering the task runner consumes). Prompts live in `planjane/prompts/*.txt`.
+  Schemas are split from the executor to match the slice layout used elsewhere.
+- `planjane/dial/` — how PlanJane *shows* a plan, and the only Mermaid code in
+  the app. `mermaid.py` turns goals into `MermaidBox`es — what a box says, and
+  the `depends_on` → `sent_to` inversion — and `format.py` turns boxes into the
+  diagram string (markup, orientation, emission). It lives under the planner
+  because the diagram *is* the plan rendered, so a caller that drew it would be
+  doing the planner's job; `PlanJaneExecutor.send_mermaid` stamps the result
+  onto `PlanJaneOutput.diagram`.
+
+  **`dial/` imports nothing from `app/`.** `format.py`'s only import is
+  `airglider`, which is itself standalone, and `mermaid.py` adds nothing beyond
+  it — so the subpackage runs with no `app` package present at all. That is
+  deliberate: PlanJane is headed for being a service of its own, and this is
+  the corner already free to travel. Import from `dial`, not from its modules.
 
   What decides *whether* to call PlanJane — cache, small talk, out of scope —
   is `app/orchestration/triage.py`, not here: it is not a capability, and

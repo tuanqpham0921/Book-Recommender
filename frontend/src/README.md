@@ -13,7 +13,7 @@ mounted once visited.
 | `components/chatbot/` | `ChatInput`, `ChatMessages` (react-markdown + remark-gfm rendering), `TaskSection` (one collapsible executed node) |
 | `components/MermaidDiagram.jsx` | Renders the task-plan diagram (`securityLevel: 'strict'`, pan/zoom via `@panzoom/panzoom`); shared with the review page |
 | `components/book/` | `BookCard`, `BookCover`, `BookDetailModal`, `BooksGrid` |
-| `pages/ChatReviewPage.jsx` | Review queue over recorded chat runs: expand a run → goals, goal diagram, parsed-arguments diagram, raw envelopes; file one review per run (`PUT /feedback/review`). Both diagrams are read out of the `planner` JSONB envelope (`output.diagram` / `output.parsed_diagram`), not the promoted `mermaid` column |
+| `pages/ChatReviewPage.jsx` | Review queue over recorded chat runs: expand a run → goals, goal diagram, raw envelopes; file one review per run (`PUT /feedback/review`). The diagram is read out of the `planner` JSONB envelope (`output.diagram`), not the promoted `mermaid` column. The second "parsed arguments" diagram was dropped on 2026-08-10 when PlanJane became the only backend renderer — it had also been reading the wrong envelope, so it never displayed |
 | `pages/BookRecommenderPage.jsx` | Shell: header, view switching |
 | `design-system/` | Button, Badge, Modal, Dropdown, IconButton, ColorModeToggle, … |
 | `hooks/`, `utils/`, `styles/`, `data/` | Support code; split CSS lives in `styles/` |

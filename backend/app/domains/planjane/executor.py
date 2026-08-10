@@ -11,7 +11,7 @@ from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.registry import REGISTRY
 from clients import OpenAIParserRequest
 
-from .mermaid import get_goals_mermaid_diagram
+from app.domains.planjane.dial.mermaid import get_goals_mermaid_diagram
 from .schemas import MAX_SYSTEM_GOALS, GoalParseRequest, SystemGoal
 
 logger = logging.getLogger(__name__)
