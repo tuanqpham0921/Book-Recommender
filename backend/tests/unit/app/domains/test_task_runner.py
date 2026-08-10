@@ -121,7 +121,9 @@ class TestSuccessfulExecution:
     async def test_stamps_the_goal_identity_onto_the_output(self, runner):
         # what makes the output usable as an artifact downstream —
         # AppWorkflow.artifact keys on output.id
-        await drive(runner, [_goal("g1", depends_on=["g0"])], _spec(_OkExecutor))
+        await drive(
+            runner, [_goal("g0"), _goal("g1", depends_on=["g0"])], _spec(_OkExecutor)
+        )
 
         output = runner.result.task_results["g1"]
         assert output.id == "g1"
@@ -130,10 +132,12 @@ class TestSuccessfulExecution:
     async def test_copies_depends_on_rather_than_aliasing_it(self, runner):
         # the goal and its output must not share a list — mutating one
         # through the other is the kind of bug a `.copy()` silently prevents
-        goal = _goal("g1", depends_on=["g0"])
-        await drive(runner, [goal], _spec(_OkExecutor))
+        dependent = _goal("g1", depends_on=["g0"])
+        await drive(runner, [_goal("g0"), dependent], _spec(_OkExecutor))
 
-        assert runner.result.task_results["g1"].depends_on is not goal.depends_on
+        assert (
+            runner.result.task_results["g1"].depends_on is not dependent.depends_on
+        )
 
     async def test_feeds_a_dependency_output_to_the_dependent_node(self, runner):
         # execution_order layers goals by len(depends_on), so "a" runs first
@@ -160,16 +164,10 @@ class TestSuccessfulExecution:
         assert runner.result.task_results["b"].saw_artifacts == {}
         assert runner.result.failed_task == ["a"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="PlanJaneOutput.execution_order keys a defaultdict by "
-        "len(depends_on) and iterates in key-INSERTION order, not layer "
-        "order — so a plan that lists a dependent before its dependency runs "
-        "them backwards and the dependency's output arrives too late. This is "
-        "the `# TODO: this is wrong, you need the indegree` on that method; "
-        "the runner is only as correct as the order it is handed.",
-    )
     async def test_dependency_runs_first_regardless_of_plan_ordering(self, runner):
+        # the runner is only as correct as the order it is handed, so this
+        # pins the layering through to execution: listing the dependent first
+        # used to run the two backwards
         await drive(
             runner, [_goal("b", depends_on=["a"]), _goal("a")], _spec(_OkExecutor)
         )
@@ -180,6 +178,38 @@ class TestSuccessfulExecution:
         await drive(runner, [_goal()], _spec(_FailingExecutor))
 
         assert not runner.record.ok
+
+
+class TestUnreachableGoals:
+    """Goals `execution_order` could not schedule — a dependency cycle, or a
+    dependency the planner refused. The runner counts them as failures so the
+    turn cannot report ok after quietly dropping part of the plan."""
+
+    async def test_a_cycle_fails_every_goal_in_it(self, runner):
+        await drive(
+            runner,
+            [_goal("a", depends_on=["b"]), _goal("b", depends_on=["a"])],
+            _spec(_OkExecutor),
+        )
+
+        assert sorted(runner.result.failed_task) == ["a", "b"]
+        assert runner.result.task_results == {}
+        assert not runner.record.ok
+
+    async def test_a_goal_waiting_on_a_refused_goal_fails(self, runner):
+        await drive(
+            runner,
+            [_goal("a"), _goal("b", depends_on=["refused_1"])],
+            _spec(_OkExecutor),
+        )
+
+        assert runner.result.failed_task == ["b"]
+        assert list(runner.result.task_results) == ["a"]
+
+    async def test_an_unreachable_goal_opens_no_ui_section(self, runner, events):
+        await drive(runner, [_goal("b", depends_on=["nope"])], _spec(_OkExecutor))
+
+        assert of_type(events, "task.start") == []
 
 
 class TestUnrunnableNodes:

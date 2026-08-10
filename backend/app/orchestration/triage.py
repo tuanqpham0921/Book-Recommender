@@ -18,7 +18,7 @@ from typing import Any
 
 from app.common.request_context import RequestContext  # noqa: F401  (re-export shape)
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
-from app.domains.planjane import PlanJaneExecutor, PlanJaneOutput
+from app.domains.planjane import ExecutionOrder, PlanJaneExecutor, PlanJaneOutput
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
 
@@ -94,7 +94,7 @@ class TriageOutput(NodeWorkflowOutput):
         of this envelope (run_recorder.py) and the review page reads it."""
         return self.parse_result.diagram if self.parse_result else None
 
-    def execution_order(self):
+    def execution_order(self) -> ExecutionOrder:
         return self.parse_result.execution_order()
 
     def accepted_goals_ids(self) -> list[str]:

@@ -1,5 +1,6 @@
 import logging
-from typing import Any
+from collections import defaultdict
+from typing import Any, NamedTuple
 
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import Field
@@ -19,10 +20,25 @@ GOAL_GENERATOR_PROMPT_PATH = "domains/planjane/prompts/0_goal_generator.txt"
 # PLAYGORUND_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
 
 
-# NOTE: there's a bug if
-# task_1 -> task_2
-# if task_1 is rejected then task_2 should not still depend on or run
-# you need the previous pruning
+class ExecutionOrder(NamedTuple):
+    """The accepted goals arranged for execution.
+
+    `layers` is a dependency layering: every goal in a layer depends only on
+    goals in *earlier* layers, so a layer is safe to run in any order — or
+    concurrently, which is the only reason to group at all. Running the layers
+    flattened, as `TaskRunnerWorkflow` does today, is therefore also correct.
+
+    `unreachable` is every accepted goal that no layer could ever contain: it
+    sits in a dependency cycle, or it depends on a goal that isn't in the plan
+    because the planner refused it. These are returned rather than dropped —
+    silently omitting them is how a user asks for three things, gets one, and
+    is told the turn succeeded.
+    """
+
+    layers: list[list["SystemGoal"]]
+    unreachable: list["SystemGoal"]
+
+
 class PlanJaneOutput(NodeWorkflowOutput):
     accepted_goals: list[SystemGoal] = Field(default_factory=list)
     refused_goals: list[SystemGoal] = Field(default_factory=list)
@@ -46,29 +62,71 @@ class PlanJaneOutput(NodeWorkflowOutput):
 
     def accepted_goals_ids(self) -> list[str]:
         return [goal.id for goal in self.accepted_goals]
+    
+    def id_to_node(self) -> dict[str, SystemGoal]:
+        """The accepted goals keyed by the id other goals reference them by."""
+        return {goal.id: goal for goal in self.accepted_goals}
 
-    def to_llm_messages(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.out_of_scope:
-            payload["out_of_scope"] = self.out_of_scope
-        if self.refused_goals:
-            payload["refused_goals"] = [
-                (g.description, g.refusal_reasons) for g in self.refused_goals
-            ]
+    def execution_order(self) -> ExecutionOrder:
+        """Layer the accepted goals by dependency depth (Kahn's algorithm).
 
-        return payload
+        Each round takes every goal whose dependencies have all been placed,
+        emits them as one layer, then decrements the goals waiting on them.
+        `ready` and `next_ready` are separate lists on purpose: the layer
+        boundary is then enforced by construction rather than by snapshotting
+        a queue's length while still pushing onto it — that snapshot is what
+        let a goal share a layer with the very dependency that unblocked it.
 
-    # TODO:
-    # this is wrong, you need the indegree
-    def execution_order(self):
-        from collections import defaultdict
+        A goal that never reaches zero outstanding dependencies is returned in
+        `unreachable` instead of vanishing. Two ways that happens, and both are
+        real: a dependency cycle, and a goal that depends on one the planner
+        refused (`accepted_goals` is not closed over `depends_on`).
+        """
+        goals = self.id_to_node()
 
-        order = defaultdict(list)
+        # goal id -> the goals waiting on it, and how many each is still
+        # waiting for. Both sides are derived from the same de-duplicated
+        # dependency list, so a goal that names the same dependency twice is
+        # counted and decremented the same number of times.
+        dependents: dict[str, list[str]] = defaultdict(list)
+        blocked_by: dict[str, int] = {}
+        for goal_id, goal in goals.items():
+            deps = list(dict.fromkeys(goal.depends_on))
+            # An unknown dependency id is counted but wired to nothing: it can
+            # never be decremented, which is exactly what makes this goal come
+            # back as unreachable rather than run without its input.
+            for dep_id in deps:
+                if dep_id in goals:
+                    dependents[dep_id].append(goal_id)
+            blocked_by[goal_id] = len(deps)
 
-        for node in self.accepted_goals:
-            order[len(node.depends_on)].append(node)
-        return order
+        layers: list[list[SystemGoal]] = []
+        ready = [goal_id for goal_id in goals if blocked_by[goal_id] == 0]
+        while ready:
+            layers.append([goals[goal_id] for goal_id in ready])
 
+            next_ready: list[str] = []
+            for goal_id in ready:
+                for dependent_id in dependents[goal_id]:
+                    blocked_by[dependent_id] -= 1
+                    if blocked_by[dependent_id] == 0:
+                        next_ready.append(dependent_id)
+            ready = next_ready
+
+        # By construction rather than by re-deriving *why* each one failed:
+        # anything a layer never claimed could not be scheduled, whatever the
+        # reason.
+        scheduled = {goal.id for layer in layers for goal in layer}
+        unreachable = [
+            goal for goal in goals.values() if goal.id not in scheduled
+        ]
+        if unreachable:
+            logger.warning(
+                "Goals that can never run (cycle, or depend on a refused "
+                f"goal): {[goal.id for goal in unreachable]}"
+            )
+
+        return ExecutionOrder(layers=layers, unreachable=unreachable)
 
 class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
     ui_loading_message = "Thinking..."
@@ -88,15 +146,10 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         self.process_parse_result(parse_result)
         # NOTE: the output needs to be added somewhere correctly
 
-        payload = self.result.to_llm_messages()
-        await self.finalize_result(payload)
+        
+        await self.finalize_result()
 
         # generate unable to help with
-        if self.result.out_of_scope:
-            await self.sse_stream.send_chars("\n\n I can't do:\n")
-            for unsupported in self.result.out_of_scope:
-                await self.sse_stream.send_chars(f"- {unsupported}\n")
-
         if self.result.accepted_goals:
             await self.send_mermaid(self.result.accepted_goals)
 
@@ -155,12 +208,13 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         tool_call = await self.run_llm_args_parse(req)
         return tool_call
 
-    async def finalize_result(self, payload) -> None:
-        # ok = the conversation was handled: either there are goals to plan,
-        # or a substantive reply (out-of-scope / refusals) was
-        # streamed to the user. The orchestrator decides continuation from
-        # accepted_goals, not from ok.
-        super().finalize_result(ok=bool(self.result.accepted_goals or payload))
+    async def finalize_result(self) -> None:
+        # ok = a plan came out of this turn. It used to also count a reply
+        # payload — out-of-scope content or refusals were treated as a handled
+        # conversation — but nothing streams that reply any more, so "handled"
+        # and "planned" are now the same question. Continuation is still
+        # decided from accepted_goals, not from ok.
+        super().finalize_result(ok=bool(self.result.accepted_goals))
 
     def process_parse_result(
         self, parse_result: GoalParseRequest, confident_tuning: float = 0.5

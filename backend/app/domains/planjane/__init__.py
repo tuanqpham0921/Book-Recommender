@@ -5,6 +5,7 @@ here: that is `app/orchestration/triage.py`, one layer up.
 """
 
 from .executor import (
+    ExecutionOrder,
     GoalParseRequest,
     MAX_SYSTEM_GOALS,
     PlanJaneExecutor,
@@ -15,6 +16,7 @@ from .executor import (
 __all__ = [
     "PlanJaneExecutor",
     "PlanJaneOutput",
+    "ExecutionOrder",
     "GoalParseRequest",
     "SystemGoal",
     "MAX_SYSTEM_GOALS",

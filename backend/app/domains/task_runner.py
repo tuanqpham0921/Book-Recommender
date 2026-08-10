@@ -63,8 +63,19 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         plan = self.require_artifact(artifacts, PlanJaneOutput)
         self.result.session_id = self.session_id
 
+        order = plan.execution_order()
+        # Goals in a dependency cycle, or waiting on one the planner refused.
+        # They are failures rather than omissions: counting them here is what
+        # stops the turn reporting ok after quietly dropping part of the plan.
+        for goal in order.unreachable:
+            logger.warning(
+                f"Skipping task {goal.id} ({goal.target_node_type.value}): "
+                "its dependencies can never complete"
+            )
+            self.result.failed_task.append(goal.id)
+
         results: dict[str, NodeWorkflowOutput] = {}
-        for goals_layer in plan.execution_order().values():
+        for goals_layer in order.layers:
             for goal in goals_layer:
                 executor_cls = self._resolve_executor(goal)
                 if executor_cls is None:

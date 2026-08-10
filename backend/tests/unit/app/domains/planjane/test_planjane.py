@@ -4,8 +4,12 @@ Scoped to what `minimal_end_to_end_v1` actually implements. Removed with the
 code they covered: `small_talk` (gone from GoalParseRequest and
 PlanJaneOutput), the `_overflow_system_goals` / `_invalid_system_goals`
 capture (goals over MAX_SYSTEM_GOALS are now rejected by the field's
-max_length instead), `PlanJaneOutput.reasoning`, and
-`generate_user_response`.
+max_length instead), `PlanJaneOutput.reasoning`, `generate_user_response`,
+and `PlanJaneOutput.to_llm_messages` (with the reply payload that
+`finalize_result` used to take).
+
+The layering helper `PlanJaneOutput.execution_order` has its own file,
+`test_execution_order.py`.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -196,38 +200,29 @@ class TestProcessParseResult:
 
 
 class TestFinalizeResult:
+    """`ok` is now exactly "did we produce a plan" — `bool(accepted_goals)`.
+
+    It used to also count a reply payload (out-of-scope / refusals), on the
+    grounds that streaming an explanation was a handled conversation. The
+    payload argument and the streaming are both gone, so a turn that only
+    found out-of-scope content now finishes not-ok.
+    """
+
     async def test_ok_true_when_accepted_goals_present(self, parse_wf):
         parse_wf.result.accepted_goals.append(_make_goal())
-        await parse_wf.finalize_result(payload={})
+        await parse_wf.finalize_result()
         assert parse_wf.record.ok is True
 
-    async def test_ok_true_when_only_a_reply_payload(self, parse_wf):
-        # out-of-scope / refusals streamed a reply — that is a handled
-        # conversation, not a failure
-        await parse_wf.finalize_result(payload={"out_of_scope": ["Cooking recipe"]})
-        assert parse_wf.record.ok is True
-        assert isinstance(parse_wf.record.ok, bool)
-
-    async def test_ok_false_when_no_goals_and_no_payload(self, parse_wf):
-        await parse_wf.finalize_result(payload={})
+    async def test_ok_false_when_only_out_of_scope_content(self, parse_wf):
+        # the behaviour change: out-of-scope alone no longer rescues `ok`
+        parse_wf.result.out_of_scope = ["Cooking recipe"]
+        await parse_wf.finalize_result()
         assert parse_wf.record.ok is False
 
-
-class TestToLlmMessages:
-    def test_empty_output_returns_empty_dict(self, parse_wf):
-        assert parse_wf.result.to_llm_messages() == {}
-
-    def test_out_of_scope_included_in_payload(self, parse_wf):
-        parse_wf.result.out_of_scope = ["Cooking recipes"]
-        result = parse_wf.result.to_llm_messages()
-        assert "out_of_scope" in result
-
-    def test_refused_goals_included_as_description_reason_tuples(self, parse_wf):
-        goal = _make_goal()
-        goal.refuse("Too low confidence")
-        parse_wf.result.refused_goals.append(goal)
-        result = parse_wf.result.to_llm_messages()
-        assert result["refused_goals"] == [(goal.description, goal.refusal_reasons)]
+    async def test_ok_false_when_nothing_was_planned(self, parse_wf):
+        await parse_wf.finalize_result()
+        assert parse_wf.record.ok is False
+        assert isinstance(parse_wf.record.ok, bool)
 
 
 def _mock_assistant_msg(parse_result=None):
@@ -276,7 +271,11 @@ class TestRun:
 
         assert parse_wf.record.ok is True
 
-    async def test_out_of_scope_is_streamed_to_the_user(self, parse_wf):
+    async def test_out_of_scope_is_recorded_but_no_longer_streamed(self, parse_wf):
+        """`run` used to stream an "I can't do:" list for out-of-scope
+        content. That block is gone, so the field is now captured on the
+        output — where `to_summary` and the recorded chat run still read it —
+        and nothing renders it to the user."""
         parse_result = _make_parse_result(
             goals=[_make_goal()], out_of_scope=["Cooking recipe"]
         )
@@ -288,10 +287,11 @@ class TestRun:
 
         await parse_wf.run(query="test message", artifacts={})
 
+        assert parse_wf.result.out_of_scope == ["Cooking recipe"]
         streamed = "".join(
             call.args[0] for call in parse_wf.sse_stream.send_chars.call_args_list
         )
-        assert "Cooking recipe" in streamed
+        assert "Cooking recipe" not in streamed
 
 
 class TestPlanJaneOutputHelpers:
