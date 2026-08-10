@@ -4,10 +4,11 @@ from typing import Any
 from pydantic import Field
 
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
-from app.registry import EXECUTORS_CLS_MAPPING, NODE_TYPE_TO_CLS
+from app.registry import REGISTRY
 from app.domains.base_request import BaseRequest
 from app.domains.planjane import PlanJaneOutput
 from app.domains.planjane.executor import SystemGoal
+from .node_spec import NodeSpec
 from dataclasses import dataclass
 from airglider import OperationResult
 
@@ -68,17 +69,18 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                     if dep_id in results
                 }
 
-                # Two hops, not one: the goal carries a node type name, while
-                # EXECUTORS_CLS_MAPPING is keyed by request schema class.
-                request_cls = NODE_TYPE_TO_CLS.get(goal.target_node_type.value)
-                executor_cls = (
-                    EXECUTORS_CLS_MAPPING.get(request_cls) if request_cls else None
-                )
+                # One hop: the goal carries a node type name, and the spec it
+                # resolves to holds the executor. `spec` is None for a name
+                # that isn't registered at all — a parked node, or one the LLM
+                # invented — which is a different skip reason than a registered
+                # node that has no executor yet.
+                spec: NodeSpec | None = REGISTRY.spec(goal.target_node_type)
+                executor_cls = spec.executor if spec else None
                 if executor_cls is None:
                     reason = (
                         "node type is not registered"
-                        if request_cls is None
-                        else f"{request_cls.__name__} has no executor"
+                        if spec is None
+                        else f"{spec.request.__name__} has no executor"
                     )
                     logger.warning(
                         f"Skipping task {goal.id} "

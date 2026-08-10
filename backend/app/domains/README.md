@@ -21,10 +21,15 @@ books/find_by_title/
   Its `__post_init__` checks the spec's name against the request schema's
   `Literal` default, so the two cannot drift apart silently.
 - `<domain>/guide.py` — that domain's specs as a tuple, one line per node.
-- `app/registry.py` — composes the domain guides into `SPECS` and **derives**
-  everything from it: `NODE_TYPE_TO_CLS`, the tier class tuples, `CATALOG_TIERS`,
-  `AnyStrategyRequest`, `NodeTypeEnum` and the executor mapping. None of those
-  are hand-maintained per node.
+- `app/registry.py` — composes the domain guides into `SPECS` and hands that
+  tuple to one `Registry` (`REGISTRY`). **The specs are its only state**: it
+  indexes them by `node_type` and answers everything as a read over that index
+  — `spec()`, `request()`, `executor()`, `executors()`, `in_tier()`,
+  `node_type in REGISTRY`, `catalog_entries()`, `format_catalog()`,
+  `node_type_enum`, `request_union()`. Lookups take a `NodeTypeEnum` member or
+  a plain string. Nothing is hand-maintained per node, and there are no longer
+  parallel dicts (`NODE_TYPE_TO_CLS`, `CATALOG_TIERS`, the tier class tuples,
+  `AnyStrategyRequest`, `EXECUTORS_CLS_MAPPING`) that could disagree.
 - `<domain>/schemas.py` — the domain's entity model plus the output shapes shared
   across its slices (`Book`, `BookRetrievalOutput`, …). A slice's own output
   subclasses the shape it claims in its docstring. One entity model per domain:
@@ -93,14 +98,13 @@ than the thing they name.)
 **`Executor` is the subset of those the planner can dispatch.** A
 `FindByTitleExecutor` is a workflow like `TriageWorkflow` is, but it is also a
 *node*: it has a request schema, a `NodeSpec`, a place in the tool catalog, and
-the task runner reaches it through `EXECUTORS_CLS_MAPPING` rather than calling
-it directly. That is the distinction the second word is carrying — node vs.
+the task runner reaches it through `REGISTRY.spec(...).executor` rather than
+calling it directly. That is the distinction the second word is carrying — node vs.
 pipeline step, not concrete vs. reusable. Rename it away and the class name
 stops telling you the planner can reach it.
 
-So: `<node>/executor.py` holding `<Node>Executor`, and `NodeSpec.executor` /
-`EXECUTORS_CLS_MAPPING` pointing at them; `base_workflow.py` holding the bases
-they build on.
+So: `<node>/executor.py` holding `<Node>Executor`, and `NodeSpec.executor`
+pointing at it; `base_workflow.py` holding the bases they build on.
 - `node_types.py` — just `UnknownNodeTypeEnum`. `NodeTypeEnum` is built in
   `app/registry.py`; it cannot live here without an import cycle back through the
   slices.
@@ -113,11 +117,13 @@ they build on.
 
   What decides *whether* to call PlanJane — cache, small talk, out of scope —
   is `app/orchestration/triage.py`, not here: it is not a capability, and
-  nothing in `EXECUTORS_CLS_MAPPING` will ever point at it.
-- `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan via
-  `registry.EXECUTORS_CLS_MAPPING`, which points at the real slice executors. The
-  mocks under `playground/app_mock/` are legacy eval-testing scaffolding — ignore
-  them.
+  no `NodeSpec.executor` will ever point at it.
+- `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan by
+  resolving each goal to `REGISTRY.spec(goal.target_node_type)` and running its
+  executor. `spec()` returning `None` means the node type is not registered;
+  a spec with `executor is None` means registered but not yet runnable — the
+  runner skips both, with different reasons. The mocks under
+  `playground/app_mock/` are legacy eval-testing scaffolding — ignore them.
 
 Request schemas describe *what* to do; **executors** (the *how*) are reached
 through the slice's `NodeSpec` — schemas contain no execution logic.

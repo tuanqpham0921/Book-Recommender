@@ -72,7 +72,12 @@ Shape-level planner questions live in
 
 ## Correctness (P1 = ship-blocking, otherwise P2)
 
-- **P1 — `AnyStrategyRequest` union drift** (`app/registry.py`, consumed by
+- **~~P1 — `AnyStrategyRequest` union drift~~ — resolved 2026-08-10.** The hand-listed
+  union is gone; `Registry.request_union()` builds it from the registered specs on
+  demand, so the union and the registered node types are the same list by construction
+  and cannot drift again. Nothing consumes it yet (`strategy_classification.py` was
+  removed with the planner rewrite) — it exists for the human-in-the-loop resume path
+  described below, which is what needed it. Original report, kept for the reasoning:
   `app/domains/planner/strategy_classification.py`) — the union has **10 members**;
   `NODE_TYPE_TO_CLS` has **28 registered node types**. `Analyze_Compare` (re-registered
   2026-07-18) and all 17 extension types are registered, planned, and executed but are not

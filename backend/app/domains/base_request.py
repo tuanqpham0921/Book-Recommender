@@ -24,7 +24,7 @@ GOAL_PLACEHOLDER = "goal_placeholder"
 
 class BaseRequest(BaseModel):
     # Every concrete request pins this to a Literal of its own node type —
-    # that Literal is the discriminator AnyStrategyRequest resolves on, and
+    # that Literal is the discriminator Registry.request_union() resolves on, and
     # NodeSpec checks it against the spec's name. Typing the base as the flat
     # NodeTypeEnum would mean importing the registry, which imports the slices,
     # which import this module.

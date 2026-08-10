@@ -73,14 +73,14 @@ class TestRenderCatalogEntry:
         assert out.splitlines()[2] == ""
 
     def test_the_real_renderer_still_produces_this_shape(self):
-        # guards the duplication: if format_node_type_catalog changes how it
+        # guards the duplication: if Registry.format_catalog changes how it
         # indents, per-tool token counts silently stop matching the prompt
-        from app.registry import NODE_TYPE_TO_CLS, class_docstring, format_node_type_catalog
+        from app.registry import REGISTRY, class_docstring
 
-        name = next(iter(NODE_TYPE_TO_CLS))
-        entry = render_catalog_entry(name, class_docstring(NODE_TYPE_TO_CLS[name]))
+        name = REGISTRY.node_types[0]
+        entry = render_catalog_entry(name, class_docstring(REGISTRY.request(name)))
 
-        assert entry in format_node_type_catalog()
+        assert entry in REGISTRY.format_catalog()
 
 
 class TestMissingSections:
@@ -258,9 +258,9 @@ class TestBuildReport:
         assert "o200k_base" in report
 
     def test_lists_every_registered_node(self, report):
-        from app.registry import NODE_TYPE_TO_CLS
+        from app.registry import REGISTRY
 
-        for name in NODE_TYPE_TO_CLS:
+        for name in REGISTRY.node_types:
             assert f"`{name}`" in report
 
     def test_reports_a_nonzero_cost(self, report):
@@ -268,10 +268,11 @@ class TestBuildReport:
         assert "$0.000000" not in report.split("## Tools")[0]
 
     def test_every_tool_row_carries_a_purpose(self, report):
-        from app.registry import NODE_TYPE_TO_CLS, class_docstring
+        from app.registry import REGISTRY, class_docstring
 
-        for name, cls in NODE_TYPE_TO_CLS.items():
-            purpose = purpose_line(class_docstring(cls))
+        for spec in REGISTRY:
+            name = spec.node_type
+            purpose = purpose_line(class_docstring(spec.request))
             assert purpose, f"{name} has no purpose line"
             # the head survives truncation even for the longest descriptions
             assert purpose[:40] in report, f"{name}'s purpose is missing from the table"

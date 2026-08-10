@@ -10,7 +10,7 @@ a runner, and report generators. **Why it's built this way and where it's headed
 |---|---|---|
 | `query_suite.json` | 70 | Core node set, easy→hard |
 | `query_suite_adversarial.json` | 54 | Rejection behavior (17 cases intentionally expect no nodes) |
-| `query_suite_extended.json` | 48 | Catalog scaling — needs the registry PLAYGROUND EXTENSION block enabled |
+| `query_suite_extended.json` | 48 | Catalog scaling — dormant: needs the playground schemas given `NodeSpec`s and passed to `Registry` (see `backend/playground/README.md`) |
 | `query_suite_stress.json` | 9 | Buffer/overflow, confusing chains |
 
 Each case: `id`, `query`, `difficulty`, `expected_nodes`, `note` (+ `category`/`domain`
@@ -82,7 +82,7 @@ the whole thing costs per request, uncached and cached (the catalog is byte-iden
 column is the steady state — `make suite-stats`'s measured hit rate says how close you
 are to it). Two token figures, paid at different points:
 
-- **catalog tokens** — the whole `format_node_type_catalog()` block, rendered into both
+- **catalog tokens** — the whole `Registry.format_catalog()` block, rendered into both
   the goal-generator and parse-response prompts, so it is paid twice per request;
 - **schema tokens** — one node's JSON function-tool schema, sent by
   `strategy_classification.py` only for the nodes an accepted goal targets.

@@ -33,7 +33,7 @@ cases around them → set thresholds (golden tests) → expand nodes and coverag
 |---|---|---|
 | `query_suite.json` (base) | 70 | Core node set, easy→hard, single lookups to 7-node cross-domain chains |
 | `query_suite_adversarial.json` | 54 | Rejection behavior: prompt injection, impossible facts, degenerate input, sounds-supported-but-unimplemented (17 cases intentionally expect no nodes) |
-| `query_suite_extended.json` | 48 | Node-*scaling* test — only meaningful with the registry extension block enabled (~26 node types); heavy on near-miss discrimination |
+| `query_suite_extended.json` | 48 | Node-*scaling* test (~26 node types); heavy on near-miss discrimination. **Dormant since 2026-08-10** — the registry extension block was removed with the `Registry` refactor; reviving it means giving the playground schemas real `NodeSpec`s and passing them to `Registry` alongside `SPECS` |
 | `query_suite_stress.json` | 9 | Buffer/overflow past `MAX_SYSTEM_GOALS`/`MAX_STRATEGIES`, confusing multi-hop chains |
 
 `make query-suite-all` fires all four concurrently — that doubles as the multi-user

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 class NodeTier(str, Enum):
     """Catalog grouping. The value is the section heading the planner LLM
-    reads in `format_node_type_catalog()`, so it is prompt text."""
+    reads in `Registry.format_catalog()`, so it is prompt text."""
 
     RETRIEVAL = "Retrieval — lookup or fetch data"
     ANALYZE = "Analyze — interpret, compare, or recommend using retrieved data"

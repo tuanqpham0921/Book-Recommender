@@ -7,7 +7,7 @@ from pydantic import Field
 from app.common.messages import UserMessage
 from app.common.prompt_loader import format_prompt
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
-from app.registry import NODE_TYPE_TO_CLS, format_node_type_catalog
+from app.registry import REGISTRY
 from clients import OpenAIParserRequest
 
 from .mermaid import get_goals_mermaid_diagram
@@ -128,7 +128,7 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
     async def _run_llm_args_parse(self, query: str) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
             prompt_path=GOAL_GENERATOR_PROMPT_PATH,
-            TOOLS_NAME_DESCRIPTION=format_node_type_catalog(),
+            TOOLS_NAME_DESCRIPTION=REGISTRY.format_catalog(),
         )
 
         # NOTE: toggle on for prompting experiments
@@ -181,7 +181,7 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
             reasons = []
             if goal.confidence < confident_tuning:
                 reasons.append(f"Rejected: confidence too low ({goal.confidence})")
-            if goal.target_node_type.value not in NODE_TYPE_TO_CLS.keys():
+            if goal.target_node_type not in REGISTRY:
                 reasons.append(
                     f"Rejected: target node type not supported ({goal.target_node_type})"
                 )

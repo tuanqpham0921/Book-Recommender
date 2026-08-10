@@ -20,7 +20,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
-from app.registry import EXECUTORS_CLS_MAPPING
+from app.registry import REGISTRY
 from airglider import StepFailure
 from db.stores.base_store import BaseStore
 from db.stores.book_store import BookStore
@@ -28,7 +28,7 @@ from db.stores.book_store import BookStore
 
 @pytest.mark.parametrize(
     "executor_cls",
-    EXECUTORS_CLS_MAPPING.values(),
+    REGISTRY.executors(),
     ids=lambda cls: cls.__name__,
 )
 def test_registered_executor_constructs_with_its_output_envelope(
@@ -43,7 +43,7 @@ def test_registered_executor_constructs_with_its_output_envelope(
 
 @pytest.mark.parametrize(
     "executor_cls",
-    EXECUTORS_CLS_MAPPING.values(),
+    REGISTRY.executors(),
     ids=lambda cls: cls.__name__,
 )
 def test_registered_executor_reads_services_off_the_context(
@@ -58,7 +58,7 @@ def test_registered_executor_reads_services_off_the_context(
 
 @pytest.mark.parametrize(
     "executor_cls",
-    EXECUTORS_CLS_MAPPING.values(),
+    REGISTRY.executors(),
     ids=lambda cls: cls.__name__,
 )
 def test_registered_executor_resolves_its_own_store(executor_cls, request_context):

@@ -14,7 +14,7 @@ Architecture overview lives in the root [CLAUDE.md](../../CLAUDE.md); V1 plans i
 | `orchestration/` | `Orchestrator` (entry point per message) + `RequestContext` |
 | `domains/` | Node type system + planner pipeline — see [domains/README.md](domains/README.md) |
 | `common/` | App-level workflow base, `SSEStream`, message types |
-| `registry.py` | node_type → schema class mapping, capability catalog, executor mapping |
+| `registry.py` | `Registry` — every node lookup (schema, executor, catalog, planner enum) derived from `SPECS` |
 
 ## API surface
 
@@ -37,8 +37,8 @@ There is no auth yet — a known pre-deploy blocker (docs/backlog.md, Security P
 2. The planner parses intent → classifies strategies → streams a Mermaid task-plan
    diagram and the goal list over SSE.
 3. `TaskRunnerWorkflow` (`domains/task_runner.py`) runs the accepted goals in dependency
-   order against the **real** executors (`registry.py`, `EXECUTORS_CLS_MAPPING` →
-   `NODE_EXECUTORS_CLS_MAPPING`), for the node types registered on this branch. It
+   order against the **real** executors (`REGISTRY.spec(...).executor` in
+   `registry.py`), for the node types registered on this branch. It
    brackets each node with `task.start` / `task.end` SSE events — closed in a `finally`,
    so a node that raises still closes its UI section — and stamps the node's `num_books`
    onto the section header on close. Retrieval nodes report a count plus a few preview

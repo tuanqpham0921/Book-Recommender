@@ -14,7 +14,7 @@ recorded run. That makes it the thing to re-run after adding or editing a node.
 Two separate token costs are reported, because they are paid at different
 points by different models:
 
-- **catalog tokens** — `format_node_type_catalog()`, rendered into the goal
+- **catalog tokens** — `Registry.format_catalog()`, rendered into the goal
   generator and the parse-response prompts (`parse_intent.py`), so the whole
   block is paid twice per request, every request.
 - **schema tokens** — the JSON function-tool schema for one node, sent by
@@ -45,13 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import tiktoken  # noqa: E402
 from openai import pydantic_function_tool  # noqa: E402
 
-from app.registry import (  # noqa: E402
-    EXECUTORS_CLS_MAPPING,
-    NODE_TYPE_TO_CLS,
-    catalog_entries,
-    class_docstring,
-    format_node_type_catalog,
-)
+from app.registry import REGISTRY  # noqa: E402
 from airglider import PRICES_CHECKED_ON, cost_of  # noqa: E402
 from evals.common import current_git_sha, truncate  # noqa: E402
 
@@ -106,7 +100,7 @@ def count_tokens(text: str, encoder) -> int:
 
 
 def render_catalog_entry(name: str, description: str) -> str:
-    """One tool as `format_node_type_catalog` renders it — the name on its own
+    """One tool as `Registry.format_catalog` renders it — the name on its own
     line, the description indented under it. Duplicated deliberately rather
     than exported from the registry: this measures what the prompt actually
     contains, so it should break loudly if the renderer changes shape."""
@@ -163,9 +157,10 @@ def table_cell(text: str, limit: int = DESCRIPTION_PRINT_LIMIT) -> str:
 def collect_tools(encoder) -> list[dict]:
     """One row per registered node, in catalog order (which is prompt order)."""
     tools = []
-    for tier, section in catalog_entries().items():
+    for tier, section in REGISTRY.catalog_entries().items():
         for name, description in section.items():
-            cls = NODE_TYPE_TO_CLS[name]
+            spec = REGISTRY.spec(name)
+            cls = spec.request
             tools.append(
                 {
                     "node_type": name,
@@ -178,7 +173,7 @@ def collect_tools(encoder) -> list[dict]:
                     ),
                     "schema_tokens": schema_tokens(cls, encoder),
                     "chars": len(description),
-                    "has_executor": cls in EXECUTORS_CLS_MAPPING,
+                    "has_executor": spec.executor is not None,
                     "missing_sections": missing_sections(description),
                 }
             )
@@ -237,7 +232,7 @@ def _dollars(value: float | None) -> str:
 
 def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
     encoder = get_encoder(model)
-    catalog_text = format_node_type_catalog()
+    catalog_text = REGISTRY.format_catalog()
     tools = collect_tools(encoder)
     stats = summarize(tools, catalog_text, encoder)
 

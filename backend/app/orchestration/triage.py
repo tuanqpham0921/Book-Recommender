@@ -6,7 +6,7 @@ plan at all**: replay a cached plan, answer small talk, refuse out-of-scope, or
 hand the turn to the planner.
 
 It lives here rather than in `app/domains/` because it is not a capability —
-nothing in `EXECUTORS_CLS_MAPPING` will ever point at it, and its only domain
+no `NodeSpec.executor` will ever point at it, and its only domain
 knowledge is which planner to call. It is a separate `AppWorkflow` rather than
 methods on `Orchestrator` because `Orchestrator` owns no envelope: folding the
 decisions in would mean a cache hit or a refusal produced no step in the trace
