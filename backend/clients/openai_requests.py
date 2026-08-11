@@ -20,10 +20,10 @@ SEED = 42
 
 class OpenAIBaseRequest(BaseLLMRequest):
     model: str = settings.openai.BASE_MODEL
-    temperature: float = TEMPERATURE
-    top_p: float = TOP_P
-    seed: int = SEED
-    reasoning_effort: str = 'low'
+    temperature: float | None = TEMPERATURE
+    top_p: float | None = TOP_P
+    seed: int | None = SEED
+    reasoning_effort: str | None = 'low'
 
     max_completion_tokens: int = 1000
 
@@ -48,7 +48,15 @@ class OpenAIBaseRequest(BaseLLMRequest):
             raise ValueError(f"Assistant tool_call has no ToolMessage reply: {unanswered}")
 
         return self
-
+    
+    def model_post_init(self, __context: Any) -> None:
+        if self.model.startswith("gpt-5"):
+            self.temperature = None
+            self.top_p = None
+            self.seed = None
+        else:
+            self.reasoning_effort = None
+            
     def to_summary(self) -> dict[str, Any]:
         """Adds the two OpenAI-specific things a trace is read for: the
         reasoning effort a cost line is explained by, and *which* schema a
