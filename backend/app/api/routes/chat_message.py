@@ -9,7 +9,7 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.background import BackgroundTask
 
 from app.api.schemas import ChatIn
-from app.common.messages import UserMessage
+from clients.messages import UserMessage
 from app.orchestration.orchestrator import Orchestrator
 from app.api.dependencies import (
     get_request_context_factory,

@@ -2,7 +2,7 @@ import asyncio
 import random
 from typing import Any
 
-from app.common.messages import AssistantMessage, ToolMessage
+from clients.messages import AssistantMessage, ToolMessage
 from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
 from app.domains.base_request import BaseRequest
 from app.common.request_context import RequestContext

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.common.messages import UserMessage
+from clients.messages import UserMessage
 from app.common.sse_stream import SSEStream
 from app.common.request_context import RequestContext
 from clients import OpenAIClient

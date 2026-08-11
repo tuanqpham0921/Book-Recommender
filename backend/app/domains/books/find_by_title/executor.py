@@ -1,4 +1,4 @@
-from app.common.messages import AssistantMessage
+from clients.messages import AssistantMessage
 from app.domains.books.base_workflow import BookWorkflow
 from clients import OpenAIParserRequest
 

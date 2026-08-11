@@ -27,7 +27,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.common.messages import AssistantMessage
+from clients.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest

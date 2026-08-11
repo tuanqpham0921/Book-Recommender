@@ -5,7 +5,7 @@ from typing import Any, NamedTuple
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import Field
 
-from app.common.messages import UserMessage
+from clients.messages import UserMessage
 from app.common.prompt_loader import format_prompt
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.domains.node_input import NodeInput

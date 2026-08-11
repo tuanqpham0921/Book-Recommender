@@ -26,7 +26,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.common.messages import UserMessage
+from clients.messages import UserMessage
 from app.common.sse_stream import SSEStream
 from db.stores.base_store import BaseStore
 

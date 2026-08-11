@@ -22,7 +22,7 @@ written.
 
 from typing import Any, Iterable
 
-from app.common.messages import AssistantMessage
+from clients.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
 from app.common.sse_stream import SSEStream
 from clients.openai_requests import OpenAIChatRequest

@@ -9,7 +9,7 @@ from openai.types.chat.parsed_function_tool_call import (
 )
 from pydantic import BaseModel, PrivateAttr
 
-from app.common.messages import (
+from clients.messages import (
     AssistantMessage,
     SystemMessage,
     ToolMessage,

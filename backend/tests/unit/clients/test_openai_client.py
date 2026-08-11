@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
 from airglider import OperationResult
-from app.common.messages import AssistantMessage
+from clients.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
 # always sets it) and execute() reads it back to attribute token spend, so the

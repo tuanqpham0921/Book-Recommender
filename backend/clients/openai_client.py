@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 
 from .base import BaseLLMClient
 from .openai_requests import OpenAIBaseRequest
-from app.common.messages import AssistantMessage, TokenUsage
+from clients.messages import AssistantMessage, TokenUsage
 from app.common.sse_stream import SSEStream
 from airglider import task
 from common.utils import save_file

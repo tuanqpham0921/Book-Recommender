@@ -4,7 +4,7 @@ from typing import Any
 from .base import BaseLLMRequest
 
 from config import settings
-from app.common.messages import AssistantMessage, SystemMessage, ToolMessage
+from clients.messages import AssistantMessage, SystemMessage, ToolMessage
 from openai import pydantic_function_tool
 from openai.types.chat import ChatCompletionFunctionToolParam
 from pydantic import model_validator, Field

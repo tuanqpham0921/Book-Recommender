@@ -93,7 +93,7 @@ async def get_request_context_factory(
     session_factory=Depends(get_sqlalchemy_session_factory),
 ):
     """Factory to create request contexts with runtime arguments."""
-    from app.common.messages import UserMessage
+    from clients.messages import UserMessage
     from app.common.request_context import RequestContext
 
     async def create_context(session_id: str, user_message: UserMessage):

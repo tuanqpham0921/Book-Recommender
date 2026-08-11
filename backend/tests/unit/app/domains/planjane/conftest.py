@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.common.messages import UserMessage
+from clients.messages import UserMessage
 from app.domains.planjane.executor import PlanJaneExecutor
 
 

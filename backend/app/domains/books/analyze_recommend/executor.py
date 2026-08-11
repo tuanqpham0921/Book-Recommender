@@ -1,7 +1,7 @@
 import logging
 from typing import List
 
-from app.common.messages import AssistantMessage
+from clients.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
 from common.prompts import basic_fill_schema_prompt
 from app.domains.books.base_workflow import BookWorkflow

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from openai.lib._parsing._completions import is_parseable_tool
 from pydantic import BaseModel
 
-from app.common.messages import AssistantMessage, ToolMessage, UserMessage
+from clients.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from clients.openai_requests import (
     MAX_COMPLETION_TOKENS,

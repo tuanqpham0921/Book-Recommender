@@ -43,7 +43,7 @@ from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
 from typing import Any, TypeVar, cast, get_args
 
-from app.common.messages import (
+from clients.messages import (
     APIMessage,
     AssistantMessage,
     ToolMessage,

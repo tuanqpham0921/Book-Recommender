@@ -3,7 +3,7 @@ from typing import Any
 
 import asyncio
 from pydantic import BaseModel, ConfigDict
-from app.common.messages import APIMessage, AssistantMessage
+from clients.messages import APIMessage, AssistantMessage
 from app.common.sse_stream import SSEStream
 
 import logging

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.common.messages import AssistantMessage, UserMessage
+from clients.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow, TriageOutput
