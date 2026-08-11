@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 
 import asyncio
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from clients.messages import APIMessage, AssistantMessage
 from app.common.sse_stream import SSEStream
 
@@ -17,7 +17,7 @@ class BaseLLMRequest(BaseModel, ABC):
     prompt: str
     messages: list[APIMessage]
     model: str
-    sse_stream: SSEStream | None = None
+    sse_stream: Optional[SSEStream] = Field(default=None, exclude=True)
 
     @abstractmethod
     def to_payload(self) -> dict[str, Any]: ...
