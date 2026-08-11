@@ -11,6 +11,22 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 continue:
+    * make a unified reference/artifact creator
+        * follow the same format as mermaid
+        * but it should have name, decription, and the text
+
+    * move the contract from schema output and stuff
+        * to external.py
+        * where you have input schema, output schema?
+        * the other schemas are actually tool schemas
+            so it should be something like
+            find_book_by_title
+                tools=[exact, series, fuzzy]?
+                and the input from external just take a query
+            
+            * output can be books types or whatever
+
+
     * work on establishing the input for workflow contract
         * don't over do it but parse dependents is an example
         * maybe the task_runner handle that collection
