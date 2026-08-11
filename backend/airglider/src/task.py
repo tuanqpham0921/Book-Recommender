@@ -6,7 +6,7 @@ from functools import wraps
 from typing import Any, Coroutine,  ParamSpec, TypeVar, overload
 
 from .schemas.record import OperationResult, Response, TokenUsage, RuntimeErrorInfo
-from .utils import bind_call_args, to_record_input
+from .utils import bind_call_args, now_iso, to_record_input
 
 
 OutputT = TypeVar("OutputT")
@@ -70,7 +70,23 @@ def task(
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
             call_input = record_input(func, args, kwargs, logger)
+
+            # Read here, not left to `Time`'s default_factory: every envelope
+            # below is constructed *after* the await, so the default would
+            # stamp the moment the task finished as the moment it started —
+            # putting `start_time` and the derived `end_time` a whole duration
+            # too late. `perf_counter` alongside it is monotonic, and the pair
+            # is what makes `end_time` consistent (see Time.end_time).
+            started_at = now_iso()
             time_start = time.perf_counter()
+
+            def stamp(result: OperationResult) -> OperationResult:
+                """Timing is the wrapper's business, on every return path —
+                including an envelope the task built for itself."""
+                result.timing.start_time = started_at
+                result.timing.duration = round(time.perf_counter() - time_start, 2)
+                return result
+
             try:
                 if log_info:
                     logger.info(f"Running task: {func_ref}")
@@ -89,8 +105,7 @@ def task(
                     # arguments, and that is the one worth keeping
                     if raw_output.input is None:
                         raw_output.input = call_input
-                    raw_output.timing.duration = round(time.perf_counter() - time_start, 2)
-                    return raw_output
+                    return stamp(raw_output)
 
                 # task did not return an operation result, create a default one
                 # no run time error is recorded, so the task is considered successful
@@ -99,7 +114,7 @@ def task(
                     input=call_input,
                     response=Response(result=raw_output, output_type=type(raw_output).__name__),
                 )
-                result.timing.duration = round(time.perf_counter() - time_start, 2)
+                stamp(result)
                 result.ok = True
                 result.add_details(
                     "output is not an operation result, creating a default one"
@@ -136,8 +151,7 @@ def task(
                 result = OperationResult(name=func_ref, input=call_input)
                 result.ok = False
                 result.runtime_error = RuntimeErrorInfo.from_exception(e)
-                result.timing.duration = round(time.perf_counter() - time_start, 2)
-                return result
+                return stamp(result)
 
         return wrapper
 

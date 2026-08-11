@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from pydantic import BaseModel, Field
 from typing import Any, Generic, ParamSpec, TypeVar
 from .error_info import RuntimeErrorInfo
@@ -7,10 +9,41 @@ from ..utils import now_iso, remove_empty_values, uuid_8
 OutputT = TypeVar("OutputT")
 P = ParamSpec("P")
 
-        
+
 class Time(BaseModel):
     start_time: str = Field(default_factory=now_iso)
     duration: float | None = None
+
+    @property
+    def end_time(self) -> str | None:
+        """When this finished, ISO 8601 — or None while it is still running.
+
+        **Derived, not observed**: `start_time + duration`. The two halves are
+        measured differently on purpose — `start_time` is wall clock
+        (`now_iso`), `duration` is `time.perf_counter`, which is monotonic — so
+        this is "the wall-clock start, plus the time that actually elapsed".
+
+        A second `now_iso()` at the end would read better but be worse: it
+        inherits whatever the system clock did in between (an NTP correction, a
+        laptop suspend), so `end_time - start_time` would stop agreeing with
+        `duration` and a step could even appear to finish before it began.
+        Deriving keeps the three values consistent by construction.
+
+        Precision follows `duration`, which callers round to 2 decimals — so
+        this is accurate to ±5ms and can sit just *after* the instant the call
+        actually returned. Fine for reading a trace; don't difference two of
+        these to measure something short.
+
+        Not a field, and not a `computed_field`: it adds no information, so
+        persisting it would be a third value that can disagree with the two it
+        came from. `to_serializable` walks `model_fields` only, so neither form
+        would reach the DB row anyway without changing that walk.
+        """
+        if self.duration is None:
+            return None
+        return (
+            datetime.fromisoformat(self.start_time) + timedelta(seconds=self.duration)
+        ).isoformat()
 
 class Response(BaseModel, Generic[OutputT]):
     result: OutputT | None = None
@@ -64,6 +97,10 @@ class OperationResult(BaseModel, Generic[OutputT]):
     @property
     def duration(self) -> float | None:
         return self.timing.duration
+
+    @property
+    def end_time(self) -> str | None:
+        return self.timing.end_time
 
     def to_summary(self) -> dict[str, Any]:
         """The trace tree with the bulk taken out — one small dict per

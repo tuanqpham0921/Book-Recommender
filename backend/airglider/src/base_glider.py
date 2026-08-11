@@ -7,7 +7,7 @@ from typing import Coroutine
 
 from .schemas import OperationResult, Response, RuntimeErrorInfo
 from .exception import StepFailure
-from .utils import bind_call_args, to_record_input
+from .utils import bind_call_args, now_iso, to_record_input
 
 OutputT = TypeVar("OutputT")
 
@@ -82,6 +82,12 @@ class Workflow(ABC, Generic[OutputT]):
         # below record them too.
         self.record_input(*args, **kwargs)
 
+        # Re-stamped here, not left at what __init__ defaulted it to: the
+        # envelope is built at construction, which for a node executor is
+        # before the runner dispatches it. `start_time` should mean "when the
+        # run began" — the same instant `duration` is measured from, which is
+        # what lets `end_time` be derived from the two (see Time.end_time).
+        self.record.timing.start_time = now_iso()
         time_start = time.perf_counter()
         try:
             self.logger.info(f"Running workflow: {self.workflow_name}")
