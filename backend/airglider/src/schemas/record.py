@@ -21,21 +21,20 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
     id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
     parent_id: str | None = None
-
-    timing: Time = Field(default_factory=Time)
-
     name: str | None = None
 
-    # request: dict[str, any] | None = None
-
     ok: bool = False
-    steps: list[Any] = Field(default_factory=list)
-    details: list[str] = Field(default_factory=list)
-
+    timing: Time = Field(default_factory=Time)
+    
+    input: dict[str, Any] | None = None
     response: Response[OutputT] = Field(default_factory=Response)
-
+    details: list[str] = Field(default_factory=list)
+    
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     runtime_error: RuntimeErrorInfo | None = None
+    
+    steps: list[Any] = Field(default_factory=list)
+
 
     def check_output_type(self) -> None:
         # default there's no output

@@ -49,6 +49,22 @@ class OpenAIBaseRequest(BaseLLMRequest):
 
         return self
 
+    def to_summary(self) -> dict[str, Any]:
+        """Adds the two OpenAI-specific things a trace is read for: the
+        reasoning effort a cost line is explained by, and *which* schema a
+        parser call was filling in.
+
+        `tool_models` is reached by `getattr` because only the parser and tool
+        subclasses declare it — one override covering every request beats three
+        that differ by a line.
+        """
+        summary = super().to_summary()
+        summary["reasoning_effort"] = self.reasoning_effort
+        tool_models = getattr(self, "tool_models", None)
+        if tool_models:
+            summary["tools"] = [model.__name__ for model in tool_models]
+        return summary
+
     def to_messages_payload(self) -> list[dict[str, Any]]:
         messages = []
         if self.prompt:

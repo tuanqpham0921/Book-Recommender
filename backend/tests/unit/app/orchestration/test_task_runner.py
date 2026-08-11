@@ -123,7 +123,7 @@ def of_type(events: list[dict], event_type: str) -> list:
 async def drive(runner, goals: list[SystemGoal], spec: NodeSpec | None):
     """Run the plan with the registry lookup stubbed to `spec`."""
     plan = PlanJaneOutput(accepted_goals=goals)
-    with patch("app.domains.task_runner.REGISTRY") as registry:
+    with patch("app.orchestration.task_runner.REGISTRY") as registry:
         registry.spec.return_value = spec
         await runner(TaskRunnerInput(plan=plan))
 
@@ -174,7 +174,7 @@ class TestSuccessfulExecution:
         plan = PlanJaneOutput(
             accepted_goals=[_goal("a"), _goal("b", depends_on=["a"])]
         )
-        with patch("app.domains.task_runner.REGISTRY") as registry:
+        with patch("app.orchestration.task_runner.REGISTRY") as registry:
             registry.spec.side_effect = [_spec(_FailingExecutor), _spec(_OkExecutor)]
             await runner(TaskRunnerInput(plan=plan))
 
@@ -305,7 +305,7 @@ class TestTaskSectionBracketing:
             coro.close()  # the executor call never runs; don't leak it
             raise asyncio.CancelledError
 
-        with patch("app.domains.task_runner.REGISTRY") as registry:
+        with patch("app.orchestration.task_runner.REGISTRY") as registry:
             registry.spec.return_value = _spec(_OkExecutor)
             with patch.object(
                 TaskRunnerWorkflow, "run_async_step", side_effect=cancel
@@ -373,7 +373,7 @@ class TestUnpreparableNodes:
         class _NeedsAnchor(NodeInput):
             anchor: _Output
 
-        with patch("app.domains.task_runner.REGISTRY") as registry:
+        with patch("app.orchestration.task_runner.REGISTRY") as registry:
             registry.spec.side_effect = [
                 _spec(_OkExecutor, input=_NeedsAnchor),
                 _spec(_OkExecutor),

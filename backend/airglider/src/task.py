@@ -6,6 +6,7 @@ from functools import wraps
 from typing import Any, Coroutine,  ParamSpec, TypeVar, overload
 
 from .schemas.record import OperationResult, Response, TokenUsage, RuntimeErrorInfo
+from .utils import bind_call_args, to_record_input
 
 
 OutputT = TypeVar("OutputT")
@@ -29,6 +30,31 @@ def task(
 ]: ...
 
 
+def record_input(
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    logger: logging.Logger,
+) -> dict[str, Any] | None:
+    """What this call was made with, keyed by parameter name — or None.
+
+    Computed *before* the call, so the exception path below records it too:
+    a task that crashed is the one whose arguments are worth having.
+
+    Never raises. `to_summary` is host code this library does not control, and
+    bookkeeping that can take down the task it describes is worse than a
+    missing field.
+    """
+    try:
+        arguments = bind_call_args(func, args, kwargs)
+        return {
+            name: value for name, value in arguments.items()
+        } or None
+    except Exception:
+        logger.warning(f"Could not record input for {func.__qualname__}", exc_info=True)
+        return None
+
+
 def task(
     func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
     *,
@@ -43,6 +69,7 @@ def task(
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> OperationResult[Any]:
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
+            call_input = record_input(func, args, kwargs, logger)
             time_start = time.perf_counter()
             try:
                 if log_info:
@@ -57,6 +84,11 @@ def task(
                         logger.warning(f"Task failed: {func_ref}")
 
                     raw_output.name = func_ref
+                    # not overwritten: a task that built its own envelope may
+                    # have recorded a more meaningful input than its raw
+                    # arguments, and that is the one worth keeping
+                    if raw_output.input is None:
+                        raw_output.input = call_input
                     raw_output.timing.duration = round(time.perf_counter() - time_start, 2)
                     return raw_output
 
@@ -64,6 +96,7 @@ def task(
                 # no run time error is recorded, so the task is considered successful
                 result = OperationResult(
                     name=func_ref,
+                    input=call_input,
                     response=Response(result=raw_output, output_type=type(raw_output).__name__),
                 )
                 result.timing.duration = round(time.perf_counter() - time_start, 2)
@@ -97,7 +130,10 @@ def task(
                 # run time error is recorded, so the task is considered failed
                 logger.exception(e)
 
-                result = OperationResult(name=func_ref)
+                # the arguments matter most here: this envelope carries no
+                # output to reason from, so what it was called with is the
+                # only description of the failure beyond the traceback
+                result = OperationResult(name=func_ref, input=call_input)
                 result.ok = False
                 result.runtime_error = RuntimeErrorInfo.from_exception(e)
                 result.timing.duration = round(time.perf_counter() - time_start, 2)

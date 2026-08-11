@@ -80,7 +80,9 @@ async def record_chat_run(
     app_env = request_context.app_env
     if app_env == "test":
         return
-
+    # NOTE: if something fails here
+    # it'll timeout not error (why?)
+    
     try:
         row = build_chat_run_row(
             session_id=request_context.session_id,

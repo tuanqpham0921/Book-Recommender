@@ -7,6 +7,7 @@ from typing import Coroutine
 
 from .schemas import OperationResult, Response, RuntimeErrorInfo
 from .exception import StepFailure
+from .utils import bind_call_args, to_record_input
 
 OutputT = TypeVar("OutputT")
 
@@ -36,6 +37,29 @@ class Workflow(ABC, Generic[OutputT]):
     def add_details(self, *message):
         self.record.add_details(*message)
 
+    def record_input(self, *args: Any, **kwargs: Any) -> None:
+        """Stamp what this workflow was called with onto its own envelope.
+
+        Keyed by `run`'s parameter names, so the record reads the same whether
+        the caller passed positionally or by keyword. Values that can
+        summarize themselves do — see `to_record_input` for why a payload
+        already recorded upstream should not be dumped again here.
+
+        Never raises. Bookkeeping that can take down the run it is describing
+        is worse than a missing field, and `to_summary` is app code this
+        library does not control.
+        """
+        try:
+            arguments = bind_call_args(self.run, args, kwargs)
+            self.record.input = (
+                {name: value for name, value in arguments.items()}
+                or None
+            )
+        except Exception:
+            self.logger.warning(
+                f"Could not record input for {self.workflow_name}", exc_info=True
+            )
+
     @property
     def result(self) -> OutputT:
         # self.record is this Workflow's OperationResult envelope; .result
@@ -52,6 +76,11 @@ class Workflow(ABC, Generic[OutputT]):
                 "construct a new instance for each execution"
             )
         self._called = True
+
+        # Stamped before run(), not after: the call that crashed is the one
+        # worth knowing the arguments of, and this way the cancel/error paths
+        # below record them too.
+        self.record_input(*args, **kwargs)
 
         time_start = time.perf_counter()
         try:

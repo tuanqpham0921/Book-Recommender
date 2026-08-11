@@ -6,12 +6,13 @@ host is free to re-export them (see `common/utils/`) instead of keeping a
 second copy.
 """
 
+import inspect
 import uuid
 from dataclasses import fields, is_dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel
 
@@ -76,6 +77,90 @@ def to_serializable(value: Any) -> Any:
         return [to_serializable(item) for item in value]
 
     return value
+
+
+def bind_call_args(
+    func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> dict[str, Any]:
+    """A call's arguments keyed by their parameter names.
+
+    `f(some_input)` and `f(node_input=some_input)` are the same call, so a
+    record that stored positional arguments by index would key the same thing
+    two ways. Binding against the signature gives one name per value.
+
+    A leading `self`/`cls` is dropped: for a decorated *method* the receiver is
+    args[0], and recording the whole client or workflow object is both noise
+    and, for a non-serializable one, a hazard.
+
+    Returns `{}` rather than raising when the arguments don't fit the
+    signature — the call itself is about to raise a much better error, and
+    bookkeeping must not pre-empt it.
+    """
+    try:
+        parameters = inspect.signature(func).parameters
+        bound = inspect.signature(func).bind(*args, **kwargs)
+    except (TypeError, ValueError):
+        return {}
+
+    # deliberately no apply_defaults(): the record says what the caller passed,
+    # and filling in every default turns a one-key call into a wall of them
+    arguments = dict(bound.arguments)
+    first = next(iter(parameters), None)
+    if first in ("self", "cls"):
+        arguments.pop(first, None)
+    return arguments
+
+
+def to_record_input(value: Any) -> Any:
+    """`to_serializable`, except anything that can summarize itself does.
+
+    Written for `OperationResult.input`, where the same payload is often
+    already recorded in full somewhere else: a node's input carries the output
+    of the node before it, whose own envelope holds every field of it. Dumping
+    it again would store the same rows once per dependent, and the trace grows
+    with the square of the plan's depth rather than its size.
+
+    `to_summary()` is the same opt-in hook `OperationResult.to_summary` already
+    honours for payloads, so a type says how it wants to appear in a record
+    once, in one place. Everything without one — the query string, the parsed
+    arguments — is serialized whole, which is the point: those are the small,
+    unique parts of the call.
+
+    **The result is always JSON-encodable.** Unlike `to_serializable`, which
+    passes an unrecognized value through untouched, anything left over here is
+    reduced to its type name. Arguments are not payloads a caller chose to
+    record — they are whatever the function happens to take, and half the
+    `@task` call sites in a typical host take a live handle (a DB session, a
+    client). One of those reaching the envelope makes the whole tree
+    unserializable, at the JSONB insert, long after the call it came from.
+    """
+    to_summary = getattr(value, "to_summary", None)
+    if callable(to_summary):
+        return to_summary()
+
+    if isinstance(value, BaseModel):
+        return {
+            name: to_record_input(getattr(value, name))
+            for name, info in type(value).model_fields.items()
+            if not info.exclude
+        }
+
+    if isinstance(value, dict):
+        return {str(key): to_record_input(item) for key, item in value.items()}
+
+    if isinstance(value, (list, tuple, set)):
+        return [to_record_input(item) for item in value]
+
+    serialized = to_serializable(value)
+    if serialized is None or isinstance(serialized, (str, bool, int, float)):
+        return serialized
+    if isinstance(serialized, (dict, list)):
+        return serialized
+
+    # a live handle, or anything else with no serializable form. Its type is
+    # the whole useful content — "it was called with a session" — and is what
+    # keeps the rest of the record intact.
+    return f"<{type(value).__name__}>"
 
 
 def remove_empty_values(value: Any) -> Any:

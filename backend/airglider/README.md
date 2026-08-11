@@ -19,12 +19,38 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `Workflow` | base class for a multi-step async process — subclass, override `run()` |
 | `task` | decorator for a single async function |
 | `StepFailure` | control-flow signal raised by `run_async_step` when a step fails |
-| `OperationResult` | the envelope: `ok`, `steps`, `details`, `runtime_error`, `timing`, `token_usage` |
+| `OperationResult` | the envelope: `ok`, `input`, `steps`, `details`, `runtime_error`, `timing`, `token_usage` |
 | `Response`, `Time` | the envelope's payload and timing sub-models |
 | `TokenUsage`, `ModelUsage` | token counts, per-model split, and USD cost |
 | `RuntimeErrorInfo` | serializable exception record |
 | `cost_of`, `MODEL_PRICES`, `PRICES_CHECKED_ON`, … | the price table (see below) |
 | `to_serializable`, `remove_empty_values`, `strip_zero_token_usage`, `now_iso`, `uuid_8` | serialization + identity helpers |
+
+## `record.input` — what a unit of work was called with
+
+Both `Workflow.__call__` and `@task` stamp it **before** the call, so a crashed
+or cancelled step still records its arguments. Keyed by parameter name, so
+`f(x)` and `f(arg=x)` record identically; a leading `self`/`cls` is dropped,
+since the receiver of a decorated method is not an argument.
+
+Values go through `to_record_input`, which differs from `to_serializable` in
+the two ways a *call record* needs:
+
+- **A value's own `to_summary()` wins.** One step's input is usually the step
+  before it's output, and that output is already recorded in full on its own
+  envelope — dumping it again grows the trace with the square of a pipeline's
+  depth rather than its size. Give a big payload a `to_summary()` and it
+  collapses everywhere at once (the host's `BaseLLMRequest` does this, so a
+  prompt never lands in a record).
+- **The result is always JSON-encodable.** Anything left over becomes
+  `<TypeName>`. Arguments are not payloads a caller chose to record — they are
+  whatever the function happens to take, and a live DB session or client
+  reaching the envelope would break the host's insert far from where it came
+  from.
+
+Neither path raises: `to_summary` is host code this library does not control,
+and bookkeeping that can take down the run it describes is a worse trade than
+a missing field.
 
 ## The invariant
 
