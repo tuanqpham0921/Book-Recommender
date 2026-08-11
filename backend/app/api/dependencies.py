@@ -97,12 +97,16 @@ async def get_request_context_factory(
     from app.common.request_context import RequestContext
 
     async def create_context(session_id: str, user_message: UserMessage):
+        # The *widest* context, always — this runs before there is a plan, so
+        # it cannot know which nodes will run, and wiring per-node views here
+        # would make this module import every slice. The task runner narrows
+        # it at dispatch, via NodeSpec.context.
         return RequestContext(
             app_env=app_env,
             session_id=session_id,
             user_message=user_message,
             llm_client=llm_client,
-            # keyed by class; a node asks for its own with require_store()
+            # keyed by class; a domain's context narrows to its own store
             stores={BookStore: book_store},
             sse_stream=sse_stream,
             session_factory=session_factory,

@@ -41,8 +41,12 @@ books/find_by_title/
   query on the output, get the match size and a small sample in one round trip)
   and `stream_books()` (cards to the browser, validated through `BookOut`).
 - `base_request.py` — `BaseRequest`, shared fields + validation.
+- `node_input.py` — `WorkflowInput` / `NodeInput`, and `build_input`, which
+  fills a node's declared input from the goal text and its dependencies'
+  outputs by matching on type. Imports nothing else from `app/domains/`;
+  `base_workflow` imports *it*.
 - `base_workflow.py` — `AppWorkflow`, the domain-agnostic base underneath those.
-  It pins the **`run(query, artifacts)`** signature *every* unit of work in the
+  It pins the **`run(node_input)`** signature *every* unit of work in the
   app answers to, and resolves the output type from `AppWorkflow[SomeOutput]`,
   so a slice's executor needs no `__init__`. Nothing about one domain goes in
   here — that is what the domain base above is for. It also holds no
@@ -50,34 +54,46 @@ books/find_by_title/
   and passes the result to `AppWorkflow.run_llm_args_parse`, which is the one
   shared seam. Only the prompt path (`ARG_PARSER_PROMPT_PATH`) is shared.
 
-## One call shape: `run(query, artifacts)`
+## One call shape: `run(node_input)`
 
-The planner, the parse step, the task runner and every node executor take the
-same two arguments. `query` is whatever invoked this node — the user's text at
-the top of a turn, a goal description further down. `artifacts` is what the
-nodes before it produced, keyed by their goal id. A node's job is then always
-the same: parse that input, reject it, or continue with it.
+The planner, the task runner and every node executor take one argument: their
+own `WorkflowInput` subclass (`node_input.py`). A node declares that class,
+lists it on `NodeSpec.input`, and the task runner assembles it — so a node's
+job is always the same: parse what it was given, or continue with it.
 
-**Select artifacts by type, never by key.** `self.require_artifact(artifacts,
-SomeOutput)` returns it typed or raises `StepFailure` (a controlled abort, not a
-crash) — that is the reject arm, written once. Keys are provenance only, which
-is what lets a node be fed by one upstream node or five without the caller and
-the callee agreeing on a string. `ParsedDependents.from_results` in the
-analyze_recommend slice follows the same rule.
+**The declaration is the point.** It replaced `(query, artifacts:
+dict[str, Any])`, which could tell a node that something was missing but never
+*what* — so a node short of a dependency could only raise. `RecommendInput`
+declares `anchors: list[BookRetrievalOutput] = []`, and an empty list is a
+named, visibly unfilled slot: enough for the node to fall back on the goal text
+today, and enough to ask the planner for a goal that fills it later. Default a
+field whenever the node has a real fallback; make it required only when the
+node genuinely cannot proceed.
 
-**Services are not constructor arguments.** `AppWorkflow.__init__(ctx, messages)`
-is the only `__init__` in the app layer; `sse_stream`, `llm_client`, `app_env`,
-`session_id` and `user_message` are properties off the `RequestContext` it
-holds. A workflow that needs a new service adds nothing to any call site.
+**Fields are filled by type, never by key.** `build_input` walks the input's
+annotations and matches each against the dependency outputs — `X` takes the
+first match, `X | None` takes it or None, `list[X]` takes all of them. Keys are
+provenance only, which is what lets a node be fed by one upstream node or five
+without the caller and the callee agreeing on a string. A required field that
+matches nothing raises `ValidationError` **naming the field**, which the runner
+turns into a skipped goal (`_prepare`) — that error text is the payload an
+agentic runner would hand back to the planner.
 
-**Stores are selected by type too.** `RequestContext.stores` is a
-`dict[type, BaseStore]`; a node asks for its own with
-`ctx.require_store(BookStore)`, and `BookWorkflow.store` is the one-line
-shorthand for the common case of one store per node. A node needing *two*
-should call `require_store` at the point of use rather than add a second
-property. The check is on the value, not the key, so a domain base wired to
-another domain's store raises there instead of failing at the first query —
-and `RequestContext` never grows a field per domain.
+**Services are not constructor arguments, and are not on the input.**
+`AppWorkflow.__init__(ctx, messages)` is the only `__init__` in the app layer;
+`sse_stream`, `llm_client`, `app_env`, `session_id` and `user_message` are
+properties off the `RequestContext` it holds. Context and input split on
+lifetime: services are built once per HTTP request, an input is assembled per
+dispatch.
+
+**A node declares the services view it needs too**, as `NodeSpec.context`.
+`RequestContext.stores` is a `dict[type, BaseStore]` — the opaque carrier that
+lets `app/common/` hold a `BookStore` without importing the books domain — and
+a domain turns it into a typed field with a `narrow()`:
+`BookRequestContext.narrow(ctx)` resolves `store` once, at dispatch, so a
+request missing it fails there (naming the store) rather than at the first
+query. `BookWorkflow.store` is then a plain field read, and `RequestContext`
+never grows a field per domain.
 
 Those stores are constructed on the FastAPI request-scoped session (see
 `get_sqlalchemy_session` in `app/api/dependencies.py`). **Don't rebuild them
@@ -130,11 +146,12 @@ pointing at it; `base_workflow.py` holding the bases they build on.
   What decides *whether* to call PlanJane — cache, small talk, out of scope —
   is `app/orchestration/triage.py`, not here: it is not a capability, and
   no `NodeSpec.executor` will ever point at it.
-- `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan by
-  resolving each goal to `REGISTRY.spec(goal.target_node_type)` and running its
-  executor. `spec()` returning `None` means the node type is not registered;
-  a spec with `executor is None` means registered but not yet runnable — the
-  runner skips both, with different reasons. The mocks under
+- `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan. It takes
+  a `TaskRunnerInput(plan=...)` and nothing else — no `query`, because its work
+  is driven entirely by the plan. `_prepare` is the one gate every goal passes:
+  resolve the spec, check it has an executor, narrow the context, assemble the
+  input. All four ways of failing skip that single goal and leave the rest of
+  the plan running, with different reasons logged. The mocks under
   `playground/app_mock/` are legacy eval-testing scaffolding — ignore them.
 
 Request schemas describe *what* to do; **executors** (the *how*) are reached
@@ -144,7 +161,7 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
 
 1. Create the folder `<domain>/<node>/` with the four files above. A book node's
    executor subclasses `BookWorkflow[TheOutput]` and implements
-   **`run(query, artifacts)`** — the one call shape, same as everything else.
+   **`run(node_input)`** — the one call shape, same as everything else.
    (There is no `execute()` hook any more: it existed only to keep `run()` from
    being overridden while `run()` was where `self.store` got bound. `store` is a
    property now, so there is nothing to lose.)
@@ -153,8 +170,14 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
    the executor (copy one of the existing two — they are near-identical today,
    and that is on purpose: the duplication is what lets one node change model,
    prompt or message list without a flag on a shared base). Call it as
-   `await self.run_llm_args_parse(build_arg_parser_request(query))` and assign
-   `self.output.args` yourself — nothing does that for you.
+   `await self.run_llm_args_parse(build_arg_parser_request(node_input.query))`
+   and assign `self.output.args` yourself — nothing does that for you.
+1b. Declare the node's input in `external.py` as a `NodeInput` subclass. A node
+   with no dependencies subclasses it and adds nothing — that empty class is a
+   real statement, since it means the node *structurally* cannot consume
+   upstream output. A node that consumes books adds
+   `anchors: list[BookRetrievalOutput] = Field(default_factory=list)`; default
+   it unless the node truly cannot run without one.
 2. Write the request schema's docstring for the LLM (include example queries;
    that's roadmap Phase 2 style). `make tools-catalog` audits every docstring for
    `Purpose: / Args: / Returns: / depends_on: / Use when: / Do not use: /
@@ -168,7 +191,9 @@ through the slice's `NodeSpec` — schemas contain no execution logic.
 3. Subclass the output from the shape the docstring claims, and give **every
    output field a default** — the workflow builds the envelope by calling
    `output_type()` with no arguments.
-4. Export `SPEC = NodeSpec(...)` from the slice's `__init__.py`.
+4. Export `SPEC = NodeSpec(...)` from the slice's `__init__.py`, naming the
+   `input=` and `context=` you declared (both default, so a dependency-free
+   node with no store needs neither).
 5. Add that SPEC to the domain's `guide.py`. That is the only file outside the
    slice you touch.
 6. Add eval cases with `expected_nodes` in `backend/evals/suites/` — see

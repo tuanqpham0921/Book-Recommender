@@ -1,9 +1,13 @@
-"""Shared result payloads for the book domain — the contract downstream nodes
-(e.g. Analyze_Recommend reading a dependency's result) and eval/review tooling
-see. `Book` is the one book model: every books-table column except the
-embedding. Narrowing happens where a consumer needs it — a prompt renderer
-picking the fields it wants, or `model_dump(include=...)` — never by declaring
-a second, smaller model. See `Book`'s docstring for why.
+"""`Book`, and the output-shape vocabulary node docstrings are written in.
+
+`Book` is the one book model: every books-table column except the embedding.
+Narrowing happens where a consumer needs it — a prompt renderer picking the
+fields it wants, or `model_dump(include=...)` — never by declaring a second,
+smaller model. See `Book`'s docstring for why.
+
+The shape *classes* live next door in `external.py`, which is what the layers
+outside this domain import: `BookRetrievalOutput` is what a downstream node's
+`NodeInput` declares a field of, and it needs `Book` from here.
 
 ## The output-shape vocabulary
 
@@ -11,20 +15,20 @@ Node docstrings name what they return and what they may depend on using four
 shape names, so the planner can tell which nodes can legally feed which:
 
 - `BookRetrievalOutput` — a list of books. Every retrieval node and the whole
-  combine tier. The only shape a node that "depends on books" can consume.
-- `BookRecommendationOutput` — a list of books that were *chosen*, from
-  `Analyze_Recommend`. Consumable anywhere books are.
+  combine tier, and `Analyze_Recommend`'s chosen set too: books that were
+  *chosen* are structurally a retrieval output, so anything that consumes books
+  consumes them. The only shape a node that "depends on books" can consume.
 - `AnalyzeBooksOutput` — a written report about books (compare, summarize,
   themes, reading order/level/time/plan). Names books without being a book
   list: a report never adds a book, so nothing may treat it as a retrieval.
 - `ActionConfirmationOutput` — a record of a write (shelf actions, feedback).
 
-The first two are real classes here, and a node's own output subclasses the one
-it claims in its docstring — so `Returns:` is checkable rather than a promise.
-The last two are **reserved names with no class yet**: no node in the current
-set produces a report or performs a write. Docstrings that reference them
-describe an intended contract, not something the code enforces. Add the class
-alongside the first node that produces the shape. See
+The first is a real class (in `external.py`), and a node's own output subclasses
+the shape it claims in its docstring — so `Returns:` is checkable rather than a
+promise. The last two are **reserved names with no class yet**: no node in the
+current set produces a report or performs a write. Docstrings that reference
+them describe an intended contract, not something the code enforces. Add the
+class alongside the first node that produces the shape. See
 docs/design/node-taxonomy-v1.md.
 
 Node-specific fields (which title was searched for, which genre) live on the
@@ -32,12 +36,8 @@ slice's own output in `app/domains/books/<node>/schemas.py`, which subclasses
 the shape it returns.
 """
 
-from typing import Any
+from pydantic import BaseModel
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from app.domains.base_workflow import NodeWorkflowOutput
-from db.stores import DeferredBookQuery
 
 class Book(BaseModel):
     """One book, as everything above the database layer sees it: every column

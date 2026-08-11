@@ -2,9 +2,11 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, ValidationError
 
+from app.common.request_context import RequestContext
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.base_request import BaseRequest
 from app.domains.planjane import PlanJaneOutput
@@ -21,6 +23,18 @@ logger = logging.getLogger(__name__)
 class TaskRecord:
     goal: SystemGoal
     result: OperationResult
+
+
+class TaskRunnerInput(WorkflowInput):
+    """A plan, and nothing else.
+
+    Not a `NodeInput`: this is a pipeline step, not a capability the planner
+    can dispatch, and its work is driven entirely by the plan. The `query` it
+    used to be handed alongside was carried only for signature uniformity and
+    never read — a field that exists to be ignored is worse than no field.
+    """
+
+    plan: PlanJaneOutput
 
 
 class TaskRunnerOutput(NodeWorkflowOutput):
@@ -40,17 +54,12 @@ class TaskRunnerOutput(NodeWorkflowOutput):
 class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     ui_loading_message = "Running tasks..."
 
-    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
-        """Execute accepted tasks in dependency order, feeding each task the
-        artifacts of the tasks it depends on. Each task runs as its own
-        AppWorkflow sharing self.messages, so its result lands on the same
-        trace as the planner's — same pattern TriageWorkflow uses for
-        PlanJaneExecutor.
-
-        The plan arrives as an artifact rather than a named parameter, which is
-        what lets this node keep the same `run(query, artifacts)` shape as
-        every node it dispatches. `query` is carried for that uniformity; the
-        work here is driven entirely by the plan.
+    async def run(self, node_input: TaskRunnerInput) -> None:
+        """Execute accepted tasks in dependency order, assembling each task's
+        declared input from the outputs of the tasks it depends on. Each task
+        runs as its own AppWorkflow sharing self.messages, so its result lands
+        on the same trace as the planner's — same pattern TriageWorkflow uses
+        for PlanJaneExecutor.
 
         This method is the spine — resolve, run, record — and deliberately
         keeps the two things the loop accumulates (`results` for downstream
@@ -59,7 +68,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        plan = self.require_artifact(artifacts, PlanJaneOutput)
+        plan = node_input.plan
         self.result.session_id = self.session_id
 
         order = plan.execution_order()
@@ -76,16 +85,12 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         results: dict[str, NodeWorkflowOutput] = {}
         for goals_layer in order.layers:
             for goal in goals_layer:
-                executor_cls = self._resolve_executor(goal)
-                if executor_cls is None:
+                prepared = self._prepare(goal, results)
+                if prepared is None:
                     self.result.failed_task.append(goal.id)
                     continue
 
-                step_result = await self._run_in_task_section(
-                    goal,
-                    executor_cls,
-                    self._dependency_artifacts(goal, results),
-                )
+                step_result = await self._run_in_task_section(goal, *prepared)
                 if not step_result.ok:
                     self.result.failed_task.append(goal.id)
                     continue
@@ -98,38 +103,70 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         self.result.task_results = results
         self.finalize_result(ok=not self.result.failed_task)
 
-    def _resolve_executor(self, goal: SystemGoal) -> type[AppWorkflow] | None:
-        """The executor class for this goal's node type, or None if it can't
-        run — in which case the reason is logged here and the caller skips it.
+    def _prepare(
+        self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
+    ) -> tuple[AppWorkflow, WorkflowInput] | None:
+        """Everything that has to be true before a goal can run, or None.
 
-        One hop: the goal carries a node type name, and the spec it resolves to
-        holds the executor. The two ways of coming back empty are logged apart
-        because they mean different things — no spec at all is a name that
-        isn't registered (a parked node, or one the LLM invented), while a spec
-        with no executor is registered for planning but not yet runnable.
+        Four ways to come back empty, logged apart because they mean different
+        things — and all four are a *skipped goal*, never an aborted plan:
+
+        - no spec at all: a node type that isn't registered (parked, or one the
+          LLM invented);
+        - a spec with no executor: registered for planning, not yet runnable;
+        - the context can't be narrowed: this request has no store the node
+          needs, which would otherwise surface much later as a failed query;
+        - the input can't be assembled: a required upstream shape is missing,
+          and pydantic's error already names the field.
+
+        That last one is the hook for the agentic version. A node short of an
+        input does not have to die here — the named field is enough to ask the
+        planner for a goal that produces it and retry.
         """
+        node_type = goal.target_node_type.value
         spec: NodeSpec | None = REGISTRY.spec(goal.target_node_type)
-        if spec is not None and spec.executor is not None:
-            return spec.executor
+        if spec is None:
+            logger.warning(
+                f"Skipping task {goal.id} ({node_type}): node type is not registered"
+            )
+            return None
+        if spec.executor is None:
+            logger.warning(
+                f"Skipping task {goal.id} ({node_type}): "
+                f"{spec.request.__name__} has no executor"
+            )
+            return None
 
-        reason = (
-            "node type is not registered"
-            if spec is None
-            else f"{spec.request.__name__} has no executor"
-        )
-        logger.warning(
-            f"Skipping task {goal.id} ({goal.target_node_type.value}): {reason}"
-        )
-        return None
+        try:
+            ctx: RequestContext = spec.context.narrow(self.ctx)
+        except LookupError as e:
+            logger.warning(f"Skipping task {goal.id} ({node_type}): {e}")
+            self.add_details(f"{goal.id}: {e}")
+            return None
 
-    def _dependency_artifacts(
+        try:
+            node_input = build_input(
+                spec.input, goal.description, self._dependency_outputs(goal, results)
+            )
+        except ValidationError as e:
+            missing = ", ".join(".".join(str(p) for p in err["loc"]) for err in e.errors())
+            logger.warning(
+                f"Skipping task {goal.id} ({node_type}): "
+                f"could not assemble {spec.input.__name__} ({missing})"
+            )
+            self.add_details(f"{goal.id}: missing input {missing}")
+            return None
+
+        return spec.executor(ctx, messages=self.messages), node_input
+
+    def _dependency_outputs(
         self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
     ) -> dict[str, NodeWorkflowOutput]:
         """What this goal's dependencies produced, keyed by their goal id.
 
         A dependency that failed is *absent* rather than None — only successful
-        outputs ever reach `results` — which is the contract `AppWorkflow.run`
-        documents for `artifacts`, and why nodes select out of it by type.
+        outputs ever reach `results`. The keys are provenance only; `build_input`
+        matches these onto the node's declared fields by type.
         """
         return {
             dep_id: results[dep_id]
@@ -140,8 +177,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     async def _run_in_task_section(
         self,
         goal: SystemGoal,
-        executor_cls: type[AppWorkflow],
-        dep_artifacts: dict[str, NodeWorkflowOutput],
+        executor: AppWorkflow,
+        node_input: WorkflowInput,
     ) -> OperationResult:
         """Run one node bracketed by the UI's task.start / task.end events.
 
@@ -154,9 +191,10 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
         A failed node is *returned*, not raised (`raise_on_failure=False`), so
         one bad step doesn't abort the rest of the plan — the caller decides.
+        The executor and its input arrive already built, so everything that can
+        fail before the section opens has failed in `_prepare`.
         """
-        executor = executor_cls(self.ctx, messages=self.messages)
-
+        executor_cls = type(executor)
         await self.sse_stream.send_task_start(
             task_id=goal.id,
             title=executor_cls.ui_section_title
@@ -167,7 +205,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         step_result = None
         try:
             step_result = await self.run_async_step(
-                executor(query=goal.description, artifacts=dep_artifacts),
+                executor(node_input),
                 raise_on_failure=False,
             )
             return step_result
@@ -186,9 +224,10 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     ) -> NodeWorkflowOutput:
         """Stamp the goal's identity onto the output it produced.
 
-        This is what makes the output usable downstream: `AppWorkflow.artifact`
-        keys on `output.id`, and the copied `depends_on` is what lets the
-        parsed diagram be drawn from the outputs alone.
+        This is what makes the output traceable downstream: `results` keys on
+        `output.id`, and the copied `depends_on` is what lets the parsed
+        diagram be drawn from the outputs alone. The id is also what
+        `ParsedDependents` names an unusable anchor by.
 
         NOTE: linking the result to the goal_id for debugging and
         visualization — but do we want to pass in a reference to the task

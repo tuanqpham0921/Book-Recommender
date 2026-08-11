@@ -6,6 +6,7 @@ import pytest
 
 from app.common.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
+from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow, TriageOutput
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
 from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
@@ -105,7 +106,7 @@ class TestTriageWorkflowRuntimeErrorPropagation:
             "app.orchestration.triage.PlanJaneExecutor",
             return_value=parse_workflow,
         ):
-            await orchestrator.run(query="test", artifacts={})
+            await orchestrator.run(NodeInput(query="test"))
 
         assert orchestrator.record.runtime_error is parse_error
 

@@ -1,17 +1,22 @@
 """`AppWorkflow` — the base class behind every unit of work in the app.
 
-Pins one call shape for all of them: **`run(query, artifacts)`**. `query` is
-whatever invoked this node, `artifacts` is what ran before it. The planner, the
-parse step, the task runner and every node executor all answer to that same
-signature, so "what does this thing take?" has one answer everywhere and a node
-can be composed into any position in a plan.
+Pins one call shape for all of them: **`run(node_input)`**, where `node_input`
+is the workflow's own `WorkflowInput` subclass (app/domains/node_input.py). The
+planner, the task runner and every node executor answer to that signature, so
+"what does this thing take?" has one answer everywhere — and, unlike the
+`(query, artifacts: dict[str, Any])` pair it replaced, the answer is *specific*:
+a node declares which upstream shapes it can consume, and one that is handed
+nothing usable can name the empty slot instead of only raising.
 
-Services are **not** constructor arguments. `AppWorkflow.__init__(ctx, messages)`
-is the only `__init__` in the app layer; `sse_stream`, `llm_client`, `app_env`,
-`session_id` and `user_message` are properties off the `RequestContext` it
-stores. That is what removed the per-class constructors that used to unpack the
-context and forward its pieces down by hand — a workflow that needs a new
-service now adds nothing to any call site.
+The input is assembled and validated by whoever dispatches — `build_input` for
+a node under the task runner — so the reject arm that used to be
+`require_artifact` inside every node body is now one validation at the boundary.
+
+Services are **not** constructor arguments, and are not on the input either.
+`AppWorkflow.__init__(ctx, messages)` is the only `__init__` in the app layer;
+`sse_stream`, `llm_client`, `app_env`, `session_id` and `user_message` are
+properties off the `RequestContext` it stores. Context and input split on
+lifetime: services are built once per request, an input is built per dispatch.
 
 Declare the output in the class header (`AppWorkflow[FindByTitleOutput]`) and
 it is resolved from the generic parameter, so a subclass needs no `__init__`
@@ -36,7 +41,7 @@ builders share.
 import inspect
 from pydantic import BaseModel, Field
 from abc import ABC, abstractmethod
-from typing import Any, Mapping, TypeVar, cast, get_args
+from typing import Any, TypeVar, cast, get_args
 
 from app.common.messages import (
     APIMessage,
@@ -46,11 +51,12 @@ from app.common.messages import (
 )
 from app.common.sse_stream import SSEStream
 from app.domains.base_request import BaseRequest
+from app.domains.node_input import WorkflowInput
 from app.common.request_context import RequestContext
 from clients.base import BaseLLMRequest
 from clients.openai_client import OpenAIClient
 from openai.types.chat import ParsedFunctionToolCall
-from airglider import StepFailure, Workflow
+from airglider import Workflow
 
 
 class NodeWorkflowOutput(BaseModel, ABC):
@@ -70,21 +76,22 @@ class NodeWorkflowOutput(BaseModel, ABC):
 
 
 OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)
-ArtifactT = TypeVar("ArtifactT", bound=NodeWorkflowOutput)
 
 
 class AppWorkflow(Workflow[OutputT], ABC):
-    """One call shape for every unit of work: `run(query, artifacts)`.
+    """One call shape for every unit of work: `run(node_input)`.
 
-    `query` is whatever invoked this node — the user's text at the top of a
-    turn, a goal description further down. `artifacts` is what the nodes before
-    it produced. A node's job is then always the same: parse that input, reject
-    it, or continue with it.
+    A subclass declares its own `WorkflowInput` and narrows the parameter
+    annotation to it; `NodeSpec.input` is where a dispatchable node records
+    which one, so the runner can build it without knowing the class.
 
-    Services come off `self.ctx`, never off constructor arguments, so this is
-    the only `__init__` in the app layer — a workflow that needs a new service
-    adds nothing to any call site.
+    Services come off `self.ctx`, never off constructor arguments or the input,
+    so this is the only `__init__` in the app layer — a workflow that needs a
+    new service adds nothing to any call site. A subclass whose nodes need a
+    narrower services view re-annotates `ctx` (see `BookWorkflow`).
     """
+
+    ctx: RequestContext
 
     ui_loading_message = "Working..."
 
@@ -174,56 +181,19 @@ class AppWorkflow(Workflow[OutputT], ABC):
     # ---- the one call shape ---------------------------------------------
 
     @abstractmethod
-    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
+    async def run(self, node_input: WorkflowInput) -> None:
         """Fill in `self.result` and call `self.finalize_result(ok=…)`.
 
-        `artifacts` is keyed by the goal id of each node this one depends on —
-        only the ones that actually produced a result, so a dependency that
-        failed is absent rather than None. Select what you need out of it by
-        *type* (`require_artifact`), not by key: keys are provenance.
+        Narrow the annotation to this workflow's own input class in the
+        override. Everything the workflow is *working on* arrives here;
+        everything it can *reach* is on `self.ctx`.
+
+        The input is already validated — whoever dispatched built it — so a
+        required field is present by the time this runs, and an optional one
+        being empty is a state to handle rather than an error to raise. There
+        is no artifact dictionary to search: `build_input` (node_input.py) did
+        the select-by-type once, at the boundary.
         """
-
-    # ---- artifacts --------------------------------------------------------
-
-    @property
-    def artifact(self) -> dict[str, Any]:
-        """This workflow's own output, in `artifacts` shape, ready to hand to
-        the next node. Keyed by the id the task runner stamps on node outputs,
-        falling back to the class name for a workflow no goal id was assigned
-        to (the planner, which runs before any goal exists)."""
-        return {self.result.id or type(self).__name__: self.result}
-
-    def find_artifact(
-        self, artifacts: Mapping[str, Any], cls: type[ArtifactT]
-    ) -> ArtifactT | None:
-        """The first artifact of type `cls`, or None.
-
-        Selecting on type rather than key is what lets one node be fed by one
-        upstream node or five without the caller and callee agreeing on a
-        string — the same rule `ParsedDependents.from_results` already follows.
-        """
-        return next((a for a in artifacts.values() if isinstance(a, cls)), None)
-
-    def require_artifact(
-        self, artifacts: Mapping[str, Any], cls: type[ArtifactT]
-    ) -> ArtifactT:
-        """`find_artifact`, but the node's *reject* arm written once.
-
-        Raises `StepFailure`, which `Workflow.__call__` treats as a controlled
-        abort — the envelope records why and the turn continues — rather than
-        as a crash.
-        """
-        found = self.find_artifact(artifacts, cls)
-        if found is None:
-            got = ", ".join(sorted({type(a).__name__ for a in artifacts.values()}))
-            self.add_details(
-                f"missing {cls.__name__} in artifacts (got: {got or 'nothing'})"
-            )
-            raise StepFailure(
-                f"{type(self).__name__} needs a {cls.__name__}; "
-                f"got {got or 'nothing'}"
-            )
-        return found
 
     async def run_llm_call(
         self, req: BaseLLMRequest, save_payload: bool = False

@@ -4,10 +4,12 @@
 unit of work in the app. This adds the three things only a book node needs,
 each of which every book slice was otherwise repeating by hand:
 
-- **`self.store`** — the request-scoped book store, resolved by class through
-  `ctx.require_store(BookStore)`, so a book node opens with its work instead of
-  a binding line and a TODO about where it belongs — and cannot quietly end up
-  holding another domain's store.
+- **`self.store`** — the request-scoped book store, read straight off a
+  `BookRequestContext`, so a book node opens with its work instead of a binding
+  line and a TODO about where it belongs — and cannot quietly end up holding
+  another domain's store. The resolution happened once already, when the task
+  runner narrowed the context (`NodeSpec.context`), so a request with no
+  `BookStore` failed at dispatch rather than here.
 - **`preflight()`** — the counts-first opening move
   (docs/design/execution-pipeline-v1.md): stamp the built query on the output,
   ask how big the match is, and take a small sample of it — one round trip.
@@ -29,7 +31,8 @@ from abc import ABC
 from typing import Any, Sequence, TypeVar
 
 from app.api.schemas import BookOut
-from app.domains.books.schemas import Book, BookRetrievalOutput
+from app.domains.books.external import BookRequestContext, BookRetrievalOutput
+from app.domains.books.schemas import Book
 from app.domains.base_workflow import AppWorkflow
 from config import BookConstraints
 from db.stores import DeferredBookQuery
@@ -43,6 +46,12 @@ BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
 class BookWorkflow(AppWorkflow[BookOutputT], ABC):
     """Base for every node executor in the books domain."""
 
+    # Narrows the inherited attribute for type checkers — a pure annotation,
+    # no runtime cost and no second generic parameter on AppWorkflow. It is
+    # true because every book node lists `context=BookRequestContext` on its
+    # spec, which is what the runner narrows with before constructing it.
+    ctx: BookRequestContext
+
     @property
     def store(self) -> BookStore:
         """The request-scoped book store.
@@ -55,13 +64,12 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         a slice can implement `run()` directly instead of an `execute()` hook
         that existed only to keep the binding from being skipped.
 
-        `require_store` names the class rather than reading a `book_store`
-        field, so this cannot quietly resolve to another domain's store. It is
-        a shorthand for the common case of one store per node — a node needing
-        two should call `self.ctx.require_store(...)` at the point of use
-        instead of adding a second property here.
+        It is a plain field read now rather than a `require_store` lookup: the
+        by-class resolution moved into `BookRequestContext.narrow`, so it
+        happens once per node instead of on every access, and a mis-wired store
+        is caught at dispatch.
         """
-        return self.ctx.require_store(BookStore)
+        return self.ctx.store
 
     async def preflight(
         self, query: DeferredBookQuery, sample: int = BookConstraints.default_limit

@@ -18,6 +18,7 @@ from typing import Any
 
 from app.common.request_context import RequestContext  # noqa: F401  (re-export shape)
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.node_input import NodeInput
 from app.domains.planjane import ExecutionOrder, PlanJaneExecutor, PlanJaneOutput
 from common.utils.json_handler import load_json
 from config import FilesLocationConstants
@@ -105,21 +106,10 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
     planner_failure_message = "I couldn't understand your request. Please try again."
     ui_loading_message = "Starting conversation..."
 
-    @property
-    def artifact(self) -> dict[str, Any]:
-        """What triage hands downstream is the **plan**, not its own envelope.
-
-        The task runner executes a plan; it should not have to know a triage
-        layer exists — and if it required `TriageOutput` it would have to import
-        upward out of `app/domains/` into this package. Empty when the turn was
-        handled without planning, which `require_artifact` then rejects.
-        """
-        plan = self.result.parse_result
-        return {plan.id or type(plan).__name__: plan} if plan else {}
-
-    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
+    async def run(self, node_input: NodeInput) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
+        query = node_input.query
         self.result.session_id = self.session_id
         self.messages.append(self.user_message)
 
@@ -132,7 +122,7 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
 
         planner = PlanJaneExecutor(self.ctx, messages=self.messages)
         planner_record = await self.run_async_step(
-            planner(query=query, artifacts=artifacts),
+            planner(NodeInput(query=query)),
             raise_on_failure=False,
         )
 

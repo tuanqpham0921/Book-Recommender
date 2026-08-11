@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
+from app.domains.node_input import NodeInput
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planjane.executor import (
     GoalParseRequest,
@@ -242,7 +243,7 @@ class TestRun:
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
         parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg())
 
-        await parse_wf.run(query="test message", artifacts={})
+        await parse_wf.run(NodeInput(query="test message"))
 
         parse_wf.sse_stream.send_ui_loading.assert_called_once_with(
             parse_wf.ui_loading_message
@@ -256,7 +257,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run(query="test message", artifacts={})
+        await parse_wf.run(NodeInput(query="test message"))
 
         assert len(parse_wf.result.accepted_goals) == 1
 
@@ -267,7 +268,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run(query="test message", artifacts={})
+        await parse_wf.run(NodeInput(query="test message"))
 
         assert parse_wf.record.ok is True
 
@@ -285,7 +286,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run(query="test message", artifacts={})
+        await parse_wf.run(NodeInput(query="test message"))
 
         assert parse_wf.result.out_of_scope == ["Cooking recipe"]
         streamed = "".join(

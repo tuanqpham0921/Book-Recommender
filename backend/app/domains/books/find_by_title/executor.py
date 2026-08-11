@@ -1,11 +1,9 @@
-from typing import Any
-
 from app.common.messages import AssistantMessage
 from app.domains.books.base_workflow import BookWorkflow
 from clients import OpenAIParserRequest
 
 from .schemas import FindByTitleRetrieval
-from .external import FindByTitleOutput
+from .external import FindByTitleInput, FindByTitleOutput
 
 from common.prompts import basic_fill_schema_prompt
 
@@ -35,7 +33,7 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
     ui_section_title = "Found books by title"
 
-    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
+    async def run(self, node_input: FindByTitleInput) -> None:
         """Count the matching titles and hand the query downstream — not the set.
 
         The count is what makes a "4,000 matched, narrow it down?" pause
@@ -45,6 +43,7 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
         """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
+        query = node_input.query
         parsed_args: FindByTitleRetrieval = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )

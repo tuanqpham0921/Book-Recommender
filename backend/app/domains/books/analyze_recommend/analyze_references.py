@@ -5,9 +5,10 @@ Analyze_Recommend doesn't search the catalog by keyword, it searches by vector
 reads like the description of the book the user wants *next*. That happens in
 two steps, kept apart on purpose:
 
-1. `ParsedDependents` sorts the raw `dependent_results` dict by output shape.
-   No LLM, no database — just "which of these can this node read". A shape it
-   can't read lands in `unknown` instead of being silently dropped.
+1. `ParsedDependents` sorts the node's declared `anchors` by what is on each
+   one. No LLM, no database — just "rows, or the query that would fetch them".
+   An anchor carrying neither lands in `unknown` instead of being silently
+   dropped.
 2. `render_documents` turns the materialized books and reports into the
    document block the LLM sees, and `build_analysis_request` asks it for the
    one string to embed (prompts/analyze_references.txt).
@@ -20,6 +21,7 @@ forbids identifiers in the output, and glued into a description they only read
 as noise.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -47,12 +49,18 @@ MAX_TOTAL_CHARS = 8000
 
 @dataclass
 class ParsedDependents:
-    """`dependent_results` sorted by what this node can do with each entry.
+    """The node's anchors sorted by what it can do with each one.
 
-    Keyed on the output *shape* (app/domains/books/schemas.py), read by duck
-    typing rather than isinstance: `AnalyzeBooksOutput` is still a reserved
-    name with no class behind it, so `reports` is the seam for the first node
-    that produces one — nothing here has to change when it lands.
+    Selecting *which* upstream outputs are anchors is no longer this class's
+    job — `RecommendInput.anchors` declares the shape and `build_input`
+    (app/domains/node_input.py) fills it, so everything arriving here is
+    already a book-producing output. What is left is the choice this node
+    genuinely has to make: rows if a dependency has them, otherwise the query
+    that would produce them.
+
+    `reports` is still read by duck typing: `AnalyzeBooksOutput` is a reserved
+    name with no class behind it, so it cannot be a typed field on the input
+    yet. This is the seam for the first node that produces one.
     """
     
     # TODO: have a rejected or .ok = False
@@ -68,13 +76,16 @@ class ParsedDependents:
     books: list[Book] = field(default_factory=list)
     # written reports about books (AnalyzeBooksOutput, reserved)
     reports: list[str] = field(default_factory=list)
-    # "<task id>: <class name>" for anything this node can't read
+    # "<task id>: <class name>" for anything this node can't read — an anchor
+    # that carries neither rows nor a query, i.e. a retrieval that matched
+    # nothing. A real state to report, not a routing mistake.
     unknown: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_results(cls, dependent_results: dict[str, Any]) -> "ParsedDependents":
+    def from_anchors(cls, anchors: Sequence[Any]) -> "ParsedDependents":
         parsed = cls()
-        for task_id, result in dependent_results.items():
+        for result in anchors:
+            task_id = getattr(result, "id", None) or "?"
             claimed = False
 
             # Rows if the dependency has them, otherwise the query that would

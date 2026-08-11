@@ -1,9 +1,32 @@
 from pydantic import Field
 from typing import Any
-from app.domains.books.schemas import Book, BookRetrievalOutput, BookRequestContext
 
-class RecomendationRequestContext(BookRequestContext):
-    artifacts: dict[str, any] = Field(..., min_length=1, description="need at least 1 artifact")
+from app.common.utils import count_values
+from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.schemas import Book
+from app.domains.node_input import NodeInput
+
+
+class RecommendInput(NodeInput):
+    """What to recommend *from*, plus the user's own words.
+
+    `anchors` defaults to empty rather than being required, and that is the
+    node's real contract, not a looser one: with no anchor it falls back on the
+    goal text alone (`ParsedDependents.is_empty`), which is what serves "find
+    me something cosy to read" with no lookup in front of it. A required field
+    here would fail a turn the node can actually answer.
+
+    An empty `anchors` is also the seam for asking the planner for one: the
+    slot is named and visibly unfilled, which is the thing a plain
+    `dict[str, Any]` of artifacts could never say.
+
+    There is no `reports` field yet on purpose. `AnalyzeBooksOutput` is still a
+    reserved name with no class behind it (books/schemas.py), and a field can
+    only select by type against a type that exists — it lands here, one line,
+    alongside the first node that produces a report.
+    """
+
+    anchors: list[BookRetrievalOutput] = Field(default_factory=list)
 
 
 class RecommendationOutput(BookRetrievalOutput):

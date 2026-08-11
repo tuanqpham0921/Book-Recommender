@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List
+from typing import List
 
 from app.common.messages import AssistantMessage
 from app.common.prompt_loader import load_prompt
@@ -22,7 +22,7 @@ from .generate_response import (
     summarize_references,
 )
 from .schemas import RecommendationStrategy
-from .external import RecommendationOutput
+from .external import RecommendInput, RecommendationOutput
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +60,16 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
     # this node owns the answer — folding it away would hide the reply
     ui_section_collapsible = False
 
-    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
+    async def run(self, node_input: RecommendInput) -> None:
         await self.sse_stream.send_ui_loading("recommending books...")
 
-        parsed_dependents = ParsedDependents.from_results(artifacts)
+        query = node_input.query
+        parsed_dependents = ParsedDependents.from_anchors(node_input.anchors)
         self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
         if parsed_dependents.unknown:
             logger.warning(
-                f"Ignoring unreadable dependent results: {parsed_dependents.unknown}"
+                f"Ignoring anchors with neither rows nor a query: "
+                f"{parsed_dependents.unknown}"
             )
 
         # rows a dependency already chose come through as-is; the rest of the

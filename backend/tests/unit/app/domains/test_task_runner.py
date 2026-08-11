@@ -17,51 +17,70 @@ from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
+from app.common.request_context import RequestContext
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.domains.books import find_by_title
+from app.domains.books.external import BookRequestContext
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
+from app.domains.node_input import NodeInput
 from app.domains.node_spec import NodeSpec
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
-from app.domains.task_runner import TaskRunnerWorkflow
+from app.domains.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 
 NODE_TYPE = FindTitleNodeTypeEnum.REQUEST
 
 
 class _Output(NodeWorkflowOutput):
     num_books: int | None = None
-    saw_artifacts: dict = {}
+    saw_anchors: list = []
 
     def to_summary(self) -> dict:
         return {}
 
 
+class _Input(NodeInput):
+    """A test node that *can* consume upstream output, so the dependency
+    feeding below is exercised through a real declared field."""
+
+    anchors: list[_Output] = []
+
+
 class _OkExecutor(AppWorkflow[_Output]):
     ui_section_title = "Looking up a title"
 
-    async def run(self, query: str, artifacts: dict) -> None:
+    async def run(self, node_input: _Input) -> None:
         self.result.num_books = 7
-        self.result.saw_artifacts = dict(artifacts)
+        self.result.saw_anchors = list(node_input.anchors)
         self.finalize_result(ok=True)
 
 
 class _UntitledExecutor(AppWorkflow[_Output]):
-    async def run(self, query: str, artifacts: dict) -> None:
+    async def run(self, node_input: _Input) -> None:
         self.finalize_result(ok=True)
 
 
 class _FailingExecutor(AppWorkflow[_Output]):
-    async def run(self, query: str, artifacts: dict) -> None:
+    async def run(self, node_input: _Input) -> None:
         self.finalize_result(ok=False)
 
 
 class _ExplodingExecutor(AppWorkflow[_Output]):
-    async def run(self, query: str, artifacts: dict) -> None:
+    async def run(self, node_input: _Input) -> None:
         raise RuntimeError("node blew up")
 
 
-def _spec(executor: type | None) -> NodeSpec:
-    return replace(find_by_title.SPEC, executor=executor)
+def _spec(executor: type | None, **overrides) -> NodeSpec:
+    return replace(
+        find_by_title.SPEC,
+        **{
+            "executor": executor,
+            "input": _Input,
+            "context": RequestContext,
+            **overrides,
+        },
+    )
 
 
 def _goal(goal_id: str = "1", depends_on: list[str] | None = None) -> SystemGoal:
@@ -106,7 +125,7 @@ async def drive(runner, goals: list[SystemGoal], spec: NodeSpec | None):
     plan = PlanJaneOutput(accepted_goals=goals)
     with patch("app.domains.task_runner.REGISTRY") as registry:
         registry.spec.return_value = spec
-        await runner(query="find dune", artifacts={"planner": plan})
+        await runner(TaskRunnerInput(plan=plan))
 
 
 class TestSuccessfulExecution:
@@ -119,8 +138,7 @@ class TestSuccessfulExecution:
         assert runner.result.task_results["1"].num_books == 7
 
     async def test_stamps_the_goal_identity_onto_the_output(self, runner):
-        # what makes the output usable as an artifact downstream —
-        # AppWorkflow.artifact keys on output.id
+        # what makes the output usable downstream — `results` keys on output.id
         await drive(
             runner, [_goal("g0"), _goal("g1", depends_on=["g0"])], _spec(_OkExecutor)
         )
@@ -141,27 +159,26 @@ class TestSuccessfulExecution:
 
     async def test_feeds_a_dependency_output_to_the_dependent_node(self, runner):
         # execution_order layers goals by len(depends_on), so "a" runs first
-        # and its output has to arrive as "b"'s artifact
+        # and its output has to land on "b"'s declared `anchors` field
         await drive(
             runner, [_goal("a"), _goal("b", depends_on=["a"])], _spec(_OkExecutor)
         )
 
-        assert (
-            runner.result.task_results["b"].saw_artifacts["a"]
-            is runner.result.task_results["a"]
-        )
+        assert runner.result.task_results["b"].saw_anchors == [
+            runner.result.task_results["a"]
+        ]
 
     async def test_a_failed_dependency_is_absent_rather_than_none(self, runner):
-        # the contract AppWorkflow.run documents for `artifacts`: only
-        # successful outputs are ever passed on
+        # only successful outputs are ever passed on, so a failed dependency
+        # leaves the dependent's field empty rather than holding a None
         plan = PlanJaneOutput(
             accepted_goals=[_goal("a"), _goal("b", depends_on=["a"])]
         )
         with patch("app.domains.task_runner.REGISTRY") as registry:
             registry.spec.side_effect = [_spec(_FailingExecutor), _spec(_OkExecutor)]
-            await runner(query="q", artifacts={"planner": plan})
+            await runner(TaskRunnerInput(plan=plan))
 
-        assert runner.result.task_results["b"].saw_artifacts == {}
+        assert runner.result.task_results["b"].saw_anchors == []
         assert runner.result.failed_task == ["a"]
 
     async def test_dependency_runs_first_regardless_of_plan_ordering(self, runner):
@@ -172,7 +189,9 @@ class TestSuccessfulExecution:
             runner, [_goal("b", depends_on=["a"]), _goal("a")], _spec(_OkExecutor)
         )
 
-        assert "a" in runner.result.task_results["b"].saw_artifacts
+        assert runner.result.task_results["b"].saw_anchors == [
+            runner.result.task_results["a"]
+        ]
 
     async def test_one_failure_makes_the_whole_run_not_ok(self, runner):
         await drive(runner, [_goal()], _spec(_FailingExecutor))
@@ -292,7 +311,7 @@ class TestTaskSectionBracketing:
                 TaskRunnerWorkflow, "run_async_step", side_effect=cancel
             ):
                 with pytest.raises(asyncio.CancelledError):
-                    await runner.run(query="q", artifacts={"planner": plan})
+                    await runner.run(TaskRunnerInput(plan=plan))
 
         assert of_type(events, "task.end") == [
             {"task_id": "1", "count": None, "ok": False}
@@ -300,10 +319,66 @@ class TestTaskSectionBracketing:
 
 
 class TestPlanRequirement:
-    async def test_without_a_plan_the_runner_fails_as_a_controlled_abort(self, runner):
-        # require_artifact raises StepFailure, which Workflow.__call__ records
-        # on the envelope rather than crashing the turn
-        await runner(query="q", artifacts={})
+    def test_the_runner_cannot_be_invoked_without_a_plan(self):
+        """The plan is a required field, so a caller that has none fails at
+        the call site rather than inside the runner. It used to be fished out
+        of an artifacts dict, which meant "no plan" was a runtime abort the
+        runner had to detect and report for itself."""
+        with pytest.raises(ValidationError):
+            TaskRunnerInput()
 
-        assert not runner.record.ok
-        assert runner.record.runtime_error is not None
+
+class TestUnpreparableNodes:
+    """The two skip paths that were not possible before: a node whose services
+    aren't on this request, and one whose input can't be assembled. Both fail
+    the single goal and leave the rest of the plan running — and both are where
+    an agentic runner would ask the planner for a fix instead of skipping."""
+
+    async def test_a_node_whose_context_cannot_be_narrowed_is_skipped(
+        self, runner, request_context, events
+    ):
+        request_context.stores.clear()
+        await drive(
+            runner, [_goal()], _spec(_OkExecutor, context=BookRequestContext)
+        )
+
+        assert runner.result.failed_task == ["1"]
+        assert runner.result.task_results == {}
+        # never started, so no section is left hanging open
+        assert of_type(events, "task.start") == []
+
+    async def test_a_node_missing_a_required_input_is_skipped(self, runner, events):
+        class _NeedsAnchor(NodeInput):
+            anchor: _Output
+
+        await drive(runner, [_goal()], _spec(_OkExecutor, input=_NeedsAnchor))
+
+        assert runner.result.failed_task == ["1"]
+        assert of_type(events, "task.start") == []
+
+    async def test_the_skip_records_which_field_was_missing(self, runner):
+        """The detail line is the seam for asking the planner: it names the
+        field, not just the fact that something went wrong."""
+
+        class _NeedsAnchor(NodeInput):
+            anchor: _Output
+
+        await drive(runner, [_goal()], _spec(_OkExecutor, input=_NeedsAnchor))
+
+        assert any("anchor" in detail for detail in runner.record.details)
+
+    async def test_one_unpreparable_goal_does_not_stop_the_others(self, runner):
+        plan = PlanJaneOutput(accepted_goals=[_goal("a"), _goal("b")])
+
+        class _NeedsAnchor(NodeInput):
+            anchor: _Output
+
+        with patch("app.domains.task_runner.REGISTRY") as registry:
+            registry.spec.side_effect = [
+                _spec(_OkExecutor, input=_NeedsAnchor),
+                _spec(_OkExecutor),
+            ]
+            await runner(TaskRunnerInput(plan=plan))
+
+        assert runner.result.failed_task == ["a"]
+        assert list(runner.result.task_results) == ["b"]

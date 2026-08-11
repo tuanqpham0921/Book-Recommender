@@ -8,6 +8,7 @@ from pydantic import Field
 from app.common.messages import UserMessage
 from app.common.prompt_loader import format_prompt
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.node_input import NodeInput
 from app.registry import REGISTRY
 from clients import OpenAIParserRequest
 
@@ -137,10 +138,10 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
 
     tool_models: list[type] = [GoalParseRequest]
 
-    async def run(self, query: str, artifacts: dict[str, Any]) -> None:
+    async def run(self, node_input: NodeInput) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        parse_result = await self._run_llm_args_parse(query)
+        parse_result = await self._run_llm_args_parse(node_input.query)
         # parsed_arguments is typed `object | None` by the openai lib; the
         # parser validated it against GoalParseRequest, so the cast holds
         self.process_parse_result(parse_result)

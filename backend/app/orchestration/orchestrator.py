@@ -5,8 +5,9 @@ import time
 from app.common.sse_stream import SSEStream
 from app.common.request_context import RequestContext
 
+from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow
-from app.domains.task_runner import TaskRunnerWorkflow
+from app.domains.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
 from airglider import OperationResult, RuntimeErrorInfo
 
@@ -55,7 +56,7 @@ class Orchestrator:
             conversation_orchestrator = TriageWorkflow(request_context)
             await asyncio.wait_for(
                 conversation_orchestrator(
-                    query=request_context.user_message.content, artifacts={}
+                    NodeInput(query=request_context.user_message.content)
                 ),
                 timeout=CONVERSATION_TIMEOUT,
             )
@@ -68,12 +69,10 @@ class Orchestrator:
             ):
                 task_runner = TaskRunnerWorkflow(request_context)
                 await asyncio.wait_for(
-                    task_runner(
-                        query=request_context.user_message.content,
-                        # the plan travels as an artifact, selected by type on
-                        # the other side — no shared key between the two
-                        artifacts=conversation_orchestrator.artifact,
-                    ),
+                    # The plan is passed as the runner's declared input, so the
+                    # runner never has to know a triage layer produced it —
+                    # this is the only place the two are wired together.
+                    task_runner(TaskRunnerInput(plan=planner_result)),
                     timeout=CONVERSATION_TIMEOUT,
                 )
 

@@ -1,3 +1,25 @@
+"""What the books domain exposes to the layers around it.
+
+Two kinds of thing, both of which a *consumer* outside this domain names:
+
+- **`BookRetrievalOutput`** — the shape a node claims in its `Returns:`, and
+  therefore the shape a downstream node's `NodeInput` declares a field of.
+- **`BookRequestContext`** — the services view every book node runs against,
+  narrowed off the request context at dispatch.
+
+`Book` itself stays in `schemas.py` alongside the shape vocabulary it belongs
+to; this module imports it rather than redefining it.
+"""
+
+from typing import Any
+
+from pydantic import ConfigDict, Field
+
+from app.common.request_context import RequestContext
+from app.domains.base_workflow import NodeWorkflowOutput
+from app.domains.books.schemas import Book
+from db.stores import DeferredBookQuery
+from db.stores.book_store import BookStore
 
 
 class BookRetrievalOutput(NodeWorkflowOutput):
@@ -53,9 +75,18 @@ class BookRetrievalOutput(NodeWorkflowOutput):
         }
 
 
-
-
-from app.common.request_context import RequestContext
-from db.stores.book_store import BookStore
 class BookRequestContext(RequestContext):
+    """The services a book node runs against — the base plus a typed store.
+
+    `narrow()` is what turns the request context's opaque, type-keyed `stores`
+    bag into this. Resolving it here rather than at the first query means a
+    request that never got a `BookStore` fails once, at dispatch, naming the
+    store — and the domain knowledge (that books need a `BookStore`) stays in
+    the books package instead of leaking into `app/common/`.
+    """
+
     store: BookStore = Field(..., exclude=True)
+
+    @classmethod
+    def narrow(cls, ctx: RequestContext) -> "BookRequestContext":
+        return cls(**ctx.base_fields(), store=ctx.require_store(BookStore))

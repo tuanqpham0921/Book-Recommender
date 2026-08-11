@@ -1,7 +1,16 @@
-from app.domains.books.schemas import BookRetrievalOutput, BookRequestContext
+from app.domains.books.external import BookRetrievalOutput
+from app.domains.node_input import NodeInput
 
-class FindByTitleRequestContext(BookRequestContext):
-    """ Just need the store """
+
+class FindByTitleInput(NodeInput):
+    """The goal text and nothing else.
+
+    Retrieval is single-dimension and reads the title out of its own goal, so
+    this node has no field for upstream output — it *structurally* cannot
+    consume one, which is the contract the empty subclass states. An artifact
+    routed here would be logged as unclaimed by `build_input` rather than
+    silently shaping the query.
+    """
 
 
 class FindByTitleOutput(BookRetrievalOutput):
