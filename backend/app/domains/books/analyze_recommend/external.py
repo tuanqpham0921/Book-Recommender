@@ -1,9 +1,12 @@
 from pydantic import Field
 from typing import Any
-from app.domains.books.schemas import Book, BookRecommendationOutput
-from app.common.utils import count_values
+from app.domains.books.schemas import Book, BookRetrievalOutput, BookRequestContext
 
-class RecommendationOutput(BookRecommendationOutput):
+class RecomendationRequestContext(BookRequestContext):
+    artifacts: dict[str, any] = Field(..., min_length=1, description="need at least 1 artifact")
+
+
+class RecommendationOutput(BookRetrievalOutput):
     """The books this node chose. An empty `books` means nothing in the
     catalog satisfied the anchor plus the filters.
 
@@ -29,6 +32,8 @@ class RecommendationOutput(BookRecommendationOutput):
         longer reads") rather than list it. Titles here would only invite the
         model to enumerate what the book cards on screen already show.
         """
+        from app.common.utils import count_values
+        
         pages = [book.num_pages for book in self.books if book.num_pages]
         return {
             "num_books": len(self.books),

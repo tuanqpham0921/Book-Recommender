@@ -1,4 +1,7 @@
-from app.domains.books.schemas import BookRetrievalOutput
+from app.domains.books.schemas import BookRetrievalOutput, BookRequestContext
+
+class FindByTitleRequestContext(BookRequestContext):
+    """ Just need the store """
 
 
 class FindByTitleOutput(BookRetrievalOutput):
