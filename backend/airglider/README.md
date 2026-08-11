@@ -26,6 +26,28 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `cost_of`, `MODEL_PRICES`, `PRICES_CHECKED_ON`, … | the price table (see below) |
 | `to_serializable`, `remove_empty_values`, `strip_zero_token_usage`, `now_iso`, `uuid_8` | serialization + identity helpers |
 
+## The record tree, and `flatten()`
+
+`add_step` is the only place parentage is known, so it is the only place
+`parent_id` is set. A child cannot know its own parent — a `@task` is a plain
+async function with no reference to its caller, and a `Workflow` is constructed
+before anyone decides where its record hangs. Both come out orphans and the
+attacher adopts them, which is why nothing has to be threaded into the
+decorator. Stamping on attach rather than deriving it later is what carries the
+link through serialization.
+
+`flatten()` is then the tree as a **span list** — depth-first, parent before
+child, each entry carrying its `parent_id` and (via `Time.end_time`) its own
+interval. The nesting is rebuildable from the list alone, with no reference to
+the tree, which is what a timeline or a per-step cost table wants. `to_summary()`
+remains the shape for *reading* a run top to bottom.
+
+Two things to know: in-memory entries come back by reference, and a record
+reloaded from JSON has plain-dict children (`steps: list[Any]` does not
+re-validate) which `flatten` validates into copies. Entries keep their own
+`steps`, so for a flat table drop them at the point of use —
+`[op.model_copy(update={"steps": []}) for op in record.flatten()]`.
+
 ## `record.input` — what a unit of work was called with
 
 Both `Workflow.__call__` and `@task` stamp it **before** the call, so a crashed

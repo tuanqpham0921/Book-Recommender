@@ -145,14 +145,61 @@ class OperationResult(BaseModel, Generic[OutputT]):
         return remove_empty_values(summary)
 
     def add_step(self, step: "OperationResult[Any]") -> None:
-        """Attach a child envelope and roll its token usage up into this one.
+        """Attach a child envelope, stamp it as ours, and roll its token usage up.
 
         Lives here rather than on `Workflow` because `steps`/`token_usage` do:
         it is also how a non-Workflow caller (the Orchestrator) builds a root
         envelope over workflows that each own their own record.
+
+        **This is the one place parentage is known**, which is why `parent_id`
+        is set here and nowhere else. A child cannot know its own parent — a
+        `@task` is a plain async function with no reference to its caller, and
+        a `Workflow` is constructed before anyone decides where its record
+        hangs. Both produce an orphan envelope, and whoever attaches it adopts
+        it. Nothing has to be threaded into the decorator.
+
+        Stamped at attach time rather than derived later (e.g. while
+        flattening) so the link is part of the record itself: it survives the
+        JSONB insert, and a reader that only ever sees the stored tree can
+        still rebuild the nesting.
         """
         if not isinstance(step, OperationResult):
             raise ValueError(f"Step is of type {type(step)} not OperationResult")
 
+        step.parent_id = self.id
         self.token_usage += step.token_usage
         self.steps.append(step)
+
+    def flatten(self) -> list["OperationResult[Any]"]:
+        """This envelope and every descendant, depth-first, parent before child.
+
+        The trace tree as a **span list** — one entry per operation, each
+        carrying the `parent_id` `add_step` stamped on it, so the nesting
+        survives the flattening and can be rebuilt from the list alone. With
+        `timing.start_time` and `end_time` on every entry, that is the shape a
+        timeline or a per-step cost table wants; `to_summary()` is the shape
+        for reading a run top to bottom.
+
+        In-memory envelopes come back **by reference** — mutating one mutates
+        the tree. A record read back from JSON is different: `steps: list[Any]`
+        does not re-validate, so its children are plain dicts, and those are
+        validated into envelopes here and are therefore copies.
+
+        Each entry still carries its own `steps`, since these are the real
+        envelopes rather than a projection. For a flat *table*, where a row
+        dragging its whole subtree would blow the list up quadratically, drop
+        them at the point of use:
+
+            [op.model_copy(update={"steps": []}) for op in record.flatten()]
+        """
+        flat: list[OperationResult[Any]] = [self]
+        for step in self.steps:
+            # a reloaded record's steps are dicts (see above); an in-memory
+            # one's are envelopes. add_step rejects anything else, so a value
+            # that is neither came from a hand-built record and is skipped
+            # rather than allowed to break the walk.
+            if isinstance(step, dict):
+                step = OperationResult.model_validate(step)
+            if isinstance(step, OperationResult):
+                flat.extend(step.flatten())
+        return flat
