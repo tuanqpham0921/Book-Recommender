@@ -106,17 +106,20 @@ async def record_chat_run(
             # a genuinely free step still serializes cost_usd: 0.0 there
             # instead of vanishing into the same shape as a pre-cost-tracking
             # row (see strip_zero_token_usage's docstring)
-            save_file(
-                {
-                    "summary": record.to_summary(),
-                    "chat_run": strip_zero_token_usage(remove_empty_values(row)),
-                },
-                file_name=row["chat_id"],
-            )
-            flat = record.flatten()
+            
+            # save_file(
+            #     {
+            #         "summary": record.to_summary(),
+            #         "chat_run": strip_zero_token_usage(remove_empty_values(row)),
+            #     },
+            #     file_name=row["chat_id"] + "_summary",
+            # )
+            
+            flat = to_serializable(record.flatten())
+            flat = strip_zero_token_usage(remove_empty_values(flat))
             save_file(
                 flat,
-                file_name=row["chat_id"] + "_flat",
+                file_name=row["chat_id"],
             )
 
         async with request_context.session_factory() as session:
