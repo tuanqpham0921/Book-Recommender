@@ -32,6 +32,7 @@ from app.common.prompt_loader import load_prompt
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
 from db.stores import DeferredBookQuery
+from app.common.utils import truncate_str
 
 ANALYZE_REFERENCES_PROMPT_PATH = (
     "domains/books/analyze_recommend/prompts/analyze_references.txt"
@@ -124,20 +125,6 @@ class ParsedDependents:
             "unknown": self.unknown,
         }
 
-
-def _truncate(text: str, limit: int, collapse: bool = True) -> str:
-    """Cut at a word boundary so a clipped description doesn't end mid-word.
-
-    `collapse` folds the internal whitespace of a single document onto one
-    line; the assembled block passes False, because the blank lines between
-    documents are what separate them.
-    """
-    text = " ".join(text.split()) if collapse else text.strip()
-    if len(text) <= limit:
-        return text
-    return text[:limit].rsplit(" ", 1)[0] + "…"
-
-
 def render_documents(books: list[Book], reports: list[str]) -> str:
     """The document block the analyzer prompt reads.
 
@@ -160,7 +147,7 @@ def render_documents(books: list[Book], reports: list[str]) -> str:
         if not book.description:
             continue
         by_title.setdefault(book.title, []).append(
-            _truncate(book.description, MAX_DOC_CHARS)
+            truncate_str(book.description, MAX_DOC_CHARS)
         )
 
     for i, (title, descriptions) in enumerate(by_title.items(), start=1):
@@ -175,9 +162,9 @@ def render_documents(books: list[Book], reports: list[str]) -> str:
         blocks.append("\n".join(lines))
 
     for i, report in enumerate(reports, start=1):
-        blocks.append(f"[report {i}]\n{_truncate(report, MAX_DOC_CHARS)}")
+        blocks.append(f"[report {i}]\n{truncate_str(report, MAX_DOC_CHARS)}")
 
-    return _truncate("\n\n".join(blocks), MAX_TOTAL_CHARS, collapse=False)
+    return truncate_str("\n\n".join(blocks), MAX_TOTAL_CHARS, collapse=False)
 
 # TODO: rename this to ideal_book_description 
 # or something similar

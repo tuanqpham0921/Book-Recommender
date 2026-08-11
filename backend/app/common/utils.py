@@ -10,3 +10,15 @@ def count_values(values: Iterable[str | None]) -> dict[str, int]:
     be misled by it.
     """
     return dict(Counter(value for value in values if value).most_common())
+
+def truncate_str(text: str, limit: int, collapse: bool = True) -> str:
+    """Cut at a word boundary so a clipped description doesn't end mid-word.
+
+    `collapse` folds the internal whitespace of a single document onto one
+    line; the assembled block passes False, because the blank lines between
+    documents are what separate them.
+    """
+    text = " ".join(text.split()) if collapse else text.strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0] + "…"

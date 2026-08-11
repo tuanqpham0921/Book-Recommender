@@ -55,7 +55,6 @@ class RecommendationOutput(BookRetrievalOutput):
         longer reads") rather than list it. Titles here would only invite the
         model to enumerate what the book cards on screen already show.
         """
-        from app.common.utils import count_values
         
         pages = [book.num_pages for book in self.books if book.num_pages]
         return {
