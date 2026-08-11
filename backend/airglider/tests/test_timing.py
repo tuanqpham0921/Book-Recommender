@@ -14,10 +14,9 @@ from datetime import datetime
 
 import pytest
 
-from airglider import OperationResult, Workflow, task
+from airglider import WorkFlowOperationResult, Workflow, task
 from airglider.src.schemas import Time
 from airglider.src.utils import now_iso
-
 
 # `duration` is rounded to 2 decimals by both callers, so a derived end_time
 # can sit up to half a centisecond past the instant the call really returned.
@@ -40,10 +39,10 @@ class TestDerivation:
         assert Time(start_time=now_iso()).end_time is None
 
     def test_a_fresh_envelope_has_no_end_time(self):
-        assert OperationResult().end_time is None
+        assert WorkFlowOperationResult().end_time is None
 
     def test_the_envelope_delegates_to_its_timing(self):
-        record = OperationResult()
+        record = WorkFlowOperationResult()
         record.timing.duration = 2.0
 
         assert record.end_time == record.timing.end_time
@@ -128,7 +127,9 @@ class TestTaskStampsBeforeTheAwait:
 
         assert not result.ok
         assert before_call <= _parse(result.timing.start_time)
-        assert (_parse(result.end_time) - after_call).total_seconds() <= ROUNDING_TOLERANCE
+        assert (
+            _parse(result.end_time) - after_call
+        ).total_seconds() <= ROUNDING_TOLERANCE
 
     async def test_a_task_owning_its_envelope_still_gets_wrapper_timing(self):
         """Timing is the wrapper's business on every return path — a task
@@ -138,7 +139,7 @@ class TestTaskStampsBeforeTheAwait:
         @task(log_info=False)
         async def _custom():
             await asyncio.sleep(0.05)
-            return OperationResult(ok=True)
+            return WorkFlowOperationResult(ok=True)
 
         before_call = _parse(now_iso())
         result = await _custom()

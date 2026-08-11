@@ -10,7 +10,7 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.orchestration.triage import TriageOutput
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
-from airglider import OperationResult, Response, TokenUsage
+from airglider import WorkFlowOperationResult, Response, TokenUsage
 
 
 def _make_goal():
@@ -28,7 +28,7 @@ def _make_goal():
     return goal
 
 
-def _make_planner_record() -> OperationResult:
+def _make_planner_record() -> WorkFlowOperationResult:
     goal = _make_goal()
     output = TriageOutput(
         session_id="sess_1",
@@ -36,23 +36,23 @@ def _make_planner_record() -> OperationResult:
         # it, which is what run_recorder promotes into chat_runs.mermaid
         parse_result=PlanJaneOutput(accepted_goals=[goal], diagram="graph TD;"),
     )
-    return OperationResult(
+    return WorkFlowOperationResult(
         ok=True,
         response=Response(result=output),
         token_usage=TokenUsage(total=42, prompt=30, completion=12),
     )
 
 
-def _make_root_record(planner: OperationResult) -> OperationResult:
+def _make_root_record(planner: WorkFlowOperationResult) -> WorkFlowOperationResult:
     """The orchestrator's root envelope, built the way Orchestrator.run builds
     it: the planner record hung on as a step, then ok/duration stamped."""
-    record = OperationResult(name="orchestrator_chat_1", ok=True)
+    record = WorkFlowOperationResult(name="orchestrator_chat_1", ok=True)
     record.add_step(planner)
     record.timing.duration = 1.23
     return record
 
 
-def _make_workflow(planner: OperationResult):
+def _make_workflow(planner: WorkFlowOperationResult):
     workflow = MagicMock()
     workflow.record = planner
     workflow.result = planner.result

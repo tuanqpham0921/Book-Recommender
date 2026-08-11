@@ -11,17 +11,17 @@ import asyncio
 
 import pytest
 
-from airglider import OperationResult, Workflow, task
+from airglider import WorkFlowOperationResult, Workflow, task
 
 
-def _op(name: str) -> OperationResult:
-    return OperationResult(name=name, ok=True)
+def _op(name: str) -> WorkFlowOperationResult:
+    return WorkFlowOperationResult(name=name, ok=True)
 
 
-def _tree() -> OperationResult:
+def _tree() -> WorkFlowOperationResult:
     """root ─┬─ a ─┬─ a1
-            │      └─ a2
-            └─ b"""
+    │      └─ a2
+    └─ b"""
     root, a, b = _op("root"), _op("a"), _op("b")
     a.add_step(_op("a1"))
     a.add_step(_op("a2"))
@@ -108,7 +108,9 @@ class TestReloadedRecords:
     runs is most of what this is for."""
 
     def test_a_reloaded_record_still_flattens(self):
-        reloaded = OperationResult.model_validate_json(_tree().model_dump_json())
+        reloaded = WorkFlowOperationResult.model_validate_json(
+            _tree().model_dump_json()
+        )
 
         assert isinstance(reloaded.steps[0], dict)
         assert [op.name for op in reloaded.flatten()] == [
@@ -122,7 +124,9 @@ class TestReloadedRecords:
     def test_parent_ids_survive_the_round_trip(self):
         """Because the stamp is part of the record, not derived while
         flattening — a reader that only ever sees the stored tree gets it."""
-        reloaded = OperationResult.model_validate_json(_tree().model_dump_json())
+        reloaded = WorkFlowOperationResult.model_validate_json(
+            _tree().model_dump_json()
+        )
         flat = reloaded.flatten()
 
         assert flat[0].parent_id is None

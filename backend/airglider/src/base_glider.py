@@ -5,11 +5,12 @@ import time
 from typing import Any, Generic, TypeVar
 from typing import Coroutine
 
-from .schemas import OperationResult, Response, RuntimeErrorInfo
+from .schemas import OperationResult, WorkFlowOperationResult, Response, RuntimeErrorInfo
 from .exception import StepFailure
 from .utils import bind_call_args, now_iso, to_record_input
 
 OutputT = TypeVar("OutputT")
+
 
 class Workflow(ABC, Generic[OutputT]):
     """One instance = one execution. self.record (and subclass output
@@ -24,8 +25,10 @@ class Workflow(ABC, Generic[OutputT]):
         self.output_type = output_type
         self._called = False
 
-        # intialize a record envolope in memory to modify
-        self.record: OperationResult[OutputT] = OperationResult(
+        # intialize a record envolope in memory to modify. The tree-shaped
+        # envelope, not the leaf one: a Workflow is by definition the thing
+        # that accumulates steps.
+        self.record: WorkFlowOperationResult[OutputT] = WorkFlowOperationResult(
             name=self.workflow_ref,
             response=Response(
                 output_type=output_type.__name__ if output_type is not None else None
@@ -51,10 +54,9 @@ class Workflow(ABC, Generic[OutputT]):
         """
         try:
             arguments = bind_call_args(self.run, args, kwargs)
-            self.record.input = (
-                {name: value for name, value in arguments.items()}
-                or None
-            )
+            self.record.input = {
+                name: value for name, value in arguments.items()
+            } or None
         except Exception:
             self.logger.warning(
                 f"Could not record input for {self.workflow_name}", exc_info=True
@@ -62,14 +64,16 @@ class Workflow(ABC, Generic[OutputT]):
 
     @property
     def result(self) -> OutputT:
-        # self.record is this Workflow's OperationResult envelope; .result
+        # self.record is this Workflow's WorkFlowOperationResult envelope; .result
         # on that is its own shorthand property for the payload
-        # (OperationResult.response.result)
+        # (WorkFlowOperationResult.response.result)
         if self.record.result is None:
             raise RuntimeError(f"{self.workflow_ref} output was not initialized")
         return self.record.result
 
-    async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
+    async def __call__(
+        self, *args: Any, **kwargs: Any
+    ) -> WorkFlowOperationResult[OutputT]:
         if self._called:
             raise RuntimeError(
                 f"{self.workflow_ref} instances are single-use — "
@@ -139,6 +143,10 @@ class Workflow(ABC, Generic[OutputT]):
         *,
         raise_on_failure: bool = True,
     ) -> OperationResult[Any]:
+        # typed on the base envelope both ways: a step is a step whether a
+        # @task returned a leaf or a nested Workflow returned its own tree, and
+        # nothing here reads `steps`
+        #
         # NOTE: enable raise_on_failure = False if you want to retry
         # so the caller can capture the envolope and deal with it
         # default is True more most cases

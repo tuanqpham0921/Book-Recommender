@@ -39,7 +39,7 @@ def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
     listed in cache_mapping. Returns None when there is no usable cache entry,
     so the caller falls through to the real planner.
 
-    The files are whole triage OperationResult dumps, so the plan payload sits
+    The files are whole triage WorkFlowOperationResult dumps, so the plan payload sits
     at output.parse_result."""
     file_name = cache_mapping.get(user_text)
     if not file_name:

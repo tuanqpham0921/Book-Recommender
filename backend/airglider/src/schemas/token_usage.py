@@ -2,6 +2,7 @@ from pydantic import BaseModel, model_validator, Field
 
 from ..config import UNKNOWN_MODEL, cost_of
 
+
 class ModelUsage(BaseModel):
     """Token counts attributable to a single model."""
 
@@ -39,7 +40,7 @@ class TokenUsage(ModelUsage):
 
     A *leaf* — what `OpenAIClient._extract_token_usage` builds — names its
     `model` and leaves `by_model` empty. Adding leaves together (see
-    `OperationResult.add_step`) produces an *aggregate*: the flat counts still sum
+    `WorkFlowOperationResult.add_step`) produces an *aggregate*: the flat counts still sum
     across everything, and `by_model` keeps the per-model split that the flat
     counts alone can't express once more than one model is in play.
 
@@ -50,7 +51,7 @@ class TokenUsage(ModelUsage):
     Both are recomputed on construction and after every `+=`.
     """
 
-    model: str = ''
+    model: str = ""
     by_model: dict[str, ModelUsage] = Field(default_factory=dict)
 
     # USD, priced at PRICES_CHECKED_ON rates and frozen into the run record.
@@ -75,7 +76,8 @@ class TokenUsage(ModelUsage):
         # TODO: Remove these compute them later(?)
         if self.total or self.prompt or self.completion:
             return {
-                self.model or UNKNOWN_MODEL: ModelUsage(
+                self.model
+                or UNKNOWN_MODEL: ModelUsage(
                     total=self.total,
                     prompt=self.prompt,
                     completion=self.completion,

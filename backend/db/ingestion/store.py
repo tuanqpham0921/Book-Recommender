@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import update
 from db.schema import BookModel
 from db.ingestion.utils import count_csv_data_rows, iter_books_from_csv
-from airglider import OperationResult, Response, task
+from airglider import WorkFlowOperationResult, Response, task
 from db.readiness import ReadinessResult
 import logging
 from typing import Any, AsyncIterator
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 async def insert_batch(
     batch: list[dict],
     session_factory: async_sessionmaker[AsyncSession],
-) -> OperationResult:
+) -> WorkFlowOperationResult:
     """Upsert a batch of books (metadata only; embedding column excluded on conflict)."""
     if not batch:
-        return OperationResult(
+        return WorkFlowOperationResult(
             ok=False,
             message="No books to insert.",
             details=[f"batch_length: {len(batch)}"],
@@ -45,7 +45,7 @@ async def insert_batch(
         result = await session.execute(stmt)
         await session.commit()
     rowcount = result.rowcount or 0
-    return OperationResult(
+    return WorkFlowOperationResult(
         ok=rowcount > 0,
         message=f"Stored {rowcount} books out.",
         response=Response(result=rowcount),
@@ -58,10 +58,10 @@ async def store_books_from_csv(
     session_factory: async_sessionmaker[AsyncSession],
     csv_path: Path,
     readiness: ReadinessResult | None = None,
-) -> OperationResult:
+) -> WorkFlowOperationResult:
     """Load books from CSV into the database."""
     if readiness and readiness.enough_rows:
-        return OperationResult(
+        return WorkFlowOperationResult(
             ok=True, message="Already have enough rows to start applications.", steps=[]
         )
 
@@ -88,7 +88,7 @@ async def store_books_from_csv(
         "total_books": total_books,
         "csv_row_count": csv_row_count,
     }
-    return OperationResult(
+    return WorkFlowOperationResult(
         ok=total_books_stored == total_books,
         message=f"Stored {total_books_stored} books out of {total_books}.",
         response=Response(result=result),
@@ -106,12 +106,12 @@ async def store_book_embedding(
     isbn13: str,
     embedding: list[float],
     session: AsyncSession,
-) -> OperationResult:
+) -> WorkFlowOperationResult:
     stmt = (
         update(BookModel).where(BookModel.isbn13 == isbn13).values(embedding=embedding)
     )
     await session.execute(stmt)
-    return OperationResult(
+    return WorkFlowOperationResult(
         ok=True,
         message=f"Updated embedding for book {isbn13}.",
         response=Response(result=isbn13),

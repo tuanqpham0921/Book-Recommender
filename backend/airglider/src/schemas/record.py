@@ -45,12 +45,25 @@ class Time(BaseModel):
             datetime.fromisoformat(self.start_time) + timedelta(seconds=self.duration)
         ).isoformat()
 
+
 class Response(BaseModel, Generic[OutputT]):
     result: OutputT | None = None
     output_type: str | None = None
 
+
 class OperationResult(BaseModel, Generic[OutputT]):
-    """Outcome of a single named check or step."""
+    """Outcome of a single named unit of work — one leaf, no subtree.
+
+    The envelope every `@task` returns and the row every span list is made of.
+    It is deliberately the *whole* record minus `steps`: a leaf carries an id,
+    a parent, timing, input, output, details, usage and an error, which is
+    everything a trace reader asks of one operation. Only something that runs
+    other operations needs children, and that is `WorkFlowOperationResult`.
+
+    Prefer this type in annotations and isinstance checks unless the code
+    actually touches `steps`/`add_step`/`flatten` — a step is a step whether a
+    `@task` or a `Workflow` produced it, and the narrower type is what says so.
+    """
 
     id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
     parent_id: str | None = None
@@ -58,16 +71,13 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
     ok: bool = False
     timing: Time = Field(default_factory=Time)
-    
+
     input: dict[str, Any] | None = None
     response: Response[OutputT] = Field(default_factory=Response)
     details: list[str] = Field(default_factory=list)
-    
+
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     runtime_error: RuntimeErrorInfo | None = None
-    
-    steps: list[Any] = Field(default_factory=list)
-
 
     def check_output_type(self) -> None:
         # default there's no output
@@ -87,9 +97,6 @@ class OperationResult(BaseModel, Generic[OutputT]):
                 f"{self.response.output_type}"
             )
 
-    def add_details(self, *message):
-        self.details.extend(message)
-
     @property
     def result(self):
         return self.response.result
@@ -102,20 +109,30 @@ class OperationResult(BaseModel, Generic[OutputT]):
     def end_time(self) -> str | None:
         return self.timing.end_time
 
-    def to_summary(self) -> dict[str, Any]:
-        """The trace tree with the bulk taken out — one small dict per
-        envelope, nested exactly like `steps`, so a run reads top to bottom
-        without unfolding payloads.
+    def add_details(self, *message):
+        self.details.extend(message)
 
-        Complements rather than replaces the full tree: the DB row and the
+    def to_span(self) -> "OperationResult[Any]":
+        """This envelope as one flat row — itself, for something with no subtree.
+
+        The counterpart on `WorkFlowOperationResult` projects a tree node down
+        to this class, which is what lets `flatten()` return a list whose
+        entries genuinely carry no children. Polymorphic so the walk never has
+        to ask which kind it is holding.
+        """
+        return self
+
+    def to_summary(self) -> dict[str, Any]:
+        """This envelope with the bulk taken out — one small dict, so a run
+        reads top to bottom without unfolding payloads.
+
+        Complements rather than replaces the full record: the DB row and the
         dev-log still carry `to_serializable(record)`. Only the shape the eye
-        needs lives here, which is why it stays one recursive method instead
-        of a summary + a separate steps summary — the tree has no fixed depth,
-        so anything that doesn't recurse only ever shows the top two levels.
+        needs lives here.
 
         `details` is left out on purpose: nearly every `@task` leaf carries the
         decorator's own bookkeeping line, which would bury the shape. Read the
-        full tree when a failure needs explaining beyond `error`.
+        full record when a failure needs explaining beyond `error`.
         """
         payload = self.result
         summary = {
@@ -138,11 +155,23 @@ class OperationResult(BaseModel, Generic[OutputT]):
             "unpriced_models": self.token_usage.unpriced_models,
             "error": self.runtime_error.type if self.runtime_error else None,
             "output": payload.to_summary() if hasattr(payload, "to_summary") else None,
-            "steps": [step.to_summary() for step in self.steps],
         }
         # keeps a leaf to the three or four keys that actually say something;
         # `ok: False` and a genuine 0 survive this (see remove_empty_values)
         return remove_empty_values(summary)
+
+
+class WorkFlowOperationResult(OperationResult):
+    """An `OperationResult` that ran other operations — the same envelope plus
+    the children it accumulated.
+
+    The split is by shape, not by producer: `steps` is the only thing here, and
+    everything that reads a record without walking into it should be typed on
+    the base class. A `Workflow` owns one of these; a `@task` returns a plain
+    `OperationResult`, and either can be attached as a step.
+    """
+
+    steps: list[Any] = Field(default_factory=list)
 
     def add_step(self, step: "OperationResult[Any]") -> None:
         """Attach a child envelope, stamp it as ours, and roll its token usage up.
@@ -170,8 +199,34 @@ class OperationResult(BaseModel, Generic[OutputT]):
         self.token_usage += step.token_usage
         self.steps.append(step)
 
-    def flatten(self) -> list["OperationResult[Any]"]:
-        """This envelope and every descendant, depth-first, parent before child.
+    def to_span(self) -> OperationResult[Any]:
+        """This node projected down to a childless `OperationResult`.
+
+        `model_construct`, not a dump-and-revalidate: every value already came
+        off a validated model, and re-validating would turn a live payload into
+        the dict `model_dump` made of it. The sub-models (`timing`, `response`,
+        `token_usage`) are shared with the tree node rather than copied — this
+        is a view for reading, not an independent record.
+        """
+        return OperationResult.model_construct(
+            **{name: getattr(self, name) for name in OperationResult.model_fields}
+        )
+
+    def to_summary(self) -> dict[str, Any]:
+        """The base summary, plus each child's — nested exactly like `steps`.
+
+        One recursive method rather than a summary + a separate steps summary:
+        the tree has no fixed depth, so anything that doesn't recurse only ever
+        shows the top two levels.
+        """
+        summary = super().to_summary()
+        steps = [step.to_summary() for step in self.steps]
+        if steps:
+            summary["steps"] = steps
+        return summary
+
+    def flatten(self) -> list[OperationResult[Any]]:
+        """This node and every descendant, depth-first, parent before child.
 
         The trace tree as a **span list** — one entry per operation, each
         carrying the `parent_id` `add_step` stamped on it, so the nesting
@@ -180,26 +235,26 @@ class OperationResult(BaseModel, Generic[OutputT]):
         timeline or a per-step cost table wants; `to_summary()` is the shape
         for reading a run top to bottom.
 
-        In-memory envelopes come back **by reference** — mutating one mutates
-        the tree. A record read back from JSON is different: `steps: list[Any]`
-        does not re-validate, so its children are plain dicts, and those are
-        validated into envelopes here and are therefore copies.
+        Entries are `OperationResult`, never this class: a row that still
+        dragged its own subtree would serialize the tree once per level, so
+        every node goes through `to_span()` on the way in. A leaf step has no
+        subtree to drop and comes back **by reference**.
 
-        Each entry still carries its own `steps`, since these are the real
-        envelopes rather than a projection. For a flat *table*, where a row
-        dragging its whole subtree would blow the list up quadratically, drop
-        them at the point of use:
-
-            [op.model_copy(update={"steps": []}) for op in record.flatten()]
+        A record read back from JSON is the other case to know about —
+        `steps: list[Any]` does not re-validate, so its children arrive as
+        plain dicts. They are validated here as tree nodes (the wider of the
+        two shapes: a leaf's dict simply has no `steps` key and defaults to
+        none), which makes them copies.
         """
-        flat: list[OperationResult[Any]] = [self]
+        flat: list[OperationResult[Any]] = [self.to_span()]
         for step in self.steps:
-            # a reloaded record's steps are dicts (see above); an in-memory
-            # one's are envelopes. add_step rejects anything else, so a value
-            # that is neither came from a hand-built record and is skipped
-            # rather than allowed to break the walk.
             if isinstance(step, dict):
-                step = OperationResult.model_validate(step)
-            if isinstance(step, OperationResult):
+                step = WorkFlowOperationResult.model_validate(step)
+
+            if isinstance(step, WorkFlowOperationResult):
                 flat.extend(step.flatten())
+            elif isinstance(step, OperationResult):
+                flat.append(step.to_span())
+            # anything else came from a hand-built record — add_step rejects
+            # it — and is skipped rather than allowed to break the walk
         return flat

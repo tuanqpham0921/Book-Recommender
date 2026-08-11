@@ -60,8 +60,8 @@ from airglider import Workflow
 
 
 class NodeWorkflowOutput(BaseModel, ABC):
-    """Domain payload stored on OperationResult.response.result, exposed via
-    the `.result` property (OperationResult.result)."""
+    """Domain payload stored on WorkFlowOperationResult.response.result, exposed via
+    the `.result` property (WorkFlowOperationResult.result)."""
 
     # Optional, not `str = None` / `BaseRequest = None`: model_dump_json emits
     # `null` for these when unset, and a non-optional annotation then rejects

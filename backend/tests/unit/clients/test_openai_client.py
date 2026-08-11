@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
-from airglider import OperationResult
+from airglider import WorkFlowOperationResult
 from clients.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
@@ -132,7 +132,7 @@ class TestExecute:
         req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
-        assert isinstance(result, OperationResult)
+        assert isinstance(result, WorkFlowOperationResult)
 
     @pytest.mark.asyncio
     async def test_output_is_assistant_message(self):

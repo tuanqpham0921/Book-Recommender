@@ -3,11 +3,15 @@ import logging
 import time
 from typing import Callable
 from functools import wraps
-from typing import Any, Coroutine,  ParamSpec, TypeVar, overload
+from typing import Any, Coroutine, ParamSpec, TypeVar, overload
 
-from .schemas.record import OperationResult, Response, TokenUsage, RuntimeErrorInfo
+from .schemas.record import (
+    OperationResult,
+    Response,
+    TokenUsage,
+    RuntimeErrorInfo,
+)
 from .utils import bind_call_args, now_iso, to_record_input
-
 
 OutputT = TypeVar("OutputT")
 P = ParamSpec("P")
@@ -47,9 +51,7 @@ def record_input(
     """
     try:
         arguments = bind_call_args(func, args, kwargs)
-        return {
-            name: value for name, value in arguments.items()
-        } or None
+        return {name: value for name, value in arguments.items()} or None
     except Exception:
         logger.warning(f"Could not record input for {func.__qualname__}", exc_info=True)
         return None
@@ -66,7 +68,9 @@ def task(
         func: Callable[P, Coroutine[Any, Any, Any]],
     ) -> Callable[P, Coroutine[Any, Any, OperationResult[Any]]]:
         @wraps(func)
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> OperationResult[Any]:
+        async def wrapper(
+            *args: P.args, **kwargs: P.kwargs
+        ) -> OperationResult[Any]:
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
             call_input = record_input(func, args, kwargs, logger)
@@ -95,6 +99,11 @@ def task(
 
                 # custom operation result retuned from the task
                 # the task must validate ok itself
+                #
+                # checked against the base class, so a task that assembled its
+                # own WorkFlowOperationResult (one that ran sub-checks and set
+                # `steps` itself) passes through with its subtree intact — the
+                # decorator only ever *builds* the leaf shape below
                 if isinstance(raw_output, OperationResult):
                     if log_info and not raw_output.ok:
                         logger.warning(f"Task failed: {func_ref}")
@@ -112,7 +121,9 @@ def task(
                 result = OperationResult(
                     name=func_ref,
                     input=call_input,
-                    response=Response(result=raw_output, output_type=type(raw_output).__name__),
+                    response=Response(
+                        result=raw_output, output_type=type(raw_output).__name__
+                    ),
                 )
                 stamp(result)
                 result.ok = True

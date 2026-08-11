@@ -1,4 +1,4 @@
-"""`OperationResult.input` — what a workflow was called with, on its envelope.
+"""`WorkFlowOperationResult.input` — what a workflow was called with, on its envelope.
 
 Two rules carry the weight here:
 
@@ -18,7 +18,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from airglider import OperationResult, Workflow, task
+from airglider import WorkFlowOperationResult, Workflow, task
 
 
 class _Payload(BaseModel):
@@ -149,7 +149,9 @@ class TestSerializability:
         wf = _Recorded()
         await wf(_Input(query="q", anchors=[_Payload(rows=["a"])]))
 
-        reloaded = OperationResult.model_validate_json(wf.record.model_dump_json())
+        reloaded = WorkFlowOperationResult.model_validate_json(
+            wf.record.model_dump_json()
+        )
         assert reloaded.input == wf.record.input
 
     async def test_a_live_handle_is_reduced_to_its_type_name(self):
@@ -208,12 +210,14 @@ class TestTaskDecorator:
         assert result.input == {"key": "k"}
 
     async def test_a_task_owning_its_envelope_keeps_its_own_input(self):
-        """A task that built its own OperationResult may have recorded
+        """A task that built its own WorkFlowOperationResult may have recorded
         something more meaningful than its raw arguments."""
 
         @task(log_info=False)
         async def _custom(key):
-            return OperationResult(ok=True, input={"resolved": "something better"})
+            return WorkFlowOperationResult(
+                ok=True, input={"resolved": "something better"}
+            )
 
         result = await _custom("k")
 
@@ -222,7 +226,7 @@ class TestTaskDecorator:
     async def test_a_task_owning_its_envelope_gets_the_arguments_by_default(self):
         @task(log_info=False)
         async def _custom(key):
-            return OperationResult(ok=True)
+            return WorkFlowOperationResult(ok=True)
 
         result = await _custom("k")
 

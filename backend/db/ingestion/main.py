@@ -4,7 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from airglider import OperationResult, task
+from airglider import WorkFlowOperationResult, task
 from common import setup_logging
 from common.context import AppContext
 from common.utils import save_file
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 async def load_books(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
-) -> OperationResult:
+) -> WorkFlowOperationResult:
     """Load books from CSV into PostgreSQL and embed any missing vectors."""
 
     schema = DatabaseConstants.SCHEMA
@@ -53,9 +53,7 @@ async def load_books(
         await store_books_from_csv(session_factory, csv_path, readiness.result)
     )
 
-    checks.append(
-        await embed_missing_books(session_factory, openai_client)
-    )
+    checks.append(await embed_missing_books(session_factory, openai_client))
 
     if not readiness.ok:
         logger.info("Readiness check failed first time, retrying after ingestion...")
@@ -67,7 +65,7 @@ async def load_books(
         checks.append(readiness)
 
     ok = all(check.ok for check in checks) or readiness.ok
-    return OperationResult(
+    return WorkFlowOperationResult(
         ok=ok,
         message="Books loaded successfully." if ok else "Books loading failed.",
         steps=checks,
@@ -84,7 +82,7 @@ async def main() -> None:
     async with AppContext(settings) as ctx:
         result = await load_books(
             session_factory=ctx.session_factory,
-            openai_client=OpenAIClient(settings.openai)
+            openai_client=OpenAIClient(settings.openai),
         )
 
         # print("-----------FINAL RESULT-----------------")

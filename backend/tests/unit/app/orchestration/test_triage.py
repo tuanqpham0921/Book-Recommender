@@ -9,7 +9,7 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow, TriageOutput
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
-from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
+from airglider import WorkFlowOperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 
 
@@ -39,19 +39,17 @@ def _make_orchestration_output() -> TriageOutput:
     return TriageOutput(
         session_id="sess_1",
         # diagram lives on the plan now — TriageOutput.diagram reads through
-        parse_result=PlanJaneOutput(
-            accepted_goals=[goal], diagram="graph TD;\nA-->B;"
-        ),
+        parse_result=PlanJaneOutput(accepted_goals=[goal], diagram="graph TD;\nA-->B;"),
     )
 
 
 class TestTriageWorkflowSteps:
     # storing the parse output moved from an add_step override into
     # run() itself — see TriageWorkflow.run. add_step itself now lives on
-    # OperationResult (airglider), where steps/token_usage do.
+    # WorkFlowOperationResult (airglider), where steps/token_usage do.
 
     def test_merges_token_usage_from_step_result(self, orchestrator):
-        step = OperationResult(
+        step = WorkFlowOperationResult(
             ok=True,
             response=Response(result=PlanJaneOutput()),
             token_usage=TokenUsage(total=100, prompt=60, completion=40),
@@ -68,7 +66,7 @@ class TestTriageWorkflowSteps:
         assert msg in orchestrator.messages
 
     def test_appends_to_result_steps(self, orchestrator):
-        step = OperationResult(
+        step = WorkFlowOperationResult(
             ok=True, name="some_step", response=Response(result=PlanJaneOutput())
         )
         orchestrator.record.add_step(step)
@@ -82,7 +80,7 @@ def _make_runtime_error(message: str) -> RuntimeErrorInfo:
         return RuntimeErrorInfo.from_exception(e)
 
 
-def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
+def _mock_child_workflow(step_result: WorkFlowOperationResult, output) -> AsyncMock:
     """A stand-in for an PlanJaneExecutor instance: calling it (as
     run_async_step does) awaits to step_result, while .result (accessed
     directly by TriageWorkflow.run) returns output."""
@@ -98,7 +96,7 @@ class TestTriageWorkflowRuntimeErrorPropagation:
     async def test_parse_failure_runtime_error_propagates(self, orchestrator):
         parse_error = _make_runtime_error("parse crashed")
         parse_workflow = _mock_child_workflow(
-            OperationResult(ok=False, runtime_error=parse_error),
+            WorkFlowOperationResult(ok=False, runtime_error=parse_error),
             PlanJaneOutput(),
         )
 

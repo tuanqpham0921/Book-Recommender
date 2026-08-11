@@ -171,11 +171,11 @@ From the owner's design notes — these need real design thought, not drive-by f
 4. **Checkpoint gap**: interrupts work, but child-workflow progress is lost because
    steps are only appended *after* a child finishes (`run_async_step` → await → 
    `add_steps`). Better checkpointing needs incremental `add_steps` (append the child's
-   `OperationResult` reference before running, let it mutate) — requires rethinking
+   `WorkFlowOperationResult` reference before running, let it mutate) — requires rethinking
    result append/overwrite semantics. *(Cross-referenced in roadmap deferred:
    checkpoint/resume.)*
 5. ~~`self.result` message overwriting is lossy — figure out message vs details.~~
-   **Done (2026-08-07):** resolved by deleting `OperationResult.message` outright
+   **Done (2026-08-07):** resolved by deleting `WorkFlowOperationResult.message` outright
    rather than making the overwrite lossless. Every layer (`@task`, `Workflow.__call__`,
    `run_async_step`, `finalize_result`, each workflow's own `success_message`/
    `failure_message`) wrote the field and nothing read it back — not the API, not
@@ -211,7 +211,7 @@ From the owner's design notes — these need real design thought, not drive-by f
 - **P3** `formatAuthors`/`formatAuthorsMobile` (~90% duplicated) — collapse with a
   `compact` flag.
 - **P3** Backend rename pass: `@task` → `@op_task` (avoid name conflicts),
-  `OperationalResult` → `OperationResult`, workflow `self.result` → `self.op_result`,
+  `OperationalResult` → `WorkFlowOperationResult`, workflow `self.result` → `self.op_result`,
   "issues" → "feedback" everywhere.
 - **P3** `db/stores/base_store.py` prints compiled SQL with `literal_binds=True` — only
   book_store routes through it (no PII flows), but gate behind `logger.debug`.

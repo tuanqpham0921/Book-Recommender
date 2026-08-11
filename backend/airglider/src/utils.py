@@ -114,13 +114,13 @@ def bind_call_args(
 def to_record_input(value: Any) -> Any:
     """`to_serializable`, except anything that can summarize itself does.
 
-    Written for `OperationResult.input`, where the same payload is often
+    Written for `WorkFlowOperationResult.input`, where the same payload is often
     already recorded in full somewhere else: a node's input carries the output
     of the node before it, whose own envelope holds every field of it. Dumping
     it again would store the same rows once per dependent, and the trace grows
     with the square of the plan's depth rather than its size.
 
-    `to_summary()` is the same opt-in hook `OperationResult.to_summary` already
+    `to_summary()` is the same opt-in hook `WorkFlowOperationResult.to_summary` already
     honours for payloads, so a type says how it wants to appear in a record
     once, in one place. Everything without one — the query string, the parsed
     arguments — is serialized whole, which is the point: those are the small,

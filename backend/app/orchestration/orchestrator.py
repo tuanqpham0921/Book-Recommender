@@ -9,7 +9,7 @@ from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
-from airglider import OperationResult, RuntimeErrorInfo
+from airglider import WorkFlowOperationResult, RuntimeErrorInfo
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class Orchestrator:
         # turn still records what ran), which is what makes ok/duration/
         # token_usage cover the whole turn instead of the planner alone.
         # Bound before the try for the same reason as the two above.
-        record = OperationResult(
+        record = WorkFlowOperationResult(
             name=f"orchestrator_{request_context.user_message.id}",
         )
         time_start = time.perf_counter()
@@ -118,7 +118,7 @@ class Orchestrator:
             # and stream close below.
             for workflow in (conversation_orchestrator, task_runner):
                 step = getattr(workflow, "record", None)
-                if isinstance(step, OperationResult):
+                if isinstance(step, WorkFlowOperationResult):
                     record.add_step(step)
             record.ok = (
                 record.runtime_error is None
@@ -156,7 +156,7 @@ class Orchestrator:
     @staticmethod
     async def _finalize(
         request_context: RequestContext,
-        record: OperationResult,
+        record: WorkFlowOperationResult,
         conversation_orchestrator: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
         sse_stream: SSEStream,

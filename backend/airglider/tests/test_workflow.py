@@ -1,7 +1,7 @@
 import asyncio
 
 import pytest
-from airglider import OperationResult, StepFailure, TokenUsage, Workflow, task
+from airglider import WorkFlowOperationResult, StepFailure, TokenUsage, Workflow, task
 
 
 def _make_flaky_task(fail_times: int):
@@ -19,7 +19,7 @@ def _make_flaky_task(fail_times: int):
     return flaky_step
 
 
-async def _as_coro(step: OperationResult) -> OperationResult:
+async def _as_coro(step: WorkFlowOperationResult) -> WorkFlowOperationResult:
     return step
 
 
@@ -40,7 +40,7 @@ class _ExceptionWorkflow(Workflow):
 
 
 class _StepWorkflow(Workflow):
-    def __init__(self, step: OperationResult, raise_on_failure: bool = True):
+    def __init__(self, step: WorkFlowOperationResult, raise_on_failure: bool = True):
         super().__init__()
         self._step = step
         self._raise = raise_on_failure
@@ -55,7 +55,9 @@ class _StepWorkflow(Workflow):
 
 
 class _MultiStepWorkflow(Workflow):
-    def __init__(self, steps: list[OperationResult], raise_on_failure: bool = True):
+    def __init__(
+        self, steps: list[WorkFlowOperationResult], raise_on_failure: bool = True
+    ):
         super().__init__()
         self._steps = steps
         self._raise = raise_on_failure
@@ -101,26 +103,26 @@ class TestWorkflowExecution:
 
 class TestRunAsyncStep:
     async def test_success_step_appended_to_steps(self):
-        step = OperationResult(ok=True, name="my_step")
+        step = WorkFlowOperationResult(ok=True, name="my_step")
         result = await _StepWorkflow(step)()
         assert result.ok is True
         assert len(result.steps) == 1
         assert result.steps[0].name == "my_step"
 
     async def test_failed_step_sets_result_ok_false(self):
-        step = OperationResult(ok=False, name="bad_step")
+        step = WorkFlowOperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=False)()
         assert result.ok is False
 
     async def test_failed_step_names_the_step_in_details(self):
-        step = OperationResult(ok=False, name="bad_step")
+        step = WorkFlowOperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=False)()
         assert "FAILED STEP:bad_step" in result.details
 
     async def test_failed_step_with_raise_is_a_controlled_abort(self):
         # StepFailure is control flow, not a crash: the parent envelope must
         # NOT carry runtime_error — the step's own envelope has the details
-        step = OperationResult(ok=False, name="bad_step")
+        step = WorkFlowOperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=True)()
         assert result.ok is False
         assert result.runtime_error is not None
@@ -128,24 +130,24 @@ class TestRunAsyncStep:
         assert "bad_step" in result.runtime_error.message
 
     async def test_failed_step_without_raise_still_appended(self):
-        step = OperationResult(ok=False, name="bad_step")
+        step = WorkFlowOperationResult(ok=False, name="bad_step")
         result = await _StepWorkflow(step, raise_on_failure=False)()
         assert len(result.steps) == 1
 
     async def test_multiple_steps_all_appended(self):
         steps = [
-            OperationResult(ok=True, name="step_1"),
-            OperationResult(ok=True, name="step_2"),
-            OperationResult(ok=True, name="step_3"),
+            WorkFlowOperationResult(ok=True, name="step_1"),
+            WorkFlowOperationResult(ok=True, name="step_2"),
+            WorkFlowOperationResult(ok=True, name="step_3"),
         ]
         result = await _MultiStepWorkflow(steps)()
         assert len(result.steps) == 3
 
     async def test_bad_step_does_not_stop_later_steps_without_raise(self):
         steps = [
-            OperationResult(ok=True, name="step_1"),
-            OperationResult(ok=False, name="bad_step"),
-            OperationResult(ok=True, name="step_3"),
+            WorkFlowOperationResult(ok=True, name="step_1"),
+            WorkFlowOperationResult(ok=False, name="bad_step"),
+            WorkFlowOperationResult(ok=True, name="step_3"),
         ]
         result = await _MultiStepWorkflow(steps, raise_on_failure=False)()
         # raise_on_failure=False: every step still runs and is recorded
@@ -155,9 +157,9 @@ class TestRunAsyncStep:
 
     async def test_bad_step_stop_later_steps_with_raise(self):
         steps = [
-            OperationResult(ok=True, name="step_1"),
-            OperationResult(ok=False, name="bad_step"),
-            OperationResult(ok=True, name="step_3"),
+            WorkFlowOperationResult(ok=True, name="step_1"),
+            WorkFlowOperationResult(ok=False, name="bad_step"),
+            WorkFlowOperationResult(ok=True, name="step_3"),
         ]
         result = await _MultiStepWorkflow(steps, raise_on_failure=True)()
         assert len(result.steps) == 2
@@ -166,8 +168,8 @@ class TestRunAsyncStep:
 
     async def test_later_success_does_not_clear_an_earlier_failure(self):
         steps = [
-            OperationResult(ok=False, name="bad_step"),
-            OperationResult(ok=True, name="step_2"),
+            WorkFlowOperationResult(ok=False, name="bad_step"),
+            WorkFlowOperationResult(ok=True, name="step_2"),
         ]
         result = await _MultiStepWorkflow(steps)()
         # the parent stays failed unless the workflow explicitly declares
@@ -177,7 +179,7 @@ class TestRunAsyncStep:
 
 
 class TestCrashingSteps:
-    """Steps whose coroutine raises mid-flight, before any OperationResult
+    """Steps whose coroutine raises mid-flight, before any WorkFlowOperationResult
     is produced."""
 
     async def test_unenveloped_coroutine_crash_is_a_workflow_crash(self):
@@ -202,7 +204,7 @@ class TestCrashingSteps:
             raise ValueError("boom before any envelope")
 
         async def _okay_step(i):
-            return OperationResult(ok=True, name=f"okay_step: {i}")
+            return WorkFlowOperationResult(ok=True, name=f"okay_step: {i}")
 
         class _BareCoroWorkflow(Workflow):
             async def run(self, *args, **kwargs):
@@ -227,7 +229,7 @@ class TestCrashingSteps:
             raise ValueError("boom before any envelope")
 
         async def _okay_step(i):
-            return OperationResult(ok=True, name=f"okay_step_{i}")
+            return WorkFlowOperationResult(ok=True, name=f"okay_step_{i}")
 
         class _BareCoroWorkflow(Workflow):
             def __init__(self, raise_on_failure):
@@ -259,7 +261,7 @@ class TestCrashingSteps:
             raise ValueError("boom")
 
         async def _okay_step(i):
-            return OperationResult(ok=True, name=f"okay_step_{i}")
+            return WorkFlowOperationResult(ok=True, name=f"okay_step_{i}")
 
         class _EnvelopedCrashWorkflow(Workflow):
             async def run(self, *args, **kwargs):
@@ -333,7 +335,7 @@ class TestCrashingSteps:
 
 
 class TestAddStep:
-    # add_step lives on OperationResult, not Workflow — a workflow reaches it
+    # add_step lives on WorkFlowOperationResult, not Workflow — a workflow reaches it
     # through the envelope it owns (self.record), same as add_details
     def test_rejects_non_operation_result(self):
         wf = _SuccessWorkflow()
@@ -343,13 +345,13 @@ class TestAddStep:
     def test_aggregates_token_usage_across_steps(self):
         wf = _SuccessWorkflow()
         wf.record.add_step(
-            OperationResult(
+            WorkFlowOperationResult(
                 ok=True,
                 token_usage=TokenUsage(total=10, prompt=8, completion=2, cached=8),
             )
         )
         wf.record.add_step(
-            OperationResult(
+            WorkFlowOperationResult(
                 ok=True,
                 token_usage=TokenUsage(total=20, prompt=12, completion=8, cached=2),
             )

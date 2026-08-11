@@ -7,7 +7,7 @@ tree you can persist, summarize, and cost.
 ## Use it
 
 ```python
-from airglider import OperationResult, Workflow, task
+from airglider import WorkFlowOperationResult, Workflow, task
 ```
 
 `airglider/__init__.py` is the entire public surface. **Import from the package
@@ -19,7 +19,7 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `Workflow` | base class for a multi-step async process — subclass, override `run()` |
 | `task` | decorator for a single async function |
 | `StepFailure` | control-flow signal raised by `run_async_step` when a step fails |
-| `OperationResult` | the envelope: `ok`, `input`, `steps`, `details`, `runtime_error`, `timing`, `token_usage` |
+| `WorkFlowOperationResult` | the envelope: `ok`, `input`, `steps`, `details`, `runtime_error`, `timing`, `token_usage` |
 | `Response`, `Time` | the envelope's payload and timing sub-models |
 | `TokenUsage`, `ModelUsage` | token counts, per-model split, and USD cost |
 | `RuntimeErrorInfo` | serializable exception record |
@@ -136,8 +136,8 @@ Known rough edges, in rough priority order:
    root, or no `src` layer at all.
 2. **`base_glider.py` contains `Workflow`** — the module is named for the
    metaphor, the class for the concept. Pick one axis.
-3. **`record.py` holds `OperationResult`, and callers store it as `.record`** —
-   three names for one thing (record / OperationResult / "envelope"). Cheapest
+3. **`record.py` holds `WorkFlowOperationResult`, and callers store it as `.record`** —
+   three names for one thing (record / WorkFlowOperationResult / "envelope"). Cheapest
    to unify now, while the library has one consumer.
 4. `exception.py` → `exceptions.py`; `schemas/` is a web-app word for what is
    really the core model.

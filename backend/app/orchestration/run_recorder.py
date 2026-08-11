@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from airglider import OperationResult
+from airglider import WorkFlowOperationResult
 from common.utils import (
     save_file,
     to_serializable,
@@ -29,9 +29,9 @@ def build_chat_run_row(
     session_id: str,
     user_chat_id: str,
     user_message: str,
-    record: OperationResult,
-    planner: OperationResult[TriageOutput] | None,
-    tasks: OperationResult[TaskRunnerOutput] | None = None,
+    record: WorkFlowOperationResult,
+    planner: WorkFlowOperationResult[TriageOutput] | None,
+    tasks: WorkFlowOperationResult[TaskRunnerOutput] | None = None,
 ) -> dict[str, Any]:
     """Map a finished turn onto ChatRunModel columns. Promoted stats (ok,
     duration, tokens, mermaid) up front for cheap querying; the full-fidelity
@@ -62,7 +62,7 @@ def build_chat_run_row(
 
 async def record_chat_run(
     request_context: RequestContext,
-    record: OperationResult,
+    record: WorkFlowOperationResult,
     planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
 ) -> None:
@@ -82,7 +82,7 @@ async def record_chat_run(
         return
     # NOTE: if something fails here
     # it'll timeout not error (why?)
-    
+
     try:
         row = build_chat_run_row(
             session_id=request_context.session_id,
@@ -109,6 +109,11 @@ async def record_chat_run(
                     "chat_run": strip_zero_token_usage(remove_empty_values(row)),
                 },
                 file_name=row["chat_id"],
+            )
+            flat = record.flatten()
+            save_file(
+                flat,
+                file_name=row["chat_id"] + "_flat",
             )
 
         async with request_context.session_factory() as session:

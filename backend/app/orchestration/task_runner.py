@@ -13,7 +13,7 @@ from app.domains.planjane import PlanJaneOutput
 from app.domains.planjane.executor import SystemGoal
 from ..domains.node_spec import NodeSpec
 from dataclasses import dataclass
-from airglider import OperationResult
+from airglider import WorkFlowOperationResult
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TaskRecord:
     goal: SystemGoal
-    result: OperationResult
+    result: WorkFlowOperationResult
 
 
 class TaskRunnerInput(WorkflowInput):
@@ -149,7 +149,9 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 spec.input, goal.description, self._dependency_outputs(goal, results)
             )
         except ValidationError as e:
-            missing = ", ".join(".".join(str(p) for p in err["loc"]) for err in e.errors())
+            missing = ", ".join(
+                ".".join(str(p) for p in err["loc"]) for err in e.errors()
+            )
             logger.warning(
                 f"Skipping task {goal.id} ({node_type}): "
                 f"could not assemble {spec.input.__name__} ({missing})"
@@ -179,7 +181,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         goal: SystemGoal,
         executor: AppWorkflow,
         node_input: WorkflowInput,
-    ) -> OperationResult:
+    ) -> WorkFlowOperationResult:
         """Run one node bracketed by the UI's task.start / task.end events.
 
         The runner owns both ends of the section, not the executors: one place

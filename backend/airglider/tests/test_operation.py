@@ -1,5 +1,11 @@
 import pytest
-from airglider import task, OperationResult, Response, RuntimeErrorInfo, TokenUsage
+from airglider import (
+    task,
+    WorkFlowOperationResult,
+    Response,
+    RuntimeErrorInfo,
+    TokenUsage,
+)
 from airglider import to_serializable
 from airglider import MODEL_PRICES, PER_MILLION, UNKNOWN_MODEL
 
@@ -11,7 +17,7 @@ async def _returns_plain_value():
 
 @task
 async def _returns_custom_result():
-    return OperationResult(ok=True, response=Response(result="custom_output"))
+    return WorkFlowOperationResult(ok=True, response=Response(result="custom_output"))
 
 
 @task
@@ -27,7 +33,7 @@ async def _returns_none():
 class TestTask:
     async def test_plain_value_wraps_in_operation_result(self):
         result = await _returns_plain_value()
-        assert isinstance(result, OperationResult)
+        assert isinstance(result, WorkFlowOperationResult)
         assert result.ok is True
         assert result.result == "hello"
         assert result.timing.duration is not None
@@ -35,14 +41,14 @@ class TestTask:
 
     async def test_passthrough_when_returns_operation_result(self):
         result = await _returns_custom_result()
-        assert isinstance(result, OperationResult)
+        assert isinstance(result, WorkFlowOperationResult)
         assert result.ok is True
         assert result.result == "custom_output"
         assert result.timing.duration is not None
 
     async def test_captures_exception_as_failed_result(self):
         result = await _raises_value_error()
-        assert isinstance(result, OperationResult)
+        assert isinstance(result, WorkFlowOperationResult)
         assert result.ok is False
         assert result.runtime_error is not None
         assert "something went wrong" in result.runtime_error.message
@@ -232,10 +238,10 @@ class TestCostAttribution:
         assert dumped["by_model"]["gpt-4.1-mini"]["prompt"] == 80
 
 
-class TestOperationResult:
+class TestWorkFlowOperationResult:
     def test_defaults(self):
         # fail-closed: an envelope is failed until someone declares success
-        result = OperationResult()
+        result = WorkFlowOperationResult()
         assert result.ok is False
         assert result.steps == []
         assert result.result is None
@@ -244,24 +250,34 @@ class TestOperationResult:
         assert result.id.startswith("op_")
 
     def test_check_output_type_passes_on_type_match(self):
-        result = OperationResult(response=Response(result="hello", output_type="str"))
+        result = WorkFlowOperationResult(
+            response=Response(result="hello", output_type="str")
+        )
         result.check_output_type()  # must not raise
 
     def test_check_output_type_raises_on_type_mismatch(self):
-        result = OperationResult(response=Response(result=42, output_type="str"))
+        result = WorkFlowOperationResult(
+            response=Response(result=42, output_type="str")
+        )
         with pytest.raises(TypeError):
             result.check_output_type()
 
     def test_check_output_type_raises_when_declared_but_missing(self):
-        result = OperationResult(response=Response(result=None, output_type="str"))
+        result = WorkFlowOperationResult(
+            response=Response(result=None, output_type="str")
+        )
         result.check_output_type()
 
     def test_check_output_type_raises_on_undeclared_output(self):
-        result = OperationResult(response=Response(result="hello", output_type=None))
+        result = WorkFlowOperationResult(
+            response=Response(result="hello", output_type=None)
+        )
         with pytest.raises(TypeError, match="without a declared output_type"):
             result.check_output_type()
 
     def test_check_output_type_skips_when_nothing_was_claimed(self):
         # failure envelopes legitimately carry neither output nor output_type
-        result = OperationResult(response=Response(result=None, output_type=None))
+        result = WorkFlowOperationResult(
+            response=Response(result=None, output_type=None)
+        )
         result.check_output_type()  # must not raise

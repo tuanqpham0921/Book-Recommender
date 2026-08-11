@@ -6,7 +6,7 @@ the orchestrator, so _finalize calls it unconditionally."""
 from unittest.mock import ANY, AsyncMock, patch
 
 from app.orchestration.orchestrator import Orchestrator
-from airglider import OperationResult
+from airglider import WorkFlowOperationResult
 
 # request_context comes from tests/conftest.py
 
@@ -14,7 +14,7 @@ from airglider import OperationResult
 class TestOrchestratorRun:
     async def test_records_chat_run(self, request_context):
         mock_workflow = AsyncMock()
-        mock_workflow.record = OperationResult(ok=True)
+        mock_workflow.record = WorkFlowOperationResult(ok=True)
         # explicit: an AsyncMock would auto-create `.artifact` as a MagicMock,
         # and the orchestrator hands it straight to the task runner
         mock_workflow.artifact = {}
