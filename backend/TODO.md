@@ -11,31 +11,44 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 continue:
+    * clean up the tracer and tree and stuff
+        * work on the tool calls and token usages
+        * make sure those are okay
+        * need to move the tool call to the node
+            and add the messages you get a clean convo history
+            for each workflow etc...
+        * maybe leave off the messages, just make sure you have a 
+        list of chatmessages, I'm not too sure how previous chats will work yet
+        so trying to get each workflow to work may cause refactoring later
+
+    * stick with just the eval baseline 
+        no Node([tool1, tool2, ...])
+        I don't want to test it for v1, since i know or semi know
+        the this way works
+        but I think the idea is
+
+        planner(query="less jane Austen", 
+                artifacts=[
+                    conversation_state={
+                        summary="just recommend books",
+                        previous_followup="would you like me look for something ..."
+                    },
+                    previous_rec or current books=[isbn=..., isbn=...]
+                ])
+        ->
+        task(
+            query="recommend more books without [ibsn] from previous"
+            target_node = recommend
+            atrifacts=[isbn13, isb13, ...]
+        )
+
     * make a unified reference/artifact creator
         * follow the same format as mermaid
         * but it should have name, decription, and the text
 
-    * move the contract from schema output and stuff
-        * to external.py
-        * where you have input schema, output schema?
-        * the other schemas are actually tool schemas
-            so it should be something like
-            find_book_by_title
-                tools=[exact, series, fuzzy]?
-                and the input from external just take a query
-            
-            * output can be books types or whatever
-
-
-    * work on establishing the input for workflow contract
-        * don't over do it but parse dependents is an example
-        * maybe the task_runner handle that collection
-        * and input cls can be in node spec
     * reduce the codebase (comments and stuff)
         * mainly for claude and compact
         * update the docs for this branch
-
-    * follow the format with out all the super init stuff
     
     * cleaning up your workflow
         * app_workflow should hold llm, tool calls, parser level
