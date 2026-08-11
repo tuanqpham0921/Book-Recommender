@@ -20,7 +20,7 @@ from common.utils import (
 from db.stores.chat_run_store import ChatRunStore
 from app.common.request_context import RequestContext
 from app.orchestration.triage import TriageWorkflow, TriageOutput
-from app.domains.task_runner import TaskRunnerWorkflow, TaskRunnerOutput
+from app.orchestration.task_runner import TaskRunnerWorkflow, TaskRunnerOutput
 
 logger = logging.getLogger(__name__)
 

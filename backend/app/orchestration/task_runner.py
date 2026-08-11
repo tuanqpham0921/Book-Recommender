@@ -11,7 +11,7 @@ from app.registry import REGISTRY
 from app.domains.base_request import BaseRequest
 from app.domains.planjane import PlanJaneOutput
 from app.domains.planjane.executor import SystemGoal
-from .node_spec import NodeSpec
+from ..domains.node_spec import NodeSpec
 from dataclasses import dataclass
 from airglider import OperationResult
 

@@ -7,7 +7,7 @@ from app.common.request_context import RequestContext
 
 from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow
-from app.domains.task_runner import TaskRunnerInput, TaskRunnerWorkflow
+from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
 from airglider import OperationResult, RuntimeErrorInfo
 
