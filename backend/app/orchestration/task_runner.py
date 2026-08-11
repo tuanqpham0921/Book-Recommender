@@ -13,7 +13,7 @@ from app.domains.planjane import PlanJaneOutput
 from app.domains.planjane.executor import SystemGoal
 from ..domains.node_spec import NodeSpec
 from dataclasses import dataclass
-from airglider import WorkFlowOperationResult
+from airglider import OperationResult
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TaskRecord:
     goal: SystemGoal
-    result: WorkFlowOperationResult
+    result: OperationResult
 
 
 class TaskRunnerInput(WorkflowInput):
@@ -181,7 +181,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         goal: SystemGoal,
         executor: AppWorkflow,
         node_input: WorkflowInput,
-    ) -> WorkFlowOperationResult:
+    ) -> OperationResult:
         """Run one node bracketed by the UI's task.start / task.end events.
 
         The runner owns both ends of the section, not the executors: one place

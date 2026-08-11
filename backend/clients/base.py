@@ -26,7 +26,7 @@ class BaseLLMRequest(BaseModel, ABC):
         """The *shape* of the request, not its contents.
 
         `LLMClient.execute` is a `@task`, so this request is what lands in
-        `WorkFlowOperationResult.input` on every LLM step — and the full prompt plus
+        `OperationResult.input` on every LLM step — and the full prompt plus
         message list would then sit in every `chat_runs` row, which is exactly
         what `save_payload` exists to gate. Sizes and the model answer the
         questions a trace is actually read for ("which model, how much context,
@@ -56,7 +56,7 @@ class BaseLLMClient(ABC):
         self, req: BaseLLMRequest, save_payload: bool = False
     ) -> AssistantMessage:
         """Execute a request (stream or not). Implementations are @task
-        decorated, so callers receive an WorkFlowOperationResult envelope whose
+        decorated, so callers receive an OperationResult envelope whose
         output is the AssistantMessage."""
         ...
 

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Any, Literal, Union, cast
 
-from airglider import WorkFlowOperationResult, TokenUsage
+from airglider import OperationResult, TokenUsage
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
 from airglider import task
@@ -87,7 +87,7 @@ class ToolMessage(BaseMessage):
         output = await tool_instance(**kwargs)
 
         # NOTE: make sure the tool calls return just the output
-        if isinstance(output, WorkFlowOperationResult):
+        if isinstance(output, OperationResult):
             logger.warning(
                 f"Tool {tool_name} returned an operation result, not a raw output"
             )

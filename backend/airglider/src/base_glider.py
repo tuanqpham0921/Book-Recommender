@@ -5,7 +5,12 @@ import time
 from typing import Any, Generic, TypeVar
 from typing import Coroutine
 
-from .schemas import OperationResult, WorkFlowOperationResult, Response, RuntimeErrorInfo
+from .schemas import (
+    OperationResult,
+    WorkFlowOperationResult,
+    Response,
+    RuntimeErrorInfo,
+)
 from .exception import StepFailure
 from .utils import bind_call_args, now_iso, to_record_input
 

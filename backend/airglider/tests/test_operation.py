@@ -1,6 +1,7 @@
 import pytest
 from airglider import (
     task,
+    OperationResult,
     WorkFlowOperationResult,
     Response,
     RuntimeErrorInfo,
@@ -17,7 +18,7 @@ async def _returns_plain_value():
 
 @task
 async def _returns_custom_result():
-    return WorkFlowOperationResult(ok=True, response=Response(result="custom_output"))
+    return OperationResult(ok=True, response=Response(result="custom_output"))
 
 
 @task
@@ -33,7 +34,7 @@ async def _returns_none():
 class TestTask:
     async def test_plain_value_wraps_in_operation_result(self):
         result = await _returns_plain_value()
-        assert isinstance(result, WorkFlowOperationResult)
+        assert isinstance(result, OperationResult)
         assert result.ok is True
         assert result.result == "hello"
         assert result.timing.duration is not None
@@ -41,14 +42,14 @@ class TestTask:
 
     async def test_passthrough_when_returns_operation_result(self):
         result = await _returns_custom_result()
-        assert isinstance(result, WorkFlowOperationResult)
+        assert isinstance(result, OperationResult)
         assert result.ok is True
         assert result.result == "custom_output"
         assert result.timing.duration is not None
 
     async def test_captures_exception_as_failed_result(self):
         result = await _raises_value_error()
-        assert isinstance(result, WorkFlowOperationResult)
+        assert isinstance(result, OperationResult)
         assert result.ok is False
         assert result.runtime_error is not None
         assert "something went wrong" in result.runtime_error.message
@@ -238,38 +239,37 @@ class TestCostAttribution:
         assert dumped["by_model"]["gpt-4.1-mini"]["prompt"] == 80
 
 
-class TestWorkFlowOperationResult:
+class TestOperationResult:
     def test_defaults(self):
         # fail-closed: an envelope is failed until someone declares success
-        result = WorkFlowOperationResult()
+        result = OperationResult()
         assert result.ok is False
-        assert result.steps == []
         assert result.result is None
         assert result.runtime_error is None
         assert result.timing.duration is None
         assert result.id.startswith("op_")
 
     def test_check_output_type_passes_on_type_match(self):
-        result = WorkFlowOperationResult(
+        result = OperationResult(
             response=Response(result="hello", output_type="str")
         )
         result.check_output_type()  # must not raise
 
     def test_check_output_type_raises_on_type_mismatch(self):
-        result = WorkFlowOperationResult(
+        result = OperationResult(
             response=Response(result=42, output_type="str")
         )
         with pytest.raises(TypeError):
             result.check_output_type()
 
     def test_check_output_type_raises_when_declared_but_missing(self):
-        result = WorkFlowOperationResult(
+        result = OperationResult(
             response=Response(result=None, output_type="str")
         )
         result.check_output_type()
 
     def test_check_output_type_raises_on_undeclared_output(self):
-        result = WorkFlowOperationResult(
+        result = OperationResult(
             response=Response(result="hello", output_type=None)
         )
         with pytest.raises(TypeError, match="without a declared output_type"):
@@ -277,7 +277,23 @@ class TestWorkFlowOperationResult:
 
     def test_check_output_type_skips_when_nothing_was_claimed(self):
         # failure envelopes legitimately carry neither output nor output_type
-        result = WorkFlowOperationResult(
+        result = OperationResult(
             response=Response(result=None, output_type=None)
         )
         result.check_output_type()  # must not raise
+
+
+class TestWorkFlowOperationResult:
+    """The same envelope plus children — `steps` is the only thing the
+    subclass adds, and the only reason to reach for it."""
+
+    def test_a_leaf_envelope_has_no_steps_field(self):
+        assert "steps" not in OperationResult.model_fields
+        assert "steps" in WorkFlowOperationResult.model_fields
+
+    def test_defaults_to_no_children(self):
+        assert WorkFlowOperationResult().steps == []
+
+    def test_is_an_operation_result(self):
+        # so anything typed on the base accepts one, including add_step
+        assert isinstance(WorkFlowOperationResult(), OperationResult)

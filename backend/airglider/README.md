@@ -7,7 +7,7 @@ tree you can persist, summarize, and cost.
 ## Use it
 
 ```python
-from airglider import WorkFlowOperationResult, Workflow, task
+from airglider import OperationResult, Workflow, task
 ```
 
 `airglider/__init__.py` is the entire public surface. **Import from the package
@@ -19,7 +19,8 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `Workflow` | base class for a multi-step async process — subclass, override `run()` |
 | `task` | decorator for a single async function |
 | `StepFailure` | control-flow signal raised by `run_async_step` when a step fails |
-| `WorkFlowOperationResult` | the envelope: `ok`, `input`, `steps`, `details`, `runtime_error`, `timing`, `token_usage` |
+| `OperationResult` | the envelope for one unit of work: `ok`, `input`, `details`, `runtime_error`, `timing`, `token_usage`, `parent_id` |
+| `WorkFlowOperationResult` | the same, plus `steps` — and `add_step` / `flatten` / `to_span` |
 | `Response`, `Time` | the envelope's payload and timing sub-models |
 | `TokenUsage`, `ModelUsage` | token counts, per-model split, and USD cost |
 | `RuntimeErrorInfo` | serializable exception record |
@@ -27,6 +28,14 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `to_serializable`, `remove_empty_values`, `strip_zero_token_usage`, `now_iso`, `uuid_8` | serialization + identity helpers |
 
 ## The record tree, and `flatten()`
+
+The envelope is split by shape, not by producer. `OperationResult` is one unit
+of work — id, parent, timing, input, output, details, usage, error — and
+`WorkFlowOperationResult` is that plus the `steps` it accumulated. A `@task`
+returns the first; a `Workflow` owns the second; **either can be attached as a
+step**, which is why `add_step` and `run_async_step` are typed on the base, and
+why anything that only reads `ok`/`result`/`token_usage` should be too. Reach
+for the subclass when the code genuinely walks children.
 
 `add_step` is the only place parentage is known, so it is the only place
 `parent_id` is set. A child cannot know its own parent — a `@task` is a plain
@@ -42,11 +51,16 @@ interval. The nesting is rebuildable from the list alone, with no reference to
 the tree, which is what a timeline or a per-step cost table wants. `to_summary()`
 remains the shape for *reading* a run top to bottom.
 
-Two things to know: in-memory entries come back by reference, and a record
-reloaded from JSON has plain-dict children (`steps: list[Any]` does not
-re-validate) which `flatten` validates into copies. Entries keep their own
-`steps`, so for a flat table drop them at the point of use —
-`[op.model_copy(update={"steps": []}) for op in record.flatten()]`.
+Entries are always `OperationResult`: every node goes through `to_span()` on
+the way in, so no row drags a subtree and the list does not re-encode the tree
+once per level. `to_span()` is `model_construct` over the shared fields rather
+than a dump-and-revalidate, so a live payload stays the object the executor
+produced — and the sub-models are shared with the tree node, making a span a
+view rather than an independent record. A leaf step has nothing to drop and
+comes back by reference; a record reloaded from JSON has plain-dict children
+(`steps: list[Any]` does not re-validate) which `flatten` validates — as the
+wider of the two shapes, since a leaf's dict simply has no `steps` key — into
+copies.
 
 ## `record.input` — what a unit of work was called with
 
@@ -136,9 +150,10 @@ Known rough edges, in rough priority order:
    root, or no `src` layer at all.
 2. **`base_glider.py` contains `Workflow`** — the module is named for the
    metaphor, the class for the concept. Pick one axis.
-3. **`record.py` holds `WorkFlowOperationResult`, and callers store it as `.record`** —
-   three names for one thing (record / WorkFlowOperationResult / "envelope"). Cheapest
-   to unify now, while the library has one consumer.
+3. **`record.py` holds `OperationResult`, and callers store it as `.record`** —
+   three names for one thing (record / OperationResult / "envelope"), and the
+   subclass spells the first word differently again. Cheapest to unify now,
+   while the library has one consumer.
 4. `exception.py` → `exceptions.py`; `schemas/` is a web-app word for what is
    really the core model.
 5. Needs its own `pyproject.toml` and pytest config — the suite currently

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from clients.openai_client import OpenAIClient
 from db.stores.book_store import BookStore
 from db.schema import BookModel
-from airglider import WorkFlowOperationResult, Response, task
+from airglider import OperationResult, WorkFlowOperationResult, Response, task
 from typing import Any, AsyncIterator
 import logging, asyncio
 
@@ -25,7 +25,7 @@ async def _store_batch_embeddings(
     isbn13_bucket: list[str],
     embeddings: list[list[float]],
     session_factory: async_sessionmaker[AsyncSession],
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     if len(isbn13_bucket) != len(embeddings):
         raise ValueError(
             "ISBN13 and embedding batches have different lengths: "
@@ -48,7 +48,7 @@ async def _store_batch_embeddings(
 
         await session.commit()
 
-    return WorkFlowOperationResult(
+    return OperationResult(
         ok=True,
         message=f"Embedded {len(isbn13_bucket)} books.",
         response=Response(result=len(isbn13_bucket)),
@@ -116,7 +116,7 @@ async def _get_batch_embeddings(
 async def embed_missing_books(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Backfill embeddings for rows where embedding IS NULL."""
 
     # check if there are any books missing embeddings
@@ -124,7 +124,7 @@ async def embed_missing_books(
         book_store = BookStore(session)
         num_missing = await book_store.get_num_book_missing_embeddings()
         if num_missing == 0:
-            return WorkFlowOperationResult(
+            return OperationResult(
                 ok=True, message="No books missing embeddings."
             )
 

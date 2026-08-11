@@ -45,6 +45,7 @@ __all__ = [
     "task",
     "StepFailure",
     # envelopes
+    "OperationResult",
     "WorkFlowOperationResult",
     "Response",
     "Time",

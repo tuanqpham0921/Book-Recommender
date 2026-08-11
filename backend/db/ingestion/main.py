@@ -4,7 +4,7 @@ import asyncio
 import logging
 from pathlib import Path
 
-from airglider import WorkFlowOperationResult, task
+from airglider import OperationResult, WorkFlowOperationResult, task
 from common import setup_logging
 from common.context import AppContext
 from common.utils import save_file
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 async def load_books(
     session_factory: async_sessionmaker[AsyncSession],
     openai_client: OpenAIClient,
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Load books from CSV into PostgreSQL and embed any missing vectors."""
 
     schema = DatabaseConstants.SCHEMA

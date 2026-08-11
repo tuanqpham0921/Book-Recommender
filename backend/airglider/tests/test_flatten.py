@@ -5,13 +5,14 @@ what makes it survive is `add_step` stamping `parent_id` when it attaches a
 child. That stamp is asserted here rather than in the attach tests because it
 exists *for* this — a flat list whose entries can be re-nested from their own
 fields, with no reference to the tree they came from.
+
+The other half is the type: entries come back as `OperationResult`, the
+childless envelope, so no row in the list drags a subtree along with it.
 """
 
 import asyncio
 
-import pytest
-
-from airglider import WorkFlowOperationResult, Workflow, task
+from airglider import OperationResult, WorkFlowOperationResult, Workflow, task
 
 
 def _op(name: str) -> WorkFlowOperationResult:
@@ -36,6 +37,15 @@ class TestParentId:
         parent.add_step(child)
 
         assert child.parent_id == parent.id
+
+    def test_add_step_takes_a_leaf_envelope_too(self):
+        """A step is a step whether a `@task` or a `Workflow` produced it —
+        which is why `add_step` checks against the base class."""
+        parent, leaf = _op("parent"), OperationResult(name="leaf", ok=True)
+        parent.add_step(leaf)
+
+        assert leaf.parent_id == parent.id
+        assert parent.steps == [leaf]
 
     def test_a_root_has_no_parent(self):
         assert _tree().parent_id is None
@@ -65,6 +75,46 @@ class TestParentId:
         assert workflow.record.steps[0].parent_id == workflow.record.id
 
 
+class TestToSpan:
+    def test_a_leaf_is_already_a_span(self):
+        leaf = OperationResult(name="leaf", ok=True)
+
+        assert leaf.to_span() is leaf
+
+    def test_a_tree_node_projects_down_to_a_childless_envelope(self):
+        span = _tree().to_span()
+
+        assert type(span) is OperationResult
+        assert not hasattr(span, "steps")
+
+    def test_the_projection_keeps_every_other_field(self):
+        node = _op("node")
+        node.parent_id = "op_parent"
+        node.timing.duration = 1.5
+        node.input = {"query": "q"}
+        span = node.to_span()
+
+        assert span.id == node.id
+        assert span.parent_id == "op_parent"
+        assert span.name == "node"
+        assert span.ok is True
+        assert span.duration == 1.5
+        assert span.input == {"query": "q"}
+
+    def test_the_payload_is_not_dumped_into_a_dict(self):
+        """`model_construct` rather than dump-and-revalidate: a live payload
+        stays the object the executor produced."""
+
+        class _Payload:
+            pass
+
+        payload = _Payload()
+        node = _op("node")
+        node.response.result = payload
+
+        assert node.to_span().result is payload
+
+
 class TestFlatten:
     def test_every_envelope_appears_once(self):
         names = [op.name for op in _tree().flatten()]
@@ -74,19 +124,24 @@ class TestFlatten:
     def test_depth_first_parent_before_child(self):
         assert [op.name for op in _tree().flatten()] == ["root", "a", "a1", "a2", "b"]
 
-    def test_a_leaf_flattens_to_itself(self):
-        leaf = _op("leaf")
+    def test_a_childless_node_flattens_to_one_span(self):
+        assert [op.name for op in _op("node").flatten()] == ["node"]
 
-        assert leaf.flatten() == [leaf]
+    def test_no_entry_carries_a_subtree(self):
+        """The point of projecting: a row that kept its own children would
+        serialize the whole tree once per level."""
+        flat = _tree().flatten()
 
-    def test_in_memory_entries_are_references_not_copies(self):
-        """Documented, and load-bearing: mutating a returned envelope mutates
-        the tree it came from."""
-        root = _tree()
-        flat = root.flatten()
+        assert all(type(op) is OperationResult for op in flat)
+        assert not any(hasattr(op, "steps") for op in flat)
 
-        assert flat[0] is root
-        assert flat[1] is root.steps[0]
+    def test_a_leaf_step_comes_back_by_reference(self):
+        """It has no subtree to drop, so there is nothing to copy."""
+        root = _op("root")
+        leaf = OperationResult(name="leaf", ok=True)
+        root.add_step(leaf)
+
+        assert root.flatten()[1] is leaf
 
     def test_the_nesting_is_rebuildable_from_the_list_alone(self):
         """The point of the exercise — a span list that needs no reference to
@@ -94,7 +149,7 @@ class TestFlatten:
         flat = _tree().flatten()
         by_id = {op.id: op for op in flat}
 
-        children = {}
+        children: dict[str, list[str]] = {}
         for op in flat:
             if op.parent_id:
                 children.setdefault(by_id[op.parent_id].name, []).append(op.name)
@@ -108,9 +163,7 @@ class TestReloadedRecords:
     runs is most of what this is for."""
 
     def test_a_reloaded_record_still_flattens(self):
-        reloaded = WorkFlowOperationResult.model_validate_json(
-            _tree().model_dump_json()
-        )
+        reloaded = WorkFlowOperationResult.model_validate_json(_tree().model_dump_json())
 
         assert isinstance(reloaded.steps[0], dict)
         assert [op.name for op in reloaded.flatten()] == [
@@ -124,13 +177,20 @@ class TestReloadedRecords:
     def test_parent_ids_survive_the_round_trip(self):
         """Because the stamp is part of the record, not derived while
         flattening — a reader that only ever sees the stored tree gets it."""
-        reloaded = WorkFlowOperationResult.model_validate_json(
-            _tree().model_dump_json()
-        )
+        reloaded = WorkFlowOperationResult.model_validate_json(_tree().model_dump_json())
         flat = reloaded.flatten()
 
         assert flat[0].parent_id is None
         assert all(op.parent_id for op in flat[1:])
+
+    def test_a_reloaded_leaf_step_is_not_dropped(self):
+        """A step dict is validated as the wider of the two shapes — a leaf's
+        simply has no `steps` key — so a `@task` envelope survives the trip."""
+        root = _op("root")
+        root.add_step(OperationResult(name="leaf", ok=True))
+        reloaded = WorkFlowOperationResult.model_validate_json(root.model_dump_json())
+
+        assert [op.name for op in reloaded.flatten()] == ["root", "leaf"]
 
     def test_a_hand_built_record_with_a_junk_step_does_not_break_the_walk(self):
         record = _op("root")
@@ -161,11 +221,11 @@ class TestSpanTableUse:
         assert len(spans) == 2
         assert all(span.timing.start_time and span.end_time for span in spans)
 
-    def test_dropping_steps_gives_a_flat_row_per_operation(self):
-        """The documented one-liner: without it every row drags its whole
-        subtree and the list serializes quadratically."""
-        rows = [op.model_copy(update={"steps": []}) for op in _tree().flatten()]
+    def test_the_list_serializes_without_repeating_the_tree(self):
+        """One row, one operation. With subtrees left in, "root" alone would
+        re-encode all five."""
+        flat = _tree().flatten()
+        encoded = [op.model_dump_json() for op in flat]
 
-        assert len(rows) == 5
-        assert all(row.steps == [] for row in rows)
-        assert [row.parent_id for row in rows].count(None) == 1
+        assert len(flat) == 5
+        assert all(encoding.count('"id"') == 1 for encoding in encoded)

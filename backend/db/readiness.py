@@ -8,7 +8,7 @@ from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
-from airglider import WorkFlowOperationResult, Response, task
+from airglider import OperationResult, WorkFlowOperationResult, Response, task
 from pydantic import BaseModel, Field
 from db.stores.book_store import BookStore
 
@@ -19,7 +19,7 @@ async def _check_table(
     *,
     schema: str,
     table: str,
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Check if the table exists and the schema is correct.
 
     Args:
@@ -35,7 +35,7 @@ async def _check_table(
     )
     exists = bool(result.scalar())
 
-    return WorkFlowOperationResult(
+    return OperationResult(
         name="table",
         ok=exists,
         message=f"Table {fqtn} exists." if exists else f"Table {fqtn} not found.",
@@ -50,7 +50,7 @@ async def _check_table_rows(
     schema: str,
     table: str,
     min_rows: int,
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Check if the table has at least the minimum number of rows.
 
     Args:
@@ -64,7 +64,7 @@ async def _check_table_rows(
     result = await session.execute(text(f"SELECT COUNT(*) FROM {schema}.{table}"))
     row_count = int(result.scalar() or 0)
     ok = row_count >= min_rows
-    return WorkFlowOperationResult(
+    return OperationResult(
         name="rows",
         ok=ok,
         message=(f"Table {fqtn} has {row_count} rows (need at least {min_rows})."),
@@ -74,7 +74,7 @@ async def _check_table_rows(
 
 
 @task
-async def _check_table_extensions(session: AsyncSession) -> WorkFlowOperationResult:
+async def _check_table_extensions(session: AsyncSession) -> OperationResult:
     """Check if the required PostgreSQL extensions are installed.
 
     Args:
@@ -93,7 +93,7 @@ async def _check_table_extensions(session: AsyncSession) -> WorkFlowOperationRes
         "installed": sorted(found),
         "missing": missing,
     }
-    return WorkFlowOperationResult(
+    return OperationResult(
         name="extensions",
         ok=ok,
         message=(
@@ -131,7 +131,7 @@ async def is_ready(
         table: The table to check.
         min_rows: The minimum number of rows the table should have.
     """
-    checks: list[WorkFlowOperationResult] = []
+    checks: list[OperationResult] = []
     result = ReadinessResult()
 
     if not await check_connection(session_factory):
@@ -169,7 +169,7 @@ async def is_ready(
         # TODO: we can change this when book store implement @task decorator
         num_missing = await book_store.get_num_book_missing_embeddings()
         checks.append(
-            WorkFlowOperationResult(
+            OperationResult(
                 name="num_missing_embeddings",
                 ok=num_missing == 0,
                 message=(

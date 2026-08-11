@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from airglider import WorkFlowOperationResult
+from airglider import OperationResult, WorkFlowOperationResult
 from common.utils import (
     save_file,
     to_serializable,
@@ -29,9 +29,9 @@ def build_chat_run_row(
     session_id: str,
     user_chat_id: str,
     user_message: str,
-    record: WorkFlowOperationResult,
-    planner: WorkFlowOperationResult[TriageOutput] | None,
-    tasks: WorkFlowOperationResult[TaskRunnerOutput] | None = None,
+    record: OperationResult,
+    planner: OperationResult[TriageOutput] | None,
+    tasks: OperationResult[TaskRunnerOutput] | None = None,
 ) -> dict[str, Any]:
     """Map a finished turn onto ChatRunModel columns. Promoted stats (ok,
     duration, tokens, mermaid) up front for cheap querying; the full-fidelity
@@ -62,6 +62,9 @@ def build_chat_run_row(
 
 async def record_chat_run(
     request_context: RequestContext,
+    # the one place the tree shape is required rather than incidental: the
+    # dev-log below writes `record.flatten()`, which only a node with children
+    # can answer
     record: WorkFlowOperationResult,
     planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,

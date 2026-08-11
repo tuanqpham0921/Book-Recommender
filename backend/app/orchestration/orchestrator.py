@@ -9,7 +9,7 @@ from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
-from airglider import WorkFlowOperationResult, RuntimeErrorInfo
+from airglider import OperationResult, WorkFlowOperationResult, RuntimeErrorInfo
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class Orchestrator:
             # and stream close below.
             for workflow in (conversation_orchestrator, task_runner):
                 step = getattr(workflow, "record", None)
-                if isinstance(step, WorkFlowOperationResult):
+                if isinstance(step, OperationResult):
                     record.add_step(step)
             record.ok = (
                 record.runtime_error is None

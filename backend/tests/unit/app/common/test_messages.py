@@ -15,7 +15,7 @@ from clients.messages import (
     ToolMessage,
     UserMessage,
 )
-from airglider import WorkFlowOperationResult, Response, TokenUsage
+from airglider import OperationResult, Response, TokenUsage
 
 
 class _FakeResult(BaseModel):
@@ -182,7 +182,7 @@ class TestToolMessageExecute:
     async def test_returns_operation_result(self):
         tool_call = self._make_tool_call("FindByTitle", {"title": "Dune"})
         result = await ToolMessage.execute(tool_call)
-        assert isinstance(result, WorkFlowOperationResult)
+        assert isinstance(result, OperationResult)
 
     async def test_output_is_tool_message(self):
         tool_call = self._make_tool_call("FindByTitle", {"title": "Dune"})
@@ -214,7 +214,7 @@ class TestToolMessageExecute:
     async def test_unwraps_operation_result_output(self):
         tool_call = self._make_tool_call(
             "FindByTitle",
-            WorkFlowOperationResult(
+            OperationResult(
                 ok=True, response=Response(result={"title": "Dune"})
             ),
         )
@@ -226,7 +226,7 @@ class TestToolMessageExecute:
 
         tool_call = self._make_tool_call(
             "FindByTitle",
-            WorkFlowOperationResult(ok=True, response=Response(result="some result")),
+            OperationResult(ok=True, response=Response(result="some result")),
         )
         with caplog.at_level(logging.WARNING, logger="app.common.messages"):
             await ToolMessage.execute(tool_call)

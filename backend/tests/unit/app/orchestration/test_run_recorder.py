@@ -10,7 +10,7 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.orchestration.triage import TriageOutput
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
-from airglider import WorkFlowOperationResult, Response, TokenUsage
+from airglider import OperationResult, WorkFlowOperationResult, Response, TokenUsage
 
 
 def _make_goal():
@@ -28,7 +28,7 @@ def _make_goal():
     return goal
 
 
-def _make_planner_record() -> WorkFlowOperationResult:
+def _make_planner_record() -> OperationResult:
     goal = _make_goal()
     output = TriageOutput(
         session_id="sess_1",
@@ -36,14 +36,14 @@ def _make_planner_record() -> WorkFlowOperationResult:
         # it, which is what run_recorder promotes into chat_runs.mermaid
         parse_result=PlanJaneOutput(accepted_goals=[goal], diagram="graph TD;"),
     )
-    return WorkFlowOperationResult(
+    return OperationResult(
         ok=True,
         response=Response(result=output),
         token_usage=TokenUsage(total=42, prompt=30, completion=12),
     )
 
 
-def _make_root_record(planner: WorkFlowOperationResult) -> WorkFlowOperationResult:
+def _make_root_record(planner: OperationResult) -> WorkFlowOperationResult:
     """The orchestrator's root envelope, built the way Orchestrator.run builds
     it: the planner record hung on as a step, then ok/duration stamped."""
     record = WorkFlowOperationResult(name="orchestrator_chat_1", ok=True)
@@ -52,7 +52,7 @@ def _make_root_record(planner: WorkFlowOperationResult) -> WorkFlowOperationResu
     return record
 
 
-def _make_workflow(planner: WorkFlowOperationResult):
+def _make_workflow(planner: OperationResult):
     workflow = MagicMock()
     workflow.record = planner
     workflow.result = planner.result
@@ -165,11 +165,21 @@ class TestRecordChatRun:
                 ctx, _make_root_record(planner), _make_workflow(planner)
             )
 
-        mock_save.assert_called_once()
+        # two files: the run itself, then the same run as a span list
+        assert mock_save.call_count == 2
+        run_call, flat_call = mock_save.call_args_list
+
         # the readable trace and the full row travel together, one file
-        payload = mock_save.call_args.args[0]
+        payload = run_call.args[0]
         assert set(payload) == {"summary", "chat_run"}
         assert payload["summary"]["steps"][0]["ok"] is True
+
+        # one entry per operation, childless, parent before child
+        spans = flat_call.args[0]
+        assert flat_call.kwargs["file_name"].endswith("_flat")
+        assert [span.parent_id for span in spans] == [None, spans[0].id]
+        assert all(type(span) is OperationResult for span in spans)
+
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 
     async def test_production_writes_db_only(self, make_request_context):

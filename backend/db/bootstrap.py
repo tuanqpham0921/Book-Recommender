@@ -10,7 +10,7 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 from config.constants import FilesLocationConstants
 from db.readiness import ReadinessResult
 
-from airglider import WorkFlowOperationResult, task
+from airglider import OperationResult, WorkFlowOperationResult, task
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +40,13 @@ async def _execute_sql_file(session: AsyncSession, path: Path) -> None:
 @task
 async def enable_extensions(
     session_factory: async_sessionmaker[AsyncSession],
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Install required PostgreSQL extensions."""
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_EXTENSIONS_FILE)
         await session.commit()
 
-    return WorkFlowOperationResult(
+    return OperationResult(
         ok=True, message="PostgreSQL extensions installed successfully."
     )
 
@@ -54,25 +54,25 @@ async def enable_extensions(
 @task
 async def init_tables(
     session_factory: async_sessionmaker[AsyncSession],
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Create application tables from schema SQL."""
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_TABLES_FILE)
         await session.commit()
 
-    return WorkFlowOperationResult(ok=True, message="Tables created successfully.")
+    return OperationResult(ok=True, message="Tables created successfully.")
 
 
 @task
 async def create_indexes(
     session_factory: async_sessionmaker[AsyncSession],
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Create database indexes from schema SQL."""
     async with session_factory() as session:
         await _execute_sql_file(session, FilesLocationConstants.SCHEMA_INDEXES_FILE)
         await session.commit()
 
-    return WorkFlowOperationResult(ok=True, message="Indexes created successfully.")
+    return OperationResult(ok=True, message="Indexes created successfully.")
 
 
 @task
@@ -86,7 +86,7 @@ async def bootstrap_schema(
             ok=True, message="No actions required.", steps=[]
         )
 
-    checks: list[WorkFlowOperationResult] = []
+    checks: list[OperationResult] = []
 
     checks.append(await enable_extensions(session_factory))
     checks.append(await init_tables(session_factory))

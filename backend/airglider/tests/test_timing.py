@@ -14,7 +14,7 @@ from datetime import datetime
 
 import pytest
 
-from airglider import WorkFlowOperationResult, Workflow, task
+from airglider import OperationResult, Workflow, task
 from airglider.src.schemas import Time
 from airglider.src.utils import now_iso
 
@@ -39,10 +39,10 @@ class TestDerivation:
         assert Time(start_time=now_iso()).end_time is None
 
     def test_a_fresh_envelope_has_no_end_time(self):
-        assert WorkFlowOperationResult().end_time is None
+        assert OperationResult().end_time is None
 
     def test_the_envelope_delegates_to_its_timing(self):
-        record = WorkFlowOperationResult()
+        record = OperationResult()
         record.timing.duration = 2.0
 
         assert record.end_time == record.timing.end_time
@@ -139,7 +139,7 @@ class TestTaskStampsBeforeTheAwait:
         @task(log_info=False)
         async def _custom():
             await asyncio.sleep(0.05)
-            return WorkFlowOperationResult(ok=True)
+            return OperationResult(ok=True)
 
         before_call = _parse(now_iso())
         result = await _custom()
