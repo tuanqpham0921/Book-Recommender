@@ -1,11 +1,11 @@
 from typing import Any
 
 from app.common.messages import AssistantMessage
-from app.common.prompt_loader import load_prompt
 from app.domains.books.base_workflow import BookWorkflow
 from clients import OpenAIParserRequest
 
-from .schemas import FindByTitleOutput, FindByTitleRetrieval
+from .schemas import FindByTitleRetrieval
+from .external import FindByTitleOutput
 
 from common.prompts import basic_fill_schema_prompt
 

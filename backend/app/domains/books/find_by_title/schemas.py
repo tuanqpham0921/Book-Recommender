@@ -1,9 +1,8 @@
 from app.domains.base_request import BaseRequest
-from app.domains.books.schemas import BookRetrievalOutput
+
 from pydantic import Field
 from typing import Literal
 from .labels import FindTitleNodeTypeEnum
-from db.schema import BookModel
 
 class FindByTitleRetrieval(BaseRequest):
     """Purpose: Retrieve the books whose titles most closely match the one given.
@@ -39,9 +38,5 @@ class FindByTitleRetrieval(BaseRequest):
     node_type: Literal[FindTitleNodeTypeEnum.REQUEST] = FindTitleNodeTypeEnum.REQUEST
     title: str = Field(..., json_schema_extra={"example": "Dune"})
 
-class FindByTitleOutput(BookRetrievalOutput):
-    """`num_books` is how many titles matched and `query` is how to reach them;
-    this node counts and does not fetch. `num_books == 0` means the catalog has
-    no such title — a real answer, and the moment to ask the user for a better
-    one rather than to fail the node."""
+
 

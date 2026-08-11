@@ -29,7 +29,7 @@ from clients.openai_requests import OpenAIChatRequest
 
 from app.domains.books.schemas import Book
 
-from .schemas import count_values
+from app.common.utils import count_values
 
 RESPONSE_PROMPT_PATH = "domains/books/analyze_recommend/prompts/response_prompt.txt"
 

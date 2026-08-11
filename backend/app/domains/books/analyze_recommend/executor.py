@@ -21,7 +21,8 @@ from .generate_response import (
     render_summaries,
     summarize_references,
 )
-from .schemas import RecommendationOutput, RecommendationStrategy
+from .schemas import RecommendationStrategy
+from .external import RecommendationOutput
 
 logger = logging.getLogger(__name__)
 
