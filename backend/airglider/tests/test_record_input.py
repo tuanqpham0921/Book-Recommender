@@ -221,7 +221,8 @@ class TestTaskDecorator:
 
         result = await _custom("k")
 
-        assert result.input == {"resolved": "something better"}
+        assert result.input == {"key": "k"}
+        assert result.steps[0].input == {"resolved": "something better"}
 
     async def test_a_task_owning_its_envelope_gets_the_arguments_by_default(self):
         @task(log_info=False)

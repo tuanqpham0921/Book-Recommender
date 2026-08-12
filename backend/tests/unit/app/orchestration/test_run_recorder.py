@@ -165,20 +165,22 @@ class TestRecordChatRun:
                 ctx, _make_root_record(planner), _make_workflow(planner)
             )
 
-        # two files: the run itself, then the same run as a span list
+        # two files: the run as a span list, then the turn's message history
         assert mock_save.call_count == 2
-        run_call, flat_call = mock_save.call_args_list
+        flat_call, messages_call = mock_save.call_args_list
 
-        # the readable trace and the full row travel together, one file
-        payload = run_call.args[0]
-        assert set(payload) == {"summary", "chat_run"}
-        assert payload["summary"]["steps"][0]["ok"] is True
-
-        # one entry per operation, childless, parent before child
+        # one entry per operation, parent before child, and already serialized
+        # — save_file receives jsonable data, not live envelopes
+        chat_id = ctx.user_message.id
         spans = flat_call.args[0]
-        assert flat_call.kwargs["file_name"].endswith("_flat")
-        assert [span.parent_id for span in spans] == [None, spans[0].id]
-        assert all(type(span) is OperationResult for span in spans)
+        assert flat_call.kwargs["file_name"] == chat_id
+        assert all(isinstance(span, dict) for span in spans)
+        assert [span.get("parent_id") for span in spans] == [None, spans[0]["id"]]
+        # remove_empty_values drops the empty `steps` of a projected span, so
+        # no row in the file carries a subtree
+        assert not any("steps" in span for span in spans)
+
+        assert messages_call.args[1] == f"{chat_id}_record_messages"
 
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 

@@ -69,7 +69,7 @@ class Workflow(ABC, Generic[OutputT]):
         try:
             arguments = bind_call_args(self.run, args, kwargs)
             self.record.input = {
-                name: value for name, value in arguments.items()
+                name: to_record_input(value) for name, value in arguments.items()
             } or None
         except Exception:
             self.logger.warning(

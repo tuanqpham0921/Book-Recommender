@@ -105,6 +105,30 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
     )
 
 
+@task
+async def _check_embeddings(session: AsyncSession) -> OperationResult:
+    """Check how many books are still missing an embedding.
+
+    A `@task` like the checks above rather than an envelope built inline, so it
+    attaches itself to `is_ready`'s record the same way they do — a hand-built
+    one would be the single check missing from the trace.
+
+    Args:
+        session: An async session.
+    """
+    num_missing = await BookStore(session).get_num_book_missing_embeddings()
+    return OperationResult(
+        name="embeddings",
+        ok=num_missing == 0,
+        details=[
+            "No books missing embeddings."
+            if num_missing == 0
+            else f"Found {num_missing} books missing embeddings."
+        ],
+        response=Response(result=num_missing, output_type="int"),
+    )
+
+
 class ReadinessResult(BaseModel):
     database_connected: bool = False
     need_db_bootstrap: bool = False
@@ -165,28 +189,18 @@ async def is_ready(
 
     async with session_factory() as session:
         # check if embeddings are present
-        book_store = BookStore(session)
-        # TODO: we can change this when book store implement @task decorator
-        num_missing = await book_store.get_num_book_missing_embeddings()
-        checks.append(
-            OperationResult(
-                name="num_missing_embeddings",
-                ok=num_missing == 0,
-                message=(
-                    "No books missing embeddings."
-                    if num_missing == 0
-                    else f"Found {num_missing} books missing embeddings."
-                ),
-                response=Response(result=num_missing),
-            )
-        )
-        result.num_missing_embeddings = num_missing
+        embeddings = await _check_embeddings(session)
+        checks.append(embeddings)
+        result.num_missing_embeddings = embeddings.result
 
     ok = all(check.ok for check in checks)
+    # No `steps=checks`: every check above is a @task and attached itself to
+    # this task's envelope on the way out (parent_scope). Passing them again
+    # would put each one in the tree twice — once as a step of this envelope,
+    # once inside the envelope returned here. The list is kept only to fold `ok`.
     return OperationResult(
         ok=ok,
-        message="Database is ready." if ok else "Database is not ready.",
-        steps=checks,
+        details=["Database is ready." if ok else "Database is not ready."],
         response=Response(result=result),
     )
 

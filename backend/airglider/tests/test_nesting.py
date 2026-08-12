@@ -18,6 +18,7 @@ import pytest
 
 from airglider import (
     OperationResult,
+    Response,
     TokenUsage,
     Workflow,
     current_parent,
@@ -177,24 +178,69 @@ class TestAttachedOnce:
 
 
 class TestReturnedEnvelope:
-    async def test_a_self_reported_result_keeps_its_children(self):
-        """The `_check_table` shape: reports `ok` itself, and ran a step."""
+    async def test_a_self_reported_result_becomes_a_step(self):
+        """The `_check_table` shape: reports `ok` itself, and ran a step.
+
+        The returned envelope is a unit of work in its own right, so it keeps
+        its own id and details and hangs under the wrapper — which *reports* it:
+        the wrapper's `ok` and payload are the child's.
+        """
 
         @task(log_info=False)
         async def checks():
             await leaf("probe")
-            return OperationResult(ok=False, details=["threshold not met"])
+            return OperationResult(
+                ok=False,
+                details=["threshold not met"],
+                response=Response(result=0, output_type="int"),
+            )
 
         record = await checks()
 
         assert record.ok is False
-        assert "threshold not met" in record.details
-        # the returned envelope is merged, not handed back — handing it back
-        # would have dropped the step that attached to the published one
-        assert _names(record) == ["leaf"]
+        assert record.result == 0
+        assert _names(record) == ["leaf", "checks:result"]
+        assert record.steps[1].details == ["threshold not met"]
 
-    async def test_a_hand_built_steps_list_is_not_duplicated(self):
-        """A task that both nests calls and assembles `steps=` itself."""
+    async def test_the_payload_is_the_value_not_the_envelope(self):
+        """`.result` must keep meaning "the value this produced".
+
+        Storing the envelope there would also write the whole subtree twice —
+        once under `steps`, once under `response`.
+        """
+
+        @task(log_info=False)
+        async def reports():
+            return OperationResult(
+                ok=True, response=Response(result="rows", output_type="str")
+            )
+
+        record = await reports()
+        assert record.result == "rows"
+        assert record.response.output_type == "str"
+
+    async def test_an_already_attached_child_is_not_attached_twice(self):
+        """`return await inner()` — inner attached itself on the way out, so
+        `add_step` no-ops and it appears once."""
+
+        @task(log_info=False)
+        async def passes_through():
+            return await leaf("once")
+
+        record = await passes_through()
+
+        assert _names(record) == ["leaf"]
+        assert record.result == "once"
+
+    async def test_a_hand_built_steps_list_duplicates_and_should_not_be_used(self):
+        """The one shape that still goes wrong, pinned so it is not a surprise.
+
+        A task whose children already auto-attached must not *also* hand them
+        back in a `steps=` list: the returned envelope becomes a step, and the
+        children it carries are then in the tree twice. `add_step` cannot catch
+        this — the outer object is new, only its contents are shared. The fix is
+        at the call site: drop the redundant list (see `db/readiness.py`).
+        """
 
         @task(log_info=False)
         async def both():
@@ -202,7 +248,8 @@ class TestReturnedEnvelope:
             return OperationResult(ok=True, steps=[child])
 
         record = await both()
-        assert len(record.steps) == 1
+        appearances = [op for op in record.flatten() if op.name.endswith("leaf")]
+        assert len(appearances) == 2
 
     async def test_the_returned_envelope_does_not_overwrite_the_timing(self):
         @task(log_info=False)

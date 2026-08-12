@@ -52,7 +52,9 @@ def record_input(
     """
     try:
         arguments = bind_call_args(func, args, kwargs)
-        return {name: value for name, value in arguments.items()} or None
+        return {
+            name: to_record_input(value) for name, value in arguments.items()
+        } or None
     except Exception:
         logger.warning(f"Could not record input for {func.__qualname__}", exc_info=True)
         return None
@@ -110,17 +112,32 @@ def task(
 
                     raw_output = await func(*args, **kwargs)
 
-                    # custom operation result returned from the task: the task
-                    # validated `ok` itself. Merged into the envelope we already
-                    # published rather than returned in its place — see
-                    # merge_returned_envelope for why handing it back is no
-                    # longer possible.
+                    # The task returned an envelope rather than a value, so it
+                    # validated `ok` itself. That envelope becomes a **step**,
+                    # not this task's report: whether it came from a nested
+                    # decorated call (`return await inner()`, already attached
+                    # by its own scope — `add_step` no-ops on it) or was
+                    # hand-built to describe a check, it is a unit of work in
+                    # its own right and keeps its own id, input and timing.
+                    #
+                    # This task then *reports* it: `ok` is the child's verdict,
+                    # and the payload is the child's payload — the response
+                    # object itself, never the envelope. Wrapping the envelope
+                    # would make `.result` hand back a record instead of a
+                    # value, and would serialize the whole subtree twice, once
+                    # under `steps` and once under `response`.
                     if isinstance(raw_output, OperationResult):
+                        # a hand-built envelope has no name of its own, and an
+                        # unnamed row is unreadable in a trace. `:` not `.` —
+                        # readers shorten a name to its last dotted segment, and
+                        # a `.result` suffix would shorten to "result" with no
+                        # trace of which task it belongs to.
+                        if raw_output.name is None:
+                            raw_output.name = f"{func_ref}:result"
                         result.add_step(raw_output)
                         result.add_details("nested task decorator, response is the step")
-                        result.response = Response(
-                            result=raw_output, output_type=type(raw_output).__name__
-                        )
+                        result.ok = raw_output.ok
+                        result.response = raw_output.response
                         if log_info and not result.ok:
                             logger.warning(f"Task failed: {func_ref}")
                     else:

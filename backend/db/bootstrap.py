@@ -82,7 +82,7 @@ async def bootstrap_schema(
 ) -> OperationResult:
     """Apply extensions, tables, and indexes in order (idempotent and safe to call multiple times)."""
     if readiness and not readiness.need_db_bootstrap:
-        return OperationResult(ok=True, message="No actions required.", steps=[])
+        return OperationResult(ok=True, details=["No actions required."])
 
     checks: list[OperationResult] = []
 
@@ -90,11 +90,13 @@ async def bootstrap_schema(
     checks.append(await init_tables(session_factory))
     checks.append(await create_indexes(session_factory))
 
+    # No `steps=checks`: each of those is a @task and attached itself to this
+    # task's envelope on the way out (parent_scope). Passing them again would
+    # put every check in the tree twice — once as a step of this envelope, once
+    # inside the envelope returned below. The list is kept only to fold `ok`.
     return OperationResult(
-        name="bootstrap_schema",
         ok=all(check.ok for check in checks),
-        message="Bootstrap schema completed.",
-        steps=checks,
+        details=["Bootstrap schema completed."],
     )
 
 
