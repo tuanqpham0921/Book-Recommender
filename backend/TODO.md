@@ -10,7 +10,39 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+
+you want to have the
+Capability/ExcutorWorflow():
+    def run(args):
+        tool1
+        tool2
+
+model it off the RecomendationNode
+    because you have to have a [AssistMessage=tool_call, ToolCall=result]
+    and the assistant might call/query a capability
+    FindByTitle is just 1 tool call so it seems off
+        even if you have series, or fuzzy or something
+        so the workflow output can be the ToolCall mesage
+
+    While Planner, Triage, Recommendation are different
+        Planner right now do one tool call that task1 -> task2
+        but later you can have something like recommendation multistep
+            entity generator tool, analyze generator tool
+            link them
+        but either way the output contract would be like 1 tool call
+            but you need the parser and the tool_message result
+
+    but then the output has util functions...
+    if I make it into a workflow, then I'm not sure about the fields
+    then you have to make sure they aren't dump into the payload...
+
+
 continue:
+    * don't try to do details + logging
+        * logging is for starting, failed, end
+        * details is for the pipeline stuff
+        * you can log important stuff if needed
+
     * clean up the tracer and tree and stuff
         * work on the tool calls and token usages
         * make sure those are okay

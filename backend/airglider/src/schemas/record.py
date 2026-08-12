@@ -160,7 +160,10 @@ class OperationResult(BaseModel, Generic[OutputT]):
         # `ok: False` and a genuine 0 survive this (see remove_empty_values)
         return remove_empty_values(summary)
 
-
+# TODO: revert this back to just OperationResult
+# steps is not mandatory, you can just flatten it without an extra layer
+# remove this a28117b2809c1f083f7f6385296808c53a23edfd
+# and make some minor edits
 class WorkFlowOperationResult(OperationResult):
     """An `OperationResult` that ran other operations — the same envelope plus
     the children it accumulated.

@@ -17,6 +17,16 @@ class BaseLLMRequest(BaseModel, ABC):
     prompt: str
     messages: list[APIMessage]
     model: str
+    
+    # TODO: remove this / streaming=True have the client stream them back
+    # and in the workflow I think you can do something like
+    # for event in self.llm.execute(req):
+    #     if some event: self.sse_stream.put(...)
+    # 
+    # and in the execute
+    # you do yield if streaming=true
+    # this way clients library is seperate from app
+    # and no @task is needed. But I'm not entirely sure about this
     sse_stream: Optional[SSEStream] = Field(default=None, exclude=True)
 
     @abstractmethod
