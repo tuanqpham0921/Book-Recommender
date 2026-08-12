@@ -1,304 +1,265 @@
-"""Would a ContextVar let `@task` attach itself to its caller's envelope?
+"""Does the ContextVar in airglider nest things correctly?
 
 Run:  poetry run python playground/contextvar_tasks.py
 
-The idea under test: instead of the parent adopting a child explicitly
-(`run_async_step` -> `add_step`), a ContextVar holds "the envelope currently
-being built", and the `@task` decorator reads it and attaches itself.
+The earlier version of this file hand-rolled the mechanism to decide whether it
+was safe. It is now shipped — `airglider/src/context.py`, one ContextVar plus
+`parent_scope` — and the real `@task` and `Workflow` use it, so this file
+exercises those instead of a sandbox copy.
 
-This file builds a minimal version of that on airglider's real envelopes and
-then pokes at the cases that decide whether it is safe — nesting, concurrency,
-leaks, orphans, and double-attach. Nothing here imports or modifies airglider's
-own task.py; it is a sandbox for the semantics.
+What it checks, in order:
 
-The short version of what it prints, if you don't want to run it:
+  1. task -> task -> task           nests three deep instead of collapsing
+  2. workflow -> task -> workflow   the two kinds interleave freely
+  3. concurrent workflows           no cross-talk between sibling Tasks
+  4. custom envelope + children     `ok=False` survives, subtree survives
+  5. run_async_step                 explicit attach does not double-count
+  6. a failing nested task          the error sits at the depth it happened
+  7. no parent at all               a task called from a script still runs
 
-  1. plain `await` SHARES the caller's context     -> auto-attach works
-  2. a leaf task in the middle can't hold children -> grandchildren skip a level
-  3. `gather`/`create_task` COPY the context       -> concurrent parents stay correct
-  4. `set()` without `reset()` LEAKS on the plain-await path
-  5. a task with no parent must handle an unset var
-  6. fire-and-forget outlives its parent           -> steps land after finalize
-  7. auto-attach + explicit add_step               -> double count, silently
+Durations are deliberately different per level, because "did func3's 0.3s get
+reported as func1's total?" was the original symptom.
 """
 
 import asyncio
-from contextvars import ContextVar
-from functools import wraps
 
-from airglider import OperationResult, TokenUsage, WorkFlowOperationResult
+from airglider import OperationResult, TokenUsage, Workflow, task
+
 
 # ---------------------------------------------------------------------------
-# the mechanism under test
+# helpers
 # ---------------------------------------------------------------------------
-
-# `default=None` matters: a task called outside any workflow reads this and
-# must not explode. See demo 5.
-CURRENT: ContextVar[WorkFlowOperationResult | None] = ContextVar(
-    "current_envelope", default=None
-)
-
-
-def ctx_task(func):
-    """`@task`, except it adopts itself into whatever envelope is current."""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        result = OperationResult(name=func.__name__, ok=True)
-        result.response.result = await func(*args, **kwargs)
-        result.token_usage = TokenUsage(total=1)
-
-        parent = CURRENT.get()
-        if parent is not None:
-            parent.add_step(result)  # stamps parent_id, rolls up token_usage
-        return result
-
-    return wrapper
-
-
-class CtxWorkflow:
-    """A workflow that publishes its own envelope as the current one.
-
-    `try/finally` around the reset is not optional — demo 4 shows what happens
-    without it.
-    """
-
-    def __init__(self, name, body, *, reset=True):
-        self.name = name
-        self.body = body
-        self.reset = reset
-        self.record = WorkFlowOperationResult(name=name, ok=True)
-
-    async def __call__(self, *args, **kwargs):
-        parent = CURRENT.get()
-        token = CURRENT.set(self.record)
-        try:
-            await self.body(*args, **kwargs)
-        finally:
-            if self.reset:
-                CURRENT.reset(token)
-        if parent is not None:
-            parent.add_step(self.record)
-        return self.record
 
 
 def render(env, indent=0):
-    """Print an envelope tree the way `flatten()` would have to rebuild it."""
     pad = "  " * indent
     parent = env.parent_id or "-"
-    # the payload is printed because two calls to the same function are
-    # otherwise indistinguishable in the tree — which is the whole point of
-    # demo 4
-    label = f"{env.name}({env.result})" if env.result else env.name
+    name = (env.name or "?").split(".")[-1]
+    payload = env.result
+    label = f"{name}={payload}" if isinstance(payload, (str, int)) else name
+    err = f"  !{env.runtime_error.type}" if env.runtime_error else ""
     print(
-        f"{pad}{label:<34} id={env.id}  parent={parent:<12} "
-        f"tokens={env.token_usage.total}"
+        f"{pad}{label:<28} id={env.id}  parent={parent:<12} "
+        f"ok={str(env.ok):<5} {env.duration:>5}s  tokens={env.token_usage.total}{err}"
     )
     for step in getattr(env, "steps", []):
         render(step, indent + 1)
 
 
 def banner(n, title):
-    print(f"\n{'=' * 74}\n{n}. {title}\n{'=' * 74}")
+    print(f"\n{'=' * 78}\n{n}. {title}\n{'=' * 78}")
 
 
 # ---------------------------------------------------------------------------
-# 1. plain `await` shares the caller's context
+# 1. the original symptom: three nested tasks
 # ---------------------------------------------------------------------------
 
 
-@ctx_task
-async def fetch(name):
+@task(log_info=False)
+async def func3():
+    await asyncio.sleep(0.30)
+    return "c"
+
+
+@task(log_info=False)
+async def func2():
+    await asyncio.sleep(0.10)
+    inner = await func3()
+    return f"b({inner.result})"
+
+
+@task(log_info=False)
+async def func1():
+    await asyncio.sleep(0.05)
+    inner = await func2()
+    return f"a({inner.result})"
+
+
+async def demo_nested_tasks():
+    banner(1, "task -> task -> task")
+    render(await func1())
+    print("\n-> Three envelopes, three ids, three durations. func1 reads ~0.45s")
+    print("   (its own 0.05 plus everything under it) and func3 reads 0.30 at")
+    print("   the bottom, which is the question 'where did the time go?' being")
+    print("   answerable. Before, this collapsed to one envelope wearing func1's")
+    print("   name, func3's id and func3's arguments.")
+
+
+# ---------------------------------------------------------------------------
+# 2. the two kinds interleave
+# ---------------------------------------------------------------------------
+
+
+@task(log_info=False)
+async def leaf(label):
     await asyncio.sleep(0.01)
-    return f"{name}-rows"
+    return label
 
 
-async def demo_sequential():
-    banner(1, "Sequential: plain `await` runs in the caller's context")
-
-    async def body():
-        await fetch("a")
-        await fetch("b")
-
-    wf = CtxWorkflow("workflow", body)
-    render(await wf())
-    print("\n-> both tasks found the workflow's envelope and attached to it.")
-    print("   This is the case auto-attach is designed for, and it works.")
+class InnerWorkflow(Workflow):
+    async def run(self, label):
+        await leaf(f"{label}-x")
+        await leaf(f"{label}-y")
+        self.record.ok = True
 
 
-# ---------------------------------------------------------------------------
-# 2. a leaf task cannot hold children
-# ---------------------------------------------------------------------------
+@task(log_info=False)
+async def task_that_runs_a_workflow(label):
+    # a @task calling a Workflow — the thing the "task can't call a workflow"
+    # rule would have forbidden. Nothing is threaded in; the workflow finds
+    # this task's envelope through the ContextVar.
+    await InnerWorkflow()(label)
+    return f"ran {label}"
 
 
-@ctx_task
-async def outer_task():
-    # this task runs another unit of work. Its own envelope is a plain
-    # OperationResult, which has no `steps`, so it cannot publish itself as
-    # CURRENT. The child therefore attaches to whatever is above it.
-    await fetch("inner")
-    return "done"
+class OuterWorkflow(Workflow):
+    async def run(self):
+        await task_that_runs_a_workflow("one")
+        await leaf("loose")
+        self.record.ok = True
 
 
-async def demo_leaf_cannot_parent():
-    banner(2, "A leaf task in the middle: grandchildren skip a level")
-
-    async def body():
-        await outer_task()
-
-    wf = CtxWorkflow("workflow", body)
-    render(await wf())
-    print("\n-> `fetch` is a sibling of `outer_task`, not its child, and the")
-    print("   workflow counts its tokens twice-over in shape (once via each).")
-    print("   To nest correctly, `outer_task` needs `steps` — i.e. it is a")
-    print("   Workflow, not a task. The ContextVar does not remove that rule,")
-    print("   it just makes breaking it invisible.")
+async def demo_interleaved():
+    banner(2, "workflow -> task -> workflow -> task")
+    render(await OuterWorkflow()())
+    print("\n-> Four levels, alternating kinds. `@task` now builds the tree-shaped")
+    print("   envelope, so a task can hold children; that is the only change")
+    print("   that makes this legal.")
 
 
 # ---------------------------------------------------------------------------
-# 3. concurrency: Tasks get a *copy* of the context
+# 3. concurrency
 # ---------------------------------------------------------------------------
 
 
-async def demo_concurrent_parents():
-    banner(3, "Concurrent workflows: each Task gets its own context copy")
+class ConcurrentWorkflow(Workflow):
+    async def run(self, name):
+        await asyncio.gather(leaf(f"{name}-1"), leaf(f"{name}-2"), func3())
+        self.record.ok = True
 
-    def make(name):
-        async def body():
-            await asyncio.gather(fetch(f"{name}-1"), fetch(f"{name}-2"))
 
-        return CtxWorkflow(name, body)
-
-    left, right = make("left-wf"), make("right-wf")
-    for record in await asyncio.gather(left(), right()):
+async def demo_concurrent():
+    banner(3, "Concurrent workflows: each Task carries its own copy")
+    left, right = ConcurrentWorkflow(), ConcurrentWorkflow()
+    for record in await asyncio.gather(left("left"), right("right")):
         render(record)
-
-    print("\n-> No cross-talk. `asyncio.gather` wraps each coroutine in a Task,")
-    print("   and a Task snapshots the context at creation — so each child sees")
-    print("   the workflow that spawned it, and a `set()` inside one Task can")
-    print("   never be observed by its sibling. Concurrency is the part that")
-    print("   actually works.")
+    print("\n-> No cross-talk. gather() wraps each coroutine in a Task and a Task")
+    print("   snapshots the context at creation, so a set() inside one is")
+    print("   invisible to its sibling. The copy is shallow — the envelope object")
+    print("   is shared — so the attach still mutates the real parent.")
 
 
 # ---------------------------------------------------------------------------
-# 4. the leak: set() without reset() on the plain-await path
+# 4. a task that builds its own envelope AND runs children
 # ---------------------------------------------------------------------------
 
 
-async def demo_leak():
-    banner(4, "Leak: `set()` with no `reset()` bleeds into the caller")
+@task(log_info=False)
+async def check_something():
+    """The `_check_table` shape: reports ok itself, without raising."""
+    child = await leaf("probe")
+    return OperationResult(
+        ok=False,
+        details=[f"probe returned {child.result}", "threshold not met"],
+    )
 
-    async def inner_body():
-        await fetch("inner")
 
-    async def outer_body():
-        leaky = CtxWorkflow("leaky-wf", inner_body, reset=False)
-        await leaky()
-        # everything after this point in the SAME coroutine now writes into
-        # leaky-wf's envelope instead of outer-wf's
-        await fetch("after-leak")
-
-    outer = CtxWorkflow("outer-wf", outer_body)
-    render(await outer())
-    print("\n-> `after-leak` landed under leaky-wf. A plain `await` does not")
-    print("   restore anything on return, so the only thing standing between")
-    print("   you and this is a try/finally in every publisher.")
-    print("\n   Look at the token counts too: outer-wf reads 1 while the child")
-    print("   it contains reads 2. `add_step` rolls usage up ONCE, at attach")
-    print("   time — so any step that arrives at a child afterwards is missing")
-    print("   from every ancestor's total. Same root cause as demo 6, and it")
-    print("   is why a late attach is not just a cosmetic nesting problem.")
+async def demo_custom_envelope():
+    banner(4, "A task returning its own OperationResult, with a child underneath")
+    record = await check_something()
+    render(record)
+    print(f"\ndetails = {record.details}")
+    print("\n-> ok=False and the details survive; so does the child. The returned")
+    print("   envelope is merged into the published one rather than handed back,")
+    print("   because the published one is what `leaf` already attached to —")
+    print("   returning the other object would have dropped the subtree.")
 
 
 # ---------------------------------------------------------------------------
-# 5. a task with no parent at all
+# 5. run_async_step alongside auto-attach
+# ---------------------------------------------------------------------------
+
+
+@task(log_info=False)
+async def billed():
+    result = OperationResult(ok=True)
+    result.token_usage = TokenUsage(total=7)
+    return result
+
+
+class ExplicitWorkflow(Workflow):
+    async def run(self):
+        # the step attached itself on the way out; run_async_step attaches it
+        # again. It must land once, and its 7 tokens must be counted once.
+        await self.run_async_step(billed())
+        self.record.ok = True
+
+
+async def demo_no_double_attach():
+    banner(5, "run_async_step + auto-attach: attached once, counted once")
+    record = await ExplicitWorkflow()()
+    render(record)
+    print(f"\nsteps={len(record.steps)}  tokens={record.token_usage.total}")
+    print("\n-> One step, 7 tokens. `add_step` is idempotent now: parent_id being")
+    print("   set already is what marks a step as claimed, so the explicit call")
+    print("   is a no-op. That is what lets both mechanisms be live at once.")
+
+
+# ---------------------------------------------------------------------------
+# 6. failure depth
+# ---------------------------------------------------------------------------
+
+
+@task(log_info=False)
+async def explodes():
+    raise ValueError("nope")
+
+
+@task(log_info=False)
+async def calls_the_exploder():
+    await explodes()
+    return "survived"
+
+
+async def demo_failure_depth():
+    banner(6, "A nested task that raises")
+    render(await calls_the_exploder())
+    print("\n-> The parent is ok=True with no error of its own: it caught nothing")
+    print("   and returned normally. The failure is one level down, where it")
+    print("   happened. Deciding that an ok=False child should fail the parent is")
+    print("   still `run_async_step`'s job — the only thing it still does alone.")
+
+
+# ---------------------------------------------------------------------------
+# 7. no parent
 # ---------------------------------------------------------------------------
 
 
 async def demo_orphan():
-    banner(5, "No workflow in scope: the var is unset")
+    banner(7, "Called from a script, with nothing above it")
+    from airglider import current_parent
 
-    result = await fetch("standalone")
-    print(f"CURRENT.get() -> {CURRENT.get()}")
-    render(result)
-    print("\n-> Fine, but note the envelope is simply dropped unless the caller")
-    print("   keeps the return value. Auto-attach makes 'did this get recorded?'")
-    print("   depend on ambient state rather than on the call site.")
-
-
-# ---------------------------------------------------------------------------
-# 6. fire-and-forget outliving its parent
-# ---------------------------------------------------------------------------
-
-
-async def demo_outliving_task():
-    banner(6, "Fire-and-forget: a step lands after the parent finalized")
-
-    background = None
-
-    async def body():
-        nonlocal background
-        # create_task snapshots the context *now* — including this workflow's
-        # envelope — but the coroutine runs later
-        background = asyncio.create_task(slow_fetch())
-        await asyncio.sleep(0)
-
-    @ctx_task
-    async def slow_fetch():
-        await asyncio.sleep(0.05)
-        return "late"
-
-    wf = CtxWorkflow("workflow", body)
-    record = await wf()
-    print("at finalize:")
-    render(record)
-
-    await background
-    print("\n0.05s later:")
-    render(record)
-    print("\n-> The envelope was already 'closed' and reported. A late step")
-    print("   mutates it after the fact — and if it had been serialized in")
-    print("   between, the stored tree and the in-memory one disagree.")
-
-
-# ---------------------------------------------------------------------------
-# 7. auto-attach alongside an explicit add_step
-# ---------------------------------------------------------------------------
-
-
-async def demo_double_attach():
-    banner(7, "Both mechanisms at once: the step is counted twice")
-
-    async def body():
-        record = CURRENT.get()
-        step = await fetch("a")  # already attached itself
-        record.add_step(step)  # the explicit seam attaches it again
-
-    wf = CtxWorkflow("workflow", body)
-    result = await wf()
-    render(result)
-    print(f"\nsteps={len(result.steps)}  tokens={result.token_usage.total}"
-          f"  (one operation, one token)")
-    print("\n-> This is the migration hazard. `run_async_step` and auto-attach")
-    print("   would both be live during any transition, and nothing errors —")
-    print("   `add_step` appends unconditionally and `token_usage +=` doubles.")
+    print(f"current_parent() -> {current_parent()}")
+    render(await leaf("standalone"))
+    print("\n-> default=None, so the attach is skipped. A startup hook or a test")
+    print("   that calls a task directly still gets its envelope back.")
 
 
 async def main():
-    await demo_sequential()
-    await demo_leaf_cannot_parent()
-    await demo_concurrent_parents()
-    await demo_leak()
+    await demo_nested_tasks()
+    await demo_interleaved()
+    await demo_concurrent()
+    await demo_custom_envelope()
+    await demo_no_double_attach()
+    await demo_failure_depth()
     await demo_orphan()
-    await demo_outliving_task()
-    await demo_double_attach()
 
-    print(f"\n{'=' * 74}")
-    print("Verdict: concurrency is the part that works (demo 3). What breaks")
-    print("is everything about *scope* — nesting depth (2), publisher")
-    print("discipline (4), whether a call is recorded at all (5), lifetime")
-    print("(6), and coexistence with the explicit seam (7).")
-    print(f"{'=' * 74}")
+    print(f"\n{'=' * 78}")
+    print("The rule is now: every envelope attaches to whoever was current when")
+    print("it started, exactly once, on the way out. Who may call whom stopped")
+    print("mattering. What still cannot work is fire-and-forget — a create_task")
+    print("that outlives its parent attaches to a record already serialized.")
+    print(f"{'=' * 78}")
 
 
 if __name__ == "__main__":

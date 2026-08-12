@@ -86,11 +86,12 @@ class ToolMessage(BaseMessage):
         tool_instance = cast(Any, tool_call.function.parsed_arguments)
         output = await tool_instance(**kwargs)
 
-        # NOTE: make sure the tool calls return just the output
+        # A tool that is itself a Workflow or a @task hands back an envelope,
+        # and that is the useful case rather than a mistake: it ran inside this
+        # task's `parent_scope`, so its record — with its own duration, steps
+        # and token usage — has already attached itself under this one. Only the
+        # payload belongs in the message going back to the model, so unwrap it.
         if isinstance(output, OperationResult):
-            logger.warning(
-                f"Tool {tool_name} returned an operation result, not a raw output"
-            )
             output = output.result
 
         return cls(

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field
@@ -8,6 +9,8 @@ from ..utils import now_iso, remove_empty_values, uuid_8
 
 OutputT = TypeVar("OutputT")
 P = ParamSpec("P")
+
+logger = logging.getLogger(__name__)
 
 
 class Time(BaseModel):
@@ -194,9 +197,27 @@ class WorkFlowOperationResult(OperationResult):
         flattening) so the link is part of the record itself: it survives the
         JSONB insert, and a reader that only ever sees the stored tree can
         still rebuild the nesting.
+
+        **Attaching is idempotent.** Since `parent_scope` adopts a child
+        automatically, an explicit `add_step` for the same step — the one
+        `run_async_step` still makes, and the orchestrator's finally block —
+        would otherwise append it twice and add its tokens twice, silently.
+        `parent_id` is the flag that says it has already been claimed, so the
+        second call is a no-op and the two mechanisms can coexist. A step
+        claimed by a *different* parent is a genuine bug (the same envelope in
+        two trees, its usage counted in both), so it is refused and logged
+        rather than re-parented.
         """
         if not isinstance(step, OperationResult):
             raise ValueError(f"Step is of type {type(step)} not OperationResult")
+
+        if step.parent_id is not None:
+            if step.parent_id != self.id:
+                logger.warning(
+                    f"Step {step.name} ({step.id}) is already attached to "
+                    f"{step.parent_id}; refusing to re-parent it under {self.id}"
+                )
+            return
 
         step.parent_id = self.id
         self.token_usage += step.token_usage

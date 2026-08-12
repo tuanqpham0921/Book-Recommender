@@ -31,19 +31,59 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 
 The envelope is split by shape, not by producer. `OperationResult` is one unit
 of work — id, parent, timing, input, output, details, usage, error — and
-`WorkFlowOperationResult` is that plus the `steps` it accumulated. A `@task`
-returns the first; a `Workflow` owns the second; **either can be attached as a
-step**, which is why `add_step` and `run_async_step` are typed on the base, and
-why anything that only reads `ok`/`result`/`token_usage` should be too. Reach
-for the subclass when the code genuinely walks children.
+`WorkFlowOperationResult` is that plus the `steps` it accumulated. **Either can
+be attached as a step**, which is why `add_step` and `run_async_step` are typed
+on the base, and why anything that only reads `ok`/`result`/`token_usage` should
+be too. Reach for the subclass when the code genuinely walks children.
+
+Both a `Workflow` and a `@task` produce the subclass. A task builds the tree
+shape because it may run other work: a leaf-shaped record can publish itself as
+the current parent but never adopt anything, so grandchildren would silently
+skip a level. A task that runs nothing else just carries an empty `steps`.
 
 `add_step` is the only place parentage is known, so it is the only place
-`parent_id` is set. A child cannot know its own parent — a `@task` is a plain
-async function with no reference to its caller, and a `Workflow` is constructed
-before anyone decides where its record hangs. Both come out orphans and the
-attacher adopts them, which is why nothing has to be threaded into the
-decorator. Stamping on attach rather than deriving it later is what carries the
-link through serialization.
+`parent_id` is set, and stamping on attach rather than deriving it later is what
+carries the link through serialization. It is **idempotent**: a step that
+already has a `parent_id` is skipped, and one claimed by a *different* parent is
+refused and logged, since the same envelope in two trees would have its spend
+counted in both.
+
+## Nesting — the one ContextVar
+
+A child cannot know its own parent: a `@task` is a plain async function with no
+reference to its caller, and a `Workflow` is constructed before anyone decides
+where its record hangs. So the *caller* publishes instead. `parent_scope(record)`
+(`src/context.py`) sets `CURRENT_PARENT`, and in its `finally` resets it and then
+attaches `record` to whatever was current before. `@task`'s wrapper and
+`Workflow.__call__` are the only two call sites, which keeps the set/reset
+discipline checkable by reading two files.
+
+What follows from it:
+
+- **Who calls whom stopped mattering.** A task may call a task, a workflow, or
+  any mix; nothing is threaded through a signature and the tree still comes out
+  right.
+- **`run_async_step` is no longer what attaches a step** — the coroutine already
+  ran inside the workflow's scope, and its `add_step` is a no-op the idempotency
+  guard absorbs. What is left is the **failure policy**: mark the workflow
+  not-ok and raise `StepFailure`, or hand the envelope back for a retry. Calling
+  a step without it is legitimate and means "I'll decide what a failure means".
+- **Attaching happens on the way out**, which the token rollup requires:
+  `add_step` reads a child's usage once, at attach time, so a record attached
+  before it ran would contribute zero to every ancestor. The cancel path comes
+  free — `finally` runs while `CancelledError` propagates, so a step killed by a
+  client disconnect still lands in its parent's `steps`.
+- **Concurrency is safe.** A plain `await` shares the caller's context;
+  `gather`/`create_task` copy it, so siblings each keep their own parent. The
+  copy is shallow, so the attach still mutates the real record.
+- **Fire-and-forget stays broken**, and cannot be fixed here: a `create_task`
+  that outlives its parent attaches to an envelope already serialized and
+  reported. Await background work inside the scope that owns it.
+
+A `@task` that returns its own `OperationResult` — the "report `ok` myself
+without raising" shape — has it **merged** into the published envelope rather
+than handed back, since the published one is what this call's children attached
+themselves to.
 
 `flatten()` is then the tree as a **span list** — depth-first, parent before
 child, each entry carrying its `parent_id` and (via `Time.end_time`) its own

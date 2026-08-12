@@ -15,7 +15,7 @@ from clients.messages import (
     ToolMessage,
     UserMessage,
 )
-from airglider import OperationResult, Response, TokenUsage
+from airglider import OperationResult, Response, TokenUsage, task
 
 
 class _FakeResult(BaseModel):
@@ -221,16 +221,29 @@ class TestToolMessageExecute:
         result = await ToolMessage.execute(tool_call)
         assert result.result.content == {"title": "Dune"}
 
-    async def test_unwraps_operation_result_logs_warning(self, caplog):
-        import logging
+    async def test_a_tool_that_records_itself_nests_under_execute(self):
+        """A tool returning an envelope is the useful case, not a mistake.
 
-        tool_call = self._make_tool_call(
-            "FindByTitle",
-            OperationResult(ok=True, response=Response(result="some result")),
-        )
-        with caplog.at_level(logging.WARNING, logger="app.common.messages"):
-            await ToolMessage.execute(tool_call)
-        assert any("operation result" in r.message for r in caplog.records)
+        `execute` is a `@task`, so it publishes its own record while the tool
+        runs; a tool that is itself instrumented adopts itself under it and its
+        duration, steps and token usage land in the trace at the right depth.
+        Only the payload goes back to the model.
+        """
+
+        @task(log_info=False)
+        async def find_by_title(**kwargs):
+            return {"title": "Dune"}
+
+        tool_call = MagicMock()
+        tool_call.id = "call_1"
+        tool_call.function.name = "FindByTitle"
+        tool_call.function.parsed_arguments = find_by_title
+
+        result = await ToolMessage.execute(tool_call)
+
+        assert result.result.content == {"title": "Dune"}
+        assert [step.name.split(".")[-1] for step in result.steps] == ["find_by_title"]
+        assert result.steps[0].parent_id == result.id
 
     async def test_exception_captured_as_failed_result(self):
         tool_instance = AsyncMock(side_effect=RuntimeError("db error"))

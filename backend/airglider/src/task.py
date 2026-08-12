@@ -5,11 +5,13 @@ from typing import Callable
 from functools import wraps
 from typing import Any, Coroutine, ParamSpec, TypeVar, overload
 
+from .context import parent_scope
 from .schemas.record import (
     OperationResult,
     Response,
     TokenUsage,
     RuntimeErrorInfo,
+    WorkFlowOperationResult,
 )
 from .utils import bind_call_args, now_iso, to_record_input
 
@@ -57,12 +59,63 @@ def record_input(
         return None
 
 
+def merge_returned_envelope(
+    envelope: WorkFlowOperationResult, returned: OperationResult
+) -> None:
+    """Fold a task's self-built envelope into the one the decorator published.
+
+    A task that wants to report `ok` itself — "the table does not exist" is an
+    answer, not a crash — returns its own `OperationResult`. The decorator used
+    to hand that object straight back, which is what made `@task` non-
+    idempotent: the returned envelope's `id`, `name`, `input` and `timing` were
+    overwritten in place, so three nested tasks collapsed into whichever one
+    returned last, wearing the outermost one's name.
+
+    It cannot be handed back at all any more. `parent_scope` published
+    `envelope`, so that is the object this call's children attached themselves
+    to; returning a different one would drop the whole subtree. The fields the
+    task actually meant to set are copied across instead, and the throwaway
+    envelope's identity — an id nobody held a reference to — is discarded.
+
+    `steps` are re-attached rather than assigned so `add_step` can stamp and
+    roll them up; ones that already auto-attached are skipped by its own
+    idempotency guard, so a task that both nests calls and hand-builds a
+    `steps=` list ends up with each child exactly once.
+    """
+    envelope.ok = returned.ok
+    envelope.response = returned.response
+    envelope.details.extend(returned.details)
+    if returned.runtime_error is not None:
+        envelope.runtime_error = returned.runtime_error
+    if returned.input is not None:
+        # a task that built its own envelope may have recorded a more
+        # meaningful input than its raw arguments; that is the one worth keeping
+        envelope.input = returned.input
+
+    steps = getattr(returned, "steps", None) or []
+    for step in steps:
+        envelope.add_step(step)
+
+    # only when it brought no children of its own: usage on a record that has
+    # steps was rolled up from those steps, which we just re-attached, and
+    # adding it again would count them twice
+    if not steps:
+        envelope.token_usage += returned.token_usage
+
+
 def task(
     func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
     *,
     log_info: bool = True,
 ) -> Any:
-    """For single-step operations (for multiple steps, use Workflow)."""
+    """Wrap an async function so it returns a record instead of a bare value.
+
+    Reach for `Workflow` when you want what a class gives you — a declared
+    output type, SSE helpers, `run_async_step`'s failure policy, somewhere to
+    hang state. That is now the whole difference: a task publishes its own
+    envelope while it runs (`parent_scope`), so it may call other tasks and
+    other workflows freely and they nest under it.
+    """
 
     def decorator(
         func: Callable[P, Coroutine[Any, Any, Any]],
@@ -75,94 +128,96 @@ def task(
             func_ref = f"{func.__module__}.{func.__qualname__}"
             call_input = record_input(func, args, kwargs, logger)
 
-            # Read here, not left to `Time`'s default_factory: every envelope
-            # below is constructed *after* the await, so the default would
-            # stamp the moment the task finished as the moment it started —
-            # putting `start_time` and the derived `end_time` a whole duration
-            # too late. `perf_counter` alongside it is monotonic, and the pair
-            # is what makes `end_time` consistent (see Time.end_time).
+            # Read here, not left to `Time`'s default_factory: the envelope is
+            # built before the await, but `now_iso()` and `perf_counter()` have
+            # to be read as a pair — one wall clock, one monotonic — because
+            # `end_time` is derived from both (see Time.end_time).
             started_at = now_iso()
             time_start = time.perf_counter()
 
-            def stamp(result: OperationResult) -> OperationResult:
-                """Timing is the wrapper's business, on every return path —
-                including an envelope the task built for itself."""
-                result.timing.start_time = started_at
-                result.timing.duration = round(time.perf_counter() - time_start, 2)
-                return result
+            # The tree shape, not the leaf one, and this is the whole reason a
+            # task can now call another task: `steps` is what makes an envelope
+            # able to hold a child, so a leaf-shaped record could publish
+            # itself as the current parent but never adopt anything, and the
+            # grandchildren would silently skip a level. It stays a subclass of
+            # OperationResult, so every annotation and isinstance check that
+            # says "a step is a step" keeps holding; a task that runs nothing
+            # else just carries an empty list.
+            #
+            # Built *before* the call because `parent_scope` needs something to
+            # publish, which also means the error and cancellation paths below
+            # no longer have to construct a second envelope to report on.
+            result: WorkFlowOperationResult[Any] = WorkFlowOperationResult(
+                name=func_ref, input=call_input
+            )
+            result.timing.start_time = started_at
 
-            try:
-                if log_info:
-                    logger.info(f"Running task: {func_ref}")
+            # Exits by attaching `result` to whatever envelope was current when
+            # this task was called — including while a CancelledError is on its
+            # way out, so a cancelled task still lands in its caller's steps.
+            with parent_scope(result):
+                try:
+                    if log_info:
+                        logger.info(f"Running task: {func_ref}")
 
-                raw_output = await func(*args, **kwargs)
+                    raw_output = await func(*args, **kwargs)
 
-                # custom operation result retuned from the task
-                # the task must validate ok itself
-                #
-                # checked against the base class, so a task that assembled its
-                # own WorkFlowOperationResult (one that ran sub-checks and set
-                # `steps` itself) passes through with its subtree intact — the
-                # decorator only ever *builds* the leaf shape below
-                if isinstance(raw_output, OperationResult):
-                    if log_info and not raw_output.ok:
-                        logger.warning(f"Task failed: {func_ref}")
+                    # custom operation result returned from the task: the task
+                    # validated `ok` itself. Merged into the envelope we already
+                    # published rather than returned in its place — see
+                    # merge_returned_envelope for why handing it back is no
+                    # longer possible.
+                    if isinstance(raw_output, OperationResult):
+                        merge_returned_envelope(result, raw_output)
+                        if log_info and not result.ok:
+                            logger.warning(f"Task failed: {func_ref}")
+                    else:
+                        # task did not return an operation result; no runtime
+                        # error was recorded, so the task is considered successful
+                        result.response = Response(
+                            result=raw_output, output_type=type(raw_output).__name__
+                        )
+                        result.ok = True
+                        result.add_details(
+                            "output is not an operation result, creating a default one"
+                        )
+                        # token_usage defaults via Field(default_factory=TokenUsage);
+                        # `+=` rather than assignment so usage rolled up from any
+                        # nested steps this task ran is not thrown away
+                        if hasattr(raw_output, "token_usage") and isinstance(
+                            raw_output.token_usage, TokenUsage
+                        ):
+                            result.token_usage += raw_output.token_usage
+                            raw_output.token_usage = None
+                            result.add_details(
+                                "promoted raw output token usage to wrapper"
+                            )
+                except asyncio.CancelledError as e:
+                    # client disconnected (e.g. page refresh) mid-task.
+                    # Returning a result would swallow the cancellation, so the
+                    # envelope is stamped and propagates unreturned — the scope
+                    # above still attaches it, so the caller's trace shows what
+                    # was in flight.
+                    result.ok = False
+                    result.add_details("asyncio Cancelled")
+                    result.runtime_error = RuntimeErrorInfo.from_exception(e)
+                    logger.warning(f"Task cancelled: {func_ref}")
+                    raise
+                except Exception as e:
+                    # run time error is recorded, so the task is considered failed
+                    logger.exception(e)
+                    # the arguments matter most here: this envelope carries no
+                    # output to reason from, so what it was called with is the
+                    # only description of the failure beyond the traceback
+                    result.ok = False
+                    result.runtime_error = RuntimeErrorInfo.from_exception(e)
+                finally:
+                    # inside the scope, so `duration` and the rolled-up
+                    # `token_usage` are final before the parent adopts this and
+                    # sums it — `add_step` reads usage once, at attach time
+                    result.timing.duration = round(time.perf_counter() - time_start, 2)
 
-                    raw_output.name = func_ref
-                    # not overwritten: a task that built its own envelope may
-                    # have recorded a more meaningful input than its raw
-                    # arguments, and that is the one worth keeping
-                    if raw_output.input is None:
-                        raw_output.input = call_input
-                    return stamp(raw_output)
-
-                # task did not return an operation result, create a default one
-                # no run time error is recorded, so the task is considered successful
-                result = OperationResult(
-                    name=func_ref,
-                    input=call_input,
-                    response=Response(
-                        result=raw_output, output_type=type(raw_output).__name__
-                    ),
-                )
-                stamp(result)
-                result.ok = True
-                result.add_details(
-                    "output is not an operation result, creating a default one"
-                )
-                # token_usage defaults via Field(default_factory=TokenUsage) —
-                # explicitly passing token_usage=None to the constructor above
-                # would fail validation, so this stays a post-construction,
-                # conditional assignment instead
-                if hasattr(raw_output, "token_usage") and isinstance(
-                    raw_output.token_usage, TokenUsage
-                ):
-                    result.token_usage = raw_output.token_usage.model_copy()
-                    raw_output.token_usage = None
-                    # this should work because @task decorator is one step only
-                    # it might be an issue if you need to load it back exactly
-                    result.add_details("promoted raw output token usage to wrapper")
-                return result
-            except asyncio.CancelledError:
-                # client disconnected (e.g. page refresh) mid-task. Unlike
-                # Workflow.__call__, there's no persistent self.result to
-                # stamp here — returning a result would swallow the
-                # cancellation, so just log which task was in flight and
-                # propagate; the enclosing Workflow.__call__ catches this
-                # and records it on the workflow's own result.
-                logger.warning(f"Task cancelled: {func_ref}")
-                raise
-            except Exception as e:
-                # run time error is recorded, so the task is considered failed
-                logger.exception(e)
-
-                # the arguments matter most here: this envelope carries no
-                # output to reason from, so what it was called with is the
-                # only description of the failure beyond the traceback
-                result = OperationResult(name=func_ref, input=call_input)
-                result.ok = False
-                result.runtime_error = RuntimeErrorInfo.from_exception(e)
-                return stamp(result)
+            return result
 
         return wrapper
 

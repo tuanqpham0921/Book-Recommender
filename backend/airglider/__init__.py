@@ -12,6 +12,7 @@ model price table in `airglider.src.config` — see that module's docstring.
 
 from .src.task import task
 from .src.base_glider import Workflow
+from .src.context import current_parent, parent_scope
 from .src.exception import StepFailure
 from .src.schemas import (
     ModelUsage,
@@ -44,6 +45,9 @@ __all__ = [
     "Workflow",
     "task",
     "StepFailure",
+    # nesting
+    "parent_scope",
+    "current_parent",
     # envelopes
     "OperationResult",
     "WorkFlowOperationResult",
