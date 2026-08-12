@@ -10,7 +10,7 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 from config.constants import FilesLocationConstants
 from db.readiness import ReadinessResult
 
-from airglider import OperationResult, OperationResult, task
+from airglider import OperationResult, task
 
 logger = logging.getLogger(__name__)
 

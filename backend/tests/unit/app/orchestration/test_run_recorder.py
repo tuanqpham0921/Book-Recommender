@@ -10,7 +10,7 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.orchestration.triage import TriageOutput
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
-from airglider import OperationResult, OperationResult, Response, TokenUsage
+from airglider import OperationResult, Response, TokenUsage
 
 
 def _make_goal():

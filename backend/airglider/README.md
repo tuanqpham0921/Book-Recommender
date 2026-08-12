@@ -19,8 +19,8 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `Workflow` | base class for a multi-step async process — subclass, override `run()` |
 | `task` | decorator for a single async function |
 | `StepFailure` | control-flow signal raised by `run_async_step` when a step fails |
-| `OperationResult` | the envelope for one unit of work: `ok`, `input`, `details`, `runtime_error`, `timing`, `token_usage`, `parent_id` |
-| `OperationResult` | the same, plus `steps` — and `add_step` / `flatten` / `to_span` |
+| `OperationResult` | the one envelope: `ok`, `input`, `details`, `runtime_error`, `timing`, `token_usage`, `parent_id`, `steps` — plus `add_step` / `flatten` / `to_span` |
+| `parent_scope`, `current_parent` | the nesting ContextVar (see below) |
 | `Response`, `Time` | the envelope's payload and timing sub-models |
 | `TokenUsage`, `ModelUsage` | token counts, per-model split, and USD cost |
 | `RuntimeErrorInfo` | serializable exception record |
@@ -29,17 +29,20 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 
 ## The record tree, and `flatten()`
 
-The envelope is split by shape, not by producer. `OperationResult` is one unit
-of work — id, parent, timing, input, output, details, usage, error — and
-`OperationResult` is that plus the `steps` it accumulated. **Either can
-be attached as a step**, which is why `add_step` and `run_async_step` are typed
-on the base, and why anything that only reads `ok`/`result`/`token_usage` should
-be too. Reach for the subclass when the code genuinely walks children.
+**One envelope class.** `OperationResult` is a unit of work — id, parent,
+timing, input, output, details, usage, error — and the `steps` it accumulated.
+A `Workflow` and a `@task` produce the same thing; one that ran nothing else
+just carries an empty `steps`.
 
-Both a `Workflow` and a `@task` produce the subclass. A task builds the tree
-shape because it may run other work: a leaf-shaped record can publish itself as
-the current parent but never adopt anything, so grandchildren would silently
-skip a level. A task that runs nothing else just carries an empty `steps`.
+There used to be a `WorkFlowOperationResult` subclass that added `steps`, on the
+reasoning that a leaf has no children and should not carry the field. Two things
+retired it. `steps` is not mandatory — an empty list costs nothing and `flatten`
+reads it the same either way — and, more decisively, once nesting became
+automatic (below) any unit of work can run another, so "which shape am I"
+stopped being answerable at decoration time. What the split actually produced
+was the same relationship rebuilt from several angles: an isinstance ladder in
+`flatten`, a `getattr(x, "steps", [])` at every reader, and a rule about who was
+allowed to call whom.
 
 `add_step` is the only place parentage is known, so it is the only place
 `parent_id` is set, and stamping on attach rather than deriving it later is what
@@ -91,16 +94,21 @@ interval. The nesting is rebuildable from the list alone, with no reference to
 the tree, which is what a timeline or a per-step cost table wants. `to_summary()`
 remains the shape for *reading* a run top to bottom.
 
-Entries are always `OperationResult`: every node goes through `to_span()` on
-the way in, so no row drags a subtree and the list does not re-encode the tree
-once per level. `to_span()` is `model_construct` over the shared fields rather
-than a dump-and-revalidate, so a live payload stays the object the executor
-produced — and the sub-models are shared with the tree node, making a span a
-view rather than an independent record. A leaf step has nothing to drop and
-comes back by reference; a record reloaded from JSON has plain-dict children
-(`steps: list[Any]` does not re-validate) which `flatten` validates — as the
-wider of the two shapes, since a leaf's dict simply has no `steps` key — into
-copies.
+No row drags a subtree, so the list does not re-encode the tree once per level:
+every node goes through `to_span()` on the way in, which returns a shallow copy
+carrying `steps=[]`. A node with no children has nothing to drop and comes back
+**by reference**, which keeps flattening a mostly-free walk. `to_span()` is
+`model_construct` over the shared fields rather than a dump-and-revalidate, so a
+live payload stays the object the executor produced — and the sub-models are
+shared with the tree node, making a span a view rather than an independent
+record.
+
+A record reloaded from JSON is the case to know about: `steps` is typed
+`list[Any]` on purpose — pydantic would otherwise re-validate a child on
+assignment and hand back a *copy*, breaking the one thing the tree depends on,
+a step being the same object the workflow that produced it is still writing to.
+The cost is plain-dict children after a round trip, which `flatten` validates on
+the way past.
 
 ## `record.input` — what a unit of work was called with
 
@@ -191,9 +199,8 @@ Known rough edges, in rough priority order:
 2. **`base_glider.py` contains `Workflow`** — the module is named for the
    metaphor, the class for the concept. Pick one axis.
 3. **`record.py` holds `OperationResult`, and callers store it as `.record`** —
-   three names for one thing (record / OperationResult / "envelope"), and the
-   subclass spells the first word differently again. Cheapest to unify now,
-   while the library has one consumer.
+   three names for one thing (record / OperationResult / "envelope"). Cheapest
+   to unify now, while the library has one consumer.
 4. `exception.py` → `exceptions.py`; `schemas/` is a web-app word for what is
    really the core model.
 5. Needs its own `pyproject.toml` and pytest config — the suite currently

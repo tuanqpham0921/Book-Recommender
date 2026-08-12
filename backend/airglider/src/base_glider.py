@@ -31,9 +31,10 @@ class Workflow(ABC, Generic[OutputT]):
         self.output_type = output_type
         self._called = False
 
-        # intialize a record envolope in memory to modify. The tree-shaped
-        # envelope, not the leaf one: a Workflow is by definition the thing
-        # that accumulates steps.
+        # intialize a record envolope in memory to modify. Steps append to it
+        # as they complete — a Workflow is by definition the thing that
+        # accumulates them, though since the merge it is not a different class
+        # from what a @task produces.
         self.record: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
             response=Response(

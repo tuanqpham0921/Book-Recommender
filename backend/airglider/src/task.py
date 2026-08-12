@@ -11,7 +11,6 @@ from .schemas.record import (
     Response,
     TokenUsage,
     RuntimeErrorInfo,
-    OperationResult,
 )
 from .utils import bind_call_args, now_iso, to_record_input
 
@@ -133,18 +132,12 @@ def task(
             started_at = now_iso()
             time_start = time.perf_counter()
 
-            # The tree shape, not the leaf one, and this is the whole reason a
-            # task can now call another task: `steps` is what makes an envelope
-            # able to hold a child, so a leaf-shaped record could publish
-            # itself as the current parent but never adopt anything, and the
-            # grandchildren would silently skip a level. It stays a subclass of
-            # OperationResult, so every annotation and isinstance check that
-            # says "a step is a step" keeps holding; a task that runs nothing
-            # else just carries an empty list.
-            #
             # Built *before* the call because `parent_scope` needs something to
             # publish, which also means the error and cancellation paths below
-            # no longer have to construct a second envelope to report on.
+            # no longer have to construct a second envelope to report on. It
+            # can hold children because every envelope can — a task that runs
+            # nothing else just carries an empty `steps`, and one that runs
+            # another task adopts it without anything being threaded in.
             result: OperationResult[Any] = OperationResult(
                 name=func_ref, input=call_input
             )

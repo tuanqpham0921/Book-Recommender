@@ -20,7 +20,6 @@ from airglider import (
     OperationResult,
     TokenUsage,
     Workflow,
-    OperationResult,
     current_parent,
     parent_scope,
     task,
@@ -77,15 +76,17 @@ class TestNesting:
         assert record.steps[0].steps[0].result == "c"
 
     async def test_a_task_can_hold_children_at_all(self):
-        """`@task` builds the tree shape; a leaf-shaped record could publish
-        itself as parent but never adopt anything."""
+        """The envelope a `@task` publishes has `steps` like any other — under
+        the old two-class split it was built as the leaf shape and could
+        publish itself as parent but never adopt anything."""
 
         @task(log_info=False)
         async def parent():
             await leaf()
             return None
 
-        assert isinstance(await parent(), OperationResult)
+        record = await parent()
+        assert _names(record) == ["leaf"]
 
     async def test_a_task_can_call_a_workflow(self):
         @task(log_info=False)

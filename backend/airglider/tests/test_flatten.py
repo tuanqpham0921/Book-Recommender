@@ -6,13 +6,15 @@ child. That stamp is asserted here rather than in the attach tests because it
 exists *for* this — a flat list whose entries can be re-nested from their own
 fields, with no reference to the tree they came from.
 
-The other half is the type: entries come back as `OperationResult`, the
-childless envelope, so no row in the list drags a subtree along with it.
+The other half is the shape: every entry comes back with an empty `steps`, so
+no row in the list drags a subtree along with it. With one envelope class that
+is a property of the row rather than of its type — `to_span()` is what enforces
+it.
 """
 
 import asyncio
 
-from airglider import OperationResult, OperationResult, Workflow, task
+from airglider import OperationResult, Workflow, task
 
 
 def _op(name: str) -> OperationResult:
@@ -81,11 +83,16 @@ class TestToSpan:
 
         assert leaf.to_span() is leaf
 
-    def test_a_tree_node_projects_down_to_a_childless_envelope(self):
-        span = _tree().to_span()
+    def test_a_node_with_children_projects_down_to_a_childless_copy(self):
+        """With one envelope class, "childless" is an empty `steps` rather than
+        a missing field — and it must be a copy, or emptying it would strip the
+        children off the tree the span was taken from."""
+        tree = _tree()
+        span = tree.to_span()
 
-        assert type(span) is OperationResult
-        assert not hasattr(span, "steps")
+        assert span is not tree
+        assert span.steps == []
+        assert len(tree.steps) == 2
 
     def test_the_projection_keeps_every_other_field(self):
         node = _op("node")
@@ -130,10 +137,13 @@ class TestFlatten:
     def test_no_entry_carries_a_subtree(self):
         """The point of projecting: a row that kept its own children would
         serialize the whole tree once per level."""
-        flat = _tree().flatten()
+        tree = _tree()
+        flat = tree.flatten()
 
         assert all(type(op) is OperationResult for op in flat)
-        assert not any(hasattr(op, "steps") for op in flat)
+        assert all(op.steps == [] for op in flat)
+        # the tree itself is untouched — the rows are views, not surgery on it
+        assert len(tree.steps) == 2
 
     def test_a_leaf_step_comes_back_by_reference(self):
         """It has no subtree to drop, so there is nothing to copy."""
@@ -184,8 +194,8 @@ class TestReloadedRecords:
         assert all(op.parent_id for op in flat[1:])
 
     def test_a_reloaded_leaf_step_is_not_dropped(self):
-        """A step dict is validated as the wider of the two shapes — a leaf's
-        simply has no `steps` key — so a `@task` envelope survives the trip."""
+        """A step dict is validated back into an envelope on the way past, so a
+        childless `@task` record survives the round trip."""
         root = _op("root")
         root.add_step(OperationResult(name="leaf", ok=True))
         reloaded = OperationResult.model_validate_json(root.model_dump_json())

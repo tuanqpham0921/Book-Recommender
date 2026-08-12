@@ -273,17 +273,22 @@ class TestOperationResult:
         result.check_output_type()  # must not raise
 
 
-class TestOperationResult:
-    """The same envelope plus children — `steps` is the only thing the
-    subclass adds, and the only reason to reach for it."""
+class TestSteps:
+    """`steps` is on every envelope — there is one class, not a leaf and a
+    tree. Nothing has to decide which shape it is before it runs."""
 
-    def test_a_leaf_envelope_has_no_steps_field(self):
-        assert "steps" not in OperationResult.model_fields
+    def test_every_envelope_can_hold_children(self):
         assert "steps" in OperationResult.model_fields
 
     def test_defaults_to_no_children(self):
         assert OperationResult().steps == []
 
-    def test_is_an_operation_result(self):
-        # so anything typed on the base accepts one, including add_step
-        assert isinstance(OperationResult(), OperationResult)
+    def test_a_childless_envelope_is_not_a_different_type(self):
+        """What the old two-class split cost: a `@task` had to be built as the
+        leaf shape, so it could never adopt anything it went on to call."""
+        leaf, parent = OperationResult(name="leaf"), OperationResult(name="parent")
+        parent.add_step(leaf)
+
+        assert type(leaf) is type(parent)
+        assert leaf.steps == []
+        assert parent.steps == [leaf]

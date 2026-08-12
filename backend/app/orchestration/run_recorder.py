@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from airglider import OperationResult, OperationResult
+from airglider import OperationResult
 from common.utils import (
     save_file,
     to_serializable,
