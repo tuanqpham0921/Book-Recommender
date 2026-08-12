@@ -98,6 +98,8 @@ def task(
             )
             result.timing.start_time = started_at
 
+            # Stamps `result.parent_id` on entry, so the record knows where it
+            # hangs for the whole of its own run, and attaches it on exit.
             # Exits by attaching `result` to whatever envelope was current when
             # this task was called — including while a CancelledError is on its
             # way out, so a cancelled task still lands in its caller's steps.

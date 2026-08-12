@@ -7,7 +7,6 @@ from typing import Coroutine
 
 from .schemas import (
     OperationResult,
-    OperationResult,
     Response,
     RuntimeErrorInfo,
 )
@@ -43,6 +42,14 @@ class Workflow(ABC, Generic[OutputT]):
         )
         if output_type is not None:
             self.record.response.result = output_type()
+
+        # `parent_id` is deliberately NOT stamped here. Construction is not
+        # dispatch: a node executor is built by the task runner before it is
+        # called, and a workflow can be constructed under one parent and run
+        # under another, so whatever is current right now is "where this object
+        # was created", not "where it ran". `parent_scope` stamps it in
+        # __call__ instead — still at the top of the run, so the value is
+        # readable for the whole of it.
 
     def add_details(self, *message):
         self.record.add_details(*message)

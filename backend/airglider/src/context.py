@@ -55,21 +55,34 @@ def parent_scope(record: OperationResult) -> Iterator[OperationResult]:
     `reset` first so that the attach below reads the *outer* envelope rather
     than the one we just published — otherwise a record would adopt itself.
 
-    Attaching on the way **out** rather than on the way in is what keeps
-    `add_step`'s token rollup correct. Usage is summed once, at attach time, so
-    a record attached before it ran would contribute zero and every ancestor
-    would under-count. By the time this exits, `record` is final.
+    **`parent_id` is stamped on the way in, the subtree on the way out**, and
+    the split is deliberate. Parentage is known the moment the call starts, and
+    a record that carries it for the whole of its own run can be read by the
+    code inside it — which is not true if the link only appears once the call
+    returns. Scope entry is also the earliest *correct* moment: a `Workflow`'s
+    envelope is built when the object is constructed, which for a node executor
+    is before the runner dispatches it and possibly under a different parent, so
+    stamping in `__init__` records where it was created rather than where it
+    ran.
+
+    Attaching, by contrast, has to wait for the exit, because `add_step` sums a
+    child's `token_usage` once, at attach time — a record attached before it ran
+    would contribute zero and every ancestor would under-count. By the time this
+    exits, `record` is final.
 
     That also means the cancel path records more than it used to: `finally`
     runs while `CancelledError` is propagating, so a workflow killed by a
     client disconnect still lands in its parent's `steps` with whatever it had
     managed to do.
     """
+    parent = CURRENT_PARENT.get()
+    if parent is not None:
+        record.parent_id = parent.id
+
     token = CURRENT_PARENT.set(record)
     try:
         yield record
     finally:
         CURRENT_PARENT.reset(token)
-        parent = CURRENT_PARENT.get()
         if parent is not None:
             parent.add_step(record)

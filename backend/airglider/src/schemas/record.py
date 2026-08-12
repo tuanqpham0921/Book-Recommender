@@ -132,37 +132,40 @@ class OperationResult(BaseModel, Generic[OutputT]):
         it is also how a non-Workflow caller (the Orchestrator) builds a root
         envelope over workflows that each own their own record.
 
-        **This is the one place parentage is known**, which is why `parent_id`
-        is set here and nowhere else. A child cannot know its own parent — a
-        `@task` is a plain async function with no reference to its caller, and
-        a `Workflow` is constructed before anyone decides where its record
-        hangs. Both produce an orphan envelope, and whoever attaches it adopts
-        it. Nothing has to be threaded into the decorator.
+        `parent_scope` normally stamps `parent_id` on the way *in* — parentage
+        is known when a call starts, and a record should carry it for the whole
+        of its own run. This stamps it too, for the attach paths that never went
+        through a scope: the `Orchestrator` builds a root envelope by hand and
+        hangs two already-finished workflow records off it, and a `@task` may
+        assemble a step list itself. Either way the child comes out an orphan
+        and whoever attaches it adopts it — nothing has to be threaded into the
+        decorator.
 
-        Stamped at attach time rather than derived later (e.g. while
-        flattening) so the link is part of the record itself: it survives the
-        JSONB insert, and a reader that only ever sees the stored tree can
-        still rebuild the nesting.
+        Stamped on the record rather than derived later (e.g. while flattening)
+        so the link survives the JSONB insert, and a reader that only ever sees
+        the stored tree can still rebuild the nesting.
 
-        **Attaching is idempotent.** Since `parent_scope` adopts a child
-        automatically, an explicit `add_step` for the same step — the one
-        `run_async_step` still makes, and the orchestrator's finally block —
-        would otherwise append it twice and add its tokens twice, silently.
-        `parent_id` is the flag that says it has already been claimed, so the
-        second call is a no-op and the two mechanisms can coexist. A step
-        claimed by a *different* parent is a genuine bug (the same envelope in
-        two trees, its usage counted in both), so it is refused and logged
-        rather than re-parented.
+        **Attaching is idempotent**, and it has to be: `parent_scope` adopts a
+        child automatically, so the explicit `add_step` that `run_async_step`
+        still makes would otherwise append the same object twice and add its
+        tokens twice, silently. The check is **identity against `steps`**, not
+        `parent_id is None` — since the scope pre-stamps the id, that flag no
+        longer distinguishes "knows its parent" from "has been attached". A step
+        already claimed by a *different* parent is a genuine bug (the same
+        envelope in two trees, its usage counted in both), so it is refused and
+        logged rather than re-parented.
         """
         if not isinstance(step, OperationResult):
             raise ValueError(f"Step is of type {type(step)} not OperationResult")
 
-        if step.parent_id is not None:
-            if step.parent_id != self.id:
-                logger.warning(
-                    f"Step {step.name} ({step.id}) is already attached to "
-                    f"{step.parent_id}; refusing to re-parent it under {self.id}"
-                )
+        if step.parent_id is not None and step.parent_id != self.id:
+            logger.warning(
+                f"Step {step.name} ({step.id}) belongs to {step.parent_id}; "
+                f"refusing to re-parent it under {self.id}"
+            )
+            return
+
+        if any(attached is step for attached in self.steps):
             return
 
         step.parent_id = self.id
