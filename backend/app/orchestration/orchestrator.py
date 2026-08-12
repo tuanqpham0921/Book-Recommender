@@ -11,6 +11,10 @@ from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
 from airglider import OperationResult, WorkFlowOperationResult, RuntimeErrorInfo
 
+from clients.messages import (
+    APIMessage,
+)
+
 logger = logging.getLogger(__name__)
 
 SAVE_LOG_TIMEOUT = 60  # seconds
@@ -43,6 +47,7 @@ class Orchestrator:
         record = WorkFlowOperationResult(
             name=f"orchestrator_{request_context.user_message.id}",
         )
+        messages: list[APIMessage] = [request_context.user_message]
         time_start = time.perf_counter()
         try:
             # Sent first and unconditionally — this id is generated when the
@@ -53,10 +58,11 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            conversation_orchestrator = TriageWorkflow(request_context)
+            conversation_orchestrator = TriageWorkflow(request_context, messages=messages)
             await asyncio.wait_for(
                 conversation_orchestrator(
-                    NodeInput(query=request_context.user_message.content)
+                    NodeInput(query=request_context.user_message.content),
+                    use_caching=False
                 ),
                 timeout=CONVERSATION_TIMEOUT,
             )
@@ -67,7 +73,7 @@ class Orchestrator:
                 and planner_result
                 and planner_result.accepted_goals
             ):
-                task_runner = TaskRunnerWorkflow(request_context)
+                task_runner = TaskRunnerWorkflow(request_context, messages=messages)
                 await asyncio.wait_for(
                     # The plan is passed as the runner's declared input, so the
                     # runner never has to know a triage layer produced it —
@@ -144,6 +150,7 @@ class Orchestrator:
                         record,
                         conversation_orchestrator,
                         task_runner,
+                        messages,
                         sse_stream,
                     )
                 )
@@ -159,7 +166,8 @@ class Orchestrator:
         record: WorkFlowOperationResult,
         conversation_orchestrator: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
-        sse_stream: SSEStream,
+        messages: list[APIMessage] | None,
+        sse_stream: SSEStream
     ) -> None:
         """Record the run, then close the stream. Best-effort — never lets a
         slow/failing step here take down the other, or the caller."""
@@ -170,6 +178,7 @@ class Orchestrator:
                     record,
                     conversation_orchestrator,
                     task_runner,
+                    messages
                 ),
                 timeout=SAVE_LOG_TIMEOUT,
             )

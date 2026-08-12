@@ -106,19 +106,19 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
     planner_failure_message = "I couldn't understand your request. Please try again."
     ui_loading_message = "Starting conversation..."
 
-    async def run(self, node_input: NodeInput) -> None:
+    async def run(self, node_input: NodeInput, *, use_caching=True) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         query = node_input.query
         self.result.session_id = self.session_id
-        self.messages.append(self.user_message)
 
-        cached = load_cached_parse_output(query)
-        if cached is not None:
-            logger.info(f"Replaying cached plan for: {query}")
-            self.result.parse_result = cached
-            self.record.ok = True
-            return
+        if use_caching:
+            cached = load_cached_parse_output(query)
+            if cached is not None:
+                logger.info(f"Replaying cached plan for: {query}")
+                self.result.parse_result = cached
+                self.record.ok = True
+                return
 
         planner = PlanJaneExecutor(self.ctx, messages=self.messages)
         planner_record = await self.run_async_step(

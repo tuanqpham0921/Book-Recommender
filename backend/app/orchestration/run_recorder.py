@@ -22,6 +22,10 @@ from app.common.request_context import RequestContext
 from app.orchestration.triage import TriageWorkflow, TriageOutput
 from app.orchestration.task_runner import TaskRunnerWorkflow, TaskRunnerOutput
 
+from clients.messages import (
+    APIMessage,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,6 +72,7 @@ async def record_chat_run(
     record: WorkFlowOperationResult,
     planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
+    messages: list[APIMessage] | None = None
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
     if not request_context or record is None:
@@ -121,6 +126,8 @@ async def record_chat_run(
                 flat,
                 file_name=row["chat_id"],
             )
+            
+            save_file(messages, row["chat_id"] + "_record_messages")
 
         async with request_context.session_factory() as session:
             await ChatRunStore(session).insert_run(row)
