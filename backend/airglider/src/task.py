@@ -57,51 +57,6 @@ def record_input(
         logger.warning(f"Could not record input for {func.__qualname__}", exc_info=True)
         return None
 
-
-def merge_returned_envelope(
-    envelope: OperationResult, returned: OperationResult
-) -> None:
-    """Fold a task's self-built envelope into the one the decorator published.
-
-    A task that wants to report `ok` itself — "the table does not exist" is an
-    answer, not a crash — returns its own `OperationResult`. The decorator used
-    to hand that object straight back, which is what made `@task` non-
-    idempotent: the returned envelope's `id`, `name`, `input` and `timing` were
-    overwritten in place, so three nested tasks collapsed into whichever one
-    returned last, wearing the outermost one's name.
-
-    It cannot be handed back at all any more. `parent_scope` published
-    `envelope`, so that is the object this call's children attached themselves
-    to; returning a different one would drop the whole subtree. The fields the
-    task actually meant to set are copied across instead, and the throwaway
-    envelope's identity — an id nobody held a reference to — is discarded.
-
-    `steps` are re-attached rather than assigned so `add_step` can stamp and
-    roll them up; ones that already auto-attached are skipped by its own
-    idempotency guard, so a task that both nests calls and hand-builds a
-    `steps=` list ends up with each child exactly once.
-    """
-    envelope.ok = returned.ok
-    envelope.response = returned.response
-    envelope.details.extend(returned.details)
-    if returned.runtime_error is not None:
-        envelope.runtime_error = returned.runtime_error
-    if returned.input is not None:
-        # a task that built its own envelope may have recorded a more
-        # meaningful input than its raw arguments; that is the one worth keeping
-        envelope.input = returned.input
-
-    steps = getattr(returned, "steps", None) or []
-    for step in steps:
-        envelope.add_step(step)
-
-    # only when it brought no children of its own: usage on a record that has
-    # steps was rolled up from those steps, which we just re-attached, and
-    # adding it again would count them twice
-    if not steps:
-        envelope.token_usage += returned.token_usage
-
-
 def task(
     func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
     *,
@@ -159,7 +114,11 @@ def task(
                     # merge_returned_envelope for why handing it back is no
                     # longer possible.
                     if isinstance(raw_output, OperationResult):
-                        merge_returned_envelope(result, raw_output)
+                        result.add_step(raw_output)
+                        result.add_details("nested task decorator, response is the step")
+                        result.response = Response(
+                            result=raw_output, output_type=type(raw_output).__name__
+                        )
                         if log_info and not result.ok:
                             logger.warning(f"Task failed: {func_ref}")
                     else:
