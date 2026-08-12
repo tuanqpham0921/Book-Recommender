@@ -155,6 +155,10 @@ class Workflow(ABC, Generic[OutputT]):
         # NOTE: enable raise_on_failure = False if you want to retry
         # so the caller can capture the envolope and deal with it
         # default is True more most cases
+        
+        # TODO: this has to return an OperationResult envolope
+        # so this can be an @task or a task runner
+        # 
 
         step_result = await function
         self.record.add_step(step_result)

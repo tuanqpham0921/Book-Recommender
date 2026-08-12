@@ -11,6 +11,13 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+seems like there's an idempotent issue with 
+run_async_step, @task and things...
+    * tho it should be okay because @task idempotent?
+    * because it will make a operation result or not
+    * but then the timing/duration might be wrong?
+    * current @task override the OperationResult returned to the decorator
+
 you want to have the
 Capability/ExcutorWorflow():
     def run(args):
