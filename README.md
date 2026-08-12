@@ -88,7 +88,7 @@ Book-Recommender/
 │   │   ├── domains/           # Node type system: books, planner, project, users
 │   │   └── orchestration/     # Orchestrator + request context
 │   ├── clients/               # OpenAI client
-│   ├── common/                # Workflow / WorkFlowOperationResult infrastructure
+│   ├── common/                # Workflow / OperationResult infrastructure
 │   ├── config/                # Settings (pydantic-settings) + .env
 │   ├── db/                    # Async engine, schema SQL, stores, models
 │   ├── evals/                 # Query suites, runner, node-expectation reports

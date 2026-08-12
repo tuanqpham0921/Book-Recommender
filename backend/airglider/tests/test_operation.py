@@ -2,7 +2,7 @@ import pytest
 from airglider import (
     task,
     OperationResult,
-    WorkFlowOperationResult,
+    OperationResult,
     Response,
     RuntimeErrorInfo,
     TokenUsage,
@@ -250,50 +250,40 @@ class TestOperationResult:
         assert result.id.startswith("op_")
 
     def test_check_output_type_passes_on_type_match(self):
-        result = OperationResult(
-            response=Response(result="hello", output_type="str")
-        )
+        result = OperationResult(response=Response(result="hello", output_type="str"))
         result.check_output_type()  # must not raise
 
     def test_check_output_type_raises_on_type_mismatch(self):
-        result = OperationResult(
-            response=Response(result=42, output_type="str")
-        )
+        result = OperationResult(response=Response(result=42, output_type="str"))
         with pytest.raises(TypeError):
             result.check_output_type()
 
     def test_check_output_type_raises_when_declared_but_missing(self):
-        result = OperationResult(
-            response=Response(result=None, output_type="str")
-        )
+        result = OperationResult(response=Response(result=None, output_type="str"))
         result.check_output_type()
 
     def test_check_output_type_raises_on_undeclared_output(self):
-        result = OperationResult(
-            response=Response(result="hello", output_type=None)
-        )
+        result = OperationResult(response=Response(result="hello", output_type=None))
         with pytest.raises(TypeError, match="without a declared output_type"):
             result.check_output_type()
 
     def test_check_output_type_skips_when_nothing_was_claimed(self):
         # failure envelopes legitimately carry neither output nor output_type
-        result = OperationResult(
-            response=Response(result=None, output_type=None)
-        )
+        result = OperationResult(response=Response(result=None, output_type=None))
         result.check_output_type()  # must not raise
 
 
-class TestWorkFlowOperationResult:
+class TestOperationResult:
     """The same envelope plus children — `steps` is the only thing the
     subclass adds, and the only reason to reach for it."""
 
     def test_a_leaf_envelope_has_no_steps_field(self):
         assert "steps" not in OperationResult.model_fields
-        assert "steps" in WorkFlowOperationResult.model_fields
+        assert "steps" in OperationResult.model_fields
 
     def test_defaults_to_no_children(self):
-        assert WorkFlowOperationResult().steps == []
+        assert OperationResult().steps == []
 
     def test_is_an_operation_result(self):
         # so anything typed on the base accepts one, including add_step
-        assert isinstance(WorkFlowOperationResult(), OperationResult)
+        assert isinstance(OperationResult(), OperationResult)

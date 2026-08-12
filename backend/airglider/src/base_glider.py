@@ -7,7 +7,7 @@ from typing import Coroutine
 
 from .schemas import (
     OperationResult,
-    WorkFlowOperationResult,
+    OperationResult,
     Response,
     RuntimeErrorInfo,
 )
@@ -34,7 +34,7 @@ class Workflow(ABC, Generic[OutputT]):
         # intialize a record envolope in memory to modify. The tree-shaped
         # envelope, not the leaf one: a Workflow is by definition the thing
         # that accumulates steps.
-        self.record: WorkFlowOperationResult[OutputT] = WorkFlowOperationResult(
+        self.record: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
             response=Response(
                 output_type=output_type.__name__ if output_type is not None else None
@@ -70,16 +70,14 @@ class Workflow(ABC, Generic[OutputT]):
 
     @property
     def result(self) -> OutputT:
-        # self.record is this Workflow's WorkFlowOperationResult envelope; .result
+        # self.record is this Workflow's OperationResult envelope; .result
         # on that is its own shorthand property for the payload
-        # (WorkFlowOperationResult.response.result)
+        # (OperationResult.response.result)
         if self.record.result is None:
             raise RuntimeError(f"{self.workflow_ref} output was not initialized")
         return self.record.result
 
-    async def __call__(
-        self, *args: Any, **kwargs: Any
-    ) -> WorkFlowOperationResult[OutputT]:
+    async def __call__(self, *args: Any, **kwargs: Any) -> OperationResult[OutputT]:
         if self._called:
             raise RuntimeError(
                 f"{self.workflow_ref} instances are single-use — "
@@ -143,9 +141,7 @@ class Workflow(ABC, Generic[OutputT]):
                 # inside finally would swallow BaseExceptions (e.g. asyncio
                 # cancellation) that the except clauses deliberately let through
                 self.record.name = self.workflow_ref
-                self.record.timing.duration = round(
-                    time.perf_counter() - time_start, 2
-                )
+                self.record.timing.duration = round(time.perf_counter() - time_start, 2)
 
         return self.record
 

@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from airglider import OperationResult, WorkFlowOperationResult
+from airglider import OperationResult, OperationResult
 from common.utils import (
     save_file,
     to_serializable,
@@ -69,10 +69,10 @@ async def record_chat_run(
     # the one place the tree shape is required rather than incidental: the
     # dev-log below writes `record.flatten()`, which only a node with children
     # can answer
-    record: WorkFlowOperationResult,
+    record: OperationResult,
     planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
-    messages: list[APIMessage] | None = None
+    messages: list[APIMessage] | None = None,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
     if not request_context or record is None:
@@ -111,7 +111,7 @@ async def record_chat_run(
             # a genuinely free step still serializes cost_usd: 0.0 there
             # instead of vanishing into the same shape as a pre-cost-tracking
             # row (see strip_zero_token_usage's docstring)
-            
+
             # save_file(
             #     {
             #         "summary": record.to_summary(),
@@ -119,14 +119,14 @@ async def record_chat_run(
             #     },
             #     file_name=row["chat_id"] + "_summary",
             # )
-            
+
             flat = to_serializable(record.flatten())
             flat = strip_zero_token_usage(remove_empty_values(flat))
             save_file(
                 flat,
                 file_name=row["chat_id"],
             )
-            
+
             save_file(messages, row["chat_id"] + "_record_messages")
 
         async with request_context.session_factory() as session:

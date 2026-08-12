@@ -155,5 +155,5 @@ examples of the review workflow:
   work, and a good regression case to keep.
 - **Planner / praise** — 155/159 ran ok with **zero runtime errors** across four suites
   fired concurrently, including prompt-injection and unicode-stress cases. The
-  WorkFlowOperationResult/Workflow envelope is doing exactly what it was designed for; the
+  OperationResult/Workflow envelope is doing exactly what it was designed for; the
   failures that remain are routing quality, not stability.

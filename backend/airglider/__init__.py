@@ -17,7 +17,7 @@ from .src.exception import StepFailure
 from .src.schemas import (
     ModelUsage,
     OperationResult,
-    WorkFlowOperationResult,
+    OperationResult,
     Response,
     RuntimeErrorInfo,
     Time,
@@ -50,7 +50,7 @@ __all__ = [
     "current_parent",
     # envelopes
     "OperationResult",
-    "WorkFlowOperationResult",
+    "OperationResult",
     "Response",
     "Time",
     # usage / errors

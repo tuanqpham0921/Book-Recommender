@@ -11,7 +11,7 @@ from .schemas.record import (
     Response,
     TokenUsage,
     RuntimeErrorInfo,
-    WorkFlowOperationResult,
+    OperationResult,
 )
 from .utils import bind_call_args, now_iso, to_record_input
 
@@ -60,7 +60,7 @@ def record_input(
 
 
 def merge_returned_envelope(
-    envelope: WorkFlowOperationResult, returned: OperationResult
+    envelope: OperationResult, returned: OperationResult
 ) -> None:
     """Fold a task's self-built envelope into the one the decorator published.
 
@@ -121,9 +121,7 @@ def task(
         func: Callable[P, Coroutine[Any, Any, Any]],
     ) -> Callable[P, Coroutine[Any, Any, OperationResult[Any]]]:
         @wraps(func)
-        async def wrapper(
-            *args: P.args, **kwargs: P.kwargs
-        ) -> OperationResult[Any]:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> OperationResult[Any]:
             logger = logging.getLogger(func.__module__)
             func_ref = f"{func.__module__}.{func.__qualname__}"
             call_input = record_input(func, args, kwargs, logger)
@@ -147,7 +145,7 @@ def task(
             # Built *before* the call because `parent_scope` needs something to
             # publish, which also means the error and cancellation paths below
             # no longer have to construct a second envelope to report on.
-            result: WorkFlowOperationResult[Any] = WorkFlowOperationResult(
+            result: OperationResult[Any] = OperationResult(
                 name=func_ref, input=call_input
             )
             result.timing.start_time = started_at

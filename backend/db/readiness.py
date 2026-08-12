@@ -8,7 +8,7 @@ from db.async_engine import check_connection
 from db.schema.extensions import REQUIRED_EXTENSIONS
 
 logger = logging.getLogger(__name__)
-from airglider import OperationResult, WorkFlowOperationResult, Response, task
+from airglider import OperationResult, OperationResult, Response, task
 from pydantic import BaseModel, Field
 from db.stores.book_store import BookStore
 
@@ -122,7 +122,7 @@ async def is_ready(
     table: str,
     *,
     min_rows: int,
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Run database readiness checks and return a structured report.
 
     Args:
@@ -183,7 +183,7 @@ async def is_ready(
         result.num_missing_embeddings = num_missing
 
     ok = all(check.ok for check in checks)
-    return WorkFlowOperationResult(
+    return OperationResult(
         ok=ok,
         message="Database is ready." if ok else "Database is not ready.",
         steps=checks,

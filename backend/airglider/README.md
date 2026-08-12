@@ -20,7 +20,7 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `task` | decorator for a single async function |
 | `StepFailure` | control-flow signal raised by `run_async_step` when a step fails |
 | `OperationResult` | the envelope for one unit of work: `ok`, `input`, `details`, `runtime_error`, `timing`, `token_usage`, `parent_id` |
-| `WorkFlowOperationResult` | the same, plus `steps` — and `add_step` / `flatten` / `to_span` |
+| `OperationResult` | the same, plus `steps` — and `add_step` / `flatten` / `to_span` |
 | `Response`, `Time` | the envelope's payload and timing sub-models |
 | `TokenUsage`, `ModelUsage` | token counts, per-model split, and USD cost |
 | `RuntimeErrorInfo` | serializable exception record |
@@ -31,7 +31,7 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 
 The envelope is split by shape, not by producer. `OperationResult` is one unit
 of work — id, parent, timing, input, output, details, usage, error — and
-`WorkFlowOperationResult` is that plus the `steps` it accumulated. **Either can
+`OperationResult` is that plus the `steps` it accumulated. **Either can
 be attached as a step**, which is why `add_step` and `run_async_step` are typed
 on the base, and why anything that only reads `ok`/`result`/`token_usage` should
 be too. Reach for the subclass when the code genuinely walks children.

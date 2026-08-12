@@ -9,7 +9,7 @@ from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
-from airglider import OperationResult, WorkFlowOperationResult, RuntimeErrorInfo
+from airglider import OperationResult, OperationResult, RuntimeErrorInfo
 
 from clients.messages import (
     APIMessage,
@@ -44,7 +44,7 @@ class Orchestrator:
         # turn still records what ran), which is what makes ok/duration/
         # token_usage cover the whole turn instead of the planner alone.
         # Bound before the try for the same reason as the two above.
-        record = WorkFlowOperationResult(
+        record = OperationResult(
             name=f"orchestrator_{request_context.user_message.id}",
         )
         messages: list[APIMessage] = [request_context.user_message]
@@ -58,11 +58,13 @@ class Orchestrator:
             await sse_stream.send_ui_loading("Starting conversation...")
 
             # Core work
-            conversation_orchestrator = TriageWorkflow(request_context, messages=messages)
+            conversation_orchestrator = TriageWorkflow(
+                request_context, messages=messages
+            )
             await asyncio.wait_for(
                 conversation_orchestrator(
                     NodeInput(query=request_context.user_message.content),
-                    use_caching=False
+                    use_caching=False,
                 ),
                 timeout=CONVERSATION_TIMEOUT,
             )
@@ -163,11 +165,11 @@ class Orchestrator:
     @staticmethod
     async def _finalize(
         request_context: RequestContext,
-        record: WorkFlowOperationResult,
+        record: OperationResult,
         conversation_orchestrator: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
         messages: list[APIMessage] | None,
-        sse_stream: SSEStream
+        sse_stream: SSEStream,
     ) -> None:
         """Record the run, then close the stream. Best-effort — never lets a
         slow/failing step here take down the other, or the caller."""
@@ -178,7 +180,7 @@ class Orchestrator:
                     record,
                     conversation_orchestrator,
                     task_runner,
-                    messages
+                    messages,
                 ),
                 timeout=SAVE_LOG_TIMEOUT,
             )

@@ -20,7 +20,7 @@ from airglider import (
     OperationResult,
     TokenUsage,
     Workflow,
-    WorkFlowOperationResult,
+    OperationResult,
     current_parent,
     parent_scope,
     task,
@@ -85,7 +85,7 @@ class TestNesting:
             await leaf()
             return None
 
-        assert isinstance(await parent(), WorkFlowOperationResult)
+        assert isinstance(await parent(), OperationResult)
 
     async def test_a_task_can_call_a_workflow(self):
         @task(log_info=False)
@@ -162,8 +162,8 @@ class TestAttachedOnce:
         assert record.token_usage.total == 7
 
     def test_add_step_refuses_a_step_claimed_by_another_parent(self, caplog):
-        first = WorkFlowOperationResult(name="first")
-        second = WorkFlowOperationResult(name="second")
+        first = OperationResult(name="first")
+        second = OperationResult(name="second")
         child = OperationResult(name="child", token_usage=TokenUsage(total=3))
 
         first.add_step(child)
@@ -198,7 +198,7 @@ class TestReturnedEnvelope:
         @task(log_info=False)
         async def both():
             child = await leaf("once")
-            return WorkFlowOperationResult(ok=True, steps=[child])
+            return OperationResult(ok=True, steps=[child])
 
         record = await both()
         assert len(record.steps) == 1
@@ -255,7 +255,7 @@ class TestFailurePaths:
         assert workflow.record.steps[0].ok is False
 
     async def test_the_var_is_reset_even_when_the_body_raises(self):
-        record = WorkFlowOperationResult(name="scope")
+        record = OperationResult(name="scope")
         with pytest.raises(ValueError):
             with parent_scope(record):
                 assert current_parent() is record

@@ -61,7 +61,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
     It is deliberately the *whole* record minus `steps`: a leaf carries an id,
     a parent, timing, input, output, details, usage and an error, which is
     everything a trace reader asks of one operation. Only something that runs
-    other operations needs children, and that is `WorkFlowOperationResult`.
+    other operations needs children, and that is `OperationResult`.
 
     Prefer this type in annotations and isinstance checks unless the code
     actually touches `steps`/`add_step`/`flatten` — a step is a step whether a
@@ -81,6 +81,8 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     runtime_error: RuntimeErrorInfo | None = None
+
+    steps: list[Any] = Field(default_factory=list)
 
     def check_output_type(self) -> None:
         # default there's no output
@@ -111,73 +113,6 @@ class OperationResult(BaseModel, Generic[OutputT]):
     @property
     def end_time(self) -> str | None:
         return self.timing.end_time
-
-    def add_details(self, *message):
-        self.details.extend(message)
-
-    def to_span(self) -> "OperationResult[Any]":
-        """This envelope as one flat row — itself, for something with no subtree.
-
-        The counterpart on `WorkFlowOperationResult` projects a tree node down
-        to this class, which is what lets `flatten()` return a list whose
-        entries genuinely carry no children. Polymorphic so the walk never has
-        to ask which kind it is holding.
-        """
-        return self
-
-    def to_summary(self) -> dict[str, Any]:
-        """This envelope with the bulk taken out — one small dict, so a run
-        reads top to bottom without unfolding payloads.
-
-        Complements rather than replaces the full record: the DB row and the
-        dev-log still carry `to_serializable(record)`. Only the shape the eye
-        needs lives here.
-
-        `details` is left out on purpose: nearly every `@task` leaf carries the
-        decorator's own bookkeeping line, which would bury the shape. Read the
-        full record when a failure needs explaining beyond `error`.
-        """
-        payload = self.result
-        summary = {
-            "id": self.id,
-            # leaf of the dotted ref only — the full module path is in the
-            # unabridged tree, and repeating it at every level is what made
-            # the trace hard to scan. `name` is optional on the model, so an
-            # unnamed envelope drops the key rather than raising here.
-            "name": self.name.split(".")[-1] if self.name else None,
-            "ok": self.ok,
-            "duration": self.duration,
-            # `or None` so a step that made no LLM call (a DB read, a
-            # combine) drops both keys instead of repeating zeros down the
-            # tree — same call strip_zero_token_usage makes for the dev log,
-            # made here because a summary has no fidelity to protect
-            "tokens": self.token_usage.total or None,
-            "cost_usd": self.token_usage.cost_usd or None,
-            # without this an unpriced model reads as free rather than
-            # unknown — the one case where a missing cost_usd is not a zero
-            "unpriced_models": self.token_usage.unpriced_models,
-            "error": self.runtime_error.type if self.runtime_error else None,
-            "output": payload.to_summary() if hasattr(payload, "to_summary") else None,
-        }
-        # keeps a leaf to the three or four keys that actually say something;
-        # `ok: False` and a genuine 0 survive this (see remove_empty_values)
-        return remove_empty_values(summary)
-
-# TODO: revert this back to just OperationResult
-# steps is not mandatory, you can just flatten it without an extra layer
-# remove this a28117b2809c1f083f7f6385296808c53a23edfd
-# and make some minor edits
-class WorkFlowOperationResult(OperationResult):
-    """An `OperationResult` that ran other operations — the same envelope plus
-    the children it accumulated.
-
-    The split is by shape, not by producer: `steps` is the only thing here, and
-    everything that reads a record without walking into it should be typed on
-    the base class. A `Workflow` owns one of these; a `@task` returns a plain
-    `OperationResult`, and either can be attached as a step.
-    """
-
-    steps: list[Any] = Field(default_factory=list)
 
     def add_step(self, step: "OperationResult[Any]") -> None:
         """Attach a child envelope, stamp it as ours, and roll its token usage up.
@@ -249,6 +184,57 @@ class WorkFlowOperationResult(OperationResult):
             summary["steps"] = steps
         return summary
 
+    def add_details(self, *message):
+        self.details.extend(message)
+
+    def to_span(self) -> "OperationResult[Any]":
+        """This envelope as one flat row — itself, for something with no subtree.
+
+        The counterpart on `OperationResult` projects a tree node down
+        to this class, which is what lets `flatten()` return a list whose
+        entries genuinely carry no children. Polymorphic so the walk never has
+        to ask which kind it is holding.
+        """
+        return self
+
+    def to_summary(self) -> dict[str, Any]:
+        """This envelope with the bulk taken out — one small dict, so a run
+        reads top to bottom without unfolding payloads.
+
+        Complements rather than replaces the full record: the DB row and the
+        dev-log still carry `to_serializable(record)`. Only the shape the eye
+        needs lives here.
+
+        `details` is left out on purpose: nearly every `@task` leaf carries the
+        decorator's own bookkeeping line, which would bury the shape. Read the
+        full record when a failure needs explaining beyond `error`.
+        """
+        payload = self.result
+        summary = {
+            "id": self.id,
+            # leaf of the dotted ref only — the full module path is in the
+            # unabridged tree, and repeating it at every level is what made
+            # the trace hard to scan. `name` is optional on the model, so an
+            # unnamed envelope drops the key rather than raising here.
+            "name": self.name.split(".")[-1] if self.name else None,
+            "ok": self.ok,
+            "duration": self.duration,
+            # `or None` so a step that made no LLM call (a DB read, a
+            # combine) drops both keys instead of repeating zeros down the
+            # tree — same call strip_zero_token_usage makes for the dev log,
+            # made here because a summary has no fidelity to protect
+            "tokens": self.token_usage.total or None,
+            "cost_usd": self.token_usage.cost_usd or None,
+            # without this an unpriced model reads as free rather than
+            # unknown — the one case where a missing cost_usd is not a zero
+            "unpriced_models": self.token_usage.unpriced_models,
+            "error": self.runtime_error.type if self.runtime_error else None,
+            "output": payload.to_summary() if hasattr(payload, "to_summary") else None,
+        }
+        # keeps a leaf to the three or four keys that actually say something;
+        # `ok: False` and a genuine 0 survive this (see remove_empty_values)
+        return remove_empty_values(summary)
+
     def flatten(self) -> list[OperationResult[Any]]:
         """This node and every descendant, depth-first, parent before child.
 
@@ -273,12 +259,13 @@ class WorkFlowOperationResult(OperationResult):
         flat: list[OperationResult[Any]] = [self.to_span()]
         for step in self.steps:
             if isinstance(step, dict):
-                step = WorkFlowOperationResult.model_validate(step)
+                step = OperationResult.model_validate(step)
 
-            if isinstance(step, WorkFlowOperationResult):
+            if isinstance(step, OperationResult):
                 flat.extend(step.flatten())
             elif isinstance(step, OperationResult):
                 flat.append(step.to_span())
             # anything else came from a hand-built record — add_step rejects
             # it — and is skipped rather than allowed to break the walk
         return flat
+

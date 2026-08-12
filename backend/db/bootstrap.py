@@ -10,7 +10,7 @@ from db.schema.extensions import REQUIRED_EXTENSIONS
 from config.constants import FilesLocationConstants
 from db.readiness import ReadinessResult
 
-from airglider import OperationResult, WorkFlowOperationResult, task
+from airglider import OperationResult, OperationResult, task
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +79,10 @@ async def create_indexes(
 async def bootstrap_schema(
     session_factory: async_sessionmaker[AsyncSession],
     readiness: ReadinessResult | None = None,
-) -> WorkFlowOperationResult:
+) -> OperationResult:
     """Apply extensions, tables, and indexes in order (idempotent and safe to call multiple times)."""
     if readiness and not readiness.need_db_bootstrap:
-        return WorkFlowOperationResult(
-            ok=True, message="No actions required.", steps=[]
-        )
+        return OperationResult(ok=True, message="No actions required.", steps=[])
 
     checks: list[OperationResult] = []
 
@@ -92,7 +90,7 @@ async def bootstrap_schema(
     checks.append(await init_tables(session_factory))
     checks.append(await create_indexes(session_factory))
 
-    return WorkFlowOperationResult(
+    return OperationResult(
         name="bootstrap_schema",
         ok=all(check.ok for check in checks),
         message="Bootstrap schema completed.",

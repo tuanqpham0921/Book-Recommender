@@ -40,7 +40,7 @@ class TokenUsage(ModelUsage):
 
     A *leaf* — what `OpenAIClient._extract_token_usage` builds — names its
     `model` and leaves `by_model` empty. Adding leaves together (see
-    `WorkFlowOperationResult.add_step`) produces an *aggregate*: the flat counts still sum
+    `OperationResult.add_step`) produces an *aggregate*: the flat counts still sum
     across everything, and `by_model` keeps the per-model split that the flat
     counts alone can't express once more than one model is in play.
 

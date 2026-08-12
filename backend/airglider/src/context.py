@@ -33,22 +33,22 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Iterator
 
-from .schemas.record import WorkFlowOperationResult
+from .schemas.record import OperationResult
 
 # `default=None` matters: a task called with no workflow above it — a script, a
 # test, a startup hook — reads this and must simply not attach.
-CURRENT_PARENT: ContextVar[WorkFlowOperationResult | None] = ContextVar(
+CURRENT_PARENT: ContextVar[OperationResult | None] = ContextVar(
     "airglider_current_parent", default=None
 )
 
 
-def current_parent() -> WorkFlowOperationResult | None:
+def current_parent() -> OperationResult | None:
     """The envelope a step started right now would attach itself to."""
     return CURRENT_PARENT.get()
 
 
 @contextmanager
-def parent_scope(record: WorkFlowOperationResult) -> Iterator[WorkFlowOperationResult]:
+def parent_scope(record: OperationResult) -> Iterator[OperationResult]:
     """Publish `record` as the current parent, then adopt it into the previous one.
 
     Both halves are in the `finally`, and the order is not interchangeable:

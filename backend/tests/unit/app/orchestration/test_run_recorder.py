@@ -10,7 +10,7 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.orchestration.triage import TriageOutput
 from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
-from airglider import OperationResult, WorkFlowOperationResult, Response, TokenUsage
+from airglider import OperationResult, OperationResult, Response, TokenUsage
 
 
 def _make_goal():
@@ -43,10 +43,10 @@ def _make_planner_record() -> OperationResult:
     )
 
 
-def _make_root_record(planner: OperationResult) -> WorkFlowOperationResult:
+def _make_root_record(planner: OperationResult) -> OperationResult:
     """The orchestrator's root envelope, built the way Orchestrator.run builds
     it: the planner record hung on as a step, then ok/duration stamped."""
-    record = WorkFlowOperationResult(name="orchestrator_chat_1", ok=True)
+    record = OperationResult(name="orchestrator_chat_1", ok=True)
     record.add_step(planner)
     record.timing.duration = 1.23
     return record

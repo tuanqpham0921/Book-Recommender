@@ -12,14 +12,14 @@ childless envelope, so no row in the list drags a subtree along with it.
 
 import asyncio
 
-from airglider import OperationResult, WorkFlowOperationResult, Workflow, task
+from airglider import OperationResult, OperationResult, Workflow, task
 
 
-def _op(name: str) -> WorkFlowOperationResult:
-    return WorkFlowOperationResult(name=name, ok=True)
+def _op(name: str) -> OperationResult:
+    return OperationResult(name=name, ok=True)
 
 
-def _tree() -> WorkFlowOperationResult:
+def _tree() -> OperationResult:
     """root ─┬─ a ─┬─ a1
     │      └─ a2
     └─ b"""
@@ -163,7 +163,7 @@ class TestReloadedRecords:
     runs is most of what this is for."""
 
     def test_a_reloaded_record_still_flattens(self):
-        reloaded = WorkFlowOperationResult.model_validate_json(_tree().model_dump_json())
+        reloaded = OperationResult.model_validate_json(_tree().model_dump_json())
 
         assert isinstance(reloaded.steps[0], dict)
         assert [op.name for op in reloaded.flatten()] == [
@@ -177,7 +177,7 @@ class TestReloadedRecords:
     def test_parent_ids_survive_the_round_trip(self):
         """Because the stamp is part of the record, not derived while
         flattening — a reader that only ever sees the stored tree gets it."""
-        reloaded = WorkFlowOperationResult.model_validate_json(_tree().model_dump_json())
+        reloaded = OperationResult.model_validate_json(_tree().model_dump_json())
         flat = reloaded.flatten()
 
         assert flat[0].parent_id is None
@@ -188,7 +188,7 @@ class TestReloadedRecords:
         simply has no `steps` key — so a `@task` envelope survives the trip."""
         root = _op("root")
         root.add_step(OperationResult(name="leaf", ok=True))
-        reloaded = WorkFlowOperationResult.model_validate_json(root.model_dump_json())
+        reloaded = OperationResult.model_validate_json(root.model_dump_json())
 
         assert [op.name for op in reloaded.flatten()] == ["root", "leaf"]
 
