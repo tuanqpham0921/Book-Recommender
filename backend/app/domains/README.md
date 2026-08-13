@@ -41,10 +41,17 @@ books/find_by_title/
   query on the output, get the match size and a small sample in one round trip)
   and `stream_books()` (cards to the browser, validated through `BookOut`).
 - `base_request.py` — `BaseRequest`, shared fields + validation.
-- `node_input.py` — `WorkflowInput` / `NodeInput`, and `build_input`, which
-  fills a node's declared input from the goal text and its dependencies'
-  outputs by matching on type. Imports nothing else from `app/domains/`;
-  `base_workflow` imports *it*.
+- `node_input.py` — `WorkflowInput` / `NodeInput` / `ParsedInput`, and
+  `build_input`, which fills a node's declared input from the goal text and its
+  dependencies' outputs by matching on type. Imports nothing else from
+  `app/domains/`; `base_workflow` imports *it*.
+  `ParsedInput[SomeRequest]` is the *other* end of a node's entry: arguments
+  someone already parsed, rather than text to parse. A node accepting both
+  annotates `run` with the union (`PlanJaneInput`) and branches once, so the
+  tool schema can be exposed and called directly — see `GoalParseRequest.__call__`,
+  which is the shape `ToolMessage.execute` dispatches a parsed tool call into.
+  It is parameterized rather than typed `BaseRequest` so the branch is a typed
+  field, not a cast: a payload of the wrong schema fails building the input.
 - `base_workflow.py` — `AppWorkflow`, the domain-agnostic base underneath those.
   It pins the **`run(node_input)`** signature *every* unit of work in the
   app answers to, and resolves the output type from `AppWorkflow[SomeOutput]`,
@@ -53,6 +60,12 @@ books/find_by_title/
   LLM-request building: a slice writes its own `build_arg_parser_request(query)`
   and passes the result to `AppWorkflow.run_llm_args_parse`, which is the one
   shared seam. Only the prompt path (`ARG_PARSER_PROMPT_PATH`) is shared.
+  `run_llm_args_parse` returns the first tool call's parsed arguments and
+  records the tool result immediately — too early to wrap in a retry, and the
+  reason `run_llm_tool_calls` exists beside it: it hands back the calls
+  themselves, so a node that cares can close the [tool_call, tool result] pair
+  *after* processing (and on the failure path, which is what keeps the message
+  list valid for the rest of the turn).
 
 ## One call shape: `run(node_input)`
 

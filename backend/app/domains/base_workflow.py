@@ -162,21 +162,36 @@ class AppWorkflow(Workflow[OutputT], ABC):
         self.messages.append(msg)
         return msg
 
-    async def run_llm_args_parse(
+    async def run_llm_tool_calls(
         self, req: BaseLLMRequest, save_payload: bool = False
-    ) -> ParsedFunctionToolCall:
+    ) -> list[ParsedFunctionToolCall]:
+        """The tool calls themselves, unprocessed.
+
+        For a caller that needs the call and not just its arguments — to pair
+        the tool result with it after processing, or to dispatch it through
+        `run_tool_call`. `run_llm_args_parse` is the shorthand for everyone
+        else.
+        """
         assistant_msg = await self.run_llm_call(req, save_payload=save_payload)
         tool_calls = assistant_msg.tool_calls
         if not tool_calls:
             # previously an unguarded [0] on None — same failure semantics
             # (runtime error caught by the workflow), clearer message
             raise ValueError("LLM response contained no tool calls")
+        return tool_calls
 
-        # NOTE: recorded too early — the tool result should be appended *after*
-        # processing, as a [tool_call, tool result] pair, so the whole thing can
-        # be wrapped in a retry. Putting __call__ on the request nodes for
-        # post-processing would also give a clear args_parse/tool-call split,
-        # leaving the workflow as the parent that manages retries and errors.
+    async def run_llm_args_parse(
+        self, req: BaseLLMRequest, save_payload: bool = False
+    ) -> Any:
+        """The first tool call's parsed arguments, with the tool result
+        recorded.
+
+        NOTE: recorded too early — the tool result should be appended *after*
+        processing, as a [tool_call, tool result] pair, so the whole thing can
+        be wrapped in a retry. A node that cares takes `run_llm_tool_calls` and
+        records the pair itself; `PlanJaneExecutor` is the first to do so.
+        """
+        tool_calls = await self.run_llm_tool_calls(req, save_payload=save_payload)
         self.record_tool_call(tool_call=tool_calls[0])
         return tool_calls[0].function.parsed_arguments
 

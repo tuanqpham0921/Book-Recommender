@@ -18,7 +18,7 @@ Imports nothing else from `app/domains/`: `base_workflow` imports *it*.
 import logging
 from collections.abc import Mapping
 from types import UnionType
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Generic, TypeVar, Union, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict
 
@@ -42,6 +42,20 @@ class NodeInput(WorkflowInput):
 
     query: str
 
+ParsedT = TypeVar("ParsedT", bound=BaseModel)
+
+
+class ParsedInput(WorkflowInput, Generic[ParsedT]):
+    """The other end of a node's entry: arguments someone already parsed.
+
+    A node reached from natural language takes a `NodeInput` and does its own
+    tool call; a node reached as an already-filled tool schema takes this and
+    skips straight to the processing. Parameterized by the schema the node
+    parses into (`ParsedInput[GoalParseRequest]`), so the branch inside the
+    executor is a typed field rather than a cast.
+    """
+
+    parsed_result: ParsedT
 
 def _resolve(annotation: Any, available: list[Any]) -> tuple[bool, Any]:
     """`(filled, value)` for one field, matched against the artifacts by type.

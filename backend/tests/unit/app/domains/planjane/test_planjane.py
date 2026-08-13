@@ -15,9 +15,11 @@ The layering helper `PlanJaneOutput.execution_order` has its own file,
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import ValidationError
 
+from clients.messages import UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
-from app.domains.node_input import NodeInput
+from app.domains.node_input import NodeInput, ParsedInput
 from app.domains.node_types import UnknownNodeTypeEnum
 from app.domains.planjane.executor import (
     GoalParseRequest,
@@ -293,6 +295,67 @@ class TestRun:
             call.args[0] for call in parse_wf.sse_stream.send_chars.call_args_list
         )
         assert "Cooking recipe" not in streamed
+
+
+class TestParsedEntry:
+    """The planner reached with its tool schema already filled in.
+
+    `run` takes either end — `NodeInput` (parse it myself) or
+    `ParsedInput[GoalParseRequest]` (skip to the processing) — so the schema
+    can be exposed as a callable tool without a second implementation of what
+    happens to the goals.
+    """
+
+    async def test_skips_the_llm_entirely(self, parse_wf):
+        parse_wf.sse_stream.send_ui_loading = AsyncMock()
+        parse_wf.run_llm_call = AsyncMock(side_effect=AssertionError("parsed already"))
+        parse_result = _make_parse_result(goals=[_make_goal()])
+
+        await parse_wf.run(ParsedInput[GoalParseRequest](parsed_result=parse_result))
+
+        assert len(parse_wf.result.accepted_goals) == 1
+        parse_wf.run_llm_call.assert_not_called()
+
+    async def test_calling_the_schema_runs_the_same_executor(self, make_request_context):
+        ctx = make_request_context(user_message=UserMessage(content="test message"))
+        parse_result = _make_parse_result(goals=[_make_goal()])
+
+        record = await parse_result(ctx, messages=[])
+
+        assert record.ok is True
+        assert record.result.accepted_goals_ids() == ["1"]
+
+    async def test_a_non_goal_payload_is_refused_at_the_boundary(self):
+        """The typed slot is the check — `parsed_result` names the schema this
+        executor processes, so a mismatch fails building the input rather than
+        somewhere inside `process_parse_result`."""
+        with pytest.raises(ValidationError):
+            ParsedInput[GoalParseRequest](parsed_result=_make_goal())
+
+
+class TestToolCallPairing:
+    async def test_tool_result_follows_the_tool_call(self, parse_wf):
+        parse_wf.sse_stream.send_ui_loading = AsyncMock()
+        parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg())
+
+        await parse_wf.run(NodeInput(query="test message"))
+
+        assert [getattr(m, "tool_call_id", None) for m in parse_wf.messages] == ["call_1"]
+
+    async def test_recorded_even_when_the_parse_is_rejected(self, parse_wf):
+        """An assistant message carrying a tool call with no answering tool
+        result is an invalid message list for anything later in the turn, and
+        `messages` is shared by reference across the whole turn — so the pair
+        closes on the failure path too."""
+        parse_wf.sse_stream.send_ui_loading = AsyncMock()
+        parse_wf.run_llm_call = AsyncMock(
+            return_value=_mock_assistant_msg(_make_parse_result(goals=[]))
+        )
+
+        with pytest.raises(RuntimeError):
+            await parse_wf.run(NodeInput(query="test message"))
+
+        assert [getattr(m, "tool_call_id", None) for m in parse_wf.messages] == ["call_1"]
 
 
 class TestPlanJaneOutputHelpers:

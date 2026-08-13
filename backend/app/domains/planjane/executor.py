@@ -8,7 +8,7 @@ from pydantic import Field
 from clients.messages import UserMessage
 from app.common.prompt_loader import format_prompt
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
-from app.domains.node_input import NodeInput
+from app.domains.node_input import NodeInput, ParsedInput
 from app.registry import REGISTRY
 from clients import OpenAIParserRequest
 
@@ -16,6 +16,10 @@ from app.domains.planjane.dial.mermaid import get_goals_mermaid_diagram
 from .schemas import MAX_SYSTEM_GOALS, GoalParseRequest, SystemGoal
 
 logger = logging.getLogger(__name__)
+
+# The planner is reachable from both ends: the user's text, or the tool schema
+# already filled in (see `GoalParseRequest.__call__`).
+PlanJaneInput = NodeInput | ParsedInput[GoalParseRequest]
 
 GOAL_GENERATOR_PROMPT_PATH = "domains/planjane/prompts/0_goal_generator.txt"
 # PLAYGORUND_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
@@ -127,16 +131,24 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
 
     tool_models: list[type] = [GoalParseRequest]
 
-    async def run(self, node_input: NodeInput) -> None:
+    async def run(self, node_input: PlanJaneInput) -> None:
+        """Two ways in, one body.
+
+        From natural language (`NodeInput`) the planner makes the tool call
+        itself; handed an already-filled `GoalParseRequest` it skips to the
+        processing. Everything after the branch is shared, which is the point —
+        the tool schema can be exposed and called directly without a second
+        implementation of what happens to the goals.
+        """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        parse_result = await self._run_llm_args_parse(node_input.query)
-        # parsed_arguments is typed `object | None` by the openai lib; the
-        # parser validated it against GoalParseRequest, so the cast holds
-        self.process_parse_result(parse_result)
-        # NOTE: the output needs to be added somewhere correctly
+        if isinstance(node_input, NodeInput):
+            parse_result = await self._run_llm_args_parse(node_input.query)
+            self.process_parse_result(parse_result)
+        else:
+            # already validated as GoalParseRequest by the field's annotation
+            self.process_parse_result(node_input.parsed_result)
 
-        
         await self.finalize_result()
 
         # generate unable to help with

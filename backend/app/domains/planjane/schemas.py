@@ -5,9 +5,12 @@ is what the LLM fills in, `executor.py` is what runs.
 """
 
 import logging
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+
+if TYPE_CHECKING:
+    from app.common.request_context import RequestContext
 
 from app.registry import NodeTypeEnum
 from app.domains.field_types import (
@@ -20,6 +23,7 @@ from app.domains.field_types import (
 )
 from .labels import PlannerNodeTypeEnum
 from .prompts.example import planner_example
+from airglider import OperationResult
 
 logger = logging.getLogger(__name__)
 
@@ -146,3 +150,25 @@ class GoalParseRequest(BaseModel):
         max_length=5,
         json_schema_extra={"example": "What's the weather like today?"},
     )
+
+    async def __call__(
+        self, ctx: "RequestContext", messages: list | None = None
+    ) -> OperationResult:
+        """Run this already-filled tool schema through the planner's executor.
+
+        The tool schema stays exposed and callable — `ToolMessage.execute`
+        dispatches a parsed tool call exactly this way — while the goals are
+        processed by the one implementation in `PlanJaneExecutor`, which skips
+        the parse it no longer needs.
+
+        Returns the executor's envelope. Its `.result` carries the
+        `PlanJaneOutput`; on failure the record is the only handle the caller
+        has, so check `.ok` rather than assuming an output.
+
+        Imported locally: `executor` imports this module.
+        """
+        from .executor import PlanJaneExecutor
+        from app.domains.node_input import ParsedInput
+
+        planner = PlanJaneExecutor(ctx, messages=messages)
+        return await planner(ParsedInput[GoalParseRequest](parsed_result=self))
