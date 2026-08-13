@@ -10,13 +10,15 @@ PlanJane when that becomes its own service.
 The `depends_on` → `sent_to` inversion happens here, once, so no call site can
 get the arrow backwards.
 """
-
+import logging
 from collections.abc import Mapping
 from typing import Any
 
 from airglider import remove_empty_values, to_serializable
 
 from .format import MermaidBox, get_diagram
+
+logger = logging.getLogger(__name__)
 
 # Rendered as the "Task"/"Goal" row instead, so the raw field would duplicate it.
 SKIP_LABEL_KEYS = {"id"}
@@ -61,4 +63,8 @@ def _goal_label(node_id: str, goal: Any) -> tuple[str, dict[str, Any]]:
 def get_goals_mermaid_diagram(goals: list) -> str | None:
     """Flowchart of the planner's system goals — one box per goal, headed by
     the capability it targets, with edges drawn from each goal's depends_on."""
-    return get_diagram(_to_boxes({goal.id: goal for goal in goals}, _goal_label))
+    try:
+        return get_diagram(_to_boxes({goal.id: goal for goal in goals}, _goal_label))
+    except Exception as e:
+        logger.warning(f"Error generating Mermaid diagram: {e}")
+        return None

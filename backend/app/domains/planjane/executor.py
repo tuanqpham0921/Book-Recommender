@@ -143,29 +143,6 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         if self.result.accepted_goals:
             await self.send_mermaid(self.result.accepted_goals)
 
-    async def send_mermaid(self, system_goals: list) -> str | None:
-        """Render the accepted goals as a Mermaid flowchart and stream it.
-
-        Returns the diagram, or None when there is nothing to draw or generation
-        failed — never raises into the request. Lives here because the diagram
-        *is* the plan rendered.
-        """
-        diagram = None
-        try:
-            diagram = get_goals_mermaid_diagram(system_goals)
-        except Exception as e:
-            logger.warning(f"Error generating Mermaid diagram: {e}")
-            return None
-
-        if not diagram:
-            logger.info("No Mermaid diagram generated (empty or invalid)")
-            return None
-
-        await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
-        await self.sse_stream.send_mermaid(diagram)
-        self.result.diagram = diagram
-        return diagram
-
     async def _run_llm_args_parse(self, query: str) -> ParsedFunctionToolCall:
         system_prompt = format_prompt(
             prompt_path=GOAL_GENERATOR_PROMPT_PATH,
@@ -202,10 +179,11 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         self, parse_result: GoalParseRequest, confident_tuning: float = 0.5
     ) -> None:
         if len(parse_result.system_goals) == 0 and not parse_result.out_of_scope:
-            logger.warning("Nothing was classified in the initial parse")
+            msg = "Nothing was classified in the initial parse"
             self.record.ok = False
-            self.record.add_details("Nothing was classified in the initial parse")
-            raise RuntimeError("Nothing was classified in the initial parse")
+            logger.warning(msg)
+            self.record.add_details(msg)
+            raise RuntimeError(msg)
 
         self.result.out_of_scope = parse_result.out_of_scope
 
@@ -227,3 +205,25 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
                 self.result.accepted_goals.append(goal)
             else:
                 self.result.buffer_goals.append(goal)
+
+    async def send_mermaid(self, system_goals: list) -> str | None:
+        """Render the accepted goals as a Mermaid flowchart and stream it.
+
+        Returns the diagram, or None when there is nothing to draw or generation
+        failed — never raises into the request. Lives here because the diagram
+        *is* the plan rendered.
+        """
+        diagram = None
+        diagram = get_goals_mermaid_diagram(system_goals)
+        
+
+        if not diagram:
+            msg = "No Mermaid diagram generated (empty or invalid)"
+            logger.warning(msg)
+            self.add_details(msg)
+            return None
+
+        await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
+        await self.sse_stream.send_mermaid(diagram)
+        self.result.diagram = diagram
+        return diagram
