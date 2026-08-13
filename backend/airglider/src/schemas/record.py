@@ -115,6 +115,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
             return
 
         if any(attached is step for attached in self.steps):
+            self.add_details(f"step_id: {step.id} attempted to add twice")
             return
 
         step.parent_id = self.id
