@@ -1,41 +1,21 @@
 """`AppWorkflow` — the base class behind every unit of work in the app.
 
-Pins one call shape for all of them: **`run(node_input)`**, where `node_input`
-is the workflow's own `WorkflowInput` subclass (app/domains/node_input.py). The
-planner, the task runner and every node executor answer to that signature, so
-"what does this thing take?" has one answer everywhere — and, unlike the
-`(query, artifacts: dict[str, Any])` pair it replaced, the answer is *specific*:
-a node declares which upstream shapes it can consume, and one that is handed
-nothing usable can name the empty slot instead of only raising.
+Pins one call shape, `run(node_input)`, where `node_input` is the workflow's own
+`WorkflowInput` subclass. The input is assembled and validated by whoever
+dispatches (`build_input`), so a missing dependency is one validation at the
+boundary rather than a guard in every node body.
 
-The input is assembled and validated by whoever dispatches — `build_input` for
-a node under the task runner — so the reject arm that used to be
-`require_artifact` inside every node body is now one validation at the boundary.
+Services are not constructor arguments and not on the input — they are
+properties off `RequestContext`. Context and input split on lifetime: services
+per request, an input per dispatch.
 
-Services are **not** constructor arguments, and are not on the input either.
-`AppWorkflow.__init__(ctx, messages)` is the only `__init__` in the app layer;
-`sse_stream`, `llm_client`, `app_env`, `session_id` and `user_message` are
-properties off the `RequestContext` it stores. Context and input split on
-lifetime: services are built once per request, an input is built per dispatch.
+Declare the output in the class header (`AppWorkflow[FindByTitleOutput]`); it is
+resolved from the generic parameter, so a subclass needs no `__init__`.
 
-Declare the output in the class header (`AppWorkflow[FindByTitleOutput]`) and
-it is resolved from the generic parameter, so a subclass needs no `__init__`
-at all.
-
-Anything specific to one domain belongs in that domain's own base instead —
-`books/base_workflow.py` (`BookWorkflow`) holds the `store` property, the
-counts-first `preflight()` and `stream_books()`, and book slices subclass that.
-Keeping them out of here is what lets this module stay free of book models and
-of the API's wire schemas.
-
-**Building LLM requests is not this class's job either.** A slice builds its own
-`OpenAIParserRequest` — a module-level `build_arg_parser_request(query)` next to
-its executor — and hands it to `AppWorkflow.run_llm_args_parse`, which is the
-single shared seam for parsing arguments. That is the same shape the analyze
-slice already uses for `build_analysis_request` / `build_response_request`, and
-it is what lets one node use a different model, prompt or message list without a
-flag on a base class. `ARG_PARSER_PROMPT_PATH` below is the one piece those
-builders share.
+Domain-specific behaviour belongs in that domain's own base (`BookWorkflow`),
+which is what keeps this module free of book models and wire schemas. Building
+LLM requests is likewise a slice's job, so one node can use a different model or
+prompt without a flag on a base class.
 """
 
 import inspect
@@ -63,10 +43,9 @@ class NodeWorkflowOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.response.result, exposed via
     the `.result` property (OperationResult.result)."""
 
-    # Optional, not `str = None` / `BaseRequest = None`: model_dump_json emits
-    # `null` for these when unset, and a non-optional annotation then rejects
-    # its own dump on reload — which is how chat_runs rows and the parse cache
-    # get replayed (see PlanJaneOutput.out_of_scope for the same note).
+    # Optional, not `str = None`: model_dump_json emits `null` when unset, and
+    # a non-optional annotation then rejects its own dump on reload — which is
+    # how chat_runs rows and the parse cache get replayed.
     id: str | None = None
     args: BaseRequest | None = None
     depends_on: list[str] = Field(default_factory=list)
@@ -82,47 +61,32 @@ class AppWorkflow(Workflow[OutputT], ABC):
     """One call shape for every unit of work: `run(node_input)`.
 
     A subclass declares its own `WorkflowInput` and narrows the parameter
-    annotation to it; `NodeSpec.input` is where a dispatchable node records
-    which one, so the runner can build it without knowing the class.
-
-    Services come off `self.ctx`, never off constructor arguments or the input,
-    so this is the only `__init__` in the app layer — a workflow that needs a
-    new service adds nothing to any call site. A subclass whose nodes need a
-    narrower services view re-annotates `ctx` (see `BookWorkflow`).
+    annotation to it; `NodeSpec.input` records which one, so the runner builds
+    it without knowing the class. Services come off `self.ctx`; a subclass
+    needing a narrower view re-annotates `ctx` (see `BookWorkflow`).
     """
 
     ctx: RequestContext
 
     ui_loading_message = "Working..."
 
-    # How this node's step is titled in the UI's task list. `TaskRunnerWorkflow`
-    # opens and closes the section, so a node only declares its own label —
-    # falling back to the node type name when it doesn't.
-    #
-    # PLAIN CLASS ATTRIBUTES ON PURPOSE: task_runner.py reads these off the
-    # *class* (`executor_cls.ui_section_title`), before any instance exists. A
-    # @property here would not raise — property objects are truthy — it would
-    # silently title every section "<property object at 0x…>".
+    # How this node's step is titled in the UI's task list; falls back to the
+    # node type name. PLAIN CLASS ATTRIBUTES ON PURPOSE — task_runner.py reads
+    # these off the *class*, and a @property would silently title every section
+    # "<property object at 0x…>" rather than raise.
     ui_section_title: str | None = None
-    # Terminal nodes own the answer, so their section is not something to fold
-    # away; the supporting steps are.
+    # terminal nodes own the answer, so their section is not folded away
     ui_section_collapsible: bool = True
 
     @classmethod
     def _generic_output_type(cls) -> type | None:
-        """The OutputT a subclass pinned in `AppWorkflow[SomeOutput]`.
-
-        Lets a workflow declare its output once, in the class header, instead
-        of repeating it as an `output_type=` argument in an __init__ that
-        otherwise does nothing. Walks the MRO so a subclass of a subclass
-        (a node executor built on a shared retrieval base) still resolves.
-        """
+        """The OutputT a subclass pinned in `AppWorkflow[SomeOutput]`. Walks
+        the MRO so a subclass of a subclass still resolves."""
         for klass in cls.__mro__:
             for base in getattr(klass, "__orig_bases__", ()):
                 for arg in get_args(base):
-                    # a still-generic base parameterizes with a TypeVar, not a
-                    # class; NodeWorkflowOutput itself is abstract and can't be
-                    # instantiated as an envelope. Skip both and keep walking.
+                    # a still-generic base parameterizes with a TypeVar, and
+                    # NodeWorkflowOutput is abstract — skip both, keep walking
                     if (
                         isinstance(arg, type)
                         and issubclass(arg, NodeWorkflowOutput)
@@ -138,9 +102,8 @@ class AppWorkflow(Workflow[OutputT], ABC):
     ):
         output_type = self._generic_output_type()
         if output_type is None:
-            # Without this the envelope's payload is left None and the failure
-            # surfaces much later, as "output was not initialized" from a
-            # property access somewhere inside run().
+            # otherwise the payload is left None and this surfaces much later
+            # as "output was not initialized", from somewhere inside run()
             raise TypeError(
                 f"{type(self).__name__} pinned no output type — declare it in "
                 f"the class header, e.g. "
@@ -148,15 +111,13 @@ class AppWorkflow(Workflow[OutputT], ABC):
             )
         super().__init__(output_type)
         self.ctx = ctx
-        # Rebound, never copied: a parent and its children share one list so a
-        # whole turn lands on one conversation trace. `list(messages)` here
-        # would split it silently — nothing would fail, the trace would just
-        # lose the children's turns.
+        # Rebound, never copied: parent and children share one list so a whole
+        # turn lands on one conversation trace. `list(messages)` would split it
+        # silently — nothing fails, the trace just loses the children's turns.
         self.messages: list[APIMessage] = messages if messages is not None else []
 
     # ---- services, read off the request context -------------------------
-    # Properties rather than assignments: every existing `self.<service>` read
-    # keeps working untouched, and none of them can be accidentally rebound.
+    # Properties rather than assignments, so none can be accidentally rebound.
 
     @property
     def sse_stream(self) -> SSEStream:
@@ -185,14 +146,9 @@ class AppWorkflow(Workflow[OutputT], ABC):
         """Fill in `self.result` and call `self.finalize_result(ok=…)`.
 
         Narrow the annotation to this workflow's own input class in the
-        override. Everything the workflow is *working on* arrives here;
-        everything it can *reach* is on `self.ctx`.
-
-        The input is already validated — whoever dispatched built it — so a
-        required field is present by the time this runs, and an optional one
-        being empty is a state to handle rather than an error to raise. There
-        is no artifact dictionary to search: `build_input` (node_input.py) did
-        the select-by-type once, at the boundary.
+        override. What the workflow works on arrives here; what it can reach is
+        on `self.ctx`. The input is already validated, so an empty optional
+        field is a state to handle, not an error to raise.
         """
 
     async def run_llm_call(
@@ -216,18 +172,11 @@ class AppWorkflow(Workflow[OutputT], ABC):
             # (runtime error caught by the workflow), clearer message
             raise ValueError("LLM response contained no tool calls")
 
-        # NOTE: the output needs to be added somewhere correctly
-        # you may not want to add it right away? because you need to process it?
-        # or is this the workflow output?
-        # NOTE: this is wrong, you add this in after processing
-        # or tool calling
-        # then you add the result as a [toolcall, tool result]
-        # so you wrap it in a retry if needed
-        # NOTE: it might also make more sense to put the __call__
-        # in the request nodes, for post processing
-        # this way you have a clear args_parse, tool call messages
-        # and the workflow is the parent node that manages that circles
-        # for retries and catching errors
+        # NOTE: recorded too early — the tool result should be appended *after*
+        # processing, as a [tool_call, tool result] pair, so the whole thing can
+        # be wrapped in a retry. Putting __call__ on the request nodes for
+        # post-processing would also give a clear args_parse/tool-call split,
+        # leaving the workflow as the parent that manages retries and errors.
         self.record_tool_call(tool_call=tool_calls[0])
         return tool_calls[0].function.parsed_arguments
 

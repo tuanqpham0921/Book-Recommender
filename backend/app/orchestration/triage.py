@@ -1,16 +1,13 @@
 """Triage — what happens to a turn before, and instead of, planning.
 
-Sits between `Orchestrator` (transport: SSE lifecycle, timeouts, cancellation,
-recording) and `PlanJane` (produce a plan). Its job is to decide **whether to
-plan at all**: replay a cached plan, answer small talk, refuse out-of-scope, or
-hand the turn to the planner.
+Sits between `Orchestrator` (transport) and `PlanJane` (produce a plan), and
+decides whether to plan at all: replay a cached plan, answer small talk, refuse
+out-of-scope, or hand the turn to the planner.
 
-It lives here rather than in `app/domains/` because it is not a capability —
-no `NodeSpec.executor` will ever point at it, and its only domain
-knowledge is which planner to call. It is a separate `AppWorkflow` rather than
-methods on `Orchestrator` because `Orchestrator` owns no envelope: folding the
-decisions in would mean a cache hit or a refusal produced no step in the trace
-tree, and `chat_runs.planner` would lose its shape.
+Not in `app/domains/` because it is not a capability — no `NodeSpec.executor`
+will point at it. A workflow rather than methods on `Orchestrator` because
+`Orchestrator` owns no envelope, so a cache hit or a refusal would produce no
+step in the trace tree.
 """
 
 import logging
@@ -35,12 +32,9 @@ cache_mapping = {
 
 
 def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
-    """Replay a recorded plan instead of calling the LLM, for the messages
-    listed in cache_mapping. Returns None when there is no usable cache entry,
-    so the caller falls through to the real planner.
-
-    The files are whole triage record dumps, so the plan payload sits
-    at output.parse_result."""
+    """Replay a recorded plan instead of calling the LLM, for the messages in
+    cache_mapping. None when there is no usable entry, so the caller falls
+    through to the real planner. The files are whole triage record dumps."""
     file_name = cache_mapping.get(user_text)
     if not file_name:
         return None
@@ -54,9 +48,8 @@ def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
         logger.warning(f"Cache entry {file_name} has no output.parse_result")
         return None
 
-    # save_file() writes these with remove_empty=True, which drops empty
-    # lists — so a goal that depends on nothing comes back missing its
-    # required depends_on. Put it back before validating.
+    # save_file() writes with remove_empty=True, dropping empty lists, so a
+    # goal depending on nothing comes back missing its required depends_on
     for key in ("accepted_goals", "refused_goals", "buffer_goals"):
         for goal in payload.get(key) or []:
             goal.setdefault("depends_on", [])
@@ -74,15 +67,12 @@ def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
 class TriageOutput(NodeWorkflowOutput):
     session_id: str | None = None
 
-    # The plan, when triage decided to produce one. None means the turn was
-    # handled without planning (or failed before the planner returned).
+    # The plan, when triage produced one. None means the turn was handled
+    # without planning, or failed before the planner returned.
     #
-    # Field name kept as `parse_result` on purpose: it is a *serialized* path.
-    # evals/report_system_goals.py reads accepted goals at
-    # planner.response.result.parse_result, the checked-in cache files key on
-    # it, and every recorded chat_runs row carries it. Renaming it to `plan`
-    # means changing all four in lockstep — worth doing, not worth doing
-    # silently as part of a file move.
+    # The name is a *serialized* path: evals/report_system_goals.py, the cache
+    # files and every chat_runs row all key on `parse_result`. Renaming it to
+    # `plan` means changing all four in lockstep.
     parse_result: PlanJaneOutput | None = None
 
     def to_summary(self) -> dict[str, Any]:
@@ -90,9 +80,9 @@ class TriageOutput(NodeWorkflowOutput):
 
     @property
     def diagram(self) -> str | None:
-        """The plan's Mermaid diagram. Rendered by PlanJane, which owns plan
-        presentation; surfaced here because `chat_runs.mermaid` is promoted out
-        of this envelope (run_recorder.py) and the review page reads it."""
+        """The plan's Mermaid diagram, rendered by PlanJane. Surfaced here
+        because `chat_runs.mermaid` is promoted out of this envelope and the
+        review page reads it."""
         return self.parse_result.diagram if self.parse_result else None
 
     def execution_order(self) -> ExecutionOrder:
@@ -126,8 +116,7 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
             raise_on_failure=False,
         )
 
-        # narrow through a local: the workflow pre-initializes its output, so it
-        # is never None; planner.result raises if it ever were
+        # the workflow pre-initializes its output, so this is never None
         self.result.parse_result = planner.result
 
         if not planner_record.ok:

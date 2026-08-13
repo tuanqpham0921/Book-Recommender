@@ -19,28 +19,10 @@ class Time(BaseModel):
 
     @property
     def end_time(self) -> str | None:
-        """When this finished, ISO 8601 — or None while it is still running.
+        """`start_time + duration`, or None while still running.
 
-        **Derived, not observed**: `start_time + duration`. The two halves are
-        measured differently on purpose — `start_time` is wall clock
-        (`now_iso`), `duration` is `time.perf_counter`, which is monotonic — so
-        this is "the wall-clock start, plus the time that actually elapsed".
-
-        A second `now_iso()` at the end would read better but be worse: it
-        inherits whatever the system clock did in between (an NTP correction, a
-        laptop suspend), so `end_time - start_time` would stop agreeing with
-        `duration` and a step could even appear to finish before it began.
-        Deriving keeps the three values consistent by construction.
-
-        Precision follows `duration`, which callers round to 2 decimals — so
-        this is accurate to ±5ms and can sit just *after* the instant the call
-        actually returned. Fine for reading a trace; don't difference two of
-        these to measure something short.
-
-        Not a field, and not a `computed_field`: it adds no information, so
-        persisting it would be a third value that can disagree with the two it
-        came from. `to_serializable` walks `model_fields` only, so neither form
-        would reach the DB row anyway without changing that walk.
+        Derived so it cannot disagree with `duration` if the clock jumps.
+        Precision follows `duration` (2dp).
         """
         if self.duration is None:
             return None
@@ -58,19 +40,8 @@ class OperationResult(BaseModel, Generic[OutputT]):
     """Outcome of one named unit of work, and whatever work it ran in turn.
 
     The envelope every `@task` and every `Workflow` produces, and the row every
-    span list is made of: an id, a parent, timing, input, output, details,
-    usage, an error — and `steps`.
-
-    **One class, not two.** There used to be a `WorkFlowOperationResult`
-    subclass that added `steps`, on the reasoning that a leaf has no children
-    and should not carry the field. Two things retired it. `steps` is not
-    mandatory — an empty list costs nothing and `flatten` reads it the same
-    either way — and, more decisively, once nesting became automatic
-    (`parent_scope`, `src/context.py`) any unit of work can run another, so
-    "which shape am I" stopped being answerable at decoration time. The split
-    only ever showed up as the same relationship rebuilt from two angles: an
-    isinstance ladder in `flatten`, a `getattr(x, "steps", [])` at every reader,
-    and a rule about who was allowed to call whom.
+    span list is made of — one class for both, since any unit of work can run
+    another.
     """
 
     id: str = Field(default_factory=lambda: f"op_{uuid_8()}")
@@ -87,16 +58,13 @@ class OperationResult(BaseModel, Generic[OutputT]):
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
     runtime_error: RuntimeErrorInfo | None = None
 
-    # `list[Any]`, not `list[OperationResult]`, and deliberately so: pydantic
-    # would re-validate a child on assignment and hand back a *copy*, which
-    # breaks the one thing the tree depends on — a step being the same object
-    # the workflow that produced it is still writing to. The cost is that a
-    # record reloaded from JSON has plain-dict children; `flatten` validates
-    # them on the way past.
+    # `list[Any]` on purpose: pydantic would re-validate a child on assignment
+    # and hand back a *copy*, so a step would stop being the same object its
+    # producer is still writing to. Cost: children reloaded from JSON are plain
+    # dicts, validated in `flatten`.
     steps: list[Any] = Field(default_factory=list)
 
     def check_output_type(self) -> None:
-        # default there's no output
         if self.result is None:
             return
 
@@ -126,34 +94,15 @@ class OperationResult(BaseModel, Generic[OutputT]):
         return self.timing.end_time
 
     def add_step(self, step: "OperationResult[Any]") -> None:
-        """Attach a child envelope, stamp it as ours, and roll its token usage up.
+        """Attach a child, stamp it as ours, and roll its token usage up.
 
-        Lives here rather than on `Workflow` because `steps`/`token_usage` do:
-        it is also how a non-Workflow caller (the Orchestrator) builds a root
-        envelope over workflows that each own their own record.
+        On the envelope, not on `Workflow`, so a non-Workflow caller (the
+        Orchestrator) can build a root over finished records.
 
-        `parent_scope` normally stamps `parent_id` on the way *in* — parentage
-        is known when a call starts, and a record should carry it for the whole
-        of its own run. This stamps it too, for the attach paths that never went
-        through a scope: the `Orchestrator` builds a root envelope by hand and
-        hangs two already-finished workflow records off it, and a `@task` may
-        assemble a step list itself. Either way the child comes out an orphan
-        and whoever attaches it adopts it — nothing has to be threaded into the
-        decorator.
-
-        Stamped on the record rather than derived later (e.g. while flattening)
-        so the link survives the JSONB insert, and a reader that only ever sees
-        the stored tree can still rebuild the nesting.
-
-        **Attaching is idempotent**, and it has to be: `parent_scope` adopts a
-        child automatically, so the explicit `add_step` that `run_async_step`
-        still makes would otherwise append the same object twice and add its
-        tokens twice, silently. The check is **identity against `steps`**, not
-        `parent_id is None` — since the scope pre-stamps the id, that flag no
-        longer distinguishes "knows its parent" from "has been attached". A step
-        already claimed by a *different* parent is a genuine bug (the same
-        envelope in two trees, its usage counted in both), so it is refused and
-        logged rather than re-parented.
+        Idempotent — `parent_scope` attaches automatically, so `run_async_step`
+        would otherwise append twice. The guard is identity against `steps`, not
+        `parent_id is None`, which the scope pre-stamps on entry. A step claimed
+        by another parent is refused, not re-parented: it would be billed twice.
         """
         if not isinstance(step, OperationResult):
             raise ValueError(f"Step is of type {type(step)} not OperationResult")
@@ -178,16 +127,9 @@ class OperationResult(BaseModel, Generic[OutputT]):
     def to_span(self) -> "OperationResult[Any]":
         """This envelope as one flat row — the same record, minus its subtree.
 
-        What `flatten()` puts in the list, and the reason no row re-encodes the
-        tree once per level. A node **with** children comes back as a shallow
-        copy carrying `steps=[]`; one **without** has nothing to drop and comes
-        back by reference, which is what keeps flattening a mostly-free walk.
-
-        `model_construct`, not a dump-and-revalidate: every value already came
-        off a validated model, and re-validating would turn a live payload into
-        the dict `model_dump` made of it. The sub-models (`timing`, `response`,
-        `token_usage`) are shared with the tree node rather than copied — this
-        is a view for reading, not an independent record.
+        Keeps `flatten` from serializing the tree once per level. With children,
+        a `model_construct` shallow copy (no dump-and-revalidate, so a live
+        payload stays live); without, by reference.
         """
         if not self.steps:
             return self
@@ -200,47 +142,27 @@ class OperationResult(BaseModel, Generic[OutputT]):
         return OperationResult.model_construct(**fields, steps=[])
 
     def to_summary(self) -> dict[str, Any]:
-        """This envelope with the bulk taken out, and each child's beneath it —
-        one small dict per node, so a run reads top to bottom without unfolding
-        payloads.
-
-        Recursive, because the tree has no fixed depth: anything that summarized
-        only itself and its immediate children would stop at two levels.
-
-        Complements rather than replaces the full record: the DB row and the
-        dev-log still carry `to_serializable(record)`. Only the shape the eye
-        needs lives here.
-
-        `details` is left out on purpose: nearly every `@task` carries the
-        decorator's own bookkeeping line, which would bury the shape. Read the
-        full record when a failure needs explaining beyond `error`.
+        """One small dict per node, children nested beneath — a run read top to
+        bottom without unfolding payloads. Complements the full record, never
+        replaces it. `details` is omitted: it is mostly decorator bookkeeping.
         """
         payload = self.result
         summary = {
             "id": self.id,
-            # leaf of the dotted ref only — the full module path is in the
-            # unabridged tree, and repeating it at every level is what made
-            # the trace hard to scan. `name` is optional on the model, so an
-            # unnamed envelope drops the key rather than raising here.
+            # leaf of the dotted ref only; the full path is in the whole tree
             "name": self.name.split(".")[-1] if self.name else None,
             "ok": self.ok,
             "duration": self.duration,
-            # `or None` so a step that made no LLM call (a DB read, a
-            # combine) drops both keys instead of repeating zeros down the
-            # tree — same call strip_zero_token_usage makes for the dev log,
-            # made here because a summary has no fidelity to protect
+            # `or None` so a step that made no LLM call drops both keys
             "tokens": self.token_usage.total or None,
             "cost_usd": self.token_usage.cost_usd or None,
-            # without this an unpriced model reads as free rather than
-            # unknown — the one case where a missing cost_usd is not a zero
+            # without this an unpriced model reads as free rather than unknown
             "unpriced_models": self.token_usage.unpriced_models,
             "error": self.runtime_error.type if self.runtime_error else None,
             "output": payload.to_summary() if hasattr(payload, "to_summary") else None,
         }
-        # keeps a childless node to the three or four keys that actually say
-        # something; `ok: False` and a genuine 0 survive this (see
-        # remove_empty_values). Steps are added after the strip so the key is
-        # absent rather than empty when there are none.
+        # `ok: False` and a genuine 0 survive this (see remove_empty_values).
+        # Steps are added after so the key is absent rather than empty.
         summary = remove_empty_values(summary)
         if self.steps:
             summary["steps"] = [step.to_summary() for step in self.steps]
@@ -249,24 +171,9 @@ class OperationResult(BaseModel, Generic[OutputT]):
     def flatten(self) -> list["OperationResult[Any]"]:
         """This node and every descendant, depth-first, parent before child.
 
-        The trace tree as a **span list** — one entry per operation, each
-        carrying the `parent_id` `add_step` stamped on it, so the nesting
-        survives the flattening and can be rebuilt from the list alone. With
-        `timing.start_time` and `end_time` on every entry, that is the shape a
-        timeline or a per-step cost table wants; `to_summary()` is the shape
-        for reading a run top to bottom.
-
-        No entry drags a subtree along — that would serialize the tree once per
-        level — so every node goes through `to_span()` on the way in. A node
-        with no children has nothing to drop and comes back by reference.
-
-        A record read back from JSON is the other case to know about —
-        `steps: list[Any]` does not re-validate, so its children arrive as
-        plain dicts. They are validated here, which makes them copies.
-
-        The walk is one branch now rather than an isinstance ladder: with a
-        single envelope class, recursing is always the right move, and a
-        childless node bottoms out on its own empty `steps`.
+        Every entry carries its `parent_id`, so the nesting is rebuildable from
+        the list alone. Children read back from JSON arrive as plain dicts (see
+        `steps`) and are validated here.
         """
         flat: list[OperationResult[Any]] = [self.to_span()]
         for step in self.steps:
@@ -275,7 +182,5 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
             if isinstance(step, OperationResult):
                 flat.extend(step.flatten())
-            # anything else came from a hand-built record — add_step rejects
-            # it — and is skipped rather than allowed to break the walk
+            # anything else came from a hand-built record and is skipped
         return flat
-

@@ -1,23 +1,17 @@
 """Turn this node's finished work into the sentence the user actually reads.
 
-By the time this runs the recommended books are already on screen as cards, so
-the reply is not a list — it is the one thing the cards cannot say: why this
-set, given what was asked for. That is a question about the *shape* of the
-input and the output, so the model is handed two summaries rather than two
-lists of books:
+The recommended books are already on screen as cards, so the reply is not a list
+— it is the one thing the cards cannot say: why this set, given what was asked
+for. So the model gets two summaries rather than two lists of books: the input
+half (`summarize_references`) and the output half
+(`RecommendationOutput.to_summary`).
 
-- the input half (`summarize_references`) — which titles were referenced, and
-  what the user asked for on top of them.
-- the output half (`RecommendationOutput.to_summary`) — how many books, whose,
-  which genres, how long.
+Descriptions and isbn13s stay out — one would re-summarize a visible book, the
+other is not prose.
 
-Descriptions and isbn13s stay out. A description would come back to the user
-as a re-summary of a book they can already see, and an identifier is not prose.
-
-Unlike every other LLM call in this slice this one is a plain streaming chat
-request, not a tool call: the output *is* the reply, so `OpenAIChatRequest`
-carries the SSE stream and the text reaches the client token by token as it is
-written.
+Unlike the other LLM calls in this slice this is a plain streaming chat request,
+not a tool call: the output *is* the reply, so `OpenAIChatRequest` carries the
+SSE stream and the text reaches the client as it is written.
 """
 
 from typing import Any, Iterable
@@ -43,22 +37,16 @@ def summarize_references(
 ) -> dict[str, Any]:
     """The input half: what the user pointed at, and what they asked for on top.
 
-    Only `title`, `authors` and `genre` are read off each book — that selection
-    is what keeps descriptions and identifiers out of the reply, per this
-    module's docstring. It belongs here rather than in a narrower book model,
-    which could only restate the same list further from the prompt.
+    Only `title`, `authors` and `genre` are read off each book, which keeps
+    descriptions and identifiers out of the reply.
 
-    `semantic_input` is the user's own phrase as the argument parser read it
-    ("but darker"), *not* the anchor prose that was embedded. The anchor is a
-    100-300 word book description written by the reference analyzer; handing
-    that to a model asked for a friendly reply gets the description paraphrased
-    back at the user, which is neither friendly nor an explanation.
+    `semantic_input` is the user's own phrase ("but darker"), not the embedded
+    anchor prose. That anchor is a 100-300 word book description; handing it to
+    a model asked for a friendly reply gets it paraphrased back at the user.
 
-    Editions are collapsed to one entry per title before anything is counted.
-    The catalog holds several editions of a book and a title retrieval returns
-    all of them, so counting rows would both repeat the title ("books like
-    Dune and Dune") and double its author — "Jane Austen (2)" for a user who
-    named one novel reads as a much stronger preference than they expressed.
+    Editions collapse to one entry per title before anything is counted —
+    otherwise the title repeats ("books like Dune and Dune") and its author
+    doubles, reading as a much stronger preference than was expressed.
     """
     by_title: dict[str, Book] = {}
     for book in references:
@@ -74,8 +62,8 @@ def summarize_references(
 
 
 def _render_counts(counts: dict[str, int]) -> str:
-    """`A (2), B` — the count only where it is more than one, because "(1)"
-    after every name reads as data to be reported rather than context."""
+    """`A (2), B` — the count only where it exceeds one, since "(1)" after
+    every name reads as data to report rather than context."""
     return ", ".join(
         name if n == 1 else f"{name} ({n})" for name, n in counts.items()
     )
@@ -86,11 +74,10 @@ def render_summaries(
 ) -> str:
     """The block the response prompt reads.
 
-    Rendered as labelled lines rather than dumped as a dict: the prompt asks
-    for a reply that does not sound technical, and `{'genre_num': Counter(...)}`
-    is a shape models happily imitate. Empty fields are dropped instead of
-    printed as None — an absent line is read as "not applicable", a `None` is
-    read as a value worth mentioning.
+    Labelled lines rather than a dumped dict: the prompt asks for a reply that
+    does not sound technical, and `{'genre_num': Counter(...)}` is a shape
+    models happily imitate. Empty fields are dropped rather than printed as
+    None, which reads as a value worth mentioning.
     """
     lines: list[str] = ["input:"]
 

@@ -11,37 +11,30 @@ class RecommendInput(NodeInput):
     """What to recommend *from*, plus the user's own words.
 
     `anchors` defaults to empty rather than being required, and that is the
-    node's real contract, not a looser one: with no anchor it falls back on the
-    goal text alone (`ParsedDependents.is_empty`), which is what serves "find
-    me something cosy to read" with no lookup in front of it. A required field
-    here would fail a turn the node can actually answer.
+    node's real contract: with no anchor it falls back on the goal text alone,
+    which serves "find me something cosy to read" with no lookup in front of it.
+    A required field would fail a turn the node can answer. Empty is also the
+    seam for asking the planner for one — the slot is named and visibly unfilled.
 
-    An empty `anchors` is also the seam for asking the planner for one: the
-    slot is named and visibly unfilled, which is the thing a plain
-    `dict[str, Any]` of artifacts could never say.
-
-    There is no `reports` field yet on purpose. `AnalyzeBooksOutput` is still a
-    reserved name with no class behind it (books/schemas.py), and a field can
-    only select by type against a type that exists — it lands here, one line,
-    alongside the first node that produces a report.
+    No `reports` field yet: `AnalyzeBooksOutput` is a reserved name with no
+    class, and a field can only select by type against a type that exists.
     """
 
     anchors: list[BookRetrievalOutput] = Field(default_factory=list)
 
 
 class RecommendationOutput(BookRetrievalOutput):
-    """The books this node chose. An empty `books` means nothing in the
-    catalog satisfied the anchor plus the filters.
+    """The books this node chose. An empty `books` means nothing in the catalog
+    satisfied the anchor plus the filters.
 
-    `references` and `search_text` are kept because this node's answer is not
-    checkable without them: "why these books" is only answerable against what
-    was pointed at and what was actually embedded. They also feed the response
-    generator, which explains the set to the user (generate_response.py).
+    `references` and `search_text` are kept because "why these books" is only
+    answerable against what was pointed at and what was embedded; they also feed
+    the response generator.
 
-    Note `search_text` is not `args.semantic_input`. `args` stays exactly as
-    the argument parser filled it — the user's own words, which the eval suite
-    diffs — while `search_text` is the assembled anchor prose plus those words,
-    which is what the embedding actually saw.
+    `search_text` is not `args.semantic_input`: `args` stays as the argument
+    parser filled it (the user's own words, which the eval suite diffs), while
+    `search_text` is the assembled anchor prose plus those words — what the
+    embedding actually saw.
     """
 
     references: list[Book] = Field(default_factory=list)
@@ -50,10 +43,9 @@ class RecommendationOutput(BookRetrievalOutput):
     def to_summary(self) -> dict[str, Any]:
         """The *shape* of the chosen set, not the books in it.
 
-        Counts and ranges, deliberately: this feeds the response generator,
-        which is asked to characterize the set ("various authors, shorter and
-        longer reads") rather than list it. Titles here would only invite the
-        model to enumerate what the book cards on screen already show.
+        Counts and ranges: this feeds the response generator, which characterizes
+        the set rather than listing it. Titles would only invite the model to
+        enumerate what the cards on screen already show.
         """
         
         pages = [book.num_pages for book in self.books if book.num_pages]
@@ -61,8 +53,7 @@ class RecommendationOutput(BookRetrievalOutput):
             "num_books": len(self.books),
             "authors": count_values(book.authors for book in self.books),
             "genres": count_values(book.genre for book in self.books),
-            # None rather than 0 when the catalog has no page counts: a range
-            # of 0-0 reads as "very short books" to whatever consumes this
+            # None, not 0: a 0-0 range reads as "very short books" downstream
             "min_pages": min(pages) if pages else None,
             "max_pages": max(pages) if pages else None,
         }

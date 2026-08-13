@@ -26,13 +26,8 @@ class TaskRecord:
 
 
 class TaskRunnerInput(WorkflowInput):
-    """A plan, and nothing else.
-
-    Not a `NodeInput`: this is a pipeline step, not a capability the planner
-    can dispatch, and its work is driven entirely by the plan. The `query` it
-    used to be handed alongside was carried only for signature uniformity and
-    never read — a field that exists to be ignored is worse than no field.
-    """
+    """A plan, and nothing else. Not a `NodeInput`: this is a pipeline step,
+    not a dispatchable capability, and the plan drives all of it."""
 
     plan: PlanJaneOutput
 
@@ -58,13 +53,11 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         """Execute accepted tasks in dependency order, assembling each task's
         declared input from the outputs of the tasks it depends on. Each task
         runs as its own AppWorkflow sharing self.messages, so its result lands
-        on the same trace as the planner's — same pattern TriageWorkflow uses
-        for PlanJaneExecutor.
+        on the same trace as the planner's.
 
-        This method is the spine — resolve, run, record — and deliberately
-        keeps the two things the loop accumulates (`results` for downstream
-        nodes, `failed_task` for the final `ok`) visible in one place. The
-        helpers below each answer one question about a single goal.
+        The spine — resolve, run, record — keeping what the loop accumulates
+        (`results` for downstream nodes, `failed_task` for the final `ok`) in
+        one place. The helpers below each answer one question about one goal.
         """
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
@@ -72,9 +65,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         self.result.session_id = self.session_id
 
         order = plan.execution_order()
-        # Goals in a dependency cycle, or waiting on one the planner refused.
-        # They are failures rather than omissions: counting them here is what
-        # stops the turn reporting ok after quietly dropping part of the plan.
+        # Goals in a cycle, or waiting on one the planner refused. Counted as
+        # failures so the turn cannot report ok after dropping part of the plan.
         for goal in order.unreachable:
             logger.warning(
                 f"Skipping task {goal.id} ({goal.target_node_type.value}): "
@@ -108,20 +100,13 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     ) -> tuple[AppWorkflow, WorkflowInput] | None:
         """Everything that has to be true before a goal can run, or None.
 
-        Four ways to come back empty, logged apart because they mean different
-        things — and all four are a *skipped goal*, never an aborted plan:
+        Four ways to come back empty — no spec, a spec with no executor, a
+        context that can't be narrowed, an input that can't be assembled —
+        logged apart because they mean different things, but all four skip one
+        goal rather than abort the plan.
 
-        - no spec at all: a node type that isn't registered (parked, or one the
-          LLM invented);
-        - a spec with no executor: registered for planning, not yet runnable;
-        - the context can't be narrowed: this request has no store the node
-          needs, which would otherwise surface much later as a failed query;
-        - the input can't be assembled: a required upstream shape is missing,
-          and pydantic's error already names the field.
-
-        That last one is the hook for the agentic version. A node short of an
-        input does not have to die here — the named field is enough to ask the
-        planner for a goal that produces it and retry.
+        The last is the hook for the agentic version: the named field is enough
+        to ask the planner for a goal that produces it and retry.
         """
         node_type = goal.target_node_type.value
         spec: NodeSpec | None = REGISTRY.spec(goal.target_node_type)
@@ -166,9 +151,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     ) -> dict[str, NodeWorkflowOutput]:
         """What this goal's dependencies produced, keyed by their goal id.
 
-        A dependency that failed is *absent* rather than None — only successful
-        outputs ever reach `results`. The keys are provenance only; `build_input`
-        matches these onto the node's declared fields by type.
+        A failed dependency is absent rather than None. The keys are provenance
+        only; `build_input` matches these onto declared fields by type.
         """
         return {
             dep_id: results[dep_id]
@@ -184,17 +168,13 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     ) -> OperationResult:
         """Run one node bracketed by the UI's task.start / task.end events.
 
-        The runner owns both ends of the section, not the executors: one place
-        to keep them paired, and a node that raises — or a turn the
-        orchestrator cancels — can't leave a section hanging open. That is what
-        the `finally` and the `step_result = None` seed are for; they only
-        matter on the exception path, since a normal return always carries an
-        envelope.
+        The runner owns both ends, not the executors, so a node that raises — or
+        a cancelled turn — can't leave a section hanging open. That is what the
+        `finally` and the `step_result = None` seed are for.
 
-        A failed node is *returned*, not raised (`raise_on_failure=False`), so
-        one bad step doesn't abort the rest of the plan — the caller decides.
-        The executor and its input arrive already built, so everything that can
-        fail before the section opens has failed in `_prepare`.
+        A failed node is returned, not raised (`raise_on_failure=False`), so one
+        bad step doesn't abort the plan. The executor and its input arrive
+        already built, so anything that could fail earlier failed in `_prepare`.
         """
         executor_cls = type(executor)
         await self.sse_stream.send_task_start(
@@ -216,7 +196,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
             await self.sse_stream.send_task_end(
                 task_id=goal.id,
                 # every retrieval output carries num_books, so the header
-                # fills itself in and executors stay dumb
+                # fills itself in
                 count=getattr(output, "num_books", None),
                 ok=bool(step_result and step_result.ok),
             )
@@ -224,12 +204,9 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
     def _link_to_goal(
         self, goal: SystemGoal, output: NodeWorkflowOutput
     ) -> NodeWorkflowOutput:
-        """Stamp the goal's identity onto the output it produced.
-
-        This is what makes the output traceable downstream: `results` keys on
-        `output.id`, and the copied `depends_on` is what lets the parsed
-        diagram be drawn from the outputs alone. The id is also what
-        `ParsedDependents` names an unusable anchor by.
+        """Stamp the goal's identity onto the output it produced, so it is
+        traceable downstream: `results` keys on `output.id`, and the copied
+        `depends_on` lets the diagram be drawn from the outputs alone.
 
         NOTE: linking the result to the goal_id for debugging and
         visualization — but do we want to pass in a reference to the task

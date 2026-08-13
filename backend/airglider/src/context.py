@@ -1,32 +1,13 @@
 """The one ContextVar: which envelope is currently being built.
 
-`add_step` is still the only place parentage is stamped — this module just
-answers the question a child could never answer for itself ("who called me?")
-by having the *caller* publish its own envelope for the duration of the call.
-A `@task` or a `Workflow` then adopts itself on the way out, so nesting no
-longer depends on the caller remembering to pass its record down or to route
-the call through `run_async_step`.
+A child cannot know its caller, so the caller publishes its envelope for the
+duration of the call and the callee adopts itself on the way out. Only
+`task.wrapper` and `Workflow.__call__` use it.
 
-**One variable, set and reset around each unit of work.** Nothing else reads or
-writes it. That is deliberate: a ContextVar that carries state a trace depends
-on is only safe while the set/reset discipline is airtight, and one context
-manager used by exactly two call sites (`task.wrapper` and `Workflow.__call__`)
-is a discipline that can be checked by reading two files.
-
-Two asyncio facts this rests on:
-
-- a plain `await` runs in the **caller's** context, so a nested call sees the
-  envelope its caller published;
-- `gather`/`create_task` **copy** the context at Task creation, so concurrent
-  siblings each keep their own parent and a `set()` inside one can never be
-  observed by another. The copy is shallow — the envelope object itself is
-  shared — so a child attaching from inside a Task still mutates the real
-  parent record.
-
-Fire-and-forget is the case that stays wrong, and cannot be fixed here: a
-`create_task` that outlives its parent attaches to an envelope that has already
-been serialized and reported. Await your background work inside the scope that
-owns it.
+A plain `await` shares the caller's context; `gather`/`create_task` copy it
+(shallowly, so attaches still mutate the real record). Fire-and-forget
+outliving its parent attaches to an already-serialized envelope — await
+background work inside the scope that owns it.
 """
 
 from contextlib import contextmanager
@@ -35,45 +16,26 @@ from typing import Iterator
 
 from .schemas.record import OperationResult
 
-# `default=None` matters: a task called with no workflow above it — a script, a
-# test, a startup hook — reads this and must simply not attach.
+# default=None: a task with no workflow above it must simply not attach.
 CURRENT_PARENT: ContextVar[OperationResult | None] = ContextVar(
     "airglider_current_parent", default=None
 )
 
 
 def current_parent() -> OperationResult | None:
-    """The envelope a step started right now would attach itself to."""
     return CURRENT_PARENT.get()
 
 
 @contextmanager
 def parent_scope(record: OperationResult) -> Iterator[OperationResult]:
-    """Publish `record` as the current parent, then adopt it into the previous one.
+    """Publish `record` as current parent, then adopt it into the previous one.
 
-    Both halves are in the `finally`, and the order is not interchangeable:
-    `reset` first so that the attach below reads the *outer* envelope rather
-    than the one we just published — otherwise a record would adopt itself.
+    `parent_id` on the way in (earliest correct moment — a Workflow's envelope
+    is built at construction, possibly under a different parent); the subtree on
+    the way out (`add_step` sums `token_usage` once, at attach time).
 
-    **`parent_id` is stamped on the way in, the subtree on the way out**, and
-    the split is deliberate. Parentage is known the moment the call starts, and
-    a record that carries it for the whole of its own run can be read by the
-    code inside it — which is not true if the link only appears once the call
-    returns. Scope entry is also the earliest *correct* moment: a `Workflow`'s
-    envelope is built when the object is constructed, which for a node executor
-    is before the runner dispatches it and possibly under a different parent, so
-    stamping in `__init__` records where it was created rather than where it
-    ran.
-
-    Attaching, by contrast, has to wait for the exit, because `add_step` sums a
-    child's `token_usage` once, at attach time — a record attached before it ran
-    would contribute zero and every ancestor would under-count. By the time this
-    exits, `record` is final.
-
-    That also means the cancel path records more than it used to: `finally`
-    runs while `CancelledError` is propagating, so a workflow killed by a
-    client disconnect still lands in its parent's `steps` with whatever it had
-    managed to do.
+    `reset` precedes the attach, or the record adopts itself. `finally` runs
+    while a CancelledError propagates, so a cancelled run still attaches.
     """
     parent = CURRENT_PARENT.get()
     if parent is not None:

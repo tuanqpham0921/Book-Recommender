@@ -90,10 +90,9 @@ async def bootstrap_schema(
     checks.append(await init_tables(session_factory))
     checks.append(await create_indexes(session_factory))
 
-    # No `steps=checks`: each of those is a @task and attached itself to this
-    # task's envelope on the way out (parent_scope). Passing them again would
-    # put every check in the tree twice — once as a step of this envelope, once
-    # inside the envelope returned below. The list is kept only to fold `ok`.
+    # No `steps=checks`: each check is a @task and already attached itself via
+    # parent_scope, so passing them again would put each in the tree twice. The
+    # list is kept only to fold `ok`.
     return OperationResult(
         ok=all(check.ok for check in checks),
         details=["Bootstrap schema completed."],

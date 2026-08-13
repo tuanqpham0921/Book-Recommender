@@ -1,24 +1,19 @@
 """Fold this node's dependent results into one embedding-ready description.
 
-Analyze_Recommend doesn't search the catalog by keyword, it searches by vector
-— so everything it depends on has to collapse into a single block of prose that
-reads like the description of the book the user wants *next*. That happens in
-two steps, kept apart on purpose:
+Analyze_Recommend searches by vector, not keyword, so everything it depends on
+has to collapse into one block of prose reading like the description of the book
+the user wants next. Two steps:
 
-1. `ParsedDependents` sorts the node's declared `anchors` by what is on each
-   one. No LLM, no database — just "rows, or the query that would fetch them".
-   An anchor carrying neither lands in `unknown` instead of being silently
-   dropped.
-2. `render_documents` turns the materialized books and reports into the
-   document block the LLM sees, and `build_analysis_request` asks it for the
-   one string to embed (prompts/analyze_references.txt).
+1. `ParsedDependents` sorts the declared `anchors` by what is on each — rows, or
+   the query that would fetch them. An anchor with neither lands in `unknown`
+   rather than being dropped.
+2. `render_documents` builds the document block, and `build_analysis_request`
+   asks the LLM for the one string to embed.
 
-Two things deliberately stay out of the prompt. The reference books are
-excluded from the search by isbn13 afterwards — "don't hand me back the book I
-named" is a metadata filter, not something to ask prose to enforce. And the
-isbn13s themselves never reach the model: they are identifiers, the prompt
-forbids identifiers in the output, and glued into a description they only read
-as noise.
+Two things stay out of the prompt. The reference books are excluded from the
+search by isbn13 afterwards — a metadata filter, not something to ask prose to
+enforce. And the isbn13s never reach the model: the prompt forbids identifiers
+in the output, and in a description they only read as noise.
 """
 
 from collections.abc import Sequence
@@ -52,16 +47,12 @@ MAX_TOTAL_CHARS = 8000
 class ParsedDependents:
     """The node's anchors sorted by what it can do with each one.
 
-    Selecting *which* upstream outputs are anchors is no longer this class's
-    job — `RecommendInput.anchors` declares the shape and `build_input`
-    (app/domains/node_input.py) fills it, so everything arriving here is
-    already a book-producing output. What is left is the choice this node
-    genuinely has to make: rows if a dependency has them, otherwise the query
-    that would produce them.
+    `RecommendInput.anchors` already selected them, so everything arriving here
+    is a book-producing output. What is left is the real choice: rows if a
+    dependency has them, otherwise the query that would produce them.
 
-    `reports` is still read by duck typing: `AnalyzeBooksOutput` is a reserved
-    name with no class behind it, so it cannot be a typed field on the input
-    yet. This is the seam for the first node that produces one.
+    `reports` is read by duck typing — `AnalyzeBooksOutput` is a reserved name
+    with no class yet. This is the seam for the first node that produces one.
     """
     
     # TODO: have a rejected or .ok = False
@@ -89,10 +80,9 @@ class ParsedDependents:
             task_id = getattr(result, "id", None) or "?"
             claimed = False
 
-            # Rows if the dependency has them, otherwise the query that would
-            # produce them — never both. A node that fetched its own rows also
-            # carries the query it fetched them with, and counting the set
-            # twice would weight it twice in the anchor.
+            # Rows, or the query that would produce them — never both. A node
+            # that fetched rows also carries the query it used, and counting
+            # both would weight that set twice in the anchor.
             books = getattr(result, "books", None)
             query = getattr(result, "query", None)
             if books:
@@ -128,17 +118,14 @@ class ParsedDependents:
 def render_documents(books: list[Book], reports: list[str]) -> str:
     """The document block the analyzer prompt reads.
 
-    Only `title` and `description` are read off each book. That selection is
-    what keeps thumbnails, ratings and years out of the prompt — the model is
-    asked for a description, and metadata here is noise it tries to explain.
-    The narrowing lives in this function on purpose; a narrower book model
-    would only restate it one layer further away (app/domains/books/schemas.py).
+    Only `title` and `description` are read off each book, which keeps
+    thumbnails, ratings and years out of a prompt asking for a description. The
+    narrowing lives here rather than in a narrower book model.
 
-    Books are grouped by title because the same title arriving twice is the
-    normal case, not a duplicate: the catalog holds several editions of a book
-    and a title retrieval returns all of them. Grouping shows the model that
-    two descriptions describe one book, which is exactly what the prompt asks
-    it to treat as extra context rather than as a doubled preference.
+    Grouped by title because the same title arriving twice is normal — the
+    catalog holds several editions and a title retrieval returns all of them.
+    Grouping shows the model that two descriptions are one book, not a doubled
+    preference.
     """
     blocks: list[str] = []
 

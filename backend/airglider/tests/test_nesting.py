@@ -1,15 +1,12 @@
 """Automatic nesting — one ContextVar, set and reset around each unit of work.
 
-`add_step` is still the only place `parent_id` is stamped. What changed is who
-calls it: instead of the caller remembering to route a step through
-`run_async_step`, the caller publishes its own envelope for the duration of the
-call (`parent_scope`) and the callee adopts itself on the way out.
+The caller publishes its own envelope for the duration of the call
+(`parent_scope`) and the callee adopts itself on the way out, instead of the
+caller routing every step through `run_async_step`.
 
-The property under test is not "tasks can nest" for its own sake — it is that
-**who may call whom stopped mattering**. A `@task` calling a `@task` used to
-collapse into a single envelope wearing the outer name and the inner timing,
-which is why the shape of the call graph had to be a rule. These tests pin the
-behaviour that replaces that rule.
+The property under test is that **who may call whom stopped mattering**. A
+`@task` calling a `@task` used to collapse into one envelope wearing the outer
+name and the inner timing, which is why the call graph's shape had to be a rule.
 """
 
 import asyncio
@@ -70,16 +67,13 @@ class TestNesting:
 
         assert _names(record) == ["middle"]
         assert _names(record.steps[0]) == ["inner"]
-        # each level kept its own identity — the collapse used to leave one
-        # envelope wearing the outer name and the inner id
+        # each level kept its own identity
         assert record.result == "a"
         assert record.steps[0].result == "b"
         assert record.steps[0].steps[0].result == "c"
 
     async def test_a_task_can_hold_children_at_all(self):
-        """The envelope a `@task` publishes has `steps` like any other — under
-        the old two-class split it was built as the leaf shape and could
-        publish itself as parent but never adopt anything."""
+        """A `@task`'s envelope has `steps` like any other."""
 
         @task(log_info=False)
         async def parent():
@@ -171,7 +165,7 @@ class TestAttachedOnce:
         first.add_step(child)
         second.add_step(child)
 
-        # the same envelope in two trees would count its spend in both
+        # the same envelope in two trees would be billed twice
         assert len(second.steps) == 0
         assert second.token_usage.total == 0
         assert child.parent_id == first.id
@@ -179,12 +173,9 @@ class TestAttachedOnce:
 
 class TestReturnedEnvelope:
     async def test_a_self_reported_result_becomes_a_step(self):
-        """The `_check_table` shape: reports `ok` itself, and ran a step.
-
-        The returned envelope is a unit of work in its own right, so it keeps
-        its own id and details and hangs under the wrapper — which *reports* it:
-        the wrapper's `ok` and payload are the child's.
-        """
+        """The `_check_table` shape: reports `ok` itself, and ran a step. The
+        returned envelope keeps its own id and details and hangs under the
+        wrapper, which *reports* it — its `ok` and payload are the child's."""
 
         @task(log_info=False)
         async def checks():
@@ -203,11 +194,8 @@ class TestReturnedEnvelope:
         assert record.steps[1].details == ["threshold not met"]
 
     async def test_the_payload_is_the_value_not_the_envelope(self):
-        """`.result` must keep meaning "the value this produced".
-
-        Storing the envelope there would also write the whole subtree twice —
-        once under `steps`, once under `response`.
-        """
+        """`.result` keeps meaning "the value this produced". Storing the
+        envelope there would write the subtree twice."""
 
         @task(log_info=False)
         async def reports():
@@ -235,11 +223,10 @@ class TestReturnedEnvelope:
     async def test_a_hand_built_steps_list_duplicates_and_should_not_be_used(self):
         """The one shape that still goes wrong, pinned so it is not a surprise.
 
-        A task whose children already auto-attached must not *also* hand them
-        back in a `steps=` list: the returned envelope becomes a step, and the
-        children it carries are then in the tree twice. `add_step` cannot catch
-        this — the outer object is new, only its contents are shared. The fix is
-        at the call site: drop the redundant list (see `db/readiness.py`).
+        A task whose children auto-attached must not *also* return them in a
+        `steps=` list — they land in the tree twice, and `add_step` cannot catch
+        it because the outer object is new and only its contents are shared. Fix
+        at the call site by dropping the list (see `db/readiness.py`).
         """
 
         @task(log_info=False)
@@ -274,9 +261,8 @@ class TestFailurePaths:
 
         record = await calls_it()
 
-        # the caller caught nothing and returned normally; the failure sits
-        # where it happened. Promoting it is run_async_step's job, not the
-        # decorator's.
+        # the failure sits where it happened; promoting it is
+        # run_async_step's job, not the decorator's
         assert record.ok is True
         assert record.steps[0].ok is False
         assert record.steps[0].runtime_error.type == "ValueError"
@@ -327,7 +313,7 @@ class TestTokenRollup:
 
         record = await Simple(middle)()
 
-        # attaching on the way *out* is what makes this work: a record attached
-        # before it ran would contribute zero to every ancestor
+        # attaching on the way *out* is what makes this work — a record
+        # attached before it ran contributes zero to every ancestor
         assert record.steps[0].token_usage.total == 10
         assert record.token_usage.total == 10

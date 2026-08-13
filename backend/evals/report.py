@@ -1,19 +1,16 @@
 """What eval-suite runs *cost* — tokens, dollars, latency, failures.
 
-Joins test_runs (written by evals/run_suites.py) with chat_runs and enriches
-each row with the case's details from its suite JSON (query, difficulty,
-note). No expectations are checked here — whether the planner picked the right
-nodes is report_system_goals.py's job. This report answers the operational
-question instead: did it run, how long did it take, how many tokens, split
-across which models, and what did it cost.
+Joins test_runs with chat_runs and enriches each row from its suite JSON. No
+expectations are checked here (that is report_system_goals.py); this answers the
+operational question: did it run, how long, how many tokens, across which
+models, at what cost.
 
-Dollar figures come from `cost_usd`, stamped onto each run's token_usage at
-the time it was recorded (see airglider/src/config.py). Runs recorded before cost
-tracking landed have no `cost_usd` and are counted as unpriced rather than
-free — the summary says how many, so a total is never quietly understated.
+Dollar figures come from `cost_usd`, stamped at record time. Runs predating cost
+tracking are counted as unpriced rather than free, and the summary says how
+many, so a total is never quietly understated.
 
-By default only the most recent run of each (suite_name, case_id) is
-reported — pass --all to include every recorded run.
+Only the most recent run of each (suite_name, case_id) is reported; --all
+includes every recorded run.
 
 Usage (from backend/, or `make suite-report`):
     poetry run python evals/report.py
@@ -39,13 +36,10 @@ QUERY_PRINT_LIMIT = 80
 
 
 def token_counts(token_usage) -> dict:
-    """prompt/cached/cost from a row's token_usage (selected out of the planner
-    JSONB). Zeros for anything absent — rows recorded before the cached field
-    existed simply count as uncached.
-
-    `cost_usd` is None, not 0.0, when the run predates cost tracking: unknown
-    spend must not be averaged in as free spend.
-    """
+    """prompt/cached/cost from a row's token_usage. Zeros for anything absent,
+    so rows predating the cached field count as uncached. `cost_usd` is None,
+    not 0.0, when the run predates cost tracking — unknown spend must not be
+    averaged in as free."""
     usage = token_usage if isinstance(token_usage, dict) else {}
     prompt = usage.get("prompt")
     cached = usage.get("cached")
@@ -59,12 +53,9 @@ def token_counts(token_usage) -> dict:
 
 def unpriced_models(rows: list[dict]) -> list[str]:
     """Models that contributed tokens but had no rate when the run was
-    recorded, so their spend is missing from every cost figure here.
-
-    This is the failure mode a cost report must never hide: those runs still
-    carry a `cost_usd`, it is just too low, so counting priced-vs-unpriced
-    *runs* would not catch it.
-    """
+    recorded, so their spend is missing from every cost figure here. Those runs
+    still carry a `cost_usd` — it is just too low — so counting priced-vs-
+    unpriced runs would not catch this."""
     found: set[str] = set()
     for row in rows:
         usage = row.get("token_usage")
@@ -97,10 +88,10 @@ def spend_by_model(rows: list[dict]) -> dict[str, dict]:
 
 
 def summarize(rows: list[dict]) -> dict:
-    """Outcome, token, cost and latency stats over a set of reported runs.
-    The cache hit rate is recomputed from the summed counts — per-run rates
-    don't add. `unpriced` counts runs with no cost recorded, so a small
-    total_cost_usd can be read as 'cheap' or 'incomplete' correctly."""
+    """Outcome, token, cost and latency stats over a set of runs. The cache hit
+    rate is recomputed from the summed counts, since per-run rates don't add.
+    `unpriced` counts runs with no cost recorded, so a small total reads as
+    'cheap' or 'incomplete' correctly."""
     durations = [r["duration_s"] for r in rows if r["duration_s"] is not None]
     tokens = [r["total_tokens"] for r in rows if r["total_tokens"] is not None]
     counts = [token_counts(r.get("token_usage")) for r in rows]
@@ -164,9 +155,8 @@ def _model_table(totals: dict[str, dict]) -> list[str]:
 
 
 def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
-    """Markdown report over the given (already latest-filtered, if desired)
-    joined rows. Suite JSON details are looked up per suite; a case missing
-    from its JSON falls back to the run's recorded user_message."""
+    """Markdown report over the joined rows. Suite JSON details are looked up
+    per suite; a case missing from its JSON falls back to user_message."""
     suites = group_by_suite(rows)
     lines = report_header("Eval suite cost report", suites, git_sha, generated_at)
 
@@ -221,7 +211,7 @@ def build_report(rows: list[dict], git_sha: str, generated_at: datetime) -> str:
                 f"| `{row['session_id']}` |"
             )
             if note:
-                # notes ride along as a quiet extra row under their case
+                # a quiet extra row under the case
                 lines.append(
                     f"| | | _{truncate(note, QUERY_PRINT_LIMIT)}_ | | | | | | | | |"
                 )

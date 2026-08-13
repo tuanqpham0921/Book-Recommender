@@ -1,9 +1,7 @@
 """Serialization and identity helpers for record trees.
 
-Self-contained on purpose: airglider imports nothing from the host app, so
-these live here rather than being borrowed from a shared `utils` package. The
-host is free to re-export them (see `common/utils/`) instead of keeping a
-second copy.
+Self-contained on purpose: airglider imports nothing from the host app, which
+re-exports these (see `common/utils/`) rather than keeping a second copy.
 """
 
 import inspect
@@ -32,18 +30,16 @@ def to_serializable(value: Any) -> Any:
         return value.__name__
 
     if isinstance(value, BaseModel):
-        # model_dump() serializes list[BaseClass] fields using the declared type,
-        # stripping subclass fields and losing private attrs before recursion.
-        # Iterating via getattr preserves actual runtime types so recursive calls
-        # see the full subclass schema and private attrs.
+        # not model_dump(): it serializes list[BaseClass] fields by the declared
+        # type, stripping subclass fields and private attrs. getattr keeps the
+        # runtime type so recursion sees the full schema.
         data = {
             name: to_serializable(getattr(value, name))
             for name, info in type(value).model_fields.items()
             if not info.exclude
         }
-        # model_fields only covers declared fields, so on extra="allow" models
-        # (e.g. the OpenAI SDK's) anything the API returned that the schema
-        # doesn't know about sits in __pydantic_extra__ and would be dropped.
+        # model_fields misses what extra="allow" models (e.g. the OpenAI SDK's)
+        # park in __pydantic_extra__.
         if value.__pydantic_extra__:
             for k, v in value.__pydantic_extra__.items():
                 data[k] = to_serializable(v)
@@ -82,19 +78,11 @@ def to_serializable(value: Any) -> Any:
 def bind_call_args(
     func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> dict[str, Any]:
-    """A call's arguments keyed by their parameter names.
+    """A call's arguments keyed by their parameter names, so `f(x)` and
+    `f(arg=x)` record identically. A leading `self`/`cls` is dropped.
 
-    `f(some_input)` and `f(node_input=some_input)` are the same call, so a
-    record that stored positional arguments by index would key the same thing
-    two ways. Binding against the signature gives one name per value.
-
-    A leading `self`/`cls` is dropped: for a decorated *method* the receiver is
-    args[0], and recording the whole client or workflow object is both noise
-    and, for a non-serializable one, a hazard.
-
-    Returns `{}` rather than raising when the arguments don't fit the
-    signature — the call itself is about to raise a much better error, and
-    bookkeeping must not pre-empt it.
+    Returns `{}` rather than raising on a bad signature match — the call itself
+    is about to raise a better error.
     """
     try:
         parameters = inspect.signature(func).parameters
@@ -102,8 +90,7 @@ def bind_call_args(
     except (TypeError, ValueError):
         return {}
 
-    # deliberately no apply_defaults(): the record says what the caller passed,
-    # and filling in every default turns a one-key call into a wall of them
+    # no apply_defaults(): the record says what the caller passed
     arguments = dict(bound.arguments)
     first = next(iter(parameters), None)
     if first in ("self", "cls"):
@@ -112,27 +99,14 @@ def bind_call_args(
 
 
 def to_record_input(value: Any) -> Any:
-    """`to_serializable`, except anything that can summarize itself does.
+    """`to_serializable` for `OperationResult.input`, with two differences:
 
-    Written for `OperationResult.input`, where the same payload is often
-    already recorded in full somewhere else: a node's input carries the output
-    of the node before it, whose own envelope holds every field of it. Dumping
-    it again would store the same rows once per dependent, and the trace grows
-    with the square of the plan's depth rather than its size.
-
-    `to_summary()` is the same opt-in hook `OperationResult.to_summary` already
-    honours for payloads, so a type says how it wants to appear in a record
-    once, in one place. Everything without one — the query string, the parsed
-    arguments — is serialized whole, which is the point: those are the small,
-    unique parts of the call.
-
-    **The result is always JSON-encodable.** Unlike `to_serializable`, which
-    passes an unrecognized value through untouched, anything left over here is
-    reduced to its type name. Arguments are not payloads a caller chose to
-    record — they are whatever the function happens to take, and half the
-    `@task` call sites in a typical host take a live handle (a DB session, a
-    client). One of those reaching the envelope makes the whole tree
-    unserializable, at the JSONB insert, long after the call it came from.
+    1. `to_summary()` wins — a node's input carries the previous node's output,
+       already held in full by its own envelope; re-dumping would grow the trace
+       with the square of the plan's depth.
+    2. The result is always JSON-encodable; anything left over becomes
+       `<TypeName>`. Many `@task` call sites take a live handle (a DB session, a
+       client), and one reaching the envelope breaks the JSONB insert.
     """
     to_summary = getattr(value, "to_summary", None)
     if callable(to_summary):
@@ -157,9 +131,7 @@ def to_record_input(value: Any) -> Any:
     if isinstance(serialized, (dict, list)):
         return serialized
 
-    # a live handle, or anything else with no serializable form. Its type is
-    # the whole useful content — "it was called with a session" — and is what
-    # keeps the rest of the record intact.
+    # a live handle, or anything with no serializable form
     return f"<{type(value).__name__}>"
 
 
@@ -187,21 +159,13 @@ def remove_empty_values(value: Any) -> Any:
 def strip_zero_token_usage(value: Any) -> Any:
     """Drop a `token_usage` dict whose remaining fields are all exactly zero.
 
-    Scoped to that one key by name rather than folded into
-    `remove_empty_values`: 0 and False survive that function on purpose
-    (`ok: False`, a genuine count of 0 are real answers, not absence — see
-    test_preserves_zero_and_false), so a generic "drop zero scalars" rule
-    would be wrong there. `token_usage` is the one place an all-zero shape
-    really does mean "nothing to report" — a step that made no LLM call — so
-    it gets a name-scoped rule instead of a general one.
+    Name-scoped, not a general "drop zero scalars" rule: 0 and False survive
+    `remove_empty_values` on purpose, and `token_usage` is the one key where
+    all-zero means "no LLM call".
 
-    Log readability only. Never apply this before persisting a record: an
-    envelope that genuinely spent $0 must still serialize `cost_usd: 0.0`
-    there, not vanish into the same shape as a record written before cost
-    tracking existed, with no `token_usage` key at all. That distinction is
-    what lets a spend report average real zeros without quietly counting
-    unknown spend as free. Run this only after `remove_empty_values`, on the
-    copy written to a local file.
+    Log readability only — never apply before persisting. A record that really
+    spent $0 must still serialize `cost_usd: 0.0`, or a spend report counts
+    unknown spend as free.
     """
     if isinstance(value, dict):
         cleaned = {key: strip_zero_token_usage(item) for key, item in value.items()}

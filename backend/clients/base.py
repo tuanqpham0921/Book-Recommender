@@ -35,16 +35,14 @@ class BaseLLMRequest(BaseModel, ABC):
     def to_summary(self) -> dict[str, Any]:
         """The *shape* of the request, not its contents.
 
-        `LLMClient.execute` is a `@task`, so this request is what lands in
-        `OperationResult.input` on every LLM step — and the full prompt plus
-        message list would then sit in every `chat_runs` row, which is exactly
-        what `save_payload` exists to gate. Sizes and the model answer the
-        questions a trace is actually read for ("which model, how much context,
-        which tools were offered"); the payload itself is available on demand.
+        `LLMClient.execute` is a `@task`, so this lands in
+        `OperationResult.input` on every LLM step — the full prompt and message
+        list would then sit in every `chat_runs` row, which is what
+        `save_payload` exists to gate. Sizes and the model answer what a trace
+        is read for; the payload is available on demand.
 
-        Defined here rather than on each provider's request so a new one is
-        summarized correctly by default, and worth overriding only for a
-        provider whose shape this misses.
+        Here rather than on each provider's request, so a new one is summarized
+        correctly by default.
         """
         return {
             "model": self.model,

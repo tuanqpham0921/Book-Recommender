@@ -37,16 +37,14 @@ def build_chat_run_row(
     planner: OperationResult[TriageOutput] | None,
     tasks: OperationResult[TaskRunnerOutput] | None = None,
 ) -> dict[str, Any]:
-    """Map a finished turn onto ChatRunModel columns. Promoted stats (ok,
-    duration, tokens, mermaid) up front for cheap querying; the full-fidelity
-    JSONB envelopes (planner, tasks) last.
+    """Map a finished turn onto ChatRunModel columns: promoted stats up front
+    for cheap querying, full-fidelity JSONB envelopes last.
 
-    The promoted stats come from `record` — the orchestrator's root envelope —
-    so they cover the whole turn including task execution. The two JSONB
-    columns stay the individual workflow envelopes rather than that root: the
-    golden-test report reads accepted goals at the fixed path
-    `planner.response.result.parse_result` (evals/report_system_goals.py), and
-    re-rooting the column would silently empty every diff.
+    The stats come from `record`, the orchestrator's root envelope, so they
+    cover the whole turn. The JSONB columns stay the individual workflow
+    envelopes: the golden-test report reads accepted goals at the fixed path
+    `planner.response.result.parse_result`, and re-rooting the column would
+    silently empty every diff.
     """
     output = planner.result if planner else None
     return {
@@ -66,9 +64,8 @@ def build_chat_run_row(
 
 async def record_chat_run(
     request_context: RequestContext,
-    # the one place the tree shape is required rather than incidental: the
-    # dev-log below writes `record.flatten()`, which only a node with children
-    # can answer
+    # the one place the tree shape is required rather than incidental — the
+    # dev-log below writes `record.flatten()`
     record: OperationResult,
     planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
@@ -102,15 +99,9 @@ async def record_chat_run(
         )
 
         if app_env == "development":
-            # summary first, then the same full tree the DB gets: the summary
-            # is for reading the shape of a run at a glance, the row is what
-            # you drop into when a step needs explaining.
-            #
-            # strip_zero_token_usage only ever touches this local eyeballing
-            # copy — the DB row above keeps every token_usage as recorded, so
-            # a genuinely free step still serializes cost_usd: 0.0 there
-            # instead of vanishing into the same shape as a pre-cost-tracking
-            # row (see strip_zero_token_usage's docstring)
+            # strip_zero_token_usage only touches this local eyeballing copy —
+            # the DB row above keeps every token_usage as recorded, so a
+            # genuinely free step still serializes cost_usd: 0.0 there.
 
             # save_file(
             #     {

@@ -1,26 +1,16 @@
-"""USD rates for the models the host app calls.
+"""USD rates for the models the host app calls — **USD per 1M tokens**.
 
-This is the one part of airglider that is *policy* rather than mechanism: the
-counting and roll-up in `TokenUsage` is general, but the table below is a
-snapshot of one provider's prices on one date. It lives inside the package so
-`TokenUsage` can stamp `cost_usd` without the host wiring anything up, at the
-cost of a host that calls other providers having to edit this file. If that
-ever becomes the norm, the seam to cut is `cost_of` — inject it rather than
-import it, and this module moves back out to the application.
+The one part of airglider that is policy rather than mechanism. It lives here
+so `TokenUsage` can stamp `cost_usd` with no wiring; if a host ever needs other
+providers, the seam to cut is `cost_of` — inject it rather than import it.
 
-Rates are **USD per 1M tokens**, transcribed from the per-model pages on
-developers.openai.com (e.g. .../api/docs/models/gpt-4.1-mini).
+**These go stale.** OpenAI reprices without notice and drops superseded models
+off the index page. Re-verify before trusting a cost figure that matters, and
+bump PRICES_CHECKED_ON when you do.
 
-These go stale. OpenAI reprices without notice, and older generations drop off
-the main pricing page entirely once superseded — at the time of writing the
-index page lists only the gpt-5.4+ family, so the rates below came from the
-individual model pages. Re-verify before trusting any cost figure that matters,
-and bump PRICES_CHECKED_ON when you do.
-
-Billing shape (mirrors the fields on `ModelUsage`):
-- `cached` is a *subset* of `prompt`, so the full-rate portion is prompt - cached.
-- `reasoning_tokens` is a *subset* of `completion` and is already billed at the
-  output rate — never add it on top.
+Billing shape (mirrors `ModelUsage`): `cached` is a subset of `prompt`, so the
+full-rate portion is prompt - cached; `reasoning_tokens` is a subset of
+`completion`, already billed at the output rate — never add it on top.
 """
 
 from typing import NamedTuple

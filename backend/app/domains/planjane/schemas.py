@@ -1,9 +1,7 @@
 """The planner's tool-call schemas — what the LLM fills in, and the goal model.
 
-Split from `executor.py` to match the slice layout the rest of the repo uses
-(`schemas.py` = what the LLM fills in, `executor.py` = what runs). The split
-originally also broke an import cycle through the generation-node module; that
-module is gone, so the layout convention is the whole reason now.
+Split from `executor.py` to match the slice layout used elsewhere: `schemas.py`
+is what the LLM fills in, `executor.py` is what runs.
 """
 
 import logging

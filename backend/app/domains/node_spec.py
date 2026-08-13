@@ -1,15 +1,13 @@
 """One descriptor per node — the single source `app/registry.py` derives from.
 
-A node is a vertical slice: `app/domains/<domain>/<node>/` holds its label, its
-request/output schemas and its executor, and exports one `SPEC`. The registry
-derives every lookup the planner and the task runner need from the collected
-specs, so adding a capability means adding a folder and listing its `SPEC` —
-not editing five parallel dicts that can drift apart.
+A node is a vertical slice exporting one `SPEC`; the registry derives every
+lookup from the collected specs, so adding a capability means adding a folder
+and listing its `SPEC`, not editing parallel dicts that can drift apart.
 
-`node_type` is the name the planner LLM emits. It has to match the `Literal`
-default on the request schema, which is the discriminator pydantic uses to pick
-the class back out of a tool call; `__post_init__` enforces that rather than
-letting the two drift into a mismatch that only shows up as a failed eval.
+`node_type` is the name the planner LLM emits, and must match the `Literal`
+default on the request schema — pydantic's discriminator for picking the class
+back out of a tool call. `__post_init__` enforces that; a mismatch would
+otherwise only show up as a failed eval.
 """
 
 from dataclasses import dataclass
@@ -36,16 +34,10 @@ class NodeTier(str, Enum):
 class NodeSpec:
     """Everything the system needs to know about one node.
 
-    Three schemas, distinguished by *who fills them in*:
-
-    - `request` — the planner LLM, choosing this capability out of the catalog.
-    - `input` — the task runner, assembling the goal text and the upstream
-      outputs into what this node is actually invoked with.
-    - `output` — the executor, with what it produced.
-
-    (`request` and `input` converge eventually: the parsed args are an input
-    the node currently produces for itself via `run_llm_args_parse`, and become
-    an `args:` field on `input` once the planner fills them in directly.)
+    Three schemas, distinguished by who fills them in: `request` by the planner
+    LLM, `input` by the task runner, `output` by the executor. (`request` and
+    `input` converge eventually — the parsed args are an input the node
+    currently produces for itself.)
 
     Args:
         node_type: The capability name the planner emits, e.g. "Retrieve_by_Title".

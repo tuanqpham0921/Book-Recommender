@@ -1,22 +1,14 @@
 """The live node registry — everything the planner and the task runner look up.
 
-Nothing here is hand-maintained per node. Each capability is a vertical slice
-under `app/domains/<domain>/<node>/` that exports one `NodeSpec`; a domain's
+Each capability is a vertical slice exporting one `NodeSpec`; a domain's
 `guide.py` lists its specs; this module collects them into `SPECS` and hands
-that tuple to a single `Registry`. Adding a capability means adding a folder
-and one line in a guide — see `app/domains/README.md`.
+that tuple to a single `Registry`. See `app/domains/README.md`.
 
-**The specs are the only state.** Every question the app asks about a node —
-its request schema, its executor, its catalog entry, the enum the planner emits
-under — is answered by `Registry` from that one indexed tuple. There are no
-parallel module-level dicts to keep in step, which is the drift this file used
-to invite: `NODE_TYPE_TO_CLS`, `CATALOG_TIERS`, the tier class tuples and the
-executor mapping each rebuilt the same spec relationship from a different
-angle, so a node could be present in one and missing from another.
+The specs are the only state — request schema, executor, catalog entry and the
+enum the planner emits under are all answered from that one indexed tuple, so
+there are no parallel dicts to drift apart.
 
-To see what the planner is actually told it can do right now, run
-`make tools-catalog`: it renders this module, so it always reflects the live
-state rather than a checked-in snapshot.
+`make tools-catalog` renders this module rather than a checked-in snapshot.
 """
 
 import inspect
@@ -33,17 +25,14 @@ from app.domains.node_types import UnknownNodeTypeEnum
 
 logger = logging.getLogger(__name__)
 
-# Anything that names a node type. The planner hands back `NodeTypeEnum`
-# members, tests and internal code pass the plain string. Every lookup accepts
-# either, so no caller has to remember to reach for `.value` — forgetting it
-# used to mean a silent miss against a str-keyed dict.
+# The planner hands back `NodeTypeEnum` members, internal code passes plain
+# strings; every lookup accepts either, so no caller reaches for `.value`.
 NodeTypeKey = str | Enum
 
 
 def class_docstring(cls: type) -> str:
-    """A node's tool description. Free function rather than a method: it reads
-    only the class, and both the catalog and `evals/tools_catalog.py` call it
-    on a request class they already hold."""
+    """A node's tool description. A free function because it reads only the
+    class, and `evals/tools_catalog.py` calls it too."""
     docs = inspect.getdoc(cls)
     if not docs:
         return "No description"
@@ -53,13 +42,10 @@ def class_docstring(cls: type) -> str:
 class Registry:
     """Every node lookup in the app, derived from a tuple of `NodeSpec`.
 
-    Construction indexes the specs by `node_type` once and rejects duplicates;
-    everything else is a read over that index. Nothing is cached that could go
-    stale against the specs, and nothing is stored twice.
-
-    Registration is also how a node is parked: a spec absent from the tuple has
-    no catalog entry, no enum member and no executor, so the planner is never
-    told about it and could not target it if it tried.
+    Construction indexes the specs by `node_type` and rejects duplicates;
+    everything else is a read over that index. Registration is also how a node
+    is parked — a spec absent from the tuple has no catalog entry, no enum
+    member and no executor, so the planner cannot target it.
     """
 
     def __init__(self, specs: Iterable[NodeSpec]) -> None:
@@ -73,10 +59,8 @@ class Registry:
                 )
             self._by_node_type[spec.node_type] = spec
 
-        # Built once, at construction, so the enum has one identity for the
-        # process: `SystemGoal.target_node_type` is annotated with it, and a
-        # second call returning a fresh Enum would produce members that fail
-        # `is` against the annotated ones.
+        # Built once so the enum has one identity per process: a fresh Enum
+        # produces members that fail `is` against the annotated ones.
         self.node_type_enum: type[Enum] = self._build_node_type_enum()
 
     # ------------------------------------------------------------------
@@ -107,8 +91,8 @@ class Registry:
     # Spec lookups
 
     def spec(self, node_type: NodeTypeKey) -> NodeSpec | None:
-        """The spec for a node type, or None when nothing is registered under
-        that name — the "parked or hallucinated" answer callers branch on."""
+        """The spec for a node type, or None — the "parked or hallucinated"
+        answer callers branch on."""
         return self._by_node_type.get(self.key(node_type))
 
     def request(self, node_type: NodeTypeKey) -> type | None:
@@ -118,8 +102,7 @@ class Registry:
 
     def executor(self, node_type: NodeTypeKey) -> type | None:
         """The workflow that runs this node. None covers both "not registered"
-        and "registered for planning but not yet runnable" — callers that need
-        to tell those apart read `spec()` instead."""
+        and "not yet runnable"; read `spec()` to tell those apart."""
         spec = self.spec(node_type)
         return spec.executor if spec else None
 
@@ -136,16 +119,13 @@ class Registry:
     def _build_node_type_enum(self) -> type[Enum]:
         """The capability names the planner LLM may emit, as one flat enum.
 
-        Built from the specs rather than unioning each slice's own label enum:
-        a union renders as an anyOf of one-member enums in the JSON schema —
-        more tokens per request with every node added, and a weaker constraint
-        for the model than a single enum.
+        Flat rather than a union of each slice's label enum: a union renders as
+        an anyOf of one-member enums — more tokens per node and a weaker
+        constraint on the model.
 
-        UNKNOWN is a member on purpose. It lets the LLM say "no capability
-        fits" instead of picking the nearest wrong one, and
-        `planjane/executor.py` then refuses that one goal with a reason the
-        user sees. Drop it and the same message becomes a hard pydantic error
-        on the whole tool call, taking the other goals down with it.
+        UNKNOWN is a member on purpose, so the LLM can decline instead of
+        picking the nearest wrong capability; `planjane/executor.py` then
+        refuses that one goal rather than failing the whole tool call.
         """
         return Enum(  # type: ignore[misc]
             "NodeTypeEnum",
@@ -161,11 +141,7 @@ class Registry:
         """The registered request schemas as one discriminated union, for
         validating a tool call (or rehydrating a recorded plan) back into typed
         requests. Discriminated on `node_type`, whose Literal default `NodeSpec`
-        already checked against the spec's name.
-
-        Derived on demand rather than stored as a module constant: the old
-        hand-listed union drifted out of step with the registered node types
-        (docs/backlog.md), and a union built here cannot.
+        already checked. Derived on demand so it cannot drift from the specs.
         """
         return Annotated[
             Union[tuple(s.request for s in self.specs)],  # type: ignore[valid-type]
@@ -178,11 +154,9 @@ class Registry:
     def catalog_entries(self) -> dict[str, dict[str, str]]:
         """Structured capability catalog: tier label -> {node_type: description}.
 
-        Grouped by walking `NodeTier` in declaration order, so tier sections
-        keep a stable order in the prompt and every spec lands in exactly one
-        of them — `NodeSpec.tier` is typed as `NodeTier`, so the grouping is
-        exhaustive by construction. Empty tiers are dropped rather than
-        rendered as a heading with nothing under it.
+        Walks `NodeTier` in declaration order, so prompt sections keep a stable
+        order and every spec lands in exactly one of them. Empty tiers are
+        dropped rather than rendered as an empty heading.
         """
         entries: dict[str, dict[str, str]] = {}
         for tier in NodeTier:
@@ -197,9 +171,8 @@ class Registry:
     def format_catalog(self) -> str:
         """Render `catalog_entries()` as the prompt block the planner LLM sees.
 
-        Each capability is its name on one line with the (possibly multi-line)
-        description indented under it, so long docstrings stay visually
-        attached to their name instead of bleeding into the next entry.
+        Name on one line, description indented under it, so a long docstring
+        stays visually attached instead of bleeding into the next entry.
         """
         lines: list[str] = []
         for label, section in self.catalog_entries().items():
@@ -225,8 +198,7 @@ SPECS: tuple[NodeSpec, ...] = BOOK_SPECS
 REGISTRY = Registry(SPECS)
 
 # Module-level because it is a *type*: `SystemGoal.target_node_type` is
-# annotated with it at class-definition time, which is also why it must be one
-# object rather than a per-call build. See `Registry._build_node_type_enum`.
+# annotated with it at class-definition time. See `_build_node_type_enum`.
 NodeTypeEnum = REGISTRY.node_type_enum
 
 

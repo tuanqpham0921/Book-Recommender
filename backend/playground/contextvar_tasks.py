@@ -2,10 +2,8 @@
 
 Run:  poetry run python playground/contextvar_tasks.py
 
-The earlier version of this file hand-rolled the mechanism to decide whether it
-was safe. It is now shipped — `airglider/src/context.py`, one ContextVar plus
-`parent_scope` — and the real `@task` and `Workflow` use it, so this file
-exercises those instead of a sandbox copy.
+Exercises the shipped mechanism (`airglider/src/context.py` — one ContextVar
+plus `parent_scope`) through the real `@task` and `Workflow`, not a sandbox copy.
 
 What it checks, in order:
 
@@ -38,9 +36,12 @@ def render(env, indent=0):
     payload = env.result
     label = f"{name}={payload}" if isinstance(payload, (str, int)) else name
     err = f"  !{env.runtime_error.type}" if env.runtime_error else ""
+    # a hand-built envelope (demo 4) never ran through a scope, so it has no
+    # duration of its own
+    duration = f"{env.duration:>5}s" if env.duration is not None else "    —"
     print(
         f"{pad}{label:<28} id={env.id}  parent={parent:<12} "
-        f"ok={str(env.ok):<5} {env.duration:>5}s  tokens={env.token_usage.total}{err}"
+        f"ok={str(env.ok):<5} {duration}  tokens={env.token_usage.total}{err}"
     )
     for step in getattr(env, "steps", []):
         render(step, indent + 1)
@@ -79,10 +80,9 @@ async def demo_nested_tasks():
     banner(1, "task -> task -> task")
     render(await func1())
     print("\n-> Three envelopes, three ids, three durations. func1 reads ~0.45s")
-    print("   (its own 0.05 plus everything under it) and func3 reads 0.30 at")
-    print("   the bottom, which is the question 'where did the time go?' being")
-    print("   answerable. Before, this collapsed to one envelope wearing func1's")
-    print("   name, func3's id and func3's arguments.")
+    print("   (its own 0.05 plus everything under it), func3 reads 0.30 at the")
+    print("   bottom. Before, this collapsed to one envelope wearing func1's")
+    print("   name and func3's id.")
 
 
 # ---------------------------------------------------------------------------
@@ -105,9 +105,8 @@ class InnerWorkflow(Workflow):
 
 @task(log_info=False)
 async def task_that_runs_a_workflow(label):
-    # a @task calling a Workflow — the thing the "task can't call a workflow"
-    # rule would have forbidden. Nothing is threaded in; the workflow finds
-    # this task's envelope through the ContextVar.
+    # nothing is threaded in — the workflow finds this task's envelope
+    # through the ContextVar
     await InnerWorkflow()(label)
     return f"ran {label}"
 
@@ -122,9 +121,8 @@ class OuterWorkflow(Workflow):
 async def demo_interleaved():
     banner(2, "workflow -> task -> workflow -> task")
     render(await OuterWorkflow()())
-    print("\n-> Four levels, alternating kinds. `@task` now builds the tree-shaped")
-    print("   envelope, so a task can hold children; that is the only change")
-    print("   that makes this legal.")
+    print("\n-> Four levels, alternating kinds. A @task's envelope holds children")
+    print("   like any other, which is what makes this legal.")
 
 
 # ---------------------------------------------------------------------------
@@ -143,10 +141,10 @@ async def demo_concurrent():
     left, right = ConcurrentWorkflow(), ConcurrentWorkflow()
     for record in await asyncio.gather(left("left"), right("right")):
         render(record)
-    print("\n-> No cross-talk. gather() wraps each coroutine in a Task and a Task")
-    print("   snapshots the context at creation, so a set() inside one is")
-    print("   invisible to its sibling. The copy is shallow — the envelope object")
-    print("   is shared — so the attach still mutates the real parent.")
+    print("\n-> No cross-talk: gather() wraps each coroutine in a Task, which")
+    print("   snapshots the context, so a set() inside one is invisible to its")
+    print("   sibling. The copy is shallow, so the attach still mutates the")
+    print("   real parent.")
 
 
 # ---------------------------------------------------------------------------
@@ -170,9 +168,9 @@ async def demo_custom_envelope():
     render(record)
     print(f"\ndetails = {record.details}")
     print("\n-> ok=False and the details survive; so does the child. The returned")
-    print("   envelope is merged into the published one rather than handed back,")
-    print("   because the published one is what `leaf` already attached to —")
-    print("   returning the other object would have dropped the subtree.")
+    print("   envelope becomes a step of the published one and the wrapper")
+    print("   reports it, because the published envelope is what `leaf` already")
+    print("   attached to — handing back the other object would drop the subtree.")
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +187,8 @@ async def billed():
 
 class ExplicitWorkflow(Workflow):
     async def run(self):
-        # the step attached itself on the way out; run_async_step attaches it
-        # again. It must land once, and its 7 tokens must be counted once.
+        # the step attached itself on the way out and run_async_step attaches
+        # it again: it must land once, and be billed once
         await self.run_async_step(billed())
         self.record.ok = True
 
@@ -200,9 +198,9 @@ async def demo_no_double_attach():
     record = await ExplicitWorkflow()()
     render(record)
     print(f"\nsteps={len(record.steps)}  tokens={record.token_usage.total}")
-    print("\n-> One step, 7 tokens. `add_step` is idempotent now: parent_id being")
-    print("   set already is what marks a step as claimed, so the explicit call")
-    print("   is a no-op. That is what lets both mechanisms be live at once.")
+    print("\n-> One step, 7 tokens. `add_step` is idempotent: it skips a step")
+    print("   already in `steps` (by identity), so the explicit call is a no-op.")
+    print("   That is what lets both mechanisms be live at once.")
 
 
 # ---------------------------------------------------------------------------
@@ -224,10 +222,9 @@ async def calls_the_exploder():
 async def demo_failure_depth():
     banner(6, "A nested task that raises")
     render(await calls_the_exploder())
-    print("\n-> The parent is ok=True with no error of its own: it caught nothing")
-    print("   and returned normally. The failure is one level down, where it")
-    print("   happened. Deciding that an ok=False child should fail the parent is")
-    print("   still `run_async_step`'s job — the only thing it still does alone.")
+    print("\n-> The parent is ok=True with no error of its own — it caught")
+    print("   nothing and returned normally. The failure sits one level down,")
+    print("   where it happened. Promoting it is run_async_step's job.")
 
 
 # ---------------------------------------------------------------------------
@@ -241,8 +238,8 @@ async def demo_orphan():
 
     print(f"current_parent() -> {current_parent()}")
     render(await leaf("standalone"))
-    print("\n-> default=None, so the attach is skipped. A startup hook or a test")
-    print("   that calls a task directly still gets its envelope back.")
+    print("\n-> default=None, so the attach is skipped; a script or test calling")
+    print("   a task directly still gets its envelope back.")
 
 
 async def main():
@@ -255,10 +252,10 @@ async def main():
     await demo_orphan()
 
     print(f"\n{'=' * 78}")
-    print("The rule is now: every envelope attaches to whoever was current when")
-    print("it started, exactly once, on the way out. Who may call whom stopped")
-    print("mattering. What still cannot work is fire-and-forget — a create_task")
-    print("that outlives its parent attaches to a record already serialized.")
+    print("Every envelope attaches to whoever was current when it started,")
+    print("exactly once, on the way out. Who may call whom stopped mattering.")
+    print("Fire-and-forget still cannot work: a create_task outliving its parent")
+    print("attaches to a record already serialized.")
     print(f"{'=' * 78}")
 
 

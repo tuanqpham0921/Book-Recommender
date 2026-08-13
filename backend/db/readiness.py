@@ -109,9 +109,9 @@ async def _check_table_extensions(session: AsyncSession) -> OperationResult:
 async def _check_embeddings(session: AsyncSession) -> OperationResult:
     """Check how many books are still missing an embedding.
 
-    A `@task` like the checks above rather than an envelope built inline, so it
-    attaches itself to `is_ready`'s record the same way they do — a hand-built
-    one would be the single check missing from the trace.
+    A `@task` like the checks above, so it attaches itself to `is_ready`'s
+    record the same way — a hand-built envelope would be the one check missing
+    from the trace.
 
     Args:
         session: An async session.
@@ -194,10 +194,9 @@ async def is_ready(
         result.num_missing_embeddings = embeddings.result
 
     ok = all(check.ok for check in checks)
-    # No `steps=checks`: every check above is a @task and attached itself to
-    # this task's envelope on the way out (parent_scope). Passing them again
-    # would put each one in the tree twice — once as a step of this envelope,
-    # once inside the envelope returned here. The list is kept only to fold `ok`.
+    # No `steps=checks`: each check is a @task and already attached itself via
+    # parent_scope, so passing them again would put each in the tree twice. The
+    # list is kept only to fold `ok`.
     return OperationResult(
         ok=ok,
         details=["Database is ready." if ok else "Database is not ready."],

@@ -26,34 +26,28 @@ class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
 
     def __init__(self):
-        """Initialize the orchestrator."""
         pass
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
 
         sse_stream = request_context.sse_stream
-        # created (not just returned from a helper) so that a cancellation
-        # mid-await below still leaves this bound for the finally block —
-        # TriageWorkflow mutates its own .record in place and
-        # re-raises on cancellation rather than returning it
+        # Bound before the try so a cancellation mid-await still leaves them
+        # for the finally block — each workflow mutates its own .record in
+        # place and re-raises rather than returning it.
         conversation_orchestrator = None
         task_runner = None
-        # Root of the turn's trace tree. The two workflow envelopes are hung
-        # off it in the finally block (one place, so a timed-out or cancelled
-        # turn still records what ran), which is what makes ok/duration/
-        # token_usage cover the whole turn instead of the planner alone.
-        # Bound before the try for the same reason as the two above.
+        # Root of the turn's trace tree; the workflow envelopes are hung off it
+        # in the finally block, so ok/duration/token_usage cover the whole turn.
         record = OperationResult(
             name=f"orchestrator_{request_context.user_message.id}",
         )
         messages: list[APIMessage] = [request_context.user_message]
         time_start = time.perf_counter()
         try:
-            # Sent first and unconditionally — this id is generated when the
-            # user message is parsed (before any work starts), so the client
-            # can attach feedback to this run even if the turn later errors,
-            # times out, or is stopped before the 'complete' event fires.
+            # First and unconditionally: this id exists before any work
+            # starts, so the client can attach feedback even if the turn later
+            # errors, times out, or is stopped before 'complete' fires.
             await sse_stream.send_chat_id(request_context.user_message.id)
             await sse_stream.send_ui_loading("Starting conversation...")
 
@@ -77,27 +71,23 @@ class Orchestrator:
             ):
                 task_runner = TaskRunnerWorkflow(request_context, messages=messages)
                 await asyncio.wait_for(
-                    # The plan is passed as the runner's declared input, so the
-                    # runner never has to know a triage layer produced it —
-                    # this is the only place the two are wired together.
+                    # the only place triage and the runner are wired together,
+                    # so the runner never learns a triage layer exists
                     task_runner(TaskRunnerInput(plan=planner_result)),
                     timeout=CONVERSATION_TIMEOUT,
                 )
 
-            # Normal completion — chat_id lets the client attach feedback
-            # to the chat_runs row recorded in the finally block below
+            # chat_id lets the client attach feedback to the chat_runs row
             await sse_stream.send(
                 "complete",
                 {"status": "completed", "chat_id": request_context.user_message.id},
             )
-            # close the sse_stream
             await sse_stream.close()
             logger.info("✅ Orchestration completed successfully")
 
         except asyncio.CancelledError as e:
-            # client disconnected mid-turn (e.g. page refresh) — the finally
-            # block below still records what we've got, then this propagates
-            # so the task is actually marked cancelled
+            # client disconnected mid-turn — the finally block still records
+            # what we have, then this propagates so the task is really cancelled
             record.runtime_error = RuntimeErrorInfo.from_exception(e)
             logger.warning(
                 f"⚠️ Orchestration cancelled: chat_id={request_context.user_message.id}"
@@ -117,13 +107,10 @@ class Orchestrator:
                 "Hmm... something went wrong while processing your query."
             )
         finally:
-            # Hung here rather than after each await so the timeout/cancel
-            # paths above record their partial work too: each workflow mutates
-            # its own .record in place, so the envelope is populated whether or
-            # not its await returned. isinstance-guarded rather than trusting
-            # add_step to validate — a raise inside this finally would replace
-            # whatever exception is already in flight and skip the recording
-            # and stream close below.
+            # Here rather than after each await, so the timeout/cancel paths
+            # record their partial work too. isinstance-guarded rather than
+            # letting add_step raise: a raise in this finally would replace the
+            # exception in flight and skip the recording and stream close below.
             for workflow in (conversation_orchestrator, task_runner):
                 step = getattr(workflow, "record", None)
                 if isinstance(step, OperationResult):
@@ -135,16 +122,12 @@ class Orchestrator:
             )
             record.timing.duration = round(time.perf_counter() - time_start, 2)
 
-            # One shielded unit, not two: a second cancellation landing on
-            # *this* task (see EventSourceResponse's disconnect handling —
-            # it keeps re-cancelling every checkpoint, and asyncio.gather()
-            # re-cancels orchestrator_task when its own await is cancelled)
-            # would otherwise raise CancelledError past `except Exception`
-            # (CancelledError is a BaseException, not an Exception, since
-            # 3.8) mid-way through cleanup, skipping sse_stream.close().
-            # Shielding the whole sequence as one background task means that
-            # even if this await is cancelled again, close() still runs —
-            # we just stop waiting for it here.
+            # One shielded unit, not two. A second cancellation landing on this
+            # task (EventSourceResponse re-cancels every checkpoint on
+            # disconnect) is a BaseException, so it would fly past
+            # `except Exception` mid-cleanup and skip sse_stream.close().
+            # Shielding the whole sequence means close() still runs — we just
+            # stop waiting for it here.
             try:
                 await asyncio.shield(
                     self._finalize(

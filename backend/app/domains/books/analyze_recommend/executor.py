@@ -31,8 +31,8 @@ MAX_RECOMMENDED_BOOKS = 10
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
 
-    Reads the user's *own* words, unlike `build_analysis_request` next door,
-    which reads the documents the dependencies produced — see `execute`.
+    Reads the user's own words, unlike `build_analysis_request` next door,
+    which reads the documents the dependencies produced.
     """
     if not query:
         raise ValueError("No query to parse arguments from")
@@ -41,14 +41,14 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         prompt=basic_fill_schema_prompt,
         model="gpt-5-nano",
         reasoning_effort="minimal",
-        # the goal text is the planner's own work, not something the user typed.
+        # the goal text is the planner's own work, not something the user typed
         # NOTE: this should carry the previous messages too; clear and direct
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
         tool_models=[RecommendationStrategy],
-        # The goal already picked the node type and tool_choice pins it, so the
-        # class docstring — which is there to help the planner choose between
-        # tools — would only be noise here. Field descriptions still ship.
+        # the goal already picked the node type and tool_choice pins it, so the
+        # class docstring (there to help the planner choose) is noise here.
+        # Field descriptions still ship.
         include_tool_description=False,
         max_completion_tokens=2000,
     )
@@ -79,13 +79,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             reference_books += await self._materialize_books(parsed_dependents.queries)
         self.result.references = reference_books
 
-        # Two parsers, two inputs. The reference analyzer reads the *documents*
-        # and answers "what is the user's anchor like"; the argument parser
-        # reads the user's *own words* and answers "what did they ask for on
-        # top of it" — the twist ("but darker") and the measurable bounds. The
-        # documents can't carry either, which is why the goal text goes here
-        # and not into the combined block.
-
+        # Two parsers, two inputs: the reference analyzer reads the documents
+        # ("what is the anchor like"), the argument parser reads the user's own
+        # words ("what did they ask for on top") — the twist and the bounds,
+        # neither of which the documents can carry.
         parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )
@@ -126,9 +123,8 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
     ) -> str | None:
         """Fold the dependent books and reports into one description to embed.
 
-        Returns None when there is nothing to fold — a node with no readable
-        dependency still has the user's own semantic_input to search on, so
-        this is a missing input, not a failure.
+        None when there is nothing to fold: the user's own semantic_input is
+        still there to search on, so this is a missing input, not a failure.
         """
         document_text = render_documents(books, reports)
         if not document_text:
@@ -145,21 +141,17 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
     @staticmethod
     def build_search_text(analyzed: str | None, user_input: str | None) -> str:
-        """The text that actually gets embedded — the analyzed anchor, plus
-        whatever the user asked for on top of it. Either half can be missing:
-        a bare "books like X" has no twist, and a purely thematic ask has no
-        anchor to analyze."""
+        """The text that gets embedded — the analyzed anchor plus whatever the
+        user asked for on top. Either half can be missing: "books like X" has no
+        twist, a purely thematic ask has no anchor."""
         return "\n\n".join(part for part in (analyzed, user_input) if part)
 
     async def response_to_user(self, result: RecommendationOutput) -> None:
-        """Write the note that sits above the book cards, streaming it as it
-        is generated.
+        """Write the note above the book cards, streamed as it is generated.
 
-        The model gets two summaries and no book descriptions — see
-        generate_response.py for why. The user's own phrasing comes off
-        `result.args`, which the argument parser filled and nothing since has
-        touched; `result.search_text` is the assembled anchor prose and is
-        deliberately not sent.
+        The model gets two summaries and no book descriptions (see
+        generate_response.py). The user's own phrasing comes off `result.args`;
+        `result.search_text` is assembled anchor prose and is not sent.
         """
         input_summary = summarize_references(
             result.references, getattr(result.args, "semantic_input", None)
@@ -197,12 +189,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
     ) -> List[Book]:
         """Pool the upstream queries into one anchor and fetch its books.
 
-        `preflight` returns the size of the pool and the rows in a single round
-        trip, so below the cap the sample *is* the anchor and there is nothing
-        left to materialize separately. Note what it stamps on the output —
-        `query`/`query_sql`/`num_books` describe the *references* here;
-        `execute()` overwrites `num_books` with the recommendation's own count
-        once it has one.
+        `preflight` returns the pool size and the rows in one round trip, so
+        below the cap the sample *is* the anchor. What it stamps
+        (`query`/`query_sql`/`num_books`) describes the references; `run`
+        overwrites `num_books` with the recommendation's own count.
         """
         anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
         num_books, books = await self.preflight(

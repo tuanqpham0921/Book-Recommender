@@ -1,10 +1,9 @@
 """Query builders for book-related database operations.
 
-Two families live here. `build_*_search` returns a statement that is run for
-rows straight away. `build_*_query` / `build_count` / `compose` /
-`build_materialize` are the **deferred** family: they build a statement that
-gets carried between nodes and executed for rows exactly once, at the end.
-See docs/design/execution-pipeline-v1.md.
+Two families: `build_*_search` returns a statement run for rows straight away;
+`build_*_query` / `build_count` / `compose` / `build_materialize` are the
+deferred family, carried between nodes and executed for rows exactly once, at
+the end. See docs/design/execution-pipeline-v1.md.
 """
 
 from sqlalchemy import select, func, or_, and_, text, union, intersect
@@ -17,16 +16,12 @@ from typing import Optional, List
 def compile_sql(stmt):
     """Compile SQLAlchemy statement to actual SQL string with formatting."""
     try:
-        # Compile with literal binds to show actual values
         compiled = stmt.compile(
-            compile_kwargs={
-                "literal_binds": True,  # Shows actual parameter values
-                "render_postcompile": True,  # Handles modern SQLAlchemy features
-            }
+            compile_kwargs={"literal_binds": True, "render_postcompile": True}
         )
         return str(compiled)
-    except Exception as e:
-        # Fallback without literal binds if that fails
+    except Exception:
+        # fallback without literal binds
         return str(stmt.compile())
 
 
@@ -59,33 +54,18 @@ def build_embedding_search(
 ):
     """Build embedding similarity search query.
 
-    Took a `BooksFilter` until the branch trim removed `apply_book_filters`;
-    the parameter is gone rather than silently ignored. Metadata narrowing is
-    Filter_Retrieval's job in the deferred pipeline, applied to the composed
-    query instead of to this one.
+    Takes no `BooksFilter`: metadata narrowing is Filter_Retrieval's job in the
+    deferred pipeline, applied to the composed query rather than to this one.
     """
-
-    # Get the embedding column
     embed_col = getattr(model, embedding_column)
 
-    # Base query with cosine similarity
     stmt = select(
         model,
-        # Calculate cosine similarity (1 - cosine distance)
+        # cosine similarity = 1 - cosine distance
         (1 - embed_col.cosine_distance(query_embedding)).label("similarity_score"),
-    ).where(
-        # Only include books with embeddings
-        embed_col.is_not(None)
-    )
-    # ).filter(
-    #     # Similarity threshold
-    #     # embed_col.cosine_distance(query_embedding) < (1 - similarity_threshold)
-    # )
+    ).where(embed_col.is_not(None))
 
-    # Order by similarity score (highest first) - this takes precedence
     stmt = stmt.order_by(text("similarity_score DESC"))
-
-    # Apply limit
     stmt = stmt.limit(limit)
 
     return stmt
@@ -116,15 +96,14 @@ def build_count(query: DeferredBookQuery):
     return select(func.count()).select_from(query.cte("matched"))
 
 def build_preview(query: DeferredBookQuery, model, limit: int = 3):
-    """A small sample of the match **and** its total size, in one statement.
+    """A small sample of the match and its total size, in one statement.
 
-    `count(*) OVER ()` is evaluated before LIMIT, so `total` is the size of the
-    whole match while the rows are only the sample. One round trip instead of a
-    COUNT plus a SELECT, and no way for the two to disagree.
+    `count(*) OVER ()` is evaluated before LIMIT, so `total` is the whole match
+    while the rows are the sample — one round trip, and no way for the two to
+    disagree.
 
-    Ranks by the query's own `score` when it has one — you searched for "Dune",
-    so Dune should lead — and by popularity otherwise. `ratings_count`, not
-    `average_rating`: a sample of a 1,200-book match should be books people
+    Ranks by the query's own `score` when it has one, by popularity otherwise.
+    `ratings_count`, not `average_rating`: a sample should be books people
     recognize, and top-rated surfaces obscure 5.0s with three ratings.
     """
     src = query.cte("preview_src")
@@ -143,13 +122,10 @@ def build_preview(query: DeferredBookQuery, model, limit: int = 3):
 def compose(queries: List[DeferredBookQuery], op: str = "or"):
     """Compose deferred queries into one statement via a WITH clause.
 
-    `"or"` pools — the implicit-union rule, where several `depends_on` ids
-    mean "pool what all of these found". `"and"` intersects. Postgres dedups
-    by isbn13 for both, so the pooling rule costs the executors nothing.
-
-    Only isbn13 survives a composition: a per-dimension `score` stops meaning
-    anything once two dimensions are combined. A single input is passed
-    through untouched so it keeps its score.
+    `"or"` pools (the implicit-union rule), `"and"` intersects; Postgres dedups
+    by isbn13 either way. Only isbn13 survives — a per-dimension `score` means
+    nothing once two dimensions combine — so a single input passes through
+    untouched and keeps its score.
     """
     if not queries:
         raise ValueError("compose() needs at least one query")
@@ -164,17 +140,13 @@ def compose(queries: List[DeferredBookQuery], op: str = "or"):
 
 def build_materialize(query: DeferredBookQuery, model, limit: int = 10):
     """The one statement that returns books: join the deferred query's isbn13s
-    back to the books table.
-
-    Ranks by the query's own `score` when it still has one (a single-dimension
-    query), and by rating otherwise — after a composition there is no
-    cross-dimension score to rank on.
+    back to the books table. Ranks by the query's own `score` when it still has
+    one, by rating otherwise — a composition leaves no score to rank on.
     """
     src = query.cte("final")
     stmt = select(model).join(src, model.isbn13 == src.c.isbn13)
-    # the vector column is ~6KB a row and nothing downstream reads it;
-    # raiseload makes an accidental access a clear error rather than a lazy
-    # load that would deadlock under asyncio
+    # ~6KB a row and nothing downstream reads it; raiseload makes an accidental
+    # access a clear error rather than a lazy load that deadlocks under asyncio
     stmt = stmt.options(defer(model.embedding, raiseload=True))
     if "score" in src.c.keys():
         stmt = stmt.order_by(src.c.score.desc())

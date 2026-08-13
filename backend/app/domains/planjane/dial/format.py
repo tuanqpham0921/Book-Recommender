@@ -1,19 +1,16 @@
 """Mermaid flowcharts from a neutral list of boxes.
 
-The caller says *what* to draw — one `MermaidBox` per node, carrying the ids it
-points at — and this module owns *how* it is drawn: id sanitization, label
-markup, edge emission, and picking an orientation from the graph's shape.
+The caller says what to draw — one `MermaidBox` per node with the ids it points
+at — and this module owns how: id sanitization, label markup, edge emission and
+orientation.
 
-**Nothing here knows about goals, or about any app type at all.** Its only
-import is `airglider`, which is itself standalone, so this module travels
-wherever PlanJane travels — the point of keeping the whole mermaid stack under
-`planjane/`. Turning goals into boxes is the layer above: `dial/mermaid.py`.
+Nothing here knows about goals or any app type; its only import is `airglider`,
+so this module travels wherever PlanJane travels. Turning goals into boxes is
+the layer above (`dial/mermaid.py`).
 
-Edges are declared as `sent_to`, the direction the arrow is actually drawn in.
-Callers usually hold the reverse (`depends_on`: who must run before me) and
-invert once when building boxes. That inversion belongs on their side: a box
-that declares an arrow and a diagram that emits a different one is a class of
-bug worth making impossible here.
+Edges are declared as `sent_to`, the direction the arrow is drawn. Callers hold
+the reverse (`depends_on`) and invert once when building boxes, so a box cannot
+declare one arrow while the diagram emits another.
 """
 
 import re
@@ -34,17 +31,15 @@ class MermaidBox:
     """One node in a flowchart.
 
     Args:
-        id: Identifies the box, and is what other boxes name in their
-            `sent_to`. Sanitized on the way out, so any string is safe here.
-            Ids should be unique — the renderer emits boxes as given rather
-            than collapsing repeats, since which duplicate wins is the
-            caller's decision, not this module's.
+        id: What other boxes name in their `sent_to`. Sanitized on the way out,
+            so any string is safe. Should be unique — repeats are emitted as
+            given, since which duplicate wins is the caller's decision.
         title: Bold header line. Omit for an unheaded box.
         body: The rest of the label. A mapping renders one `Key: value` row per
-            entry, with keys humanized, empty values dropped and lists joined;
-            a plain string renders as a single row.
-        sent_to: Ids this box draws an arrow *to*. An id with no box of its own
-            is skipped rather than conjuring an empty node beside the graph.
+            entry (keys humanized, empties dropped, lists joined); a string
+            renders as a single row.
+        sent_to: Ids this box draws an arrow to. An id with no box is skipped
+            rather than conjuring an empty node beside the graph.
     """
 
     id: str
@@ -111,9 +106,8 @@ def choose_orientation(levels: Mapping[str, int] | None) -> str:
 def levels_from_boxes(boxes: Sequence[MermaidBox]) -> dict[str, int]:
     """Longest-path depth per box id, used only to orient the diagram.
 
-    A box's level is one past its deepest predecessor. Arrows pointing at ids
-    with no box count as nothing, and a visit guard breaks cycles — an invalid
-    graph should still render rather than hang.
+    One past the deepest predecessor. Arrows at ids with no box count as
+    nothing, and a visit guard breaks cycles so an invalid graph still renders.
     """
     incoming: dict[str, list[str]] = {box.id: [] for box in boxes}
     for box in boxes:
@@ -140,15 +134,9 @@ def levels_from_boxes(boxes: Sequence[MermaidBox]) -> dict[str, int]:
 def get_diagram(
     boxes: Sequence[MermaidBox], *, orientation: str | None = None
 ) -> str | None:
-    """Render `boxes` as a Mermaid flowchart, or None when there is nothing
-    to draw.
-
-    None rather than an empty `flowchart` header: an empty diagram is not
-    something to stream to a client, and every caller here already treats the
-    "nothing to show" case as skip-this-step.
-
-    Orientation is chosen from the graph's own shape unless one is passed.
-    """
+    """Render `boxes` as a Mermaid flowchart, or None when there is nothing to
+    draw — every caller treats that as skip-this-step. Orientation comes from
+    the graph's own shape unless one is passed."""
     if not boxes:
         return None
 

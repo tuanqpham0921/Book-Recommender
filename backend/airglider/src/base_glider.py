@@ -18,22 +18,19 @@ OutputT = TypeVar("OutputT")
 
 
 class Workflow(ABC, Generic[OutputT]):
-    """One instance = one execution. self.record (and subclass output
-    fields like accepted_goals) accumulate for the life of the instance and
-    are never reset, so calling __call__ more than once on the same instance
-    stacks the second run's output onto the first's instead of replacing it.
-    Construct a new instance for every execution, including retries — the
-    constructor sets up no expensive resources, so this is cheap."""
+    """One instance = one execution.
+
+    `self.record` and subclass output fields accumulate for the life of the
+    instance and are never reset, so a second `__call__` would stack onto the
+    first run's output. Construct a new instance per execution, including
+    retries — the constructor sets up no expensive resources.
+    """
 
     def __init__(self, output_type: type[OutputT] | None = None):
         self.name = self.workflow_ref
         self.output_type = output_type
         self._called = False
 
-        # intialize a record envolope in memory to modify. Steps append to it
-        # as they complete — a Workflow is by definition the thing that
-        # accumulates them, though since the merge it is not a different class
-        # from what a @task produces.
         self.record: OperationResult[OutputT] = OperationResult(
             name=self.workflow_ref,
             response=Response(
@@ -43,28 +40,16 @@ class Workflow(ABC, Generic[OutputT]):
         if output_type is not None:
             self.record.response.result = output_type()
 
-        # `parent_id` is deliberately NOT stamped here. Construction is not
-        # dispatch: a node executor is built by the task runner before it is
-        # called, and a workflow can be constructed under one parent and run
-        # under another, so whatever is current right now is "where this object
-        # was created", not "where it ran". `parent_scope` stamps it in
-        # __call__ instead — still at the top of the run, so the value is
-        # readable for the whole of it.
+        # parent_id is stamped by `parent_scope` in __call__, not here:
+        # construction is not dispatch.
 
     def add_details(self, *message):
         self.record.add_details(*message)
 
     def record_input(self, *args: Any, **kwargs: Any) -> None:
-        """Stamp what this workflow was called with onto its own envelope.
-
-        Keyed by `run`'s parameter names, so the record reads the same whether
-        the caller passed positionally or by keyword. Values that can
-        summarize themselves do — see `to_record_input` for why a payload
-        already recorded upstream should not be dumped again here.
-
-        Never raises. Bookkeeping that can take down the run it is describing
-        is worse than a missing field, and `to_summary` is app code this
-        library does not control.
+        """Stamp what this workflow was called with, keyed by `run`'s parameter
+        names. Never raises — see `to_record_input` for why a payload already
+        recorded upstream is summarized rather than dumped again.
         """
         try:
             arguments = bind_call_args(self.run, args, kwargs)
@@ -78,9 +63,6 @@ class Workflow(ABC, Generic[OutputT]):
 
     @property
     def result(self) -> OutputT:
-        # self.record is this Workflow's OperationResult envelope; .result
-        # on that is its own shorthand property for the payload
-        # (OperationResult.response.result)
         if self.record.result is None:
             raise RuntimeError(f"{self.workflow_ref} output was not initialized")
         return self.record.result
@@ -93,61 +75,50 @@ class Workflow(ABC, Generic[OutputT]):
             )
         self._called = True
 
-        # Stamped before run(), not after: the call that crashed is the one
-        # worth knowing the arguments of, and this way the cancel/error paths
-        # below record them too.
+        # before run(), so the cancel/error paths record the arguments too
         self.record_input(*args, **kwargs)
 
-        # Re-stamped here, not left at what __init__ defaulted it to: the
-        # envelope is built at construction, which for a node executor is
-        # before the runner dispatches it. `start_time` should mean "when the
-        # run began" — the same instant `duration` is measured from, which is
-        # what lets `end_time` be derived from the two (see Time.end_time).
+        # re-stamped, not left at the __init__ default: start_time must be the
+        # instant `duration` is measured from, so `end_time` can derive from both
         self.record.timing.start_time = now_iso()
         time_start = time.perf_counter()
 
-        # Publishes self.record as the envelope anything called from run()
-        # attaches itself to, and on the way out adopts it into whatever was
-        # current when *this* workflow was called. Wrapping the whole
-        # try/finally means the attach happens after `duration` is stamped and
-        # after every step has rolled its usage up, which is what `add_step`
-        # needs — it reads a child's token_usage once, at attach time.
+        # Publishes self.record for anything called from run(). Wrapping the
+        # whole try/finally puts the attach after `duration` is stamped and
+        # every step has rolled up — `add_step` reads usage once, at attach.
         with parent_scope(self.record):
             try:
                 self.logger.info(f"Running workflow: {self.workflow_name}")
                 await self.run(*args, **kwargs)
                 self.check_output_type()
 
-                # not runtime failure, app still runs
+                # not a runtime failure, app still runs
                 if not self.record.ok:
                     self.logger.warning(f"Workflow failed: {self.workflow_name}")
                 else:
                     self.logger.info(f"Finished workflow: {self.workflow_name}")
             except asyncio.CancelledError as e:
-                # client disconnected (e.g. page refresh) mid-workflow. Stamp
-                # what we have so a caller can still record a partial run, then
-                # re-raise — swallowing this would stop the task from actually
-                # being cancelled (see the no-`return`-in-finally note below).
+                # client disconnected mid-workflow. Stamp what we have, then
+                # re-raise — swallowing this would stop the actual cancellation.
                 self.record.ok = False
                 self.add_details("asyncio Cancelled")
                 self.logger.warning(f"Workflow cancelled: {self.workflow_name}")
                 self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
                 raise
             except StepFailure as e:
-                # controlled abort — the failing step's envelope already
+                # controlled abort — the failing step's envelope is already in
+                # self.record.steps
                 self.record.ok = False
                 self.logger.warning(f"Workflow stopped: {e}")
                 # NOTE just make the StepFailure a runtime error
                 self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
             except Exception as e:
                 self.record.ok = False
-                # run-time failure: a genuine crash in run() itself
                 self.logger.exception(f"Workflow failed: {e}")
                 self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
             finally:
-                # final formatting of the result — no `return` here: a return
-                # inside finally would swallow BaseExceptions (e.g. asyncio
-                # cancellation) that the except clauses deliberately let through
+                # no `return` here: a return inside finally would swallow the
+                # BaseExceptions the except clauses deliberately let through
                 self.record.name = self.workflow_ref
                 self.record.timing.duration = round(time.perf_counter() - time_start, 2)
 
@@ -163,27 +134,16 @@ class Workflow(ABC, Generic[OutputT]):
         *,
         raise_on_failure: bool = True,
     ) -> OperationResult[Any]:
-        """Await a step, attach it, and abort the workflow if it failed.
+        """Await a step and abort the workflow if it failed.
 
-        Attaching is no longer this method's job — the coroutine runs in this
-        workflow's `parent_scope`, so it adopted itself before returning. The
-        `add_step` below is a no-op in that case (`add_step` skips a step that
-        already has a `parent_id`) and only does real work for a coroutine
-        created outside this workflow's scope. What is left that only this
-        method does is the **failure policy**: mark the workflow not-ok and
-        raise `StepFailure`, or hand the envelope back for a retry.
+        Attaching is not this method's job — the coroutine ran in this
+        workflow's `parent_scope` and adopted itself, so `add_step` below is a
+        no-op unless the coroutine was created outside that scope. What remains
+        is the failure policy, so calling a step without this method is
+        legitimate and means "I decide what a failure means myself".
 
-        Calling a step *without* this method is now a legitimate thing to do —
-        the record still lands in the tree — and means "I will decide what a
-        failure means myself".
+        NOTE: raise_on_failure=False if you want to capture the envelope and retry.
         """
-        # typed on the base envelope both ways: a step is a step whether a
-        # @task returned a leaf or a nested Workflow returned its own tree, and
-        # nothing here reads `steps`
-        #
-        # NOTE: enable raise_on_failure = False if you want to retry
-        # so the caller can capture the envolope and deal with it
-        # default is True more most cases
         step_result = await function
         self.record.add_step(step_result)
 
@@ -193,9 +153,7 @@ class Workflow(ABC, Generic[OutputT]):
         self.record.ok = False
         self.record.add_details(f"FAILED STEP:{step_result.name}")
         if raise_on_failure:
-            # names the step only: the step's own envelope is already in
-            # self.record.steps with its details and runtime_error, and this
-            # string is what lands in the parent's runtime_error.message
+            # names the step only: its envelope is already in self.record.steps
             raise StepFailure(f"Step failed: {step_result.name}")
         return step_result
 

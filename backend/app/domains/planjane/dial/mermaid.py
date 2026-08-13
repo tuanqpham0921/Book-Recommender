@@ -1,19 +1,14 @@
 """Goals → `MermaidBox`es. The drawing itself is `dial/format.py`.
 
-This module decides only what a box *says* — which field heads it, which
-fields earn a row — and hands the boxes to `get_diagram`, which owns markup,
-orientation and emission. Splitting there is what keeps the renderer free of
-app types.
+This module decides only what a box *says*; `get_diagram` owns markup,
+orientation and emission, which is what keeps the renderer free of app types.
 
-**PlanJane owns the whole mermaid stack**, hence `planjane/dial/` rather than
-somewhere shared: the diagram *is* the plan rendered, so a caller that drew it
-would be doing the planner's job. It is also the direction PlanJane is headed —
-a service of its own — and drawing the plan has to travel with it. Today
-PlanJane is the only thing in the app that formats a diagram at all.
+PlanJane owns the whole mermaid stack — the diagram *is* the plan rendered, so a
+caller that drew it would be doing the planner's job, and it has to travel with
+PlanJane when that becomes its own service.
 
-**The `depends_on` → `sent_to` inversion happens here, once.** Goals record who
-must run before them; Mermaid draws arrows the other way. Doing it in one place
-means no call site can get the arrow backwards.
+The `depends_on` → `sent_to` inversion happens here, once, so no call site can
+get the arrow backwards.
 """
 
 from collections.abc import Mapping
@@ -30,14 +25,11 @@ SKIP_LABEL_KEYS = {"id"}
 def _to_boxes(nodes: Mapping[str, Any], label_for) -> list[MermaidBox]:
     """One box per node, with `depends_on` inverted into `sent_to`.
 
-    Kept generic over "things with an id and a depends_on" rather than typed to
-    `SystemGoal`: that is the whole of what a diagram needs from a node, and it
-    is what let the parsed-request diagram share this code before it was
-    retired.
+    Generic over "things with an id and a depends_on" rather than typed to
+    `SystemGoal` — that is all a diagram needs from a node.
 
-    A dependency on an id that isn't in `nodes` — a goal the planner refused,
-    say — contributes no edge. `get_diagram` would drop it anyway; dropping it
-    here keeps the box's own declaration honest.
+    A dependency on an id not in `nodes` (a refused goal) contributes no edge.
+    `get_diagram` would drop it anyway; dropping it here keeps the box honest.
     """
     sent_to: dict[str, list[str]] = {node_id: [] for node_id in nodes}
     for node_id, node in nodes.items():

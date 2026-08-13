@@ -43,12 +43,8 @@ def record_input(
 ) -> dict[str, Any] | None:
     """What this call was made with, keyed by parameter name — or None.
 
-    Computed *before* the call, so the exception path below records it too:
-    a task that crashed is the one whose arguments are worth having.
-
-    Never raises. `to_summary` is host code this library does not control, and
-    bookkeeping that can take down the task it describes is worse than a
-    missing field.
+    Computed before the call so the exception path records it too. Never
+    raises: bookkeeping must not take down the task it describes.
     """
     try:
         arguments = bind_call_args(func, args, kwargs)
@@ -59,6 +55,7 @@ def record_input(
         logger.warning(f"Could not record input for {func.__qualname__}", exc_info=True)
         return None
 
+
 def task(
     func: Callable[..., Coroutine[Any, Any, Any]] | None = None,
     *,
@@ -66,11 +63,10 @@ def task(
 ) -> Any:
     """Wrap an async function so it returns a record instead of a bare value.
 
-    Reach for `Workflow` when you want what a class gives you — a declared
-    output type, SSE helpers, `run_async_step`'s failure policy, somewhere to
-    hang state. That is now the whole difference: a task publishes its own
-    envelope while it runs (`parent_scope`), so it may call other tasks and
-    other workflows freely and they nest under it.
+    Reach for `Workflow` when you want a declared output type, SSE helpers,
+    `run_async_step`'s failure policy, or somewhere to hang state — that is the
+    whole difference. A task publishes its own envelope while it runs, so it may
+    call other tasks and workflows freely.
     """
 
     def decorator(
@@ -82,29 +78,21 @@ def task(
             func_ref = f"{func.__module__}.{func.__qualname__}"
             call_input = record_input(func, args, kwargs, logger)
 
-            # Read here, not left to `Time`'s default_factory: the envelope is
-            # built before the await, but `now_iso()` and `perf_counter()` have
-            # to be read as a pair — one wall clock, one monotonic — because
-            # `end_time` is derived from both (see Time.end_time).
+            # read as a pair — one wall clock, one monotonic — because
+            # `end_time` is derived from both (see Time.end_time)
             started_at = now_iso()
             time_start = time.perf_counter()
 
-            # Built *before* the call because `parent_scope` needs something to
-            # publish, which also means the error and cancellation paths below
-            # no longer have to construct a second envelope to report on. It
-            # can hold children because every envelope can — a task that runs
-            # nothing else just carries an empty `steps`, and one that runs
-            # another task adopts it without anything being threaded in.
+            # Built before the call because `parent_scope` needs something to
+            # publish, which also lets the error and cancel paths below report
+            # without constructing a second envelope.
             result: OperationResult[Any] = OperationResult(
                 name=func_ref, input=call_input
             )
             result.timing.start_time = started_at
 
-            # Stamps `result.parent_id` on entry, so the record knows where it
-            # hangs for the whole of its own run, and attaches it on exit.
-            # Exits by attaching `result` to whatever envelope was current when
-            # this task was called — including while a CancelledError is on its
-            # way out, so a cancelled task still lands in its caller's steps.
+            # Stamps `parent_id` on entry and attaches on exit — including
+            # while a CancelledError is on its way out.
             with parent_scope(result):
                 try:
                     if log_info:
@@ -112,78 +100,56 @@ def task(
 
                     raw_output = await func(*args, **kwargs)
 
-                    # The task returned an envelope rather than a value, so it
-                    # validated `ok` itself. That envelope becomes a **step**,
-                    # not this task's report: whether it came from a nested
-                    # decorated call (`return await inner()`, already attached
-                    # by its own scope — `add_step` no-ops on it) or was
-                    # hand-built to describe a check, it is a unit of work in
-                    # its own right and keeps its own id, input and timing.
-                    #
-                    # This task then *reports* it: `ok` is the child's verdict,
-                    # and the payload is the child's payload — the response
-                    # object itself, never the envelope. Wrapping the envelope
-                    # would make `.result` hand back a record instead of a
-                    # value, and would serialize the whole subtree twice, once
-                    # under `steps` and once under `response`.
+                    # The task validated `ok` itself. Its envelope becomes a
+                    # step with its own id, input and timing — whether from
+                    # `return await inner()` (already attached; `add_step`
+                    # no-ops) or hand-built. This task reports it: `ok` and the
+                    # payload are the child's. Storing the envelope in
+                    # `response` instead would make `.result` hand back a record
+                    # and serialize the subtree twice.
                     if isinstance(raw_output, OperationResult):
-                        # a hand-built envelope has no name of its own, and an
-                        # unnamed row is unreadable in a trace. `:` not `.` —
-                        # readers shorten a name to its last dotted segment, and
-                        # a `.result` suffix would shorten to "result" with no
-                        # trace of which task it belongs to.
+                        # `:` not `.` — readers shorten a name to its last
+                        # dotted segment, and `.result` would shorten to
+                        # "result" with no trace of which task it belongs to
                         if raw_output.name is None:
                             raw_output.name = f"{func_ref}:result"
                         result.add_step(raw_output)
-                        result.add_details("nested task decorator, response is the step")
+                        result.add_details("nested envelope: response is the step")
                         result.ok = raw_output.ok
                         result.response = raw_output.response
                         if log_info and not result.ok:
                             logger.warning(f"Task failed: {func_ref}")
                     else:
-                        # task did not return an operation result; no runtime
-                        # error was recorded, so the task is considered successful
+                        # no envelope and no runtime error, so this succeeded
                         result.response = Response(
                             result=raw_output, output_type=type(raw_output).__name__
                         )
                         result.ok = True
-                        result.add_details(
-                            "output is not an operation result, creating a default one"
-                        )
-                        # token_usage defaults via Field(default_factory=TokenUsage);
-                        # `+=` rather than assignment so usage rolled up from any
-                        # nested steps this task ran is not thrown away
+                        result.add_details("wrapped a bare return value")
+                        # `+=` not assignment, so usage rolled up from nested
+                        # steps is not thrown away
                         if hasattr(raw_output, "token_usage") and isinstance(
                             raw_output.token_usage, TokenUsage
                         ):
                             result.token_usage += raw_output.token_usage
                             raw_output.token_usage = None
-                            result.add_details(
-                                "promoted raw output token usage to wrapper"
-                            )
+                            result.add_details("promoted output token usage")
                 except asyncio.CancelledError as e:
-                    # client disconnected (e.g. page refresh) mid-task.
-                    # Returning a result would swallow the cancellation, so the
-                    # envelope is stamped and propagates unreturned — the scope
-                    # above still attaches it, so the caller's trace shows what
-                    # was in flight.
+                    # client disconnected mid-task. Returning a result would
+                    # swallow the cancellation, so the envelope is stamped and
+                    # propagates unreturned — the scope still attaches it.
                     result.ok = False
                     result.add_details("asyncio Cancelled")
                     result.runtime_error = RuntimeErrorInfo.from_exception(e)
                     logger.warning(f"Task cancelled: {func_ref}")
                     raise
                 except Exception as e:
-                    # run time error is recorded, so the task is considered failed
                     logger.exception(e)
-                    # the arguments matter most here: this envelope carries no
-                    # output to reason from, so what it was called with is the
-                    # only description of the failure beyond the traceback
                     result.ok = False
                     result.runtime_error = RuntimeErrorInfo.from_exception(e)
                 finally:
-                    # inside the scope, so `duration` and the rolled-up
-                    # `token_usage` are final before the parent adopts this and
-                    # sums it — `add_step` reads usage once, at attach time
+                    # inside the scope, so `duration` and the rolled-up usage
+                    # are final before the parent adopts and sums this
                     result.timing.duration = round(time.perf_counter() - time_start, 2)
 
             return result

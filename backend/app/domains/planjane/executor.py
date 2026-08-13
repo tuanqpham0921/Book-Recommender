@@ -24,16 +24,13 @@ GOAL_GENERATOR_PROMPT_PATH = "domains/planjane/prompts/0_goal_generator.txt"
 class ExecutionOrder(NamedTuple):
     """The accepted goals arranged for execution.
 
-    `layers` is a dependency layering: every goal in a layer depends only on
-    goals in *earlier* layers, so a layer is safe to run in any order — or
-    concurrently, which is the only reason to group at all. Running the layers
-    flattened, as `TaskRunnerWorkflow` does today, is therefore also correct.
+    `layers` is a dependency layering: a goal depends only on earlier layers, so
+    a layer is safe to run in any order or concurrently — which is the only
+    reason to group. Running them flattened is therefore also correct.
 
-    `unreachable` is every accepted goal that no layer could ever contain: it
-    sits in a dependency cycle, or it depends on a goal that isn't in the plan
-    because the planner refused it. These are returned rather than dropped —
-    silently omitting them is how a user asks for three things, gets one, and
-    is told the turn succeeded.
+    `unreachable` is every goal no layer could contain: in a cycle, or depending
+    on one the planner refused. Returned rather than dropped — omitting them is
+    how a user asks for three things, gets one, and is told it succeeded.
     """
 
     layers: list[list["SystemGoal"]]
@@ -45,13 +42,11 @@ class PlanJaneOutput(NodeWorkflowOutput):
     refused_goals: list[SystemGoal] = Field(default_factory=list)
     buffer_goals: list[SystemGoal] = Field(default_factory=list)
 
-    # Optional, not `list[str] = None`: model_dump_json emits `null` here when
-    # unset, and a non-optional annotation then rejects its own dump on reload
-    # — which is how chat_runs rows get replayed.
+    # Optional, not `list[str] = None`: model_dump_json emits `null` when
+    # unset, and a non-optional annotation then rejects its own dump on reload.
     out_of_scope: list[str] | None = None
 
-    # The rendered plan. Lives on the plan, not on whatever called the planner:
-    # drawing the plan is plan presentation.
+    # The rendered plan — plan presentation belongs to the plan.
     diagram: str | None = None
 
     def to_summary(self) -> dict[str, Any]:
@@ -71,31 +66,27 @@ class PlanJaneOutput(NodeWorkflowOutput):
     def execution_order(self) -> ExecutionOrder:
         """Layer the accepted goals by dependency depth (Kahn's algorithm).
 
-        Each round takes every goal whose dependencies have all been placed,
-        emits them as one layer, then decrements the goals waiting on them.
-        `ready` and `next_ready` are separate lists on purpose: the layer
-        boundary is then enforced by construction rather than by snapshotting
-        a queue's length while still pushing onto it — that snapshot is what
-        let a goal share a layer with the very dependency that unblocked it.
+        Each round emits every goal whose dependencies are all placed, then
+        decrements the goals waiting on them. `ready` and `next_ready` are
+        separate lists so the layer boundary holds by construction — snapshotting
+        one queue's length while still pushing onto it is what let a goal share a
+        layer with the dependency that unblocked it.
 
-        A goal that never reaches zero outstanding dependencies is returned in
-        `unreachable` instead of vanishing. Two ways that happens, and both are
-        real: a dependency cycle, and a goal that depends on one the planner
-        refused (`accepted_goals` is not closed over `depends_on`).
+        A goal that never reaches zero is returned in `unreachable` rather than
+        vanishing: a cycle, or a dependency the planner refused.
         """
         goals = self.id_to_node()
 
-        # goal id -> the goals waiting on it, and how many each is still
-        # waiting for. Both sides are derived from the same de-duplicated
-        # dependency list, so a goal that names the same dependency twice is
-        # counted and decremented the same number of times.
+        # goal id -> the goals waiting on it, and how many each still waits
+        # for. Both sides come off the same de-duplicated list, so a goal naming
+        # a dependency twice is counted and decremented the same number of times.
         dependents: dict[str, list[str]] = defaultdict(list)
         blocked_by: dict[str, int] = {}
         for goal_id, goal in goals.items():
             deps = list(dict.fromkeys(goal.depends_on))
-            # An unknown dependency id is counted but wired to nothing: it can
-            # never be decremented, which is exactly what makes this goal come
-            # back as unreachable rather than run without its input.
+            # An unknown dependency id is counted but wired to nothing, so it
+            # can never be decremented — which is what makes this goal come back
+            # unreachable rather than run without its input.
             for dep_id in deps:
                 if dep_id in goals:
                     dependents[dep_id].append(goal_id)
@@ -114,9 +105,7 @@ class PlanJaneOutput(NodeWorkflowOutput):
                         next_ready.append(dependent_id)
             ready = next_ready
 
-        # By construction rather than by re-deriving *why* each one failed:
-        # anything a layer never claimed could not be scheduled, whatever the
-        # reason.
+        # by construction: anything no layer claimed could not be scheduled
         scheduled = {goal.id for layer in layers for goal in layer}
         unreachable = [
             goal for goal in goals.values() if goal.id not in scheduled
@@ -155,13 +144,11 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
             await self.send_mermaid(self.result.accepted_goals)
 
     async def send_mermaid(self, system_goals: list) -> str | None:
-        """Render the accepted system goals as a Mermaid flowchart and stream
-        it to the client. Returns the diagram string, or None when there is
-        nothing to draw or generation failed (never raises into the request).
+        """Render the accepted goals as a Mermaid flowchart and stream it.
 
-        Drawing the plan lives here rather than on the caller: the diagram *is*
-        the plan rendered, so a caller that drew it would be doing the planner's
-        job.
+        Returns the diagram, or None when there is nothing to draw or generation
+        failed — never raises into the request. Lives here because the diagram
+        *is* the plan rendered.
         """
         diagram = None
         try:
@@ -188,10 +175,8 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         # NOTE: toggle on for prompting experiments
         # system_prompt = load_prompt(prompt_path=PLAYGORUND_PROMPT_PATH)
 
-        # NOTE: using gpt4.1 because the system goals sees the whole catalog
-        # it's very important that this part is done correctly
-        # cache hit rate is high, and output generation is lower
-        # we can optimize
+        # NOTE: the planner sees the whole catalog, so accuracy matters more
+        # than cost here; cache hit rate is high and output is short
         req = OpenAIParserRequest(
             prompt=system_prompt,
             model="gpt-5.6-terra",
@@ -199,9 +184,8 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
             # NOTE: this should be a list of previous messages as well
             # but for now we can just do clear and direct instructions
             #
-            # `query`, not `self.user_message` — identical on the wire
-            # (to_openai_dict emits only role/content), but it means a query
-            # the planner rewrote or clarified is what actually gets parsed.
+            # `query`, not `self.user_message` — identical on the wire, but it
+            # means a rewritten or clarified query is what gets parsed.
             messages=[UserMessage(content=query)],
             tool_models=[GoalParseRequest],
             max_completion_tokens=1000,
@@ -210,11 +194,8 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         return tool_call
 
     async def finalize_result(self) -> None:
-        # ok = a plan came out of this turn. It used to also count a reply
-        # payload — out-of-scope content or refusals were treated as a handled
-        # conversation — but nothing streams that reply any more, so "handled"
-        # and "planned" are now the same question. Continuation is still
-        # decided from accepted_goals, not from ok.
+        # ok = a plan came out of this turn. Continuation is still decided
+        # from accepted_goals, not from ok.
         super().finalize_result(ok=bool(self.result.accepted_goals))
 
     def process_parse_result(
@@ -228,9 +209,8 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
 
         self.result.out_of_scope = parse_result.out_of_scope
 
-        # overflow goals are valid, just over the model's limit — run them
-        # through the same checks so they can fill capacity freed by refusals,
-        # or wait in buffer_goals
+        # overflow goals are valid, just over the limit — same checks, so they
+        # can fill capacity freed by refusals or wait in buffer_goals
         all_goals = parse_result.system_goals
         for goal in all_goals:
             reasons = []
