@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
-import asyncio
 import logging
-import time
 from typing import Any, Generic, TypeVar
 from typing import Coroutine
 
@@ -10,9 +8,9 @@ from .schemas import (
     Response,
     RuntimeErrorInfo,
 )
-from .context import parent_scope
 from .exception import StepFailure
-from .utils import bind_call_args, now_iso, to_record_input
+from .span import record_span
+from .utils import record_call_input
 
 OutputT = TypeVar("OutputT")
 
@@ -51,15 +49,7 @@ class Workflow(ABC, Generic[OutputT]):
         names. Never raises — see `to_record_input` for why a payload already
         recorded upstream is summarized rather than dumped again.
         """
-        try:
-            arguments = bind_call_args(self.run, args, kwargs)
-            self.record.input = {
-                name: to_record_input(value) for name, value in arguments.items()
-            } or None
-        except Exception:
-            self.logger.warning(
-                f"Could not record input for {self.workflow_name}", exc_info=True
-            )
+        self.record.input = record_call_input(self.run, args, kwargs, self.logger)
 
     @property
     def result(self) -> OutputT:
@@ -78,17 +68,13 @@ class Workflow(ABC, Generic[OutputT]):
         # before run(), so the cancel/error paths record the arguments too
         self.record_input(*args, **kwargs)
 
-        # re-stamped, not left at the __init__ default: start_time must be the
-        # instant `duration` is measured from, so `end_time` can derive from both
-        self.record.timing.start_time = now_iso()
-        time_start = time.perf_counter()
-
-        # Publishes self.record for anything called from run(). Wrapping the
-        # whole try/finally puts the attach after `duration` is stamped and
-        # every step has rolled up — `add_step` reads usage once, at attach.
-        with parent_scope(self.record):
+        # Timing, `parent_scope`, and the cancel/error paths — see span.py. The
+        # display name is `Class:id`, not `record.name`, so concurrent runs of
+        # the same workflow stay tellable apart in the logs.
+        with record_span(
+            self.record, self.logger, label="workflow", name=self.workflow_name
+        ):
             try:
-                self.logger.info(f"Running workflow: {self.workflow_name}")
                 await self.run(*args, **kwargs)
                 self.check_output_type()
 
@@ -97,30 +83,14 @@ class Workflow(ABC, Generic[OutputT]):
                     self.logger.warning(f"Workflow failed: {self.workflow_name}")
                 else:
                     self.logger.info(f"Finished workflow: {self.workflow_name}")
-            except asyncio.CancelledError as e:
-                # client disconnected mid-workflow. Stamp what we have, then
-                # re-raise — swallowing this would stop the actual cancellation.
-                self.record.ok = False
-                self.add_details("asyncio Cancelled")
-                self.logger.warning(f"Workflow cancelled: {self.workflow_name}")
-                self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
-                raise
             except StepFailure as e:
-                # controlled abort — the failing step's envelope is already in
-                # self.record.steps
+                # Controlled abort — the failing step's envelope is already in
+                # self.record.steps. Caught here rather than left to the span so
+                # it reads as a stop, not a crash.
                 self.record.ok = False
                 self.logger.warning(f"Workflow stopped: {e}")
                 # NOTE just make the StepFailure a runtime error
                 self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
-            except Exception as e:
-                self.record.ok = False
-                self.logger.exception(f"Workflow failed: {e}")
-                self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
-            finally:
-                # no `return` here: a return inside finally would swallow the
-                # BaseExceptions the except clauses deliberately let through
-                self.record.name = self.workflow_ref
-                self.record.timing.duration = round(time.perf_counter() - time_start, 2)
 
         return self.record
 

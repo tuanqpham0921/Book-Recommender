@@ -1,8 +1,9 @@
 """The one ContextVar: which envelope is currently being built.
 
 A child cannot know its caller, so the caller publishes its envelope for the
-duration of the call and the callee adopts itself on the way out. Only
-`task.wrapper` and `Workflow.__call__` use it.
+duration of the call and the callee adopts itself on the way out. `record_span`
+(span.py) is the only user, which is what `@task` and `Workflow.__call__` both
+wrap their call in.
 
 A plain `await` shares the caller's context; `gather`/`create_task` copy it
 (shallowly, so attaches still mutate the real record). Fire-and-forget
@@ -16,6 +17,8 @@ from typing import Iterator
 
 from .schemas.record import OperationResult
 
+# NOTE: later, we might just want to expose parent.id
+# to ensure that the child nodes can't alter the parent fields
 # default=None: a task with no workflow above it must simply not attach.
 CURRENT_PARENT: ContextVar[OperationResult | None] = ContextVar(
     "airglider_current_parent", default=None

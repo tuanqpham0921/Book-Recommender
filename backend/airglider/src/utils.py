@@ -5,6 +5,7 @@ re-exports these (see `common/utils/`) rather than keeping a second copy.
 """
 
 import inspect
+import logging
 import uuid
 from dataclasses import fields, is_dataclass
 from datetime import datetime, timezone
@@ -133,6 +134,28 @@ def to_record_input(value: Any) -> Any:
 
     # a live handle, or anything with no serializable form
     return f"<{type(value).__name__}>"
+
+
+def record_call_input(
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    logger: logging.Logger,
+) -> dict[str, Any] | None:
+    """What a call was made with, keyed by parameter name — or None.
+
+    Both `@task` and `Workflow.__call__` compute this before the call, so the
+    error and cancel paths record the arguments too. Never raises: bookkeeping
+    must not take down the work it describes.
+    """
+    try:
+        arguments = bind_call_args(func, args, kwargs)
+        return {
+            name: to_record_input(value) for name, value in arguments.items()
+        } or None
+    except Exception:
+        logger.warning(f"Could not record input for {func.__qualname__}", exc_info=True)
+        return None
 
 
 def remove_empty_values(value: Any) -> Any:
