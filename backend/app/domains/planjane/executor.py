@@ -1,19 +1,15 @@
 import logging
-from collections import defaultdict
-from typing import Any, NamedTuple
-
-from openai.types.chat import ParsedFunctionToolCall
-from pydantic import Field
 
 from clients.messages import UserMessage
 from app.common.prompt_loader import format_prompt
-from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.base_workflow import AppWorkflow
 from app.domains.node_input import NodeInput, ParsedInput
 from app.registry import REGISTRY
 from clients import OpenAIParserRequest
 
 from app.domains.planjane.dial.mermaid import get_goals_mermaid_diagram
-from .schemas import MAX_SYSTEM_GOALS, GoalParseRequest, SystemGoal
+from .external import PlanJaneOutput
+from .schemas import MAX_SYSTEM_GOALS, GoalParseRequest
 
 logger = logging.getLogger(__name__)
 
@@ -24,103 +20,6 @@ PlanJaneInput = NodeInput | ParsedInput[GoalParseRequest]
 GOAL_GENERATOR_PROMPT_PATH = "domains/planjane/prompts/0_goal_generator.txt"
 # PLAYGORUND_PROMPT_PATH = "../playground/prompting/planner_prompt._extended.txt"
 
-
-class ExecutionOrder(NamedTuple):
-    """The accepted goals arranged for execution.
-
-    `layers` is a dependency layering: a goal depends only on earlier layers, so
-    a layer is safe to run in any order or concurrently — which is the only
-    reason to group. Running them flattened is therefore also correct.
-
-    `unreachable` is every goal no layer could contain: in a cycle, or depending
-    on one the planner refused. Returned rather than dropped — omitting them is
-    how a user asks for three things, gets one, and is told it succeeded.
-    """
-
-    layers: list[list["SystemGoal"]]
-    unreachable: list["SystemGoal"]
-
-
-class PlanJaneOutput(NodeWorkflowOutput):
-    accepted_goals: list[SystemGoal] = Field(default_factory=list)
-    refused_goals: list[SystemGoal] = Field(default_factory=list)
-    buffer_goals: list[SystemGoal] = Field(default_factory=list)
-
-    # Optional, not `list[str] = None`: model_dump_json emits `null` when
-    # unset, and a non-optional annotation then rejects its own dump on reload.
-    out_of_scope: list[str] | None = None
-
-    # The rendered plan — plan presentation belongs to the plan.
-    diagram: str | None = None
-
-    def to_summary(self) -> dict[str, Any]:
-        return {
-            "accepted_types": [goal.target_node_type for goal in self.accepted_goals],
-            "num_rejected_system": len(self.refused_goals),
-            "out_of_scope": self.out_of_scope,
-        }
-
-    def accepted_goals_ids(self) -> list[str]:
-        return [goal.id for goal in self.accepted_goals]
-    
-    def id_to_node(self) -> dict[str, SystemGoal]:
-        """The accepted goals keyed by the id other goals reference them by."""
-        return {goal.id: goal for goal in self.accepted_goals}
-
-    def execution_order(self) -> ExecutionOrder:
-        """Layer the accepted goals by dependency depth (Kahn's algorithm).
-
-        Each round emits every goal whose dependencies are all placed, then
-        decrements the goals waiting on them. `ready` and `next_ready` are
-        separate lists so the layer boundary holds by construction — snapshotting
-        one queue's length while still pushing onto it is what let a goal share a
-        layer with the dependency that unblocked it.
-
-        A goal that never reaches zero is returned in `unreachable` rather than
-        vanishing: a cycle, or a dependency the planner refused.
-        """
-        goals = self.id_to_node()
-
-        # goal id -> the goals waiting on it, and how many each still waits
-        # for. Both sides come off the same de-duplicated list, so a goal naming
-        # a dependency twice is counted and decremented the same number of times.
-        dependents: dict[str, list[str]] = defaultdict(list)
-        blocked_by: dict[str, int] = {}
-        for goal_id, goal in goals.items():
-            deps = list(dict.fromkeys(goal.depends_on))
-            # An unknown dependency id is counted but wired to nothing, so it
-            # can never be decremented — which is what makes this goal come back
-            # unreachable rather than run without its input.
-            for dep_id in deps:
-                if dep_id in goals:
-                    dependents[dep_id].append(goal_id)
-            blocked_by[goal_id] = len(deps)
-
-        layers: list[list[SystemGoal]] = []
-        ready = [goal_id for goal_id in goals if blocked_by[goal_id] == 0]
-        while ready:
-            layers.append([goals[goal_id] for goal_id in ready])
-
-            next_ready: list[str] = []
-            for goal_id in ready:
-                for dependent_id in dependents[goal_id]:
-                    blocked_by[dependent_id] -= 1
-                    if blocked_by[dependent_id] == 0:
-                        next_ready.append(dependent_id)
-            ready = next_ready
-
-        # by construction: anything no layer claimed could not be scheduled
-        scheduled = {goal.id for layer in layers for goal in layer}
-        unreachable = [
-            goal for goal in goals.values() if goal.id not in scheduled
-        ]
-        if unreachable:
-            logger.warning(
-                "Goals that can never run (cycle, or depend on a refused "
-                f"goal): {[goal.id for goal in unreachable]}"
-            )
-
-        return ExecutionOrder(layers=layers, unreachable=unreachable)
 
 class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
     ui_loading_message = "Thinking..."
@@ -155,7 +54,7 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         if self.result.accepted_goals:
             await self.send_mermaid(self.result.accepted_goals)
 
-    async def _run_llm_args_parse(self, query: str) -> ParsedFunctionToolCall:
+    async def _run_llm_args_parse(self, query: str) -> GoalParseRequest:
         system_prompt = format_prompt(
             prompt_path=GOAL_GENERATOR_PROMPT_PATH,
             TOOLS_NAME_DESCRIPTION=REGISTRY.format_catalog(),
@@ -179,8 +78,8 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
             tool_models=[GoalParseRequest],
             max_completion_tokens=1000,
         )
-        tool_call = await self.run_llm_args_parse(req)
-        return tool_call
+        parse_result = await self.run_llm_args_parse(req)
+        return parse_result
 
     async def finalize_result(self) -> None:
         # ok = a plan came out of this turn. Continuation is still decided

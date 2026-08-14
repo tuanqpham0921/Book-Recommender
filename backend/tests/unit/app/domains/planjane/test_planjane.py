@@ -21,7 +21,7 @@ from clients.messages import UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput, ParsedInput
 from app.domains.node_types import UnknownNodeTypeEnum
-from app.domains.planjane.executor import (
+from app.domains.planjane import (
     GoalParseRequest,
     SystemGoal,
     MAX_SYSTEM_GOALS,

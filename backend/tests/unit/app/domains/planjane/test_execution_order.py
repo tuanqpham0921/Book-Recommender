@@ -10,8 +10,7 @@ race. The previous implementation produced exactly that.
 import pytest
 
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
-from app.domains.planjane import PlanJaneOutput
-from app.domains.planjane.schemas import SystemGoal
+from app.domains.planjane import PlanJaneOutput, SystemGoal
 
 
 def goal(goal_id: str, depends_on: list[str] | None = None) -> SystemGoal:

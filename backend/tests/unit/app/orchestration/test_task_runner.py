@@ -26,7 +26,7 @@ from app.domains.books.external import BookRequestContext
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput
 from app.domains.node_spec import NodeSpec
-from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
+from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 
 NODE_TYPE = FindTitleNodeTypeEnum.REQUEST

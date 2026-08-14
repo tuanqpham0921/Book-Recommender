@@ -7,7 +7,7 @@ emission belong to dial/format.py and are tested in test_mermaid_format.py.
 
 from app.domains.planjane.dial import get_goals_mermaid_diagram
 from app.domains.planjane.dial.format import mermaid_id
-from app.domains.planjane.executor import SystemGoal
+from app.domains.planjane import SystemGoal
 
 
 def _make_goal(id_str, target_node_type, depends_on=None, description="A goal description"):

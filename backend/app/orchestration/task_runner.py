@@ -9,8 +9,7 @@ from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.base_request import BaseRequest
-from app.domains.planjane import PlanJaneOutput
-from app.domains.planjane.executor import SystemGoal
+from app.domains.planjane import PlanJaneOutput, SystemGoal
 from ..domains.node_spec import NodeSpec
 from dataclasses import dataclass
 from airglider import OperationResult

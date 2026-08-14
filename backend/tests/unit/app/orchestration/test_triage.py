@@ -8,7 +8,7 @@ from clients.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow, TriageOutput
-from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
+from app.domains.planjane import PlanJaneOutput, SystemGoal
 from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
 from common.utils import load_json, save_file
 

@@ -137,11 +137,16 @@ pointing at it; `base_workflow.py` holding the bases they build on.
 - `node_types.py` — just `UnknownNodeTypeEnum`. `NodeTypeEnum` is built in
   `app/registry.py`; it cannot live here without an import cycle back through the
   slices.
-- `planjane/` — **the planner**. `schemas.py` (`SystemGoal`, `GoalParseRequest` —
-  the tool call the LLM fills in) and `executor.py` (`PlanJaneExecutor`:
-  message → goals, plus `PlanJaneOutput.execution_order`, the dependency
-  layering the task runner consumes). Prompts live in `planjane/prompts/*.txt`.
-  Schemas are split from the executor to match the slice layout used elsewhere.
+- `planjane/` — **the planner**, split three ways, matching the slice layout
+  used elsewhere. `external.py` is what the plan *is* and the address every
+  other layer imports it from: `SystemGoal`, `PlanJaneOutput`, and
+  `ExecutionOrder` with `execution_order()`, the dependency layering the task
+  runner consumes. `schemas.py` is what the LLM fills in (`GoalParseRequest`,
+  `MAX_SYSTEM_GOALS`). `executor.py` runs (`PlanJaneExecutor`: message →
+  goals). The dependency runs `external ← schemas ← executor`, so a consumer of
+  the plan pulls in neither the prompt example nor the executor — import from
+  the `planjane` package root and the split stays free to move. Prompts live in
+  `planjane/prompts/*.txt`.
 - `planjane/dial/` — how PlanJane *shows* a plan, and the only Mermaid code in
   the app. `mermaid.py` turns goals into `MermaidBox`es — what a box says, and
   the `depends_on` → `sent_to` inversion — and `format.py` turns boxes into the

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.orchestration.triage import TriageOutput
-from app.domains.planjane.executor import PlanJaneOutput, SystemGoal
+from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
 from airglider import OperationResult, Response, TokenUsage
 
