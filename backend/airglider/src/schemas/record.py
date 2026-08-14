@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from typing import Any, Generic, ParamSpec, TypeVar
 from .error_info import RuntimeErrorInfo
 from .token_usage import TokenUsage
+from ..exception import StepFailure
 from ..utils import now_iso, remove_empty_values, uuid_8
 
 OutputT = TypeVar("OutputT")
@@ -84,6 +85,40 @@ class OperationResult(BaseModel, Generic[OutputT]):
     @property
     def result(self):
         return self.response.result
+
+    def unwrap(self) -> OutputT:
+        """The payload, or stop the caller.
+
+        The verb for "I need what this step produced". `await` is the other one:
+        it hands back this envelope and leaves the caller to decide what a
+        failure means. Between them they replace `run_async_step`'s
+        `raise_on_failure` flag, and split awaiting from the failure policy — so
+        a caller can retry an envelope, or inspect it and *then* insist.
+
+        A failed step notes itself on whatever envelope is currently being built
+        and raises `StepFailure`, which `record_span` reports as a stop rather
+        than a crash: the real traceback belongs to whichever step actually
+        raised, one or more levels down.
+        """
+        if self.ok:
+            return self.result
+
+        # Local import: `context` imports this module to type CURRENT_PARENT, so
+        # a module-level import here would be a cycle.
+        from ..context import current_parent
+
+        # the caller's own envelope — `parent_scope` published it before the
+        # call, and the step's scope has already been reset by now
+        if (parent := current_parent()) is not None:
+            parent.add_details(f"FAILED STEP: {self.name}")
+
+        if self.runtime_error is None:
+            # Not ok, having not crashed. `ok` means "ran to completion", so
+            # this is a bug in the step rather than a state to report — say so
+            # in the message, or the caller stops with nothing underneath it
+            # explaining why.
+            raise StepFailure(f"Step failed: {self.name} (no runtime error recorded)")
+        raise StepFailure(f"Step failed: {self.name}")
 
     @property
     def duration(self) -> float | None:

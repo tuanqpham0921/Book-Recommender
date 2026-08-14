@@ -1,10 +1,11 @@
 """The recording body shared by `@task` and `Workflow.__call__`.
 
-Both wrap their call in the same five things: a start timestamp paired with a
-monotonic clock, `parent_scope`, a cancel path that stamps and re-raises, an
-error path that stamps and does not, and a `finally` that closes `duration`
-inside the scope so the parent adopts a finished record. Only the noun in the
-log lines differs, which is what `label` is for.
+Both wrap their call in the same six things: a start timestamp paired with a
+monotonic clock, `parent_scope`, a cancel path that stamps and re-raises, a stop
+path for `StepFailure`, an error path that stamps and does not re-raise, and a
+`finally` that closes `duration` inside the scope so the parent adopts a
+finished record. Only the noun in the log lines differs, which is what `label`
+is for.
 
 Keeping it here rather than in two files is what makes the cancel contract
 checkable by reading one function.
@@ -17,6 +18,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 from .context import parent_scope
+from .exception import StepFailure
 from .schemas.record import OperationResult, RuntimeErrorInfo
 from .utils import now_iso
 
@@ -36,8 +38,7 @@ def record_span(
     `Exception` is swallowed on purpose: the envelope's `ok`/`runtime_error`
     *is* the report, which is what keeps a failed unit of work from crashing the
     one above it. A caller wanting a different verdict for a particular
-    exception type (`Workflow` does, for `StepFailure`) catches it inside the
-    body, before it reaches here.
+    exception type catches it inside the body, before it reaches here.
 
     `name` is the log-line display name, which is not always `record.name` — a
     workflow logs `Class:id` so concurrent runs stay tellable apart.
@@ -66,6 +67,20 @@ def record_span(
             record.runtime_error = RuntimeErrorInfo.from_exception(e)
             logger.warning(f"{label.capitalize()} cancelled: {display_name}")
             raise
+        except StepFailure as e:
+            # A step below returned not-ok and the body insisted on its payload
+            # (`unwrap`). Stamped like any other failure — `ok` means "ran to
+            # completion", so a stop is not a completion and must carry a reason
+            # — but logged as a warning without a traceback: the step that
+            # actually raised already logged the real one, and re-printing it at
+            # every level above is how one cause becomes four tracebacks.
+            #
+            # Here rather than in `Workflow.__call__` so a `@task` that unwraps
+            # reads the same as a workflow that does; which decorator a unit of
+            # work happens to use is not a fact about the failure.
+            record.ok = False
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
+            logger.warning(f"{label.capitalize()} stopped: {e}")
         except Exception as e:
             record.ok = False
             record.runtime_error = RuntimeErrorInfo.from_exception(e)

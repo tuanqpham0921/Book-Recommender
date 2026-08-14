@@ -39,10 +39,11 @@ def task(
 ) -> Any:
     """Wrap an async function so it returns a record instead of a bare value.
 
-    Reach for `Workflow` when you want a declared output type, SSE helpers,
-    `run_async_step`'s failure policy, or somewhere to hang state — that is the
-    whole difference. A task publishes its own envelope while it runs, so it may
-    call other tasks and workflows freely.
+    Reach for `Workflow` when you want a declared output type, SSE helpers, or
+    somewhere to hang state — that is the whole difference. A task publishes its
+    own envelope while it runs, so it may call other tasks and workflows freely,
+    and `(await step).unwrap()` aborts it on a failed step exactly as it would a
+    workflow.
     """
 
     def decorator(

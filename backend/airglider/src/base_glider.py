@@ -6,7 +6,6 @@ from typing import Coroutine
 from .schemas import (
     OperationResult,
     Response,
-    RuntimeErrorInfo,
 )
 from .exception import StepFailure
 from .span import record_span
@@ -71,26 +70,20 @@ class Workflow(ABC, Generic[OutputT]):
         # Timing, `parent_scope`, and the cancel/error paths — see span.py. The
         # display name is `Class:id`, not `record.name`, so concurrent runs of
         # the same workflow stay tellable apart in the logs.
+        # `StepFailure` is not caught here: `record_span` has the stop path, so a
+        # workflow and a `@task` that abort the same way record and log the same
+        # way. The failing step's envelope is already in `self.record.steps`.
         with record_span(
             self.record, self.logger, label="workflow", name=self.workflow_name
         ):
-            try:
-                await self.run(*args, **kwargs)
-                self.check_output_type()
+            await self.run(*args, **kwargs)
+            self.check_output_type()
 
-                # not a runtime failure, app still runs
-                if not self.record.ok:
-                    self.logger.warning(f"Workflow failed: {self.workflow_name}")
-                else:
-                    self.logger.info(f"Finished workflow: {self.workflow_name}")
-            except StepFailure as e:
-                # Controlled abort — the failing step's envelope is already in
-                # self.record.steps. Caught here rather than left to the span so
-                # it reads as a stop, not a crash.
-                self.record.ok = False
-                self.logger.warning(f"Workflow stopped: {e}")
-                # NOTE just make the StepFailure a runtime error
-                self.record.runtime_error = RuntimeErrorInfo.from_exception(e)
+            # not a runtime failure, app still runs
+            if not self.record.ok:
+                self.logger.warning(f"Workflow failed: {self.workflow_name}")
+            else:
+                self.logger.info(f"Finished workflow: {self.workflow_name}")
 
         return self.record
 
@@ -115,7 +108,10 @@ class Workflow(ABC, Generic[OutputT]):
         is the failure policy, so calling a step without this method is
         legitimate and means "I decide what a failure means myself".
 
-        NOTE: raise_on_failure=False if you want to capture the envelope and retry.
+        NOTE: superseded by `await step` / `OperationResult.unwrap()`, which say
+        the same two things without the flag and work inside a `@task` too.
+        `raise_on_failure=True` is `(await step).unwrap()` minus the payload;
+        `raise_on_failure=False` is a plain `await`.
         """
         step_result = await function
         self.record.add_step(step_result)

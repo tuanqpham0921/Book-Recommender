@@ -1,7 +1,14 @@
 import asyncio
 
 import pytest
-from airglider import OperationResult, StepFailure, TokenUsage, Workflow, task
+from airglider import (
+    OperationResult,
+    Response,
+    StepFailure,
+    TokenUsage,
+    Workflow,
+    task,
+)
 
 
 def _make_flaky_task(fail_times: int):
@@ -332,6 +339,105 @@ class TestCrashingSteps:
         assert result.steps[2].result == "succeeded on attempt 3"
         # the failed attempts remain in the trail for forensics
         assert result.steps[0].runtime_error.type == "ValueError"
+
+
+class TestUnwrap:
+    """`unwrap` is the payload-or-stop verb, usable from a `@task` as well as a
+    `Workflow` — which is what moving the `StepFailure` branch into
+    `record_span` bought."""
+
+    def test_returns_the_payload_when_ok(self):
+        step = OperationResult(ok=True, name="good", response=Response(result=42))
+        assert step.unwrap() == 42
+
+    def test_raises_step_failure_naming_the_step(self):
+        step = OperationResult(ok=False, name="bad_step")
+        with pytest.raises(StepFailure, match="bad_step"):
+            step.unwrap()
+
+    def test_names_the_anomaly_when_not_ok_without_a_crash(self):
+        # ok means "ran to completion", so not-ok with no runtime_error is a bug
+        # in the step — the message has to say so, or the caller stops with
+        # nothing underneath it explaining why
+        step = OperationResult(ok=False, name="bad_step")
+        with pytest.raises(StepFailure, match="no runtime error recorded"):
+            step.unwrap()
+
+    async def test_stops_a_workflow_and_records_the_failed_step(self):
+        flaky_step = _make_flaky_task(fail_times=99)
+
+        class _UnwrapWorkflow(Workflow):
+            def __init__(self):
+                super().__init__()
+                self.continued_past_step = False
+
+            async def run(self, *args, **kwargs):
+                (await flaky_step()).unwrap()
+                self.continued_past_step = True
+
+        wf = _UnwrapWorkflow()
+        result = await wf()
+        assert wf.continued_past_step is False
+        assert result.ok is False
+        assert result.runtime_error.type == "StepFailure"
+        assert "flaky_step" in result.runtime_error.message
+        # the caller says which step; the crash itself stays on that step
+        assert "FAILED STEP: " in "".join(result.details)
+        assert result.steps[0].runtime_error.type == "ValueError"
+
+    async def test_stops_a_task_the_same_way_as_a_workflow(self):
+        # the point of moving StepFailure into record_span: which decorator a
+        # unit of work happens to use is not a fact about the failure
+        flaky_step = _make_flaky_task(fail_times=99)
+
+        @task(log_info=False)
+        async def outer():
+            (await flaky_step()).unwrap()
+            return "never reached"
+
+        result = await outer()
+        assert result.ok is False
+        assert result.result is None
+        assert result.runtime_error.type == "StepFailure"
+        assert "flaky_step" in result.runtime_error.message
+        assert result.steps[0].runtime_error.type == "ValueError"
+
+    async def test_propagates_up_a_chain_of_unwraps(self):
+        # each level stops naming the level below; only the innermost carries
+        # the original exception
+        flaky_step = _make_flaky_task(fail_times=99)
+
+        @task(log_info=False)
+        async def middle():
+            (await flaky_step()).unwrap()
+
+        @task(log_info=False)
+        async def outer():
+            (await middle()).unwrap()
+
+        result = await outer()
+        assert result.runtime_error.type == "StepFailure"
+        assert "middle" in result.runtime_error.message
+        assert result.steps[0].runtime_error.type == "StepFailure"
+        assert result.steps[0].steps[0].runtime_error.type == "ValueError"
+
+    async def test_a_caller_may_still_inspect_instead_of_unwrapping(self):
+        # plain await is the other verb — the envelope comes back and the
+        # caller decides what a failure means
+        flaky_step = _make_flaky_task(fail_times=99)
+
+        class _InspectWorkflow(Workflow):
+            async def run(self, *args, **kwargs):
+                step = await flaky_step()
+                if not step.ok:
+                    self.add_details("handled it myself")
+                self.record.ok = True
+
+        result = await _InspectWorkflow()()
+        assert result.ok is True
+        assert result.runtime_error is None
+        assert "handled it myself" in result.details
+        assert result.steps[0].ok is False
 
 
 class TestAddStep:
