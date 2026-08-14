@@ -94,6 +94,9 @@ class Workflow(ABC, Generic[OutputT]):
 
         return self.record
 
+    # NOTE: I think if you do .run()
+    # then it won't span or capture the errors
+    # tho it could be something to handle later
     @abstractmethod
     async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
