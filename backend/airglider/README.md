@@ -27,6 +27,99 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 | `cost_of`, `MODEL_PRICES`, `PRICES_CHECKED_ON`, … | the price table (see below) |
 | `to_serializable`, `remove_empty_values`, `strip_zero_token_usage`, `now_iso`, `uuid_8` | serialization + identity helpers |
 
+## The rules
+
+The contract, as implemented. Everything after this section is the reasoning
+behind one or another of these.
+
+### What you are in, and what you get back
+
+1. **Instrumentation is opt-in, and it is what puts you in the tree.** A `@task`
+   or a `Workflow` gets an envelope, a parent, timing and a spot in `steps`. A
+   plain `async def` gets none of that — it is an ordinary call. Nothing is
+   wrong with that; instrument what you want to be able to read later.
+2. **An uninstrumented callee that raises fails its caller.** With no envelope of
+   its own, the exception travels to the nearest enclosing `@task`/`Workflow`,
+   where it is stamped as *that* unit's `runtime_error`. So the trace says the
+   caller failed and names the exception, but shows no step for where it
+   happened. That is the cost of not instrumenting, and the reason to.
+3. **Calling one always returns an envelope; it does not raise.** `record_span`
+   swallows `Exception` — the envelope's `ok`/`runtime_error` *is* the report,
+   which is what keeps a failed unit from crashing the one above it.
+   `asyncio.CancelledError` is the exception: stamped, then re-raised, because
+   swallowing it would stop the actual cancellation.
+4. **A `@task` returns its payload — the envelope is the decorator's.**
+   Returning an `OperationResult` raises `TypeError`. Use
+   `(await step).unwrap()` to pass a nested step's payload through, `await step`
+   to inspect it, `add_details(...)` to annotate.
+5. **`Workflow` vs `@task` is scaffolding, not permission.** A workflow gives you
+   a declared output type, a class to hang state on, and (in this app) SSE
+   helpers. Either may call either, in any nesting; the tree comes out right
+   without anything threaded through a signature.
+
+### Who says what about `ok`
+
+6. **`ok` means "ran to completion".** It is not a content judgment. A query that
+   matched nothing, a planner that produced zero goals, a filter that removed
+   everything — all `ok=True`. They did what their input asked.
+7. **The producer judges completeness; the consumer judges sufficiency.** "Did I
+   fill in what I promised, given the input I got?" is the producer's question.
+   "Is what I got enough for what I am doing?" is the consumer's, and it is
+   answered by reading the payload — never by asking the producer to have
+   encoded it in `ok`.
+8. **A producer that cannot complete raises.** It does not set `ok=False` and
+   return a payload-less envelope. Raising is what puts the reason in
+   `runtime_error`; setting the flag by hand leaves the consumer stopped with
+   nothing underneath explaining why.
+9. **Therefore `ok=False` ⟺ `runtime_error is not None`.** `unwrap` still handles
+   the other combination, and says so in the message — see the gap below.
+
+### Running a step
+
+10. **Two verbs, and there is no third.** `await step` hands back the envelope
+    and leaves the policy to the caller. `(await step).unwrap()` hands back the
+    payload or stops. Splitting the await from the policy is what lets a caller
+    retry an envelope, or inspect it and *then* insist.
+
+    ```python
+    books = (await self.store_lookup(isbn)).unwrap()   # can't continue without it
+
+    step = await planner(NodeInput(query=q))           # a failure here means
+    if not step.ok:                                    # something specific to
+        await self.send_message("I couldn't plan that") # this caller
+    ```
+
+11. **`unwrap` on a failed step notes it upward, then raises `StepFailure`.** The
+    note (`FAILED STEP: <name>`) lands on whatever envelope is currently being
+    built, so the stopped caller records which step stopped it.
+12. **A `StepFailure` stops exactly one unit of work.** `record_span` catches it,
+    stamps `runtime_error`, and logs one warning line — no traceback, since the
+    step that actually crashed already logged the real one. It does **not**
+    escape to the caller above. Aborting several levels means each level
+    unwrapping in turn, which is a decision per level rather than an exception
+    tearing through units that might have wanted to handle it.
+13. **You never attach a step by hand.** Nesting is automatic. `add_step` exists
+    for the one case it cannot cover — an envelope produced outside any scope,
+    as when a non-workflow caller builds a root over finished records — and is
+    idempotent, so calling it anyway is absorbed rather than double-billed.
+
+### Writing to your own envelope
+
+14. **`add_details(...)` writes to the unit of work currently running**, which
+    inside a `@task` body is that task's own record. `current_parent()` is the
+    same lookup if you need the envelope itself (to stamp `token_usage`, say).
+15. **`self.add_details` on a `Workflow` always means that workflow.** So in a
+    `@task` *method* on a workflow the two land in different places: the module
+    function on the task, `self.` on the workflow. Usually you want the former.
+
+### Known gap
+
+`Workflow.__call__` does not yet set `ok=True` on clean completion — a `run()`
+body has to set `self.record.ok = True` itself (this app does it in
+`AppWorkflow.finalize_result`). So rule 9 is a convention today rather than
+something the library enforces, and rule 8 is the one to hold the line on
+until the default flips.
+
 ## The record tree, and `flatten()`
 
 **One envelope class.** `OperationResult` is a unit of work — id, parent,

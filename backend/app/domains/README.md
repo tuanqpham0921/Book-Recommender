@@ -119,6 +119,13 @@ The ladder is `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`, each in
 `workflow.py`/`base_workflow.py` file. Concrete units of work are `*Workflow`
 too: `TriageWorkflow`, `TaskRunnerWorkflow`.
 
+The bottom rung is a **separate library**, and its rules are not restated here:
+what `ok` means, when a producer raises instead of reporting, the two verbs for
+running a step (`await step` vs `(await step).unwrap()`), and where
+`add_details` lands all live in
+[airglider's README](../../airglider/README.md#the-rules). Read it before
+writing an executor — the executor is the producer in every one of those rules.
+
 (There used to be a rule that `Base` marks a reusable base class. It was retired
 when the ladder collapsed to three levels — the file a class lives in already
 says whether it is a base, and `AppBaseWorkflow`/`BookBaseWorkflow` read worse
