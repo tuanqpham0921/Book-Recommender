@@ -62,7 +62,7 @@ mismatch into a hard failure. Tracked in [../backlog.md](../backlog.md); fixing 
 cheap and can be done independently, well before any HITL work starts.
 
 **2. Child-workflow progress is lost on interrupt.** Steps are appended only *after* a
-child finishes (`run_async_step` → await → `add_steps`), so an interrupted run has no
+child finishes (`parent_scope` attaches on the way out), so an interrupted run has no
 record of partial child progress. Better checkpointing needs incremental `add_steps` and
 a rethink of result append/overwrite semantics — item 4 of the Workflow-framework list in
 [../backlog.md](../backlog.md). A pause point that sits *between* workflows (A or B)

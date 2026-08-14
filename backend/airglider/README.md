@@ -18,9 +18,9 @@ to move. A symbol that is not re-exported in `__init__.py` is not API.
 |---|---|
 | `Workflow` | base class for a multi-step async process — subclass, override `run()` |
 | `task` | decorator for a single async function |
-| `StepFailure` | control-flow signal raised by `run_async_step` when a step fails |
-| `OperationResult` | the one envelope: `ok`, `input`, `details`, `runtime_error`, `timing`, `token_usage`, `parent_id`, `steps` — plus `add_step` / `flatten` / `to_span` |
-| `parent_scope`, `current_parent` | the nesting ContextVar (see below) |
+| `StepFailure` | control-flow signal raised by `OperationResult.unwrap` when a step fails |
+| `OperationResult` | the one envelope: `ok`, `input`, `details`, `runtime_error`, `timing`, `token_usage`, `parent_id`, `steps` — plus `add_step` / `unwrap` / `flatten` / `to_span` |
+| `parent_scope`, `current_parent`, `add_details` | the nesting ContextVar, and writing to the envelope currently running (see below) |
 | `Response`, `Time` | the envelope's payload and timing sub-models |
 | `TokenUsage`, `ModelUsage` | token counts, per-model split, and USD cost |
 | `RuntimeErrorInfo` | serializable exception record |
@@ -66,11 +66,14 @@ What follows from it:
 - **Who calls whom stopped mattering.** A task may call a task, a workflow, or
   any mix; nothing is threaded through a signature and the tree still comes out
   right.
-- **`run_async_step` is no longer what attaches a step** — the coroutine already
-  ran inside the workflow's scope, and its `add_step` is a no-op the idempotency
-  guard absorbs. What is left is the **failure policy**: mark the workflow
-  not-ok and raise `StepFailure`, or hand the envelope back for a retry. Calling
-  a step without it is legitimate and means "I'll decide what a failure means".
+- **Two verbs for running a step**, since attaching is no longer anybody's job:
+  `await step` hands back the envelope and leaves the caller to decide what a
+  failure means; `(await step).unwrap()` hands back the payload or raises
+  `StepFailure`. Splitting the await from the policy is what lets a caller retry
+  an envelope, or inspect it and *then* insist. Both work inside a `@task` as
+  well as a `Workflow` — `record_span` owns the `StepFailure` stop path, so
+  either records and logs an abort the same way. (`add_step` remains, for the
+  one case nesting can't cover: an envelope produced outside any scope.)
 - **Attaching happens on the way out**, which the token rollup requires:
   `add_step` reads a child's usage once, at attach time, so a record attached
   before it ran would contribute zero to every ancestor. The cancel path comes
@@ -83,10 +86,14 @@ What follows from it:
   that outlives its parent attaches to an envelope already serialized and
   reported. Await background work inside the scope that owns it.
 
-A `@task` that returns its own `OperationResult` — the "report `ok` myself
-without raising" shape — has it **merged** into the published envelope rather
-than handed back, since the published one is what this call's children attached
-themselves to.
+**A `@task` returns its payload; the envelope is the decorator's.** Returning an
+`OperationResult` raises `TypeError`. The shape used to mean "report `ok` myself
+without raising" or "hand back what I called", and both have better answers now
+— `ok` means ran-to-completion, and anything awaited inside already attached
+itself. Use `(await step).unwrap()` to pass a nested step's payload through,
+`await step` to inspect it, and `add_details(...)` to write free text onto the
+envelope currently running (inside a `@task` body, that is the task's own
+record).
 
 `flatten()` is then the tree as a **span list** — depth-first, parent before
 child, each entry carrying its `parent_id` and (via `Time.end_time`) its own

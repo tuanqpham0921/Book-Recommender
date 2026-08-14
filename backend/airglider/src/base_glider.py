@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
 import logging
 from typing import Any, Generic, TypeVar
-from typing import Coroutine
 
 from .schemas import (
     OperationResult,
     Response,
 )
-from .exception import StepFailure
 from .span import record_span
 from .utils import record_call_input
 
@@ -94,37 +92,13 @@ class Workflow(ABC, Generic[OutputT]):
     async def run(self, *args: Any, **kwargs: Any) -> None:
         pass
 
-    async def run_async_step(
-        self,
-        function: Coroutine[Any, Any, OperationResult[Any]],
-        *,
-        raise_on_failure: bool = True,
-    ) -> OperationResult[Any]:
-        """Await a step and abort the workflow if it failed.
-
-        Attaching is not this method's job — the coroutine ran in this
-        workflow's `parent_scope` and adopted itself, so `add_step` below is a
-        no-op unless the coroutine was created outside that scope. What remains
-        is the failure policy, so calling a step without this method is
-        legitimate and means "I decide what a failure means myself".
-
-        NOTE: superseded by `await step` / `OperationResult.unwrap()`, which say
-        the same two things without the flag and work inside a `@task` too.
-        `raise_on_failure=True` is `(await step).unwrap()` minus the payload;
-        `raise_on_failure=False` is a plain `await`.
-        """
-        step_result = await function
-        self.record.add_step(step_result)
-
-        if step_result.ok:
-            return step_result
-
-        self.record.ok = False
-        self.record.add_details(f"FAILED STEP:{step_result.name}")
-        if raise_on_failure:
-            # names the step only: its envelope is already in self.record.steps
-            raise StepFailure(f"Step failed: {step_result.name}")
-        return step_result
+    # `run_async_step` is gone. Attaching stopped being its job once nesting
+    # became automatic, and what was left — the failure policy — is two verbs
+    # that need no method and work inside a `@task` just as well: `await step`
+    # hands back the envelope and leaves the caller to decide,
+    # `(await step).unwrap()` hands back the payload or raises `StepFailure`.
+    # A coroutine created outside this workflow's scope still attaches with
+    # `self.record.add_step(...)`, which is what that call always meant.
 
     @property
     def workflow_ref(self) -> str:

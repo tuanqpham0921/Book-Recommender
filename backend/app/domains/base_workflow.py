@@ -154,11 +154,12 @@ class AppWorkflow(Workflow[OutputT], ABC):
     async def run_llm_call(
         self, req: BaseLLMRequest, save_payload: bool = False
     ) -> AssistantMessage:
-        result = await self.run_async_step(
-            self.llm_client.execute(req, save_payload=save_payload)
-        )
-        # run_async_step raised on failure, so output carries the message
-        msg = cast(AssistantMessage, result.result)
+        # unwrap, not a bare await: a node that asked for a completion cannot
+        # continue without one, so a failed call stops this workflow rather than
+        # feeding None downstream. The envelope is `OperationResult[Any]`, hence
+        # the cast.
+        step = await self.llm_client.execute(req, save_payload=save_payload)
+        msg = cast(AssistantMessage, step.unwrap())
         self.messages.append(msg)
         return msg
 
@@ -207,8 +208,8 @@ class AppWorkflow(Workflow[OutputT], ABC):
     async def run_tool_call(
         self, tool_call: ParsedFunctionToolCall, **kwargs
     ) -> ToolMessage:
-        result = await self.run_async_step(ToolMessage.execute(tool_call, **kwargs))
-        tool_msg = cast(ToolMessage, result.result)
+        step = await ToolMessage.execute(tool_call, **kwargs)
+        tool_msg = cast(ToolMessage, step.unwrap())
         self.messages.append(tool_msg)
         return tool_msg
 

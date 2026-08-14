@@ -171,9 +171,10 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         a cancelled turn — can't leave a section hanging open. That is what the
         `finally` and the `step_result = None` seed are for.
 
-        A failed node is returned, not raised (`raise_on_failure=False`), so one
-        bad step doesn't abort the plan. The executor and its input arrive
-        already built, so anything that could fail earlier failed in `_prepare`.
+        A bare await, never `unwrap()`: a failed node is one goal marked failed,
+        not an aborted plan, so the runner wants the envelope. The executor and
+        its input arrive already built, so anything that could fail earlier
+        failed in `_prepare`.
         """
         executor_cls = type(executor)
         await self.sse_stream.send_task_start(
@@ -185,10 +186,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
         step_result = None
         try:
-            step_result = await self.run_async_step(
-                executor(node_input),
-                raise_on_failure=False,
-            )
+            step_result = await executor(node_input)
             return step_result
         finally:
             output = step_result.result if step_result else None

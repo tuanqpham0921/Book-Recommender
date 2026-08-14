@@ -81,9 +81,9 @@ def _make_runtime_error(message: str) -> RuntimeErrorInfo:
 
 
 def _mock_child_workflow(step_result: OperationResult, output) -> AsyncMock:
-    """A stand-in for an PlanJaneExecutor instance: calling it (as
-    run_async_step does) awaits to step_result, while .result (accessed
-    directly by TriageWorkflow.run) returns output."""
+    """A stand-in for an PlanJaneExecutor instance: awaiting it yields
+    step_result, while .result (accessed directly by TriageWorkflow.run)
+    returns output."""
     workflow = AsyncMock(return_value=step_result)
     workflow.result = output
     return workflow

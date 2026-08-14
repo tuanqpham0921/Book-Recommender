@@ -169,8 +169,8 @@ From the owner's design notes — these need real design thought, not drive-by f
 3. Remove private attributes (keep state in the output; may need `create` instead of
    `parse`) — matters once buffers get loaded.
 4. **Checkpoint gap**: interrupts work, but child-workflow progress is lost because
-   steps are only appended *after* a child finishes (`run_async_step` → await → 
-   `add_steps`). Better checkpointing needs incremental `add_steps` (append the child's
+   steps are only appended *after* a child finishes (`parent_scope` attaches on the way
+   out). Better checkpointing needs incremental `add_steps` (append the child's
    `OperationResult` reference before running, let it mutate) — requires rethinking
    result append/overwrite semantics. *(Cross-referenced in roadmap deferred:
    checkpoint/resume.)*

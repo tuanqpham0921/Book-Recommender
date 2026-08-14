@@ -18,7 +18,7 @@ import asyncio
 import pytest
 from pydantic import BaseModel
 
-from airglider import OperationResult, Workflow, task
+from airglider import OperationResult, Workflow, current_parent, task
 
 
 class _Payload(BaseModel):
@@ -209,26 +209,28 @@ class TestTaskDecorator:
         assert not result.ok
         assert result.input == {"key": "k"}
 
-    async def test_a_task_owning_its_envelope_keeps_its_own_input(self):
-        """A task that built its own OperationResult may have recorded
-        something more meaningful than its raw arguments."""
+    async def test_a_body_may_overwrite_its_own_recorded_input(self):
+        """A task that resolved something more meaningful than its raw
+        arguments writes over them on the envelope it is already running in."""
 
         @task(log_info=False)
         async def _custom(key):
-            return OperationResult(
-                ok=True, input={"resolved": "something better"}
-            )
+            current_parent().input = {"resolved": "something better"}
+            return None
 
         result = await _custom("k")
 
-        assert result.input == {"key": "k"}
-        assert result.steps[0].input == {"resolved": "something better"}
+        assert result.input == {"resolved": "something better"}
 
-    async def test_a_task_owning_its_envelope_gets_the_arguments_by_default(self):
+    async def test_a_rejected_envelope_still_records_the_arguments(self):
+        # the input is stamped before the call, so it survives every failure
+        # path — including the body returning an envelope
         @task(log_info=False)
         async def _custom(key):
             return OperationResult(ok=True)
 
         result = await _custom("k")
 
+        assert result.ok is False
+        assert result.runtime_error.type == "TypeError"
         assert result.input == {"key": "k"}

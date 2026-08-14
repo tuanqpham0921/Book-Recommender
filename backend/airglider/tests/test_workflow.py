@@ -47,31 +47,40 @@ class _ExceptionWorkflow(Workflow):
 
 
 class _StepWorkflow(Workflow):
-    def __init__(self, step: OperationResult, raise_on_failure: bool = True):
+    """A hand-made envelope, attached explicitly.
+
+    `_as_coro` is a plain coroutine, not a `@task`, so nothing published a scope
+    for the step to adopt itself into — `add_step` is what that case always
+    needed, and is all `run_async_step` ever added over a bare `await`.
+    """
+
+    def __init__(self, step: OperationResult, insist: bool = True):
         super().__init__()
         self._step = step
-        self._raise = raise_on_failure
+        self._insist = insist
 
     async def run(self, *args, **kwargs):
-        step = await self.run_async_step(
-            _as_coro(self._step), raise_on_failure=self._raise
-        )
+        step = await _as_coro(self._step)
+        self.record.add_step(step)
+        if self._insist:
+            step.unwrap()
         # fail-closed contract: declare success only if the work succeeded
         if step.ok:
             self.record.ok = True
 
 
 class _MultiStepWorkflow(Workflow):
-    def __init__(
-        self, steps: list[OperationResult], raise_on_failure: bool = True
-    ):
+    def __init__(self, steps: list[OperationResult], insist: bool = True):
         super().__init__()
         self._steps = steps
-        self._raise = raise_on_failure
+        self._insist = insist
 
     async def run(self, *args, **kwargs):
         for step in self._steps:
-            await self.run_async_step(_as_coro(step), raise_on_failure=self._raise)
+            attached = await _as_coro(step)
+            self.record.add_step(attached)
+            if self._insist:
+                attached.unwrap()
 
 
 class TestWorkflowExecution:
@@ -108,7 +117,10 @@ class TestWorkflowExecution:
         assert result.runtime_error.type == "TypeError"
 
 
-class TestRunAsyncStep:
+class TestExplicitSteps:
+    """Attaching an envelope produced outside any scope — the one thing
+    `run_async_step` did that a bare `await` does not, now spelled `add_step`."""
+
     async def test_success_step_appended_to_steps(self):
         step = OperationResult(ok=True, name="my_step")
         result = await _StepWorkflow(step)()
@@ -116,29 +128,29 @@ class TestRunAsyncStep:
         assert len(result.steps) == 1
         assert result.steps[0].name == "my_step"
 
-    async def test_failed_step_sets_result_ok_false(self):
+    async def test_failed_step_leaves_the_workflow_not_ok(self):
+        # nothing marks the parent: `ok` simply never gets declared, which is
+        # the fail-closed default
         step = OperationResult(ok=False, name="bad_step")
-        result = await _StepWorkflow(step, raise_on_failure=False)()
+        result = await _StepWorkflow(step, insist=False)()
         assert result.ok is False
 
-    async def test_failed_step_names_the_step_in_details(self):
+    async def test_insisting_names_the_step_in_details(self):
         step = OperationResult(ok=False, name="bad_step")
-        result = await _StepWorkflow(step, raise_on_failure=False)()
-        assert "FAILED STEP:bad_step" in result.details
+        result = await _StepWorkflow(step, insist=True)()
+        assert "FAILED STEP: bad_step" in result.details
 
-    async def test_failed_step_with_raise_is_a_controlled_abort(self):
-        # StepFailure is control flow, not a crash: the parent envelope must
-        # NOT carry runtime_error — the step's own envelope has the details
+    async def test_insisting_on_a_failed_step_is_a_controlled_abort(self):
         step = OperationResult(ok=False, name="bad_step")
-        result = await _StepWorkflow(step, raise_on_failure=True)()
+        result = await _StepWorkflow(step, insist=True)()
         assert result.ok is False
         assert result.runtime_error is not None
         assert result.runtime_error.type == "StepFailure"
         assert "bad_step" in result.runtime_error.message
 
-    async def test_failed_step_without_raise_still_appended(self):
+    async def test_failed_step_still_appended_when_not_insisting(self):
         step = OperationResult(ok=False, name="bad_step")
-        result = await _StepWorkflow(step, raise_on_failure=False)()
+        result = await _StepWorkflow(step, insist=False)()
         assert len(result.steps) == 1
 
     async def test_multiple_steps_all_appended(self):
@@ -150,28 +162,27 @@ class TestRunAsyncStep:
         result = await _MultiStepWorkflow(steps)()
         assert len(result.steps) == 3
 
-    async def test_bad_step_does_not_stop_later_steps_without_raise(self):
+    async def test_bad_step_does_not_stop_later_steps_when_not_insisting(self):
         steps = [
             OperationResult(ok=True, name="step_1"),
             OperationResult(ok=False, name="bad_step"),
             OperationResult(ok=True, name="step_3"),
         ]
-        result = await _MultiStepWorkflow(steps, raise_on_failure=False)()
-        # raise_on_failure=False: every step still runs and is recorded
+        result = await _MultiStepWorkflow(steps, insist=False)()
+        # a bare await says "I decide what a failure means": every step runs
         assert len(result.steps) == 3
         assert [step.ok for step in result.steps] == [True, False, True]
-        assert "FAILED STEP:bad_step" in result.details
 
-    async def test_bad_step_stop_later_steps_with_raise(self):
+    async def test_bad_step_stops_later_steps_when_insisting(self):
         steps = [
             OperationResult(ok=True, name="step_1"),
             OperationResult(ok=False, name="bad_step"),
             OperationResult(ok=True, name="step_3"),
         ]
-        result = await _MultiStepWorkflow(steps, raise_on_failure=True)()
+        result = await _MultiStepWorkflow(steps, insist=True)()
         assert len(result.steps) == 2
         assert [step.ok for step in result.steps] == [True, False]
-        assert "FAILED STEP:bad_step" in result.details
+        assert "FAILED STEP: bad_step" in result.details
 
     async def test_later_success_does_not_clear_an_earlier_failure(self):
         steps = [
@@ -182,7 +193,7 @@ class TestRunAsyncStep:
         # the parent stays failed unless the workflow explicitly declares
         # success after handling the failure (fail-closed contract)
         assert result.ok is False
-        assert "FAILED STEP:bad_step" in result.details
+        assert "FAILED STEP: bad_step" in result.details
 
 
 class TestCrashingSteps:
@@ -198,7 +209,7 @@ class TestCrashingSteps:
 
         class _BareCoroWorkflow(Workflow):
             async def run(self, *args, **kwargs):
-                await self.run_async_step(_explodes())
+                await _explodes()
 
         result = await _BareCoroWorkflow()()
         assert result.ok is False
@@ -217,8 +228,8 @@ class TestCrashingSteps:
             async def run(self, *args, **kwargs):
                 for i in range(5):
                     if i == 3:
-                        await self.run_async_step(_explodes())
-                    await self.run_async_step(_okay_step(i))
+                        await _explodes()
+                    self.record.add_step(await _okay_step(i))
 
         result = await _BareCoroWorkflow()()
         assert result.ok is False
@@ -226,43 +237,9 @@ class TestCrashingSteps:
         assert result.runtime_error.type == "ValueError"
         assert len(result.steps) == 3
 
-    @pytest.mark.parametrize("raise_on_failure", [True, False])
-    async def test_unenveloped_crash_ignores_raise_on_failure(self, raise_on_failure):
-        # raise_on_failure only governs failed *envelopes*; the crash fires
-        # at `await function`, before the flag is ever consulted — so a bare
-        # coroutine crash aborts the workflow either way. To survive a
-        # crashing step, envelope it with @task (see the next test).
-        async def _explodes():
-            raise ValueError("boom before any envelope")
-
-        async def _okay_step(i):
-            return OperationResult(ok=True, name=f"okay_step_{i}")
-
-        class _BareCoroWorkflow(Workflow):
-            def __init__(self, raise_on_failure):
-                super().__init__()
-                self._raise = raise_on_failure
-
-            async def run(self, *args, **kwargs):
-                for i in range(5):
-                    if i == 3:
-                        await self.run_async_step(
-                            _explodes(), raise_on_failure=self._raise
-                        )
-                    await self.run_async_step(
-                        _okay_step(i), raise_on_failure=self._raise
-                    )
-
-        result = await _BareCoroWorkflow(raise_on_failure)()
-        assert result.ok is False
-        assert result.runtime_error is not None
-        assert result.runtime_error.type == "ValueError"
-        # steps 0-2 ran; the crash aborted before steps 3 and 4
-        assert len(result.steps) == 3
-
-    async def test_enveloped_crash_continues_without_raise(self):
-        # the fourth quadrant: @task turns the crash into a failed step
-        # envelope, and raise_on_failure=False lets the loop keep going
+    async def test_enveloped_crash_continues_when_not_insisting(self):
+        # @task turns the crash into a failed step envelope, and a bare await
+        # lets the loop keep going
         @task(log_info=False)
         async def _explodes_enveloped():
             raise ValueError("boom")
@@ -274,10 +251,8 @@ class TestCrashingSteps:
             async def run(self, *args, **kwargs):
                 for i in range(5):
                     if i == 3:
-                        await self.run_async_step(
-                            _explodes_enveloped(), raise_on_failure=False
-                        )
-                    await self.run_async_step(_okay_step(i), raise_on_failure=False)
+                        await _explodes_enveloped()
+                    self.record.add_step(await _okay_step(i))
 
         result = await _EnvelopedCrashWorkflow()()
         # all 5 okay steps ran, plus the failed envelope in between
@@ -285,49 +260,20 @@ class TestCrashingSteps:
         failed = [step for step in result.steps if not step.ok]
         assert len(failed) == 1
         assert failed[0].runtime_error.type == "ValueError"
-        # the failure is recorded on the parent, but the workflow didn't crash
+        # the workflow itself never crashed, and never declared success either
         assert result.ok is False
         assert result.runtime_error is None
 
-    async def test_crashing_task_with_raise_stops_with_step_failure_message(self):
-        # with @task the crash becomes a failed step envelope; the raise
-        # then aborts the workflow as a controlled StepFailure — the parent
-        # message says which step failed, runtime_error stays on the step
-        flaky_step = _make_flaky_task(fail_times=99)
-
-        class _CrashingStepWorkflow(Workflow):
-            def __init__(self):
-                super().__init__()
-                self.continued_past_step = False
-
-            async def run(self, *args, **kwargs):
-                await self.run_async_step(flaky_step(), raise_on_failure=True)
-                self.continued_past_step = True
-
-        wf = _CrashingStepWorkflow()
-        result = await wf()
-        assert wf.continued_past_step is False
-        assert result.ok is False
-        assert result.runtime_error.type == "StepFailure"
-        assert "Step failed" in result.runtime_error.message
-        assert "flaky_step" in result.runtime_error.message
-        # controlled abort: the crash details live on the step, not the parent
-        assert result.runtime_error is not None
-        assert result.steps[0].runtime_error.type == "ValueError"
-        assert len(result.steps) == 1
-
     async def test_retry_loop_succeeds_on_third_attempt(self):
-        # the retry owner runs attempts with raise_on_failure=False and,
-        # on success, explicitly declares ok (a later success never clears
-        # an earlier failure by itself — fail-closed contract)
+        # the case that motivated splitting awaiting from the failure policy:
+        # the retry owner awaits bare and, on success, explicitly declares ok
+        # (a later success never clears an earlier failure by itself)
         flaky_step = _make_flaky_task(fail_times=2)
 
         class _RetryWorkflow(Workflow):
             async def run(self, *args, **kwargs):
                 for _ in range(3):
-                    step = await self.run_async_step(
-                        flaky_step(), raise_on_failure=False
-                    )
+                    step = await flaky_step()
                     if step.ok:
                         self.record.ok = True
                         return

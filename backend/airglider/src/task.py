@@ -65,40 +65,40 @@ def task(
             with record_span(result, logger, label="task", log_info=log_info):
                 raw_output = await func(*args, **kwargs)
 
-                # The task validated `ok` itself. Its envelope becomes a step
-                # with its own id, input and timing — whether from
-                # `return await inner()` (already attached; `add_step` no-ops)
-                # or hand-built. This task reports it: `ok` and the payload are
-                # the child's. Storing the envelope in `response` instead would
-                # make `.result` hand back a record and serialize the subtree
-                # twice.
+                # A body returning an envelope used to be the way to report `ok`
+                # yourself or hand back what you called. Both have better
+                # answers now — `ok` means "ran to completion" so nobody votes
+                # on it, and anything awaited inside this body already attached
+                # itself — which leaves only the ways it can go wrong: the
+                # subtree serialized twice, or a failed step read as a success
+                # with a None payload. Rejected rather than unwrapped silently,
+                # because the two spellings below mean different things and
+                # guessing is what produced the None.
                 if isinstance(raw_output, OperationResult):
-                    # `:` not `.` — readers shorten a name to its last dotted
-                    # segment, and `.result` would shorten to "result" with no
-                    # trace of which task it belongs to
-                    if raw_output.name is None:
-                        raw_output.name = f"{func_ref}:result"
-                    result.add_step(raw_output)
-                    result.add_details("nested envelope: response is the step")
-                    result.ok = raw_output.ok
-                    result.response = raw_output.response
-                    if log_info and not result.ok:
-                        logger.warning(f"Task failed: {func_ref}")
-                else:
-                    # no envelope and no runtime error, so this succeeded
-                    result.response = Response(
-                        result=raw_output, output_type=type(raw_output).__name__
+                    raise TypeError(
+                        f"{func_ref} returned an OperationResult. A @task "
+                        f"returns its payload — the envelope is the "
+                        f"decorator's. Use `(await step).unwrap()` to hand back "
+                        f"what a nested step produced (it has already attached "
+                        f"itself to this task), or `await step` and return the "
+                        f"part you want; `airglider.add_details` writes to this "
+                        f"task's own record."
                     )
-                    result.ok = True
-                    result.add_details("wrapped a bare return value")
-                    # `+=` not assignment, so usage rolled up from nested steps
-                    # is not thrown away
-                    if hasattr(raw_output, "token_usage") and isinstance(
-                        raw_output.token_usage, TokenUsage
-                    ):
-                        result.token_usage += raw_output.token_usage
-                        raw_output.token_usage = None
-                        result.add_details("promoted output token usage")
+
+                # no envelope and no runtime error, so this succeeded
+                result.response = Response(
+                    result=raw_output, output_type=type(raw_output).__name__
+                )
+                result.ok = True
+                result.add_details("wrapped a bare return value")
+                # `+=` not assignment, so usage rolled up from nested steps
+                # is not thrown away
+                if hasattr(raw_output, "token_usage") and isinstance(
+                    raw_output.token_usage, TokenUsage
+                ):
+                    result.token_usage += raw_output.token_usage
+                    raw_output.token_usage = None
+                    result.add_details("promoted output token usage")
 
             return result
 

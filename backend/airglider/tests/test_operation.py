@@ -17,7 +17,7 @@ async def _returns_plain_value():
 
 
 @task
-async def _returns_custom_result():
+async def _returns_an_envelope():
     return OperationResult(ok=True, response=Response(result="custom_output"))
 
 
@@ -40,11 +40,12 @@ class TestTask:
         assert result.timing.duration is not None
         assert result.name is not None
 
-    async def test_passthrough_when_returns_operation_result(self):
-        result = await _returns_custom_result()
+    async def test_returning_an_envelope_is_rejected(self):
+        # the envelope belongs to the decorator; a body returns its payload
+        result = await _returns_an_envelope()
         assert isinstance(result, OperationResult)
-        assert result.ok is True
-        assert result.result == "custom_output"
+        assert result.ok is False
+        assert result.runtime_error.type == "TypeError"
         assert result.timing.duration is not None
 
     async def test_captures_exception_as_failed_result(self):

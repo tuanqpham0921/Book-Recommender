@@ -1,7 +1,6 @@
 class StepFailure(RuntimeError):
-    """Control-flow only: raised by `OperationResult.unwrap` (and by
-    `Workflow.run_async_step`) to abort the caller after a step it needed
-    failed.
+    """Control-flow only: raised by `OperationResult.unwrap` to abort the caller
+    after a step it needed failed.
 
     The failing step's own envelope already holds the details, including the
     `runtime_error` of whatever actually crashed, so `record_span` reports this

@@ -68,7 +68,7 @@ class TestParentId:
 
         class _Workflow(Workflow):
             async def run(self):
-                await self.run_async_step(_leaf())
+                await _leaf()
                 self.record.ok = True
 
         workflow = _Workflow()
@@ -221,7 +221,7 @@ class TestSpanTableUse:
 
         class _Workflow(Workflow):
             async def run(self):
-                await self.run_async_step(_leaf())
+                await _leaf()
                 self.record.ok = True
 
         workflow = _Workflow()

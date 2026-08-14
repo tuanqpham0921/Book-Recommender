@@ -71,6 +71,15 @@ class _ExplodingExecutor(AppWorkflow[_Output]):
         raise RuntimeError("node blew up")
 
 
+class _CancelledExecutor(AppWorkflow[_Output]):
+    """Stands in for the orchestrator cancelling the turn on timeout.
+    `record_span` stamps the envelope and re-raises, so this reaches the
+    runner exactly as a real cancellation would."""
+
+    async def run(self, node_input: _Input) -> None:
+        raise asyncio.CancelledError
+
+
 def _spec(executor: type | None, **overrides) -> NodeSpec:
     return replace(
         find_by_title.SPEC,
@@ -297,21 +306,14 @@ class TestTaskSectionBracketing:
     ):
         """Why `_run_in_task_section` keeps a `finally` and seeds
         `step_result = None`: the orchestrator cancels the turn on timeout,
-        and CancelledError propagates straight through `run_async_step`. A
+        and CancelledError propagates straight through the awaited executor. A
         section left open renders as a step that never finishes."""
         plan = PlanJaneOutput(accepted_goals=[_goal()])
 
-        def cancel(coro, **kwargs):
-            coro.close()  # the executor call never runs; don't leak it
-            raise asyncio.CancelledError
-
         with patch("app.orchestration.task_runner.REGISTRY") as registry:
-            registry.spec.return_value = _spec(_OkExecutor)
-            with patch.object(
-                TaskRunnerWorkflow, "run_async_step", side_effect=cancel
-            ):
-                with pytest.raises(asyncio.CancelledError):
-                    await runner.run(TaskRunnerInput(plan=plan))
+            registry.spec.return_value = _spec(_CancelledExecutor)
+            with pytest.raises(asyncio.CancelledError):
+                await runner.run(TaskRunnerInput(plan=plan))
 
         assert of_type(events, "task.end") == [
             {"task_id": "1", "count": None, "ok": False}

@@ -91,8 +91,8 @@ class OperationResult(BaseModel, Generic[OutputT]):
 
         The verb for "I need what this step produced". `await` is the other one:
         it hands back this envelope and leaves the caller to decide what a
-        failure means. Between them they replace `run_async_step`'s
-        `raise_on_failure` flag, and split awaiting from the failure policy — so
+        failure means. Between them they replaced `run_async_step` and its
+        `raise_on_failure` flag, splitting awaiting from the failure policy — so
         a caller can retry an envelope, or inspect it and *then* insist.
 
         A failed step notes itself on whatever envelope is currently being built
@@ -134,8 +134,10 @@ class OperationResult(BaseModel, Generic[OutputT]):
         On the envelope, not on `Workflow`, so a non-Workflow caller (the
         Orchestrator) can build a root over finished records.
 
-        Idempotent — `parent_scope` attaches automatically, so `run_async_step`
-        would otherwise append twice. The guard is identity against `steps`, not
+        Idempotent — `parent_scope` attaches automatically, so a caller that
+        also calls this would otherwise append twice; needed only for an
+        envelope produced outside any scope. The guard is identity against
+        `steps`, not
         `parent_id is None`, which the scope pre-stamps on entry. A step claimed
         by another parent is refused, not re-parented: it would be billed twice.
         """

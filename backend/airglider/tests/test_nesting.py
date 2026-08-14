@@ -2,7 +2,7 @@
 
 The caller publishes its own envelope for the duration of the call
 (`parent_scope`) and the callee adopts itself on the way out, instead of the
-caller routing every step through `run_async_step`.
+caller routing every step through a method that attaches it.
 
 The property under test is that **who may call whom stopped mattering**. A
 `@task` calling a `@task` used to collapse into one envelope wearing the outer
@@ -18,6 +18,7 @@ from airglider import (
     Response,
     TokenUsage,
     Workflow,
+    add_details,
     current_parent,
     parent_scope,
     task,
@@ -139,18 +140,22 @@ class TestConcurrency:
 
 
 class TestAttachedOnce:
-    async def test_run_async_step_does_not_double_attach(self):
-        """Both mechanisms are live; the step must land once and be counted once."""
+    async def test_explicit_add_step_does_not_double_attach(self):
+        """Both mechanisms are live — `parent_scope` attaches on the way out and
+        a caller may also call `add_step` — so the step must land once and be
+        billed once."""
 
         @task(log_info=False)
         async def billed():
-            result = OperationResult(ok=True)
-            result.token_usage = TokenUsage(total=7)
-            return result
+            # the task's own envelope: record_span published it before calling
+            current_parent().token_usage = TokenUsage(total=7)
+            return "done"
 
         class Explicit(Workflow):
             async def run(self):
-                await self.run_async_step(billed())
+                step = await billed()
+                # already attached; the guard absorbs this
+                self.record.add_step(step)
                 self.record.ok = True
 
         record = await Explicit()()
@@ -172,31 +177,15 @@ class TestAttachedOnce:
 
 
 class TestReturnedEnvelope:
-    async def test_a_self_reported_result_becomes_a_step(self):
-        """The `_check_table` shape: reports `ok` itself, and ran a step. The
-        returned envelope keeps its own id and details and hangs under the
-        wrapper, which *reports* it — its `ok` and payload are the child's."""
+    """A `@task` returns its payload; the envelope is the decorator's.
 
-        @task(log_info=False)
-        async def checks():
-            await leaf("probe")
-            return OperationResult(
-                ok=False,
-                details=["threshold not met"],
-                response=Response(result=0, output_type="int"),
-            )
+    Returning one used to mean "report `ok` yourself" or "hand back what I
+    called". Both have better answers now — `ok` means ran-to-completion, and
+    anything awaited inside already attached itself — so the shape is rejected
+    rather than guessed at, since the two things it could mean differ.
+    """
 
-        record = await checks()
-
-        assert record.ok is False
-        assert record.result == 0
-        assert _names(record) == ["leaf", "checks:result"]
-        assert record.steps[1].details == ["threshold not met"]
-
-    async def test_the_payload_is_the_value_not_the_envelope(self):
-        """`.result` keeps meaning "the value this produced". Storing the
-        envelope there would write the subtree twice."""
-
+    async def test_returning_an_envelope_is_rejected(self):
         @task(log_info=False)
         async def reports():
             return OperationResult(
@@ -204,41 +193,51 @@ class TestReturnedEnvelope:
             )
 
         record = await reports()
-        assert record.result == "rows"
-        assert record.response.output_type == "str"
+        assert record.ok is False
+        assert record.runtime_error.type == "TypeError"
+        assert "returns its payload" in record.runtime_error.message
 
-    async def test_an_already_attached_child_is_not_attached_twice(self):
-        """`return await inner()` — inner attached itself on the way out, so
-        `add_step` no-ops and it appears once."""
+    async def test_the_rejection_names_the_two_replacements(self):
+        @task(log_info=False)
+        async def reports():
+            return OperationResult(ok=True)
+
+        record = await reports()
+        assert "unwrap()" in record.runtime_error.message
+        assert "add_details" in record.runtime_error.message
+
+    async def test_passing_a_step_through_means_unwrapping_it(self):
+        """`return await inner()` is now `return (await inner()).unwrap()` —
+        inner attached itself on the way out, so it appears exactly once and
+        only its payload travels up."""
 
         @task(log_info=False)
         async def passes_through():
-            return await leaf("once")
+            return (await leaf("once")).unwrap()
 
         record = await passes_through()
 
+        assert record.ok is True
         assert _names(record) == ["leaf"]
         assert record.result == "once"
 
-    async def test_a_hand_built_steps_list_duplicates_and_should_not_be_used(self):
-        """The one shape that still goes wrong, pinned so it is not a surprise.
-
-        A task whose children auto-attached must not *also* return them in a
-        `steps=` list — they land in the tree twice, and `add_step` cannot catch
-        it because the outer object is new and only its contents are shared. Fix
-        at the call site by dropping the list (see `db/readiness.py`).
-        """
+    async def test_a_task_reports_details_on_its_own_record(self):
+        """What a body uses instead of returning a hand-built envelope."""
 
         @task(log_info=False)
-        async def both():
-            child = await leaf("once")
-            return OperationResult(ok=True, steps=[child])
+        async def checks():
+            await leaf("probe")
+            add_details("threshold not met")
+            return 0
 
-        record = await both()
-        appearances = [op for op in record.flatten() if op.name.endswith("leaf")]
-        assert len(appearances) == 2
+        record = await checks()
 
-    async def test_the_returned_envelope_does_not_overwrite_the_timing(self):
+        assert record.ok is True
+        assert record.result == 0
+        assert "threshold not met" in record.details
+        assert _names(record) == ["leaf"]
+
+    async def test_a_rejected_envelope_does_not_overwrite_the_timing(self):
         @task(log_info=False)
         async def slow():
             await asyncio.sleep(0.05)
@@ -261,8 +260,8 @@ class TestFailurePaths:
 
         record = await calls_it()
 
-        # the failure sits where it happened; promoting it is
-        # run_async_step's job, not the decorator's
+        # the failure sits where it happened; promoting it is the caller's
+        # choice (`unwrap`), not the decorator's
         assert record.ok is True
         assert record.steps[0].ok is False
         assert record.steps[0].runtime_error.type == "ValueError"
@@ -301,9 +300,9 @@ class TestTokenRollup:
     async def test_usage_rolls_up_through_every_level(self):
         @task(log_info=False)
         async def spends():
-            result = OperationResult(ok=True)
-            result.token_usage = TokenUsage(total=5)
-            return result
+            # a body writes usage onto the envelope it is already running in
+            current_parent().token_usage = TokenUsage(total=5)
+            return None
 
         @task(log_info=False)
         async def middle():

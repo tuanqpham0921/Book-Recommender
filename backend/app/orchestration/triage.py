@@ -110,11 +110,10 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
                 self.record.ok = True
                 return
 
+        # a bare await, not `unwrap()`: triage decides what a failed planner
+        # means (a specific message to the user), so it wants the envelope
         planner = PlanJaneExecutor(self.ctx, messages=self.messages)
-        planner_record = await self.run_async_step(
-            planner(NodeInput(query=query)),
-            raise_on_failure=False,
-        )
+        planner_record = await planner(NodeInput(query=query))
 
         # the workflow pre-initializes its output, so this is never None
         self.result.parse_result = planner.result
