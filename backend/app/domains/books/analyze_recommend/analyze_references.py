@@ -85,6 +85,12 @@ class ParsedDependents:
             # both would weight that set twice in the anchor.
             books = getattr(result, "books", None)
             query = getattr(result, "query", None)
+            
+            # NOTE: this is elif
+            # so it will take the preview on instead
+            # eventually, you want len(preview) == num books
+            # then just remove the sql query
+            # but for now lets just work with the deffered query
             if books:
                 parsed.books.extend(books)
                 claimed = True

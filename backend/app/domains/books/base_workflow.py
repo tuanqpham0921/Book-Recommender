@@ -13,7 +13,7 @@ fields only `BookRetrievalOutput` has, which is what the type bound says.
 """
 
 from abc import ABC
-from typing import Any, Sequence, TypeVar
+from typing import Any, Sequence, TypeVar, List
 
 from app.api.schemas import BookOut
 from app.domains.books.external import BookRequestContext, BookRetrievalOutput
@@ -24,6 +24,8 @@ from db.stores import DeferredBookQuery
 from db.stores.book_store import BookStore
 from db.stores.utils import compile_sql
 import asyncio
+
+from airglider import task
 
 BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
 
@@ -45,6 +47,7 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         """
         return self.ctx.store
 
+    @task
     async def preflight(
         self, query: DeferredBookQuery, sample: int = BookConstraints.default_limit
     ) -> tuple[int, list[Book]]:
@@ -65,6 +68,37 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         total, rows = await self.store.preview(query, limit=sample)
         self.result.num_books = total
         return total, [Book.model_validate(row) for row in rows]
+    
+    @task
+    async def materialize_books(
+        self, upstream: list[DeferredBookQuery]
+    ) -> List[Book]:
+        """Pool the upstream queries into one anchor and fetch its books.
+
+        `preflight` returns the pool size and the rows in one round trip, so
+        below the cap the sample *is* the anchor. What it stamps
+        (`query`/`query_sql`/`num_books`) describes the references; `run`
+        overwrites `num_books` with the recommendation's own count.
+        """
+        from db.stores.utils import compose
+        
+        anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
+        
+        # TODO: something is wrong here
+        # you might want to put the from the caller
+        # that way you can see the anchor query
+        # but DefferedBookQuery is not serializable?
+        # maybe have like a to_sql for debugging purposes
+        num_books, books = await self.preflight(
+            anchor, sample=BookConstraints.default_limit
+        )
+        self.add_details(f"Dependent results has {num_books} books in total")
+        if num_books > 5:
+            # TODO: for now, re-query and only get the top rated
+            # or give the users pre-defined options (random, ...)
+            raise NotImplementedError("need to handle when there are more than 5 books")
+        print("herere1")
+        return books
 
     async def stream_books(
         self, books: Sequence[Book | dict[str, Any]], delay: float = 0.0

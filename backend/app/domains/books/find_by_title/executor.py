@@ -55,7 +55,9 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
         await self.sse_stream.send_ui_loading(f"finding book titled: {book_title}")
 
         deferred = self.store.title_query(title=book_title)
-        total, books = await self.preflight(deferred)
+        # deferred = deferred.unwrap()
+        result = await self.preflight(deferred)
+        total, books = result.unwrap()
 
         # a sample, not the answer — `num_books` is the size of the match, and
         # the gap between the two is what marks these rows as a preview

@@ -23,6 +23,7 @@ from .generate_response import (
 )
 from .schemas import RecommendationStrategy
 from .external import RecommendInput, RecommendationOutput
+from airglider import task
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,8 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # anchor is one composed query, run for rows here
         reference_books = list(parsed_dependents.books)
         if parsed_dependents.queries:
-            reference_books += await self._materialize_books(parsed_dependents.queries)
+            result = await self.materialize_books(parsed_dependents.queries)
+            reference_books += result.unwrap()
         self.result.references = reference_books
 
         # Two parsers, two inputs: the reference analyzer reads the documents
@@ -86,7 +88,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )
-        self.result.args = parsed_args
+        self.result.args = parsed_dependents
 
         semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
 
@@ -100,9 +102,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # then do the similarity search
         await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
 
-        candidates = await self.similarity_search(
+        result = await self.similarity_search(
             search_text, exclude_isbns=[book.isbn13 for book in reference_books]
         )
+        candidates = result.unwrap()
         recommended_books = self.process_candidates(candidates, reference_books)
         self.result.books = recommended_books
         self.result.num_books = len(recommended_books)
@@ -112,7 +115,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # ---------------------------
         # NOTE: this should be in a generation section(?)
         # putting this here for now
-        await self.response_to_user(self.result)
+        # await self.response_to_user(self.result)
 
         # last, not before the reply: this node owns the answer, so a run that
         # found books and then failed to say anything about them is not ok
@@ -167,6 +170,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             f"{len(result.books)} recommendations"
         )
 
+    @task
     async def similarity_search(self, search_text: str, exclude_isbns: list[str]):
         embedding = await self.llm_client.get_embeddings([search_text])
         embedding = embedding[0]
@@ -182,28 +186,6 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             for row in rows
             if row.get("isbn13") not in excluded
         ]
-        return books
-
-    async def _materialize_books(
-        self, upstream: list[DeferredBookQuery]
-    ) -> List[Book]:
-        """Pool the upstream queries into one anchor and fetch its books.
-
-        `preflight` returns the pool size and the rows in one round trip, so
-        below the cap the sample *is* the anchor. What it stamps
-        (`query`/`query_sql`/`num_books`) describes the references; `run`
-        overwrites `num_books` with the recommendation's own count.
-        """
-        anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
-        num_books, books = await self.preflight(
-            anchor, sample=BookConstraints.default_limit
-        )
-        self.add_details(f"Dependent results has {num_books} books in total")
-        if num_books > 5:
-            # TODO: for now, re-query and only get the top rated
-            # or give the users pre-defined options (random, ...)
-            raise NotImplementedError("need to handle when there are more than 5 books")
-
         return books
 
     def process_candidates(self, candidates: list[Book], referenced_books: list[Book]) -> list[Book]:
