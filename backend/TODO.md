@@ -12,7 +12,36 @@ history (`git log -p -- backend/TODO.md`).
 ---
 
 
+continue
+    high priority - flush out the be more clear about
+    nodes, tool schemas, executors (the nl input and a regular tool call __call__)
 
+    * maybe a good place to start is recommend node
+    * and what is a task or workflow or a normal util func
+
+    * current implemntation is mixed between a 1-1 mapping
+    of tool schemas and its executors
+        * they are mostly like that but the recommendation node
+        * and the concept of the executor taking in a nl query is different
+            * because now to use the tool, you have to go through the exeuctor with a natural langugage query
+            * you also need to know form filling llm, vs post processing form filling, vs actual tasks
+        
+        * like DAG in task plan, is the tool schema 1-1
+            * if you have different implmentations then how does that work?
+            * and does the cycle dection/processing belong to the same executors
+        * then you also have recommendation node, which does multiple things
+        
+        * it seems like the natural language query in the domain
+            is an orchestrator for this capability
+            you can have multiple tools, or different tools versions
+        * for now, don't try to combine nodes
+            find titles have find series tools
+            because your evals don't support it yet
+            so just mainly do 1-1 tool and executor
+            or the function calls
+            and your recommendation nodes have multiple steps/tools
+            so if you set that up correctly, then it will
+            be similar. with swapping out tools or adding new ones
 
 
 seems like there's an idempotent issue with 
