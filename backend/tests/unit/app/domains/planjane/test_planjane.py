@@ -27,7 +27,7 @@ from app.domains.planjane import (
     MAX_SYSTEM_GOALS,
 )
 from app.domains.base_request import MAX_STRING_LENGTH, MIN_CONFIDENCE
-from app.domains.field_types import REASONING_FALLBACK
+from app.common.field_types import REASONING_FALLBACK
 
 # parse_wf fixture comes from tests/unit/app/orchestration/planner/conftest.py
 

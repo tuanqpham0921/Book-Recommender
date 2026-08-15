@@ -8,7 +8,7 @@ validators were removed with them.
 from pydantic import model_validator
 
 from app.domains.base_request import BaseRequest
-from app.domains.field_types import MAX_STRING_LENGTH, REASONING_FALLBACK
+from app.common.field_types import MAX_STRING_LENGTH, REASONING_FALLBACK
 from app.domains.node_types import UnknownNodeTypeEnum
 
 

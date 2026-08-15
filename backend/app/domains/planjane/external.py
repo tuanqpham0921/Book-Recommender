@@ -20,7 +20,7 @@ from typing import Any, Literal, NamedTuple
 from pydantic import BaseModel, Field, PrivateAttr
 
 from app.domains.base_workflow import NodeWorkflowOutput
-from app.domains.field_types import (
+from app.common.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
     MAX_STRING_LENGTH,

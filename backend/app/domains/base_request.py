@@ -1,6 +1,6 @@
 from common.utils import uuid_8
 from pydantic import BaseModel, Field, model_validator, PrivateAttr, field_validator
-from app.domains.field_types import (
+from app.common.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
     MAX_STRING_LENGTH,

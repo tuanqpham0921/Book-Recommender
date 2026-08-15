@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 if TYPE_CHECKING:
     from app.common.request_context import RequestContext
 
-from app.domains.field_types import MAX_STRING_LENGTH, ReasoningStr
+from app.common.field_types import MAX_STRING_LENGTH, ReasoningStr
 from .external import SystemGoal
 from .labels import PlannerNodeTypeEnum
 from .prompts.example import planner_example
