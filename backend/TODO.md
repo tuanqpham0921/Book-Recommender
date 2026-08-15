@@ -10,7 +10,104 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+continue
+    * make a new branch
+    * remove a lot of the implmentation from it
+    * have a reference to this branch
+    * and add things back in slowly with the new airglider protocol
 
+* something to watch out for
+    * RequestContext just load everything at the Orchestrator level
+    * give all of it to the sub nodes (mainly I'm not too sure about the current code. Might have over done it, something I can optimize later)
+    * check the preflight and compose
+    * forget about tool calling! or linking the schema or multiple tools into one node
+        * focus on this book rec system needs rather than PlanJane for now
+        * which is nl_query -> parser -> tool call link to this executor output
+        * don't try to handle the if it's already parsed right now (you kinda know what to do if that's the direction)
+    * most things that need
+        * llm_parse to schema
+        * postprocess, validate, db query
+        * return result should be a workflow or @task
+            * and just link it like a 1 dimenstion schema/executor
+    
+* recommend node you literall just do
+    * parse query = (semantic_input="...", filter="...")
+        * input = "Find book like dune but darker and scary vibes"
+            * parser -> semantic_input="darker and scary vibes", filters=None
+        * input = "Find book like dune with 300 pages or more"
+            * parser -> semantic_input=None, filters 300 pages or more
+    * so the parser at the recommend node is a query decom or tool calling selector
+    * build description -> workflow
+    * build filter -> workflow
+
+so try to keep it 1-1:
+    pydantic_tool_schema():
+        ...
+
+    ExcutorWorkflow(natural language query)
+        parser(tool_schema) -> set the toolmessage to the envolope response
+        do stuff
+        finalize
+
+tho an ExecutorWorkflow can call other ExecutorWorkflow
+    * similar to triage -> planJane
+    ex:
+        RecommendToolSchema():
+            semantic: str
+            filters: str
+
+        RecommendExcutorWorkflow(natural language query)
+            parser(tool_schema) -> set the toolmessage to the envolope response
+            do stuff
+                await AnalyzeReferenceWorkflow(nl_query=semantic_str)
+                    * 1-1 mapping between a parser and the tool_schema
+                    * here is where the prompts and examples can be
+                    * set the result -> envolope Response
+                await FilterBuilderWorkflow(nl_query=filters_str)
+                    * same thing here
+
+            unwrap both() or handle
+            do the embedding search <- @task
+
+            finalize
+
+might be a little in-efficient but it keeps the shape we have right now
+Executor(natural_lange_query)
+    * analyze nodes and more complicated nodes like Triage require tool selection within it
+        * triage -> select[cached_plans, clarification, small_talks,  planner,...]
+        * recommend -> select[description_builder, filters]
+    
+    * but most tools can't call other tools
+        * atomic level operations
+    * communication between nodes is through natural language
+
+we can do the parsed_args as an input later on
+but the bulk of the executor will remain the same.
+
+or you could just have the Recommend
+
+RecommendNodeToolSchema:
+    ideal_book_description: str
+    filters: BookFilter
+
+AnalyzeRecommendExecutor
+    def run(nl_query, artifacts):
+        artifacts = process_and_format_artifacts
+        parse_args = parse(nl_query, artifacts)
+
+        do embedding search
+        finalize result
+
+so this remains 1-1, this might need a bigger model
+to summaried:
+    * keep 1-1 tool and executor
+        * LLM_parse set the ToolMessage to the envolope record
+        * if you need another llm call, make a new workflow or a @task func for more simple op
+            * @task still follow the llm_parse -> op -> toolmessage to envolope rec
+    * communicate with nl_query between executors
+    * a node that call other nodes should start a new workflow and unwrap
+        * a node with (query, artifact) might need to process artifacts
+-----------------------------------------------------------------
 
 continue
     high priority - flush out the be more clear about

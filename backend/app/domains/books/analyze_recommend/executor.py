@@ -90,6 +90,11 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         )
         self.result.args = parsed_dependents
 
+        # NOTE: this semantic_input might be able to go in the parser
+        # like the overal schema. However, prompt might be big and you might want seperate things
+        # a filter parser and a description parser. Tho this ties back to the form filling vs tool call
+        # filling the form, filters does not perform the sql
+        # so maybe filling the form returns a sql command to run?
         semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
 
         # NOTE: parsed_args.semantic_input might not be needed

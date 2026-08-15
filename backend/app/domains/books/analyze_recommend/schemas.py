@@ -65,6 +65,10 @@ class RecommendationStrategy(BaseRequest):
     semantic_input: str = Field(
         ..., json_schema_extra={"example": "cozy and hopeful"}
     )
+    
+    # NOTE: change this to a string
+    # you're decompositioning the query="..." to a natural language
+    # if none, then don't call book filter
     filters: Optional[BooksFilter] = Field(
         default=None,
         description=(

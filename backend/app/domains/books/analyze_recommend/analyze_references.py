@@ -121,6 +121,7 @@ class ParsedDependents:
             "unknown": self.unknown,
         }
 
+# NOTE: make these in a workflow
 def render_documents(books: list[Book], reports: list[str]) -> str:
     """The document block the analyzer prompt reads.
 
@@ -161,6 +162,7 @@ def render_documents(books: list[Book], reports: list[str]) -> str:
 
 # TODO: rename this to ideal_book_description 
 # or something similar
+# NOTE: make these in a workflow or just @task function
 class ReferenceAnalysis(BaseModel):
     """The single description to embed, synthesized from the reference
     documents. Not a node request — it never reaches the planner, so it carries
