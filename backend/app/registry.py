@@ -21,13 +21,16 @@ from pydantic import Field
 
 from app.domains.books.guide import BOOK_SPECS
 from app.domains.node_spec import NodeSpec, NodeTier
-from app.domains.node_types import UnknownNodeTypeEnum
 
 logger = logging.getLogger(__name__)
 
 # The planner hands back `NodeTypeEnum` members, internal code passes plain
 # strings; every lookup accepts either, so no caller reaches for `.value`.
 NodeTypeKey = str | Enum
+
+
+class UnknownNodeTypeEnum(Enum):
+    UNKNOWN = "unknown"
 
 
 def class_docstring(cls: type) -> str:
