@@ -129,6 +129,12 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
             return None
 
         try:
+            # NOTE: not logging or what's missing
+            # what if one failed or missing
+            # we might want to put results in the result no matter what
+            # then the actual executor will parse it out (so it knows if there is enough info)
+            # might be able to continue without some depdency (and can inform the user)
+            
             node_input = build_input(
                 spec.input, goal.description, self._dependency_outputs(goal, results)
             )
@@ -153,6 +159,15 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         A failed dependency is absent rather than None. The keys are provenance
         only; `build_input` matches these onto declared fields by type.
         """
+        # NOTE: relying on results as key:value mapping
+        # if one is missing then this node skip
+        # we might want to follow the plan as is
+        # then it's the node/executor responsibility to parse and inform the user
+        # exeception might be if all ok=False, then we can skip(?)
+        # might have the issue of repeating stuff
+        # like "i found no books" in one section, then another "because there's no books..., I can continue/not..."
+        # having 1 generation node at the end would be nice for this
+        # rather than answering the questions at each node
         return {
             dep_id: results[dep_id]
             for dep_id in goal.get_depends_on()
@@ -187,6 +202,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         step_result = None
         try:
             step_result = await executor(node_input)
+            
+            # NOTE: probably should unwrap here
             return step_result
         finally:
             output = step_result.result if step_result else None
