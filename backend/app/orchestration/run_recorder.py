@@ -28,6 +28,21 @@ from clients.messages import (
 
 logger = logging.getLogger(__name__)
 
+from pydantic import BaseModel
+class Tracer(BaseModel):
+    name: str | None
+    steps: list["Tracer"]
+
+def to_tracer(record) -> Tracer | None:
+    if not isinstance(record, OperationResult):
+        return None
+
+    steps = [tracer for step in record.steps if (tracer := to_tracer(step))]
+    return Tracer(name=record.name, steps=steps)
+    
+    
+
+
 
 def build_chat_run_row(
     session_id: str,
@@ -89,6 +104,9 @@ async def record_chat_run(
     # it'll timeout not error (why?)
 
     try:
+        # tracer_name = to_tracer(record)
+        # save_file(tracer_name, "tracer_name")
+        
         row = build_chat_run_row(
             session_id=request_context.session_id,
             user_chat_id=request_context.user_message.id,
