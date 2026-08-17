@@ -86,8 +86,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 if not step_result.ok or step_result.result is None:
                     self.result.failed_task.append(goal.id)
                     continue
-
-                output = self._link_to_goal(goal, step_result.result)
+                
+                output = step_result.result
                 results[goal.id] = output
                 self.result.completed_task.append(output)
                 await self.sse_stream.send_divider()
@@ -215,18 +215,3 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 count=getattr(output, "num_books", None),
                 ok=bool(step_result and step_result.ok),
             )
-
-    def _link_to_goal(
-        self, goal: SystemGoal, output: NodeWorkflowOutput
-    ) -> NodeWorkflowOutput:
-        """Stamp the goal's identity onto the output it produced, so it is
-        traceable downstream: `results` keys on `output.id`, and the copied
-        `depends_on` lets the diagram be drawn from the outputs alone.
-
-        NOTE: linking the result to the goal_id for debugging and
-        visualization — but do we want to pass in a reference to the task
-        runner, or is here fine?
-        """
-        output.id = goal.id
-        output.depends_on = goal.depends_on.copy()
-        return output

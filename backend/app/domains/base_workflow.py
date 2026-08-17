@@ -43,12 +43,11 @@ class NodeWorkflowOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.response.result, exposed via
     the `.result` property (OperationResult.result)."""
 
-    # Optional, not `str = None`: model_dump_json emits `null` when unset, and
-    # a non-optional annotation then rejects its own dump on reload — which is
-    # how chat_runs rows and the parse cache get replayed.
-    id: str | None = None
-    args: Any | None = None
-    depends_on: list[str] = Field(default_factory=list)
+    # Field for the reasonings
+    # with in a workflow, we can populate this field as we see fit
+    # it can be from the query performed, tool parsed, parsed artifacts
+    # or none
+    reasoning: Any | None = None
 
     @abstractmethod
     def to_summary(self) -> dict[str, Any]: ...
