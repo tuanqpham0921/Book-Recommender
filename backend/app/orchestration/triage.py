@@ -85,10 +85,14 @@ class TriageOutput(NodeWorkflowOutput):
         review page reads it."""
         return self.parse_result.diagram if self.parse_result else None
 
-    def execution_order(self) -> ExecutionOrder:
+    def execution_order(self) -> ExecutionOrder | None:
+        if not self.parse_result:
+            return None
         return self.parse_result.execution_order()
 
-    def accepted_goals_ids(self) -> list[str]:
+    def accepted_goals_ids(self) -> list[str] | None:
+        if not self.parse_result:
+            return None
         return self.parse_result.accepted_goals_ids()
 
 

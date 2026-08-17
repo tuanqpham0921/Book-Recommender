@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 
 from pydantic import BaseModel, Field
-from typing import Any, Generic, ParamSpec, TypeVar
+from typing import Any, Generic, ParamSpec, TypeVar, cast
 from .error_info import RuntimeErrorInfo
 from .token_usage import TokenUsage
 from ..exception import StepFailure
@@ -37,6 +37,13 @@ class Response(BaseModel, Generic[OutputT]):
     output_type: str | None = None
 
 
+def _empty_response() -> Response[Any]:
+    """Factory for the field below. Bare `default_factory=Response` leaves the
+    type variable unsolved, so a checker reads the default as a *differently*
+    parametrized Response than the field it fills."""
+    return Response()
+
+
 class OperationResult(BaseModel, Generic[OutputT]):
     """Outcome of one named unit of work, and whatever work it ran in turn.
 
@@ -53,7 +60,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
     timing: Time = Field(default_factory=Time)
 
     input: dict[str, Any] | None = None
-    response: Response[OutputT] = Field(default_factory=Response)
+    response: Response[OutputT] = Field(default_factory=_empty_response)
     details: list[str] = Field(default_factory=list)
 
     token_usage: TokenUsage = Field(default_factory=TokenUsage)
@@ -101,7 +108,10 @@ class OperationResult(BaseModel, Generic[OutputT]):
         raised, one or more levels down.
         """
         if self.ok:
-            return self.result
+            # `ok` is the guarantee: a step that ran to completion produced its
+            # payload. The stored field stays `OutputT | None` because an
+            # envelope is built empty, before the step it belongs to has run.
+            return cast(OutputT, self.result)
 
         # Local import: `context` imports this module to type CURRENT_PARENT, so
         # a module-level import here would be a cycle.
@@ -185,6 +195,9 @@ class OperationResult(BaseModel, Generic[OutputT]):
         replaces it. `details` is omitted: it is mostly decorator bookkeeping.
         """
         payload = self.result
+        # bound rather than `hasattr`-guarded: the payload is `OutputT | None`,
+        # so a checker cannot narrow the attribute access on its own
+        payload_summary = getattr(payload, "to_summary", None)
         summary = {
             "id": self.id,
             # leaf of the dotted ref only; the full path is in the whole tree
@@ -197,7 +210,7 @@ class OperationResult(BaseModel, Generic[OutputT]):
             # without this an unpriced model reads as free rather than unknown
             "unpriced_models": self.token_usage.unpriced_models,
             "error": self.runtime_error.type if self.runtime_error else None,
-            "output": payload.to_summary() if hasattr(payload, "to_summary") else None,
+            "output": payload_summary() if callable(payload_summary) else None,
         }
         # `ok: False` and a genuine 0 survive this (see remove_empty_values).
         # Steps are added after so the key is absent rather than empty.

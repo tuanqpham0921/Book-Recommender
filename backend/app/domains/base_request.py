@@ -47,7 +47,7 @@ class BaseRequest(BaseModel):
     )
     _refusal: bool = PrivateAttr(default=False)
     _details: list[str] = PrivateAttr(default_factory=list)
-    _id: str = PrivateAttr(default=None)
+    _id: str | None = PrivateAttr(default=None)
     _depends_on: list[str] = PrivateAttr(default=[])
     
     @property

@@ -89,9 +89,10 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         # that way you can see the anchor query
         # but DefferedBookQuery is not serializable?
         # maybe have like a to_sql for debugging purposes
-        num_books, books = await self.preflight(
+        preview = await self.preflight(
             anchor, sample=BookConstraints.default_limit
         )
+        num_books, books = preview.unwrap()
         self.add_details(f"Dependent results has {num_books} books in total")
         if num_books > 5:
             # TODO: for now, re-query and only get the top rated

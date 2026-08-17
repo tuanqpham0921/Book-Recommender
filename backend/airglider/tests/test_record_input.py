@@ -66,6 +66,7 @@ class TestParameterNames:
         wf = _Recorded()
         await wf(_Input())
 
+        assert wf.record.input is not None
         assert "extra" not in wf.record.input
 
     async def test_no_arguments_records_none_rather_than_an_empty_dict(self):
@@ -87,6 +88,7 @@ class TestSummarizing:
         wf = _Recorded()
         await wf(_Input(query="q", anchors=[anchor]))
 
+        assert wf.record.input is not None
         assert wf.record.input["node_input"]["anchors"] == [{"num_rows": 3}]
 
     async def test_a_value_without_a_summary_is_recorded_whole(self):
@@ -95,6 +97,7 @@ class TestSummarizing:
         wf = _Recorded()
         await wf(_Input(query="books like dune"))
 
+        assert wf.record.input is not None
         assert wf.record.input["node_input"]["query"] == "books like dune"
 
 
@@ -139,6 +142,7 @@ class TestFailurePaths:
         await wf(wrong_name="x")
 
         assert wf.record.input is None
+        assert wf.record.runtime_error is not None
         assert isinstance(wf.record.runtime_error.type, str)
 
 
@@ -215,7 +219,9 @@ class TestTaskDecorator:
 
         @task(log_info=False)
         async def _custom(key):
-            current_parent().input = {"resolved": "something better"}
+            parent = current_parent()
+            assert parent is not None
+            parent.input = {"resolved": "something better"}
             return None
 
         result = await _custom("k")
@@ -232,5 +238,6 @@ class TestTaskDecorator:
         result = await _custom("k")
 
         assert result.ok is False
+        assert result.runtime_error is not None
         assert result.runtime_error.type == "TypeError"
         assert result.input == {"key": "k"}

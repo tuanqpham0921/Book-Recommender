@@ -4,8 +4,7 @@ from typing import Optional
 
 from openai import AsyncOpenAI
 
-from .base import BaseLLMClient
-from .openai_requests import OpenAIBaseRequest
+from .base import BaseLLMClient, BaseLLMRequest
 from clients.messages import AssistantMessage, TokenUsage
 from app.common.sse_stream import SSEStream
 from airglider import task
@@ -50,8 +49,14 @@ class OpenAIClient(BaseLLMClient):
             raise
     
     @task
-    async def execute(self, req: OpenAIBaseRequest, save_payload: bool = False) -> AssistantMessage:
-        """Execute the chat completion."""
+    async def execute(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
+        """Execute the chat completion.
+
+        Typed at the base request, matching `BaseLLMClient.execute` — the body
+        only ever touches `to_payload()` and `sse_stream`, both of which the
+        base declares, and narrowing it here made every app-layer caller (which
+        holds a `BaseLLMRequest`) an error.
+        """
         payload = req.to_payload()
 
         async with self.semaphore:
@@ -80,7 +85,9 @@ class OpenAIClient(BaseLLMClient):
         its `cached_tokens` are both Optional on the OpenAI side — absent on
         models/endpoints without prompt caching — so default them to 0."""
         if usage is None:
-            return None
+            # zero usage, not "no usage": the model still ran, and an empty
+            # TokenUsage sums and strips exactly like one with counts
+            return TokenUsage(model=model)
 
         prompt_details = usage.prompt_tokens_details
         completion_details = usage.completion_tokens_details

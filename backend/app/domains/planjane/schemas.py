@@ -62,7 +62,7 @@ class GoalParseRequest(BaseModel):
     )
 
     out_of_scope: list[str] = Field(
-        default=None,
+        default_factory=list,
         max_length=5,
         json_schema_extra={"example": "What's the weather like today?"},
     )

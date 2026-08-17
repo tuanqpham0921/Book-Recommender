@@ -21,6 +21,13 @@ def _op(name: str) -> OperationResult:
     return OperationResult(name=name, ok=True)
 
 
+def _name(op: OperationResult) -> str:
+    """`name` is optional on the model but set on every envelope built here.
+    The placeholder keeps names sortable and dict-keyable, and still fails the
+    assert loudly if one ever goes missing."""
+    return op.name or "<unnamed>"
+
+
 def _tree() -> OperationResult:
     """root ─┬─ a ─┬─ a1
     │      └─ a2
@@ -124,7 +131,7 @@ class TestToSpan:
 
 class TestFlatten:
     def test_every_envelope_appears_once(self):
-        names = [op.name for op in _tree().flatten()]
+        names = [_name(op) for op in _tree().flatten()]
 
         assert sorted(names) == ["a", "a1", "a2", "b", "root"]
 
@@ -162,7 +169,7 @@ class TestFlatten:
         children: dict[str, list[str]] = {}
         for op in flat:
             if op.parent_id:
-                children.setdefault(by_id[op.parent_id].name, []).append(op.name)
+                children.setdefault(_name(by_id[op.parent_id]), []).append(_name(op))
 
         assert children == {"root": ["a", "b"], "a": ["a1", "a2"]}
 

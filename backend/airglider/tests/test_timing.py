@@ -23,7 +23,11 @@ from airglider.src.utils import now_iso
 ROUNDING_TOLERANCE = 0.005
 
 
-def _parse(iso: str) -> datetime:
+def _parse(iso: str | None) -> datetime:
+    """Takes the optional `end_time` directly: it is None only while an
+    operation is still running, and every call here is on a finished one — so a
+    None is a failed test rather than a case to handle."""
+    assert iso is not None
     return datetime.fromisoformat(iso)
 
 

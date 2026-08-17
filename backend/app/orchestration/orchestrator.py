@@ -35,8 +35,8 @@ class Orchestrator:
         # Bound before the try so a cancellation mid-await still leaves them
         # for the finally block — each workflow mutates its own .record in
         # place and re-raises rather than returning it.
-        conversation_orchestrator = None
-        task_runner = None
+        triage_workflow: TriageWorkflow | None = None
+        task_runner: TaskRunnerWorkflow | None = None
         # Root of the turn's trace tree; the workflow envelopes are hung off it
         # in the finally block, so ok/duration/token_usage cover the whole turn.
         record = OperationResult(
@@ -44,6 +44,8 @@ class Orchestrator:
         )
         messages: list[APIMessage] = [request_context.user_message]
         time_start = time.perf_counter()
+        
+        # Core work
         try:
             # First and unconditionally: this id exists before any work
             # starts, so the client can attach feedback even if the turn later
@@ -51,29 +53,26 @@ class Orchestrator:
             await sse_stream.send_chat_id(request_context.user_message.id)
             await sse_stream.send_ui_loading("Starting conversation...")
 
-            # Core work
-            conversation_orchestrator = TriageWorkflow(
-                request_context, messages=messages
-            )
+            triage_workflow = TriageWorkflow(request_context, messages=messages)
             await asyncio.wait_for(
-                conversation_orchestrator(
+                triage_workflow(
                     NodeInput(query=request_context.user_message.content),
                     # use_caching=False,
                 ),
                 timeout=CONVERSATION_TIMEOUT,
             )
 
-            planner_result = conversation_orchestrator.result.parse_result
-            if (
-                conversation_orchestrator.record.ok
-                and planner_result
-                and planner_result.accepted_goals
-            ):
+            # No plan when triage handled the turn without planning (small
+            # talk, a refusal, a cache miss on a failed planner): nothing for
+            # the runner to execute. A bare read, not `unwrap()` — triage has
+            # already told the user what its own failure means.
+            plan = triage_workflow.result.parse_result
+            if triage_workflow.record.ok and plan and plan.accepted_goals:
                 task_runner = TaskRunnerWorkflow(request_context, messages=messages)
                 await asyncio.wait_for(
                     # the only place triage and the runner are wired together,
                     # so the runner never learns a triage layer exists
-                    task_runner(TaskRunnerInput(plan=planner_result)),
+                    task_runner(TaskRunnerInput(plan=plan)),
                     timeout=CONVERSATION_TIMEOUT,
                 )
 
@@ -111,7 +110,7 @@ class Orchestrator:
             # record their partial work too. isinstance-guarded rather than
             # letting add_step raise: a raise in this finally would replace the
             # exception in flight and skip the recording and stream close below.
-            for workflow in (conversation_orchestrator, task_runner):
+            for workflow in (triage_workflow, task_runner):
                 step = getattr(workflow, "record", None)
                 if isinstance(step, OperationResult):
                     record.add_step(step)
@@ -133,7 +132,7 @@ class Orchestrator:
                     self._finalize(
                         request_context,
                         record,
-                        conversation_orchestrator,
+                        triage_workflow,
                         task_runner,
                         messages,
                         sse_stream,
@@ -149,7 +148,7 @@ class Orchestrator:
     async def _finalize(
         request_context: RequestContext,
         record: OperationResult,
-        conversation_orchestrator: TriageWorkflow | None,
+        triage_workflow: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
         messages: list[APIMessage] | None,
         sse_stream: SSEStream,
@@ -161,7 +160,7 @@ class Orchestrator:
                 record_chat_run(
                     request_context,
                     record,
-                    conversation_orchestrator,
+                    triage_workflow,
                     task_runner,
                     messages,
                 ),

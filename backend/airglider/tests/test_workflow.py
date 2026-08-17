@@ -325,6 +325,7 @@ class TestUnwrap:
         result = await wf()
         assert wf.continued_past_step is False
         assert result.ok is False
+        assert result.runtime_error is not None
         assert result.runtime_error.type == "StepFailure"
         assert "flaky_step" in result.runtime_error.message
         # the caller says which step; the crash itself stays on that step
@@ -344,6 +345,7 @@ class TestUnwrap:
         result = await outer()
         assert result.ok is False
         assert result.result is None
+        assert result.runtime_error is not None
         assert result.runtime_error.type == "StepFailure"
         assert "flaky_step" in result.runtime_error.message
         assert result.steps[0].runtime_error.type == "ValueError"
@@ -362,6 +364,7 @@ class TestUnwrap:
             (await middle()).unwrap()
 
         result = await outer()
+        assert result.runtime_error is not None
         assert result.runtime_error.type == "StepFailure"
         assert "middle" in result.runtime_error.message
         assert result.steps[0].runtime_error.type == "StepFailure"
@@ -392,7 +395,8 @@ class TestAddStep:
     def test_rejects_non_operation_result(self):
         wf = _SuccessWorkflow()
         with pytest.raises(ValueError):
-            wf.record.add_step("not a result")
+            # the wrong type is the point of the test
+            wf.record.add_step("not a result")  # pyright: ignore[reportArgumentType]
 
     def test_aggregates_token_usage_across_steps(self):
         wf = _SuccessWorkflow()

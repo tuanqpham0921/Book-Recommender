@@ -8,7 +8,6 @@ from app.common.request_context import RequestContext
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
-from app.domains.base_request import BaseRequest
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from ..domains.node_spec import NodeSpec
 from dataclasses import dataclass
@@ -36,7 +35,7 @@ class TaskRunnerOutput(NodeWorkflowOutput):
     task_results: dict[str, Any] = Field(default_factory=dict)
     failed_task: list[str] = Field(default_factory=list)
 
-    completed_task: list[BaseRequest] = Field(default_factory=list)
+    completed_task: list[NodeWorkflowOutput] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
         return {
@@ -82,7 +81,9 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                     continue
 
                 step_result = await self._run_in_task_section(goal, *prepared)
-                if not step_result.ok:
+                # an `ok` envelope with no payload is a bug in the node, not a
+                # state downstream can use — one failed goal either way
+                if not step_result.ok or step_result.result is None:
                     self.result.failed_task.append(goal.id)
                     continue
 
@@ -179,7 +180,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         goal: SystemGoal,
         executor: AppWorkflow,
         node_input: WorkflowInput,
-    ) -> OperationResult:
+    ) -> OperationResult[NodeWorkflowOutput]:
         """Run one node bracketed by the UI's task.start / task.end events.
 
         The runner owns both ends, not the executors, so a node that raises — or

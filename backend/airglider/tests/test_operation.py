@@ -45,6 +45,7 @@ class TestTask:
         result = await _returns_an_envelope()
         assert isinstance(result, OperationResult)
         assert result.ok is False
+        assert result.runtime_error is not None
         assert result.runtime_error.type == "TypeError"
         assert result.timing.duration is not None
 
@@ -74,6 +75,7 @@ class TestTask:
 
     async def test_sets_function_name_on_result(self):
         result = await _returns_plain_value()
+        assert result.name is not None
         assert "test_operation" in result.name
         assert "_returns_plain_value" in result.name
 

@@ -136,7 +136,7 @@ class TestToSerializable:
 
         class Parent(BaseModel):
             x: int
-            _tag: str = PrivateAttr(default=None)
+            _tag: str | None = PrivateAttr(default=None)
 
         class Child(Parent):
             extra: str
@@ -161,7 +161,7 @@ class TestToSerializable:
 
         class Parent(BaseModel):
             x: int
-            _tag: str = PrivateAttr(default=None)
+            _tag: str | None = PrivateAttr(default=None)
 
         class Child(Parent):
             extra: str
@@ -241,8 +241,8 @@ class TestRemoveEmptyValues:
     def test_private_attr_none_stripped_set_kept(self):
         class M(BaseModel):
             x: int
-            _set_field: str = PrivateAttr(default=None)
-            _none_field: str = PrivateAttr(default=None)
+            _set_field: str | None = PrivateAttr(default=None)
+            _none_field: str | None = PrivateAttr(default=None)
 
         m = M(x=1)
         m._set_field = "hello"

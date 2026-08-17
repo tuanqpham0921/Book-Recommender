@@ -148,7 +148,9 @@ class TestAttachedOnce:
         @task(log_info=False)
         async def billed():
             # the task's own envelope: record_span published it before calling
-            current_parent().token_usage = TokenUsage(total=7)
+            parent = current_parent()
+            assert parent is not None
+            parent.token_usage = TokenUsage(total=7)
             return "done"
 
         class Explicit(Workflow):
@@ -194,6 +196,7 @@ class TestReturnedEnvelope:
 
         record = await reports()
         assert record.ok is False
+        assert record.runtime_error is not None
         assert record.runtime_error.type == "TypeError"
         assert "returns its payload" in record.runtime_error.message
 
@@ -203,6 +206,7 @@ class TestReturnedEnvelope:
             return OperationResult(ok=True)
 
         record = await reports()
+        assert record.runtime_error is not None
         assert "unwrap()" in record.runtime_error.message
         assert "add_details" in record.runtime_error.message
 
@@ -301,7 +305,9 @@ class TestTokenRollup:
         @task(log_info=False)
         async def spends():
             # a body writes usage onto the envelope it is already running in
-            current_parent().token_usage = TokenUsage(total=5)
+            parent = current_parent()
+            assert parent is not None
+            parent.token_usage = TokenUsage(total=5)
             return None
 
         @task(log_info=False)

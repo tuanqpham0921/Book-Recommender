@@ -1,4 +1,8 @@
-planner_example = {
+from typing import Any
+
+# Annotated so it lands in `ConfigDict(json_schema_extra=...)`, whose value type
+# is invariant and would otherwise reject the inferred nested-dict type.
+planner_example: dict[str, Any] = {
     "examples": [
         {
             "query": "Hi! Can you recommend books like Dune?",
