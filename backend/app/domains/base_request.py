@@ -1,14 +1,11 @@
-from common.utils import uuid_8
-from pydantic import BaseModel, Field, model_validator, PrivateAttr, field_validator
+from pydantic import BaseModel, Field, PrivateAttr
 from app.common.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
     MAX_STRING_LENGTH,
     ConfidenceFloat,
-    DescriptionStr,
     ReasoningStr
 )
-import re
 import logging
 
 logger = logging.getLogger(__name__)

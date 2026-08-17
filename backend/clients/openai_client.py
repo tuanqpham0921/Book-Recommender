@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
 
 from .base import BaseLLMClient, BaseLLMRequest
 from clients.messages import AssistantMessage, TokenUsage
@@ -13,6 +14,25 @@ from config.constants import FilesLocationConstants, OpenAIConstants
 from config.settings import OpenAISettings
 
 logger = logging.getLogger(__name__)
+
+
+class EmbeddingsResult(BaseModel):
+    """What one embeddings call produced.
+
+    A model rather than bare vectors so the `@task` envelope can promote
+    `token_usage` — the same hook `AssistantMessage` rides — because embedding
+    spend used to vanish from the run record entirely.
+
+    `embeddings` is excluded from serialization: ~1KB of floats per text that
+    no reader of a `chat_runs` row can use. Callers unwrap and read it live.
+    """
+
+    embeddings: list[list[float]] = Field(default_factory=list, exclude=True)
+    token_usage: TokenUsage | None = None
+
+    def to_summary(self) -> dict[str, Any]:
+        return {"num_texts": len(self.embeddings)}
+
 
 class OpenAIClient(BaseLLMClient):
     def __init__(self, openai_settings: OpenAISettings):
@@ -28,26 +48,31 @@ class OpenAIClient(BaseLLMClient):
         
         self.semaphore = asyncio.Semaphore(openai_settings.MAX_CONCURRENCY)
     
-    # these functions are like session commit()
-    # use them similarly to ensure proper error handling and logging
-    async def get_embeddings(self, input: list[str]) -> list[list[float]]:
-        """Get the embeddings for the input texts."""
+    @task
+    async def get_embeddings(self, input: list[str]) -> EmbeddingsResult:
+        """Embed `input`. A `@task` like `execute`: the call is its own step in
+        the trace, a failure lands on the envelope rather than raising through
+        the caller, and the usage is promoted off the returned model."""
         if self.token_count(input) > self.max_tokens:
             raise ValueError(f"Input is too long. Max tokens: {self.max_tokens}")
-        
-        try:
-            async with self.semaphore:
-                response = await self.client.embeddings.create(
-                                    input=input, 
-                                    model=self.embedding_model, 
-                                    dimensions=self.embedding_dimensions
-                                )
-                
-            return [data.embedding for data in response.data]
-        except Exception as e:
-            logger.exception(f"OpenAI embedding API call failed: {e}")
-            raise
-    
+
+        async with self.semaphore:
+            response = await self.client.embeddings.create(
+                input=input,
+                model=self.embedding_model,
+                dimensions=self.embedding_dimensions,
+            )
+
+        return EmbeddingsResult(
+            embeddings=[data.embedding for data in response.data],
+            # embeddings bill input only, so completion stays 0
+            token_usage=TokenUsage(
+                model=response.model,
+                total=response.usage.total_tokens,
+                prompt=response.usage.prompt_tokens,
+            ),
+        )
+
     @task
     async def execute(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         """Execute the chat completion.

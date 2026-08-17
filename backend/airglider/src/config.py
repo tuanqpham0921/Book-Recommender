@@ -44,6 +44,10 @@ MODEL_PRICES: dict[str, ModelPrice] = {
     "gpt-4.1-nano": ModelPrice(input=0.10, cached_input=0.025, output=0.40),
     "gpt-5-mini": ModelPrice(input=0.25, cached_input=0.025, output=2.00),
     "gpt-5-nano": ModelPrice(input=0.05, cached_input=0.005, output=0.40),
+    # embeddings bill input only — the zero rates are structural, not unknown.
+    # Added 2026-08-17 (the recommend node's similarity search).
+    "text-embedding-3-small": ModelPrice(input=0.02, cached_input=0.0, output=0.0),
+    "text-embedding-3-large": ModelPrice(input=0.13, cached_input=0.0, output=0.0),
 }
 
 

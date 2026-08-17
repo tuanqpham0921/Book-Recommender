@@ -6,11 +6,10 @@ deferred family, carried between nodes and executed for rows exactly once, at
 the end. See docs/design/execution-pipeline-v1.md.
 """
 
-from sqlalchemy import select, func, or_, and_, text, union, intersect
+from sqlalchemy import select, func, or_, text, union, intersect
 from sqlalchemy.orm import defer
-from db.schema import BooksFilter
 from db.stores.deferred_query import DeferredBookQuery
-from typing import Optional, List
+from typing import List
 
 
 def compile_sql(stmt):

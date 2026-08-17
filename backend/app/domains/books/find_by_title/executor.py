@@ -55,8 +55,7 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
         await self.sse_stream.send_ui_loading(f"finding book titled: {book_title}")
 
         deferred = self.store.title_query(title=book_title)
-        total = await self.count_books(deferred)
-        total = total.unwrap()
+        total = (await self.count_books(deferred)).unwrap()
 
         await self.sse_stream.send_chars(
             f"- Found {total} books titled: {book_title}"

@@ -88,36 +88,57 @@ class TestTokenCount:
 
 
 class TestGetEmbeddings:
+    """`get_embeddings` is a `@task`: failures land on the envelope rather
+    than raising through the caller, and the usage the API reports is promoted
+    onto the envelope (`token_usage` on the payload is consumed by the hook)."""
+
     def setup_method(self):
         self.client = make_client()
 
+    @staticmethod
+    def _fake_response(*embeddings: list[float]) -> MagicMock:
+        fake = MagicMock()
+        fake.data = [MagicMock(embedding=e) for e in embeddings]
+        fake.model = "text-embedding-3-large"
+        fake.usage.prompt_tokens = 7
+        fake.usage.total_tokens = 7
+        return fake
+
     @pytest.mark.asyncio
-    async def test_raises_when_input_too_long(self):
+    async def test_records_input_too_long_on_the_envelope(self):
         self.client.max_tokens = 1
-        with pytest.raises(ValueError, match="too long"):
-            await self.client.get_embeddings(
-                ["a very long text that exceeds one token"]
-            )
+        step = await self.client.get_embeddings(
+            ["a very long text that exceeds one token"]
+        )
+        assert not step.ok
+        assert step.runtime_error is not None
+        assert "too long" in step.runtime_error.message
 
     @pytest.mark.asyncio
-    async def test_returns_embeddings(self):
-        fake_response = MagicMock()
-        fake_response.data = [
-            MagicMock(embedding=[0.1, 0.2]),
-            MagicMock(embedding=[0.3, 0.4]),
-        ]
-        self.client.client.embeddings.create = AsyncMock(return_value=fake_response)
+    async def test_returns_embeddings_and_promotes_usage(self):
+        self.client.client.embeddings.create = AsyncMock(
+            return_value=self._fake_response([0.1, 0.2], [0.3, 0.4])
+        )
 
-        result = await self.client.get_embeddings(["hello", "world"])
-        assert result == [[0.1, 0.2], [0.3, 0.4]]
+        step = await self.client.get_embeddings(["hello", "world"])
+        assert step.unwrap().embeddings == [[0.1, 0.2], [0.3, 0.4]]
+        # promoted off the payload onto the envelope, so it rolls up like any
+        # other step's spend
+        assert step.unwrap().token_usage is None
+        assert step.token_usage.prompt == 7
+        # promotion aggregates: the model lands as a by_model bucket, priced
+        assert step.token_usage.by_model["text-embedding-3-large"].prompt == 7
+        assert step.token_usage.unpriced_models == []
 
     @pytest.mark.asyncio
-    async def test_reraises_api_error(self):
+    async def test_records_api_error_on_the_envelope(self):
         self.client.client.embeddings.create = AsyncMock(
             side_effect=RuntimeError("API down")
         )
-        with pytest.raises(RuntimeError, match="API down"):
-            await self.client.get_embeddings(["hello"])
+        step = await self.client.get_embeddings(["hello"])
+        assert not step.ok
+        assert step.runtime_error is not None
+        assert step.runtime_error.type == "RuntimeError"
 
 
 class TestExecute:

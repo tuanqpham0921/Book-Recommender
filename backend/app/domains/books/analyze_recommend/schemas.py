@@ -3,7 +3,6 @@ from app.domains.base_request import BaseRequest
 from pydantic import Field
 from typing import Literal, Optional
 from .labels import AnalyzeRecommendNodeTypeEnum
-from db.schema import BooksFilter
 
 
 # NOTE: this can inherit from the workflow itself?
@@ -13,17 +12,11 @@ class RecommendationStrategy(BaseRequest):
 
     Args:
         semantic_input: What the books should be LIKE — theme, tone, mood or
-            premise. Never a title, author, or shelf label; shelf words go to
-            Retrieve_by_Genre.
-        filters: Optional BooksFilter — pages, year, rating, ratings count,
-            child-friendly — that the SEARCH ITSELF must respect. These are not
-            applied to the depended-on books; they bound which candidates the
-            similarity search is allowed to return.
+            premise, in the user's own words. Never a title, author, or shelf
+            label; shelf words go to Retrieve_by_Genre. Omit when the ask is
+            purely "more like X" with no twist — the anchor alone carries it.
 
-    With neither semantic_input nor filters, this node returns the books closest
-    to whatever it depends on — the anchor alone carries the whole ask.
-
-    Returns: BookRecommendationOutput — a list of recommended books.
+    Returns: BookRetrievalOutput — the recommended books, chosen by this node.
 
     depends_on: at least 1 node producing books (BookRetrievalOutput) or a
     report (AnalyzeBooksOutput). Several inputs are pooled: the referenced books
@@ -31,49 +24,30 @@ class RecommendationStrategy(BaseRequest):
 
     Use when: the user wants new titles to read.
         - Similarity: "books like X", "more like X or Y" → retrieve X (and Y)
-          first
+          first; no semantic_input needed
         - Thematic / mood: "something cozy and hopeful" → semantic_input. A
           shelf word riding along ("cozy mysteries") splits: "mystery" to
           Retrieve_by_Genre, "cozy" stays here
         - Mixed: named anchor book(s) plus a twist ("like X but darker") →
           a supporting retrieval plus semantic_input
-        - Any of the above with a measurable limit ("like X but under 300
-          pages", "cozy mysteries rated 4+") → add filters
 
-    Do not use: when they only want to look up a known book or an author's/genre's
-    full catalog instead of suggestions. Do not use when there is no semantic_input
-    or to find similar book to referenced books or from a analyzed report.
+    Do not use: when they only want to look up a known book or an
+    author's/genre's full catalog instead of suggestions.
 
     Constraints: needs a supporting retrieval step, so a retrieval is still
     required even for purely thematic requests with no named book.
 
-    How this node's filters differ from Filter_Retrieval: this node SEARCHES
-    within the bounds; Filter_Retrieval DELETES from a finished result. The
-    bounds here go into the similarity query, so what comes back is the closest
-    books that already satisfy them — including books no prior step retrieved.
-    Filter_Retrieval can only remove books from a set that already exists and can
-    never surface a new one. So "something like Dune, 100-200 pages" belongs
-    here, in filters: putting it in a Filter_Retrieval afterwards would rank the
-    nearest books to Dune first — mostly long ones — and then throw nearly all of
-    them away, answering with a few poor matches or nothing at all. Narrow a
-    plain retrieval with Filter_Retrieval; narrow a recommendation with filters.
-
-    If a recommendation author, genre is known, then use retrieve random instead.
+    Example queries:
+        - "recommend books like Dune"
+        - "something cozy and hopeful to read"
+        - "books like 1984 but with more romance"
     """
 
     node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
-    semantic_input: str = Field(
-        ..., json_schema_extra={"example": "cozy and hopeful"}
-    )
-    
-    # NOTE: change this to a string
-    # you're decompositioning the query="..." to a natural language
-    # if none, then don't call book filter
-    filters: Optional[BooksFilter] = Field(
-        default=None,
-        description=(
-            "Metadata bounds the similarity search must satisfy — applied inside "
-            "the search, not to the depended-on books. Omit unless the user "
-            "stated a measurable limit."
-        ),
+
+    # No `filters` field: the search honors no metadata bounds yet, and a
+    # parsed-then-dropped bound is a promise the planner passes on to the user.
+    # It returns alongside the FilterBuilder step that actually applies it.
+    semantic_input: Optional[str] = Field(
+        default=None, json_schema_extra={"example": "cozy and hopeful"}
     )

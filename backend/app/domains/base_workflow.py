@@ -19,7 +19,7 @@ prompt without a flag on a base class.
 """
 
 import inspect
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from abc import ABC, abstractmethod
 from typing import Any, TypeVar, cast, get_args
 
@@ -30,7 +30,6 @@ from clients.messages import (
     UserMessage,
 )
 from app.common.sse_stream import SSEStream
-from app.domains.base_request import BaseRequest
 from app.domains.node_input import WorkflowInput
 from app.common.request_context import RequestContext
 from clients.base import BaseLLMRequest

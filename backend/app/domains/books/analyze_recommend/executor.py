@@ -1,15 +1,10 @@
 import logging
-from typing import List
 
 from clients.messages import AssistantMessage
-from app.common.prompt_loader import load_prompt
 from common.prompts import basic_fill_schema_prompt
 from app.domains.books.base_workflow import BookWorkflow
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
-from config import BookConstraints
-from db.stores import DeferredBookQuery
-from db.stores.utils import compose
 from .analyze_references import (
     ParsedDependents,
     ReferenceAnalysis,
@@ -177,8 +172,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
     @task
     async def similarity_search(self, search_text: str, exclude_isbns: list[str]):
-        embedding = await self.llm_client.get_embeddings([search_text])
-        embedding = embedding[0]
+        # a nested @task: its envelope (and the embedding spend it promoted)
+        # attaches under this one
+        embedded = await self.llm_client.get_embeddings([search_text])
+        embedding = embedded.unwrap().embeddings[0]
 
         # TODO: push exclude_isbns into search_by_embedding as a NOT IN — the
         # references are what the user already named, so returning them is the

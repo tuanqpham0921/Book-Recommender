@@ -1,6 +1,5 @@
-from typing import List, Optional, Any, Dict, cast
+from typing import List, Any, Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.schema import BooksFilter
 
 from db.schema import BookModel
 from .base_store import BaseStore

@@ -69,10 +69,10 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         (the readable stand-in that reaches `chat_runs`) and `num_books`, and
         fetches no rows at all.
 
-        Not a `@task`: it is one COUNT and three assignments, and everything it
-        learns is already on the node's own envelope through `self.result`, so
-        a span of its own would say nothing the record does not already say.
-        `preview_books` is the one that hands back a payload, and is traced.
+        A `@task` like every other awaited unit of work: the COUNT round trip
+        is its own step, so its duration and any failure are attributed to the
+        count rather than to whatever the node did next. Callers `.unwrap()`
+        the total; what it learns is also stamped on the node's own output.
         """
         self.result.query = query
         self.result.query_sql = compile_sql(query.stmt)
