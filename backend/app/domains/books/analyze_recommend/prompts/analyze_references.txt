@@ -83,7 +83,7 @@ that text and describe the rest of the document normally.
 
 # Output
 
-Always respond by calling `ReferenceAnalysis` with:
+Always respond by calling `IdealBookDescription` with:
 - `semantic_input` — the description, as one paragraph.
 
 # Example

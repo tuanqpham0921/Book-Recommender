@@ -16,6 +16,17 @@ books/find_by_title/
 └── __init__.py   # SPEC = NodeSpec(...) tying the three together
 ```
 
+A slice with several LLM calls grows past those four files by one rule
+(`analyze_recommend/` is the worked example): **executor.py stays the flow** —
+`run()` plus every step, methods in the order `run` calls them, pure helpers
+module-level beside them — and each **satellite module is one LLM call's pure
+half** (the rendering, the tool model, the request builder — nothing that
+runs). A builder with no rendering to carry (`build_arg_parser_request`) stays
+in executor.py. Interpretation of the node's input gets its own module when it
+outgrows `run` (`dependents.py`). Never a `utils.py` — a helper either belongs
+to the flow, to one call's pure half, or to the input, and naming the file for
+that is the point.
+
 - `node_spec.py` — `NodeSpec` (node_type, tier, request, output, executor) and
   `NodeTier`. One spec per node; it is the **only** thing a slice has to export.
   Its `__post_init__` checks the spec's name against the request schema's

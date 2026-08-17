@@ -1,3 +1,19 @@
+"""The recommend node's flow. `run` is the table of contents; everything else
+sits where the flow reaches it.
+
+How this slice is laid out (the reading rule):
+
+- **This file is the flow** — `run()` plus every *step* (anything awaited), as
+  methods in the order `run` calls them. Pure helpers whose input needs no
+  rendering are module-level functions here, also in flow order.
+- **A satellite module is one LLM call's pure half** — `analyze_references.py`
+  and `generate_response.py` each hold the rendering, the tool model and the
+  request builder for one call, and nothing that runs. The arg parser has no
+  rendering (the goal text *is* the message), so its builder lives here.
+- **`dependents.py` is step 1's interpretation** — what the node makes of the
+  anchors its input contract selected.
+"""
+
 import logging
 
 from clients.messages import AssistantMessage
@@ -5,9 +21,9 @@ from common.prompts import basic_fill_schema_prompt
 from app.domains.books.base_workflow import BookWorkflow
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
+from .dependents import ParsedDependents
 from .analyze_references import (
-    ParsedDependents,
-    ReferenceAnalysis,
+    IdealBookDescription,
     build_analysis_request,
     render_documents,
 )
@@ -24,6 +40,39 @@ logger = logging.getLogger(__name__)
 
 MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
+
+
+def build_arg_parser_request(query: str) -> OpenAIParserRequest:
+    """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
+
+    Reads the user's own words, unlike `build_analysis_request` next door,
+    which reads the documents the dependencies produced.
+    """
+    if not query:
+        raise ValueError("No query to parse arguments from")
+
+    return OpenAIParserRequest(
+        prompt=basic_fill_schema_prompt,
+        model="gpt-5-nano",
+        reasoning_effort="minimal",
+        # the goal text is the planner's own work, not something the user typed
+        # NOTE: this should carry the previous messages too; clear and direct
+        # instructions are enough while the conversation is single-turn.
+        messages=[AssistantMessage(content=query)],
+        tool_models=[RecommendationStrategy],
+        # the goal already picked the node type and tool_choice pins it, so the
+        # class docstring (there to help the planner choose) is noise here.
+        # Field descriptions still ship.
+        include_tool_description=False,
+        max_completion_tokens=2000,
+    )
+
+
+def build_search_text(analyzed: str | None, user_input: str | None) -> str:
+    """The text that gets embedded — the analyzed anchor plus whatever the
+    user asked for on top. Either half can be missing: "books like X" has no
+    twist, a purely thematic ask has no anchor."""
+    return "\n\n".join(part for part in (analyzed, user_input) if part)
 
 
 def rank_candidates(
@@ -54,32 +103,6 @@ def rank_candidates(
         if len(picked) == limit:
             break
     return picked
-
-
-def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
-
-    Reads the user's own words, unlike `build_analysis_request` next door,
-    which reads the documents the dependencies produced.
-    """
-    if not query:
-        raise ValueError("No query to parse arguments from")
-
-    return OpenAIParserRequest(
-        prompt=basic_fill_schema_prompt,
-        model="gpt-5-nano",
-        reasoning_effort="minimal",
-        # the goal text is the planner's own work, not something the user typed
-        # NOTE: this should carry the previous messages too; clear and direct
-        # instructions are enough while the conversation is single-turn.
-        messages=[AssistantMessage(content=query)],
-        tool_models=[RecommendationStrategy],
-        # the goal already picked the node type and tool_choice pins it, so the
-        # class docstring (there to help the planner choose) is noise here.
-        # Field descriptions still ship.
-        include_tool_description=False,
-        max_completion_tokens=2000,
-    )
 
 
 class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
@@ -130,7 +153,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # 5. assemble what gets embedded; either half can be missing, and this
         # is where sufficiency is judged — analyze_references returning None is
         # a missing input, an empty *sum* is a dead end
-        search_text = self.build_search_text(analyzed, parsed_args.semantic_input)
+        search_text = build_search_text(analyzed, parsed_args.semantic_input)
         # kept apart from args.semantic_input on purpose — see RecommendationOutput
         self.result.search_text = search_text
         if not search_text:
@@ -176,40 +199,12 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             return None
 
         req = build_analysis_request(document_text)
-        analysis: ReferenceAnalysis = await self.run_llm_args_parse(req)
+        analysis: IdealBookDescription = await self.run_llm_args_parse(req)
         self.add_details(
             f"Analyzed {len(books)} reference books and {len(reports)} reports "
             f"into {len(analysis.semantic_input.split())} words"
         )
         return analysis.semantic_input
-
-    @staticmethod
-    def build_search_text(analyzed: str | None, user_input: str | None) -> str:
-        """The text that gets embedded — the analyzed anchor plus whatever the
-        user asked for on top. Either half can be missing: "books like X" has no
-        twist, a purely thematic ask has no anchor."""
-        return "\n\n".join(part for part in (analyzed, user_input) if part)
-
-    async def response_to_user(self, result: RecommendationOutput) -> None:
-        """Write the note above the book cards, streamed as it is generated.
-
-        The model gets two summaries and no book descriptions (see
-        generate_response.py). The user's own phrasing comes off `result.args`;
-        `result.search_text` is assembled anchor prose and is not sent.
-        """
-        input_summary = summarize_references(
-            result.references, result.args.semantic_input if result.args else None
-        )
-        summary_text = render_summaries(input_summary, result.to_summary())
-
-        await self.sse_stream.send_ui_loading("writing up your recommendations...")
-        req = build_response_request(summary_text, self.sse_stream)
-        message = await self.run_llm_call(req)
-        self.add_details(
-            f"Wrote a {len((message.content or '').split())} word reply "
-            f"from {len(result.references)} references and "
-            f"{len(result.books)} recommendations"
-        )
 
     @task
     async def similarity_search(
@@ -232,6 +227,27 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             if row.get("isbn13") not in excluded
         ]
         return books
+
+    async def response_to_user(self, result: RecommendationOutput) -> None:
+        """Write the note above the book cards, streamed as it is generated.
+
+        The model gets two summaries and no book descriptions (see
+        generate_response.py). The user's own phrasing comes off `result.args`;
+        `result.search_text` is assembled anchor prose and is not sent.
+        """
+        input_summary = summarize_references(
+            result.references, result.args.semantic_input if result.args else None
+        )
+        summary_text = render_summaries(input_summary, result.to_summary())
+
+        await self.sse_stream.send_ui_loading("writing up your recommendations...")
+        req = build_response_request(summary_text, self.sse_stream)
+        message = await self.run_llm_call(req)
+        self.add_details(
+            f"Wrote a {len((message.content or '').split())} word reply "
+            f"from {len(result.references)} references and "
+            f"{len(result.books)} recommendations"
+        )
 
     def finalize_result(self):
         ok = self.result.args is not None and bool(self.result.books)
