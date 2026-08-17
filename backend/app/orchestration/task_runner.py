@@ -10,17 +10,9 @@ from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from ..domains.node_spec import NodeSpec
-from dataclasses import dataclass
 from airglider import OperationResult
 
 logger = logging.getLogger(__name__)
-
-
-# TODO: do the link later
-@dataclass
-class TaskRecord:
-    goal: SystemGoal
-    result: OperationResult
 
 
 class TaskRunnerInput(WorkflowInput):
@@ -32,10 +24,11 @@ class TaskRunnerInput(WorkflowInput):
 
 class TaskRunnerOutput(NodeWorkflowOutput):
     session_id: str | None = None
-    task_results: dict[str, Any] = Field(default_factory=dict)
+    # excluded from serialization: each output already lives in full on its own
+    # node's envelope in `steps`, so persisting this map would store every
+    # output twice per run. It exists for dependency resolution at runtime.
+    task_results: dict[str, Any] = Field(default_factory=dict, exclude=True)
     failed_task: list[str] = Field(default_factory=list)
-
-    completed_task: list[NodeWorkflowOutput] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
         return {
@@ -87,9 +80,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                     self.result.failed_task.append(goal.id)
                     continue
                 
-                output = step_result.result
-                results[goal.id] = output
-                self.result.completed_task.append(output)
+                results[goal.id] = step_result.result
                 await self.sse_stream.send_divider()
 
         self.result.task_results = results
@@ -171,7 +162,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         # rather than answering the questions at each node
         return {
             dep_id: results[dep_id]
-            for dep_id in goal.get_depends_on()
+            for dep_id in goal.depends_on
             if dep_id in results
         }
 

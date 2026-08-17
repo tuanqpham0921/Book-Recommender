@@ -156,32 +156,3 @@ class OpenAIChatRequest(OpenAIBaseRequest):
         payload = self.base_payload()
         payload["max_completion_tokens"] = self.max_complete_chat_tokens
         return payload
-
-
-class OpenAIToolRequest(OpenAIBaseRequest):
-    """Support both sse stream and tool choice"""
-
-    tool_models: list[type]
-
-    @model_validator(mode="after")
-    def check_tool_models(self) -> "OpenAIToolRequest":
-        if not self.tool_models:
-            raise ValueError("Usage error: tool_models must be a list of tool models")
-        return self
-
-    def to_function_tools(self) -> list[dict]:
-        tools = []
-        for tool_model in self.tool_models:
-            tool_name = tool_model.__name__
-            tool = pydantic_function_tool(
-                tool_model,
-                name=tool_name,
-            )
-            tools.append(tool)
-        return tools
-
-    def to_payload(self) -> dict[str, Any]:
-        payload = self.base_payload()
-        payload["tools"] = self.to_function_tools()
-        payload["tool_choice"] = "auto"
-        return payload

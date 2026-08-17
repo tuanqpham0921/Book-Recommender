@@ -1,9 +1,10 @@
 """Query builders for book-related database operations.
 
-Two families: `build_*_search` returns a statement run for rows straight away;
-`build_*_query` / `build_count` / `compose` / `build_materialize` are the
-deferred family, carried between nodes and executed for rows exactly once, at
-the end. See docs/design/execution-pipeline-v1.md.
+Two families: `build_embedding_search` returns a statement run for rows
+straight away; `build_*_query` / `build_count` / `compose` /
+`build_materialize` are the deferred family, carried between nodes and
+executed for rows exactly once, at the end. See
+docs/design/execution-pipeline-v1.md.
 """
 
 from sqlalchemy import select, func, or_, text, union, intersect
@@ -22,26 +23,6 @@ def compile_sql(stmt):
     except Exception:
         # fallback without literal binds
         return str(stmt.compile())
-
-
-def build_title_search(
-    model,
-    book_title: str,
-    limit: int = 1,
-    similarity_threshold: float = 0.7,
-):
-    """Apply title-based filtering with similarity search."""
-    stmt = select(model)
-    stmt = stmt.where(
-        or_(
-            model.title.ilike(f"%{book_title}%"),
-            func.similarity(model.title, book_title) > similarity_threshold,
-        )
-    )
-
-    stmt = stmt.order_by(func.similarity(model.title, book_title).desc())
-    stmt = stmt.limit(limit)
-    return stmt
 
 
 def build_embedding_search(
@@ -93,29 +74,6 @@ def build_title_query(
 def build_count(query: DeferredBookQuery):
     """COUNT over a deferred query without materializing its rows."""
     return select(func.count()).select_from(query.cte("matched"))
-
-def build_preview(query: DeferredBookQuery, model, limit: int = 3):
-    """A small sample of the match and its total size, in one statement.
-
-    `count(*) OVER ()` is evaluated before LIMIT, so `total` is the whole match
-    while the rows are the sample — one round trip, and no way for the two to
-    disagree.
-
-    Ranks by the query's own `score` when it has one, by popularity otherwise.
-    `ratings_count`, not `average_rating`: a sample should be books people
-    recognize, and top-rated surfaces obscure 5.0s with three ratings.
-    """
-    src = query.cte("preview_src")
-    stmt = (
-        select(model, func.count().over().label("total"))
-        .join(src, model.isbn13 == src.c.isbn13)
-        .options(defer(model.embedding, raiseload=True))
-    )
-    if "score" in src.c.keys():
-        stmt = stmt.order_by(src.c.score.desc())
-    else:
-        stmt = stmt.order_by(model.ratings_count.desc().nulls_last())
-    return stmt.limit(limit)
 
 
 def compose(queries: List[DeferredBookQuery], op: str = "or"):

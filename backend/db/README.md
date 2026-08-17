@@ -20,10 +20,9 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `COUNT` over it, and the statement itself rides downstream on the node's output.
   `compose()` folds several of them into one `WITH` clause (`"or"` pools, `"and"`
   intersects, both deduped by isbn13 in SQL), and `materialize()` is the single
-  place rows are fetched — at the end of the plan. `preview()` is the exception
-  that proves the rule: it returns `(total, rows)` for the UI's sample cards
-  using `count(*) OVER ()`, so the count and the handful of books shown under it
-  come from **one** round trip and cannot disagree. A `DeferredBookQuery` selects
+  place rows are fetched — at the end of the plan (the UI's sample cards are a
+  small `materialize()` call too, streamed and dropped — see
+  `BookWorkflow.preview_books`). A `DeferredBookQuery` selects
   isbn13 (plus an optional `score`) and carries **no LIMIT and no ORDER BY**; that
   is what makes two of them composable, so don't add either in a builder. See
   docs/design/execution-pipeline-v1.md.

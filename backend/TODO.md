@@ -10,6 +10,35 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+Guidelines
+
+* keep tool_schema to executor 1-1
+* the executor communicate via natural language query, and artifacts (for dependents)
+* an executor can start a new @task or worfklow
+    * it will use AirGlider unwrap to do so
+* the flow should always be 
+    1. llm parse
+    2. post process or do work
+        * post process can just be pydantic validation for formfilling (still add the tool message even if it's redudant)
+    3. return the envolope (with the ToolMessage set to response of the llm parse)
+* when in this flow it should be a new task or worfklow
+    * a simple task can be a function instead of workflow
+* @task or worfklow everything that's async (db query, or llm calls)
+
+* business failure within a workflow or app should raise
+    * it will be caught by the unwrap caller where it's needed
+* ok belongs to the workflow/task
+    * the caller will unwrap and decide what to do
+    * .ok is mainly just for it ran without run_time_errors
+
+* book domains with sql query will follow
+    1. llm call parse
+    2. get a count
+    3. send preview
+    4. return the result
+* there might be a userfacing response in between
+
+---
 continue
     * make a new branch
     * remove a lot of the implmentation from it
