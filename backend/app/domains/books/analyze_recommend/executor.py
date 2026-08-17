@@ -88,7 +88,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )
-        self.result.args = parsed_dependents
+        self.result.args = parsed_args
 
         # NOTE: this semantic_input might be able to go in the parser
         # like the overal schema. However, prompt might be big and you might want seperate things
@@ -162,7 +162,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         `result.search_text` is assembled anchor prose and is not sent.
         """
         input_summary = summarize_references(
-            result.references, getattr(result.args, "semantic_input", None)
+            result.references, result.args.semantic_input if result.args else None
         )
         summary_text = render_summaries(input_summary, result.to_summary())
 

@@ -6,6 +6,8 @@ from app.domains.books.external import BookRetrievalOutput
 from app.domains.books.schemas import Book
 from app.domains.node_input import NodeInput
 
+from .schemas import RecommendationStrategy
+
 
 class RecommendInput(NodeInput):
     """What to recommend *from*, plus the user's own words.
@@ -39,11 +41,14 @@ class RecommendationOutput(BookRetrievalOutput):
     the response generator.
 
     `search_text` is not `args.semantic_input`: `args` stays as the argument
-    parser filled it (the user's own words, which the eval suite diffs), while
-    `search_text` is the assembled anchor prose plus those words — what the
-    embedding actually saw.
+    parser filled it — the user's own words — while `search_text` is the
+    assembled anchor prose plus those words, i.e. what the embedding actually
+    saw. `args` is declared here, typed as the schema this node parses, because
+    `NodeWorkflowOutput` no longer carries an untyped one; `response_to_user`
+    reads `semantic_input` straight off it.
     """
 
+    args: RecommendationStrategy | None = None
     books: list[Book] = Field(
         default_factory=list,
         description="the rows this node chose — its answer, not a sample",

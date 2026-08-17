@@ -51,6 +51,9 @@ class ParsedDependents:
     is a book-producing output. What is left is the real choice: rows if a
     dependency has them, otherwise the query that would produce them.
 
+    Read by duck typing throughout: an anchor is whatever a dependency
+    produced, and this class asks it what it has rather than what it is.
+
     Which branch an anchor takes is now structural rather than a guess:
     `BookRetrievalOutput` carries a query and no rows, and only a node that
     *chose* rows (`RecommendationOutput`) declares `books`. So a retrieval
@@ -74,18 +77,20 @@ class ParsedDependents:
     books: list[Book] = field(default_factory=list)
     # written reports about books (AnalyzeBooksOutput, reserved)
     reports: list[str] = field(default_factory=list)
-    # "<task id>: <class name>" for anything this node can't read — an anchor
-    # carrying neither rows nor a query, which now means an output that is not
-    # book-shaped rather than one that found nothing: a retrieval stamps its
-    # query whether or not it matched. A real state to report, not a routing
-    # mistake.
+    # Class names of anything this node can't read — an anchor carrying neither
+    # rows nor a query, which now means an output that is not book-shaped rather
+    # than one that found nothing: a retrieval stamps its query whether or not it
+    # matched. A real state to report, not a routing mistake.
+    #
+    # The class name is all there is to say: outputs no longer carry the id of
+    # the goal that produced them, and only the task runner's `results` map
+    # knows which was which.
     unknown: list[str] = field(default_factory=list)
 
     @classmethod
     def from_anchors(cls, anchors: Sequence[Any]) -> "ParsedDependents":
         parsed = cls()
         for result in anchors:
-            task_id = getattr(result, "id", None) or "?"
             claimed = False
 
             # Rows, or the query that would produce them — never both, and now
@@ -109,7 +114,7 @@ class ParsedDependents:
                 claimed = True
 
             if not claimed:
-                parsed.unknown.append(f"{task_id}: {type(result).__name__}")
+                parsed.unknown.append(type(result).__name__)
 
         return parsed
 

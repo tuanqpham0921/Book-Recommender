@@ -43,12 +43,6 @@ class NodeWorkflowOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.response.result, exposed via
     the `.result` property (OperationResult.result)."""
 
-    # Field for the reasonings
-    # with in a workflow, we can populate this field as we see fit
-    # it can be from the query performed, tool parsed, parsed artifacts
-    # or none
-    reasoning: Any | None = None
-
     @abstractmethod
     def to_summary(self) -> dict[str, Any]: ...
 

@@ -146,25 +146,18 @@ class TestSuccessfulExecution:
         assert list(runner.result.task_results) == ["1"]
         assert runner.result.task_results["1"].num_books == 7
 
-    async def test_stamps_the_goal_identity_onto_the_output(self, runner):
-        # what makes the output usable downstream — `results` keys on output.id
+    async def test_keys_each_output_by_the_goal_that_produced_it(self, runner):
+        """Provenance lives in the runner's `results` map, not on the output.
+
+        `NodeWorkflowOutput` used to be stamped with `id`/`depends_on` on the
+        way out (`_link_to_goal`); it carries neither now, so this mapping is
+        the only thing tying a payload back to its goal.
+        """
         await drive(
             runner, [_goal("g0"), _goal("g1", depends_on=["g0"])], _spec(_OkExecutor)
         )
 
-        output = runner.result.task_results["g1"]
-        assert output.id == "g1"
-        assert output.depends_on == ["g0"]
-
-    async def test_copies_depends_on_rather_than_aliasing_it(self, runner):
-        # the goal and its output must not share a list — mutating one
-        # through the other is the kind of bug a `.copy()` silently prevents
-        dependent = _goal("g1", depends_on=["g0"])
-        await drive(runner, [_goal("g0"), dependent], _spec(_OkExecutor))
-
-        assert (
-            runner.result.task_results["g1"].depends_on is not dependent.depends_on
-        )
+        assert sorted(runner.result.task_results) == ["g0", "g1"]
 
     async def test_feeds_a_dependency_output_to_the_dependent_node(self, runner):
         # execution_order layers goals by len(depends_on), so "a" runs first

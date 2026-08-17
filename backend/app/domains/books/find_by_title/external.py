@@ -1,6 +1,8 @@
 from app.domains.books.external import BookRetrievalOutput
 from app.domains.node_input import NodeInput
 
+from .schemas import FindByTitleRetrieval
+
 
 class FindByTitleInput(NodeInput):
     """The goal text and nothing else.
@@ -19,4 +21,11 @@ class FindByTitleOutput(BookRetrievalOutput):
     The node keeps no rows: it streams a few cards so the section has something
     in it, and what it hands downstream is the query. `num_books == 0` means the
     catalog has no such title — a real answer, and the moment to ask the user for
-    a better one rather than to fail the node."""
+    a better one rather than to fail the node.
+
+    `args` is declared here rather than on `NodeWorkflowOutput`, and typed as
+    the schema this node actually parses: what "the arguments" *are* is a fact
+    about one node, so the base has no useful annotation for it. None means the
+    parse never happened, which is what `finalize_result` reads."""
+
+    args: FindByTitleRetrieval | None = None
