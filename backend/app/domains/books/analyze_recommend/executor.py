@@ -24,6 +24,38 @@ logger = logging.getLogger(__name__)
 
 MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
+
+
+def rank_candidates(
+    candidates: list[Book],
+    references: list[Book],
+    limit: int = MAX_RECOMMENDED_BOOKS,
+    max_same_author: int = MAX_ALLOWED_SAME_AUTHOR,
+) -> list[Book]:
+    """Pick the books to recommend, in the store's similarity order.
+
+    A pure function on purpose: "expandable later" means replacing this body
+    (or swapping the function), not growing a strategy class now. Today's one
+    rule is an author cap — "like Dune" should not be four more Herberts — and
+    it applies however few candidates there are, not only past `limit`.
+    """
+    if not candidates:
+        raise ValueError("No books were returned from embedding search")
+
+    referenced_authors = {book.authors for book in references}
+    same_author_count = 0
+    picked: list[Book] = []
+    for book in candidates:
+        if book.authors in referenced_authors:
+            if same_author_count >= max_same_author:
+                continue
+            same_author_count += 1
+        picked.append(book)
+        if len(picked) == limit:
+            break
+    return picked
+
+
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
 
@@ -59,7 +91,8 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
     async def run(self, node_input: RecommendInput) -> None:
         await self.sse_stream.send_ui_loading("recommending books...")
 
-        query = node_input.query
+        # 1. collect artifacts — the input contract selected them, interpreting
+        # them is this node's own job
         parsed_dependents = ParsedDependents.from_anchors(node_input.anchors)
         self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
         if parsed_dependents.unknown:
@@ -76,58 +109,66 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             reference_books += result.unwrap()
         self.result.references = reference_books
 
+        # 2. parse the goal text into this node's own schema.
         # Two parsers, two inputs: the reference analyzer reads the documents
         # ("what is the anchor like"), the argument parser reads the user's own
         # words ("what did they ask for on top") — the twist and the bounds,
         # neither of which the documents can carry.
         parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
-            build_arg_parser_request(query)
+            build_arg_parser_request(node_input.query)
         )
         self.result.args = parsed_args
 
-        # NOTE: this semantic_input might be able to go in the parser
-        # like the overal schema. However, prompt might be big and you might want seperate things
-        # a filter parser and a description parser. Tho this ties back to the form filling vs tool call
-        # filling the form, filters does not perform the sql
-        # so maybe filling the form returns a sql command to run?
-        semantic_input = await self.analyze_references(reference_books, parsed_dependents.reports)
+        # 3. fold the references into an ideal-book description
+        analyzed = (
+            await self.analyze_references(reference_books, parsed_dependents.reports)
+        ).unwrap()
 
-        # NOTE: parsed_args.semantic_input might not be needed
-        search_text = self.build_search_text(semantic_input, parsed_args.semantic_input)
+        # 4. the filter builder goes here when the FilterBuilder slice exists —
+        # `filters` re-grows on RecommendationStrategy the same day (schemas.py)
+
+        # 5. assemble what gets embedded; either half can be missing, and this
+        # is where sufficiency is judged — analyze_references returning None is
+        # a missing input, an empty *sum* is a dead end
+        search_text = self.build_search_text(analyzed, parsed_args.semantic_input)
         # kept apart from args.semantic_input on purpose — see RecommendationOutput
         self.result.search_text = search_text
         if not search_text:
             raise ValueError("Nothing to search on: no references and no semantic input")
 
-        # then do the similarity search
-        await self.sse_stream.send_chars(f"- loaded argument for {query}\n")
-
+        # 6. embed + search
         result = await self.similarity_search(
             search_text, exclude_isbns=[book.isbn13 for book in reference_books]
         )
         candidates = result.unwrap()
-        recommended_books = self.process_candidates(candidates, reference_books)
+
+        # 7. rank — pure, no step
+        recommended_books = rank_candidates(candidates, reference_books)
         self.result.books = recommended_books
         self.result.num_books = len(recommended_books)
 
+        # 8. show, then tell
         await self.stream_books(recommended_books)
+        await self.response_to_user(self.result)
 
-        # ---------------------------
-        # NOTE: this should be in a generation section(?)
-        # putting this here for now
-        # await self.response_to_user(self.result)
-
-        # last, not before the reply: this node owns the answer, so a run that
-        # found books and then failed to say anything about them is not ok
+        # 9. last, not before the reply: this node owns the answer, so a run
+        # that found books and then failed to say anything about them is not ok
         self.finalize_result()
 
+    @task
     async def analyze_references(
         self, books: list[Book], reports: list[str]
     ) -> str | None:
         """Fold the dependent books and reports into one description to embed.
 
-        None when there is nothing to fold: the user's own semantic_input is
-        still there to search on, so this is a missing input, not a failure.
+        A `@task` so the two parser calls in `run` are distinguishable in the
+        trace: this one's LLM step nests under a named envelope. Not a
+        `Workflow` — the payload is a string, no declared output type to carry.
+
+        None when there is nothing to fold: the producer completed, the input
+        was missing (`ok=True`, empty payload). The user's own semantic_input
+        may still carry the search; the caller judges sufficiency where the
+        two halves meet.
         """
         document_text = render_documents(books, reports)
         if not document_text:
@@ -171,7 +212,9 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         )
 
     @task
-    async def similarity_search(self, search_text: str, exclude_isbns: list[str]):
+    async def similarity_search(
+        self, search_text: str, exclude_isbns: list[str]
+    ) -> list[Book]:
         # a nested @task: its envelope (and the embedding spend it promoted)
         # attaches under this one
         embedded = await self.llm_client.get_embeddings([search_text])
@@ -189,29 +232,6 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             if row.get("isbn13") not in excluded
         ]
         return books
-
-    def process_candidates(self, candidates: list[Book], referenced_books: list[Book]) -> list[Book]:
-        if not candidates:
-            raise ValueError("No books were returned from embedding search")
-        if len(candidates) <= MAX_RECOMMENDED_BOOKS:
-            return candidates
-        
-        referenced_authors = set(book.authors for book in referenced_books)
-        same_author_count = 0
-        recommended_books = []
-        for book in candidates:
-            if book.authors in referenced_authors:
-                if same_author_count < MAX_ALLOWED_SAME_AUTHOR:
-                    recommended_books.append(book)
-                    same_author_count += 1
-            else:
-                recommended_books.append(book)
-            
-            if len(recommended_books) == MAX_RECOMMENDED_BOOKS:
-                break
-                
-        return recommended_books
-        
 
     def finalize_result(self):
         ok = self.result.args is not None and bool(self.result.books)
