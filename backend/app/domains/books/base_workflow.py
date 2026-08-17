@@ -59,7 +59,8 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         dispatch, so a mis-wired store fails there rather than at first query.
         """
         return self.ctx.store
-    
+
+    @task
     async def count_books(self, query: DeferredBookQuery) -> int:
         """Stamp the built-but-unrun query on the output and size it.
 
