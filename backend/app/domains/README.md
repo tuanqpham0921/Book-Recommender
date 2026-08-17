@@ -238,6 +238,11 @@ assumed, not restated, here.
    default (the workflow constructs its output empty, before `run`), and a
    workflow instance is single-use — construct a new one per execution,
    including retries.
+7. **Reuse before adding.** Most of what a new node needs is already on
+   `BookWorkflow`, `DeferredBookQuery`, `REGISTRY` or `airglider` — see
+   "Before Generating New Code" in the root `CLAUDE.md`, which also names the
+   duplication here that is deliberate (`build_arg_parser_request` per slice)
+   and must not be factored together.
 
 One known wart, deliberately deferred: a business dead-end that raises and a
 genuine bug both land in `runtime_error` (a `StepFailure` is stamped like any

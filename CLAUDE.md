@@ -8,6 +8,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Read the nearest folder's `README.md` before making changes there** — most backend/frontend folders have one with the local context (e.g. `backend/app/`, `backend/app/domains/`, `backend/db/`, `backend/evals/`, `frontend/src/`).
 - **Keep docs in sync**: a change to routes, the node registry, enums, or the request flow must update the nearest README, this file's architecture section, and the relevant `docs/` file in the same change.
 
+## Before Generating New Code
+
+**Default to the smallest change that works, built out of code that already exists.** Both halves are load-bearing. This repo has repeatedly paid to *delete* layers that only forwarded a call — `db/stores/utils.py`, the parallel node dicts (`NODE_TYPE_TO_CLS`, `CATALOG_TIERS`, …), `preflight()`, `BookRecommendationOutput` — and each new one costs that removal again later.
+
+**1. Search before you write.** Before adding a function, model, constant or helper, grep for the one that already does it. The things that get reinvented most:
+
+| Reaching for | Already exists |
+|---|---|
+| serialization, ids, timestamps, pricing | `airglider` — `to_serializable`, `remove_empty_values`, `strip_zero_token_usage`, `now_iso`, `uuid_8`, `cost_of`. `common/utils` **re-exports** these; never keep a second copy |
+| counting / previewing / fetching / streaming books | `BookWorkflow` — `count_books`, `preview_books`, `materialize_books`, `stream_books`, `self.store` |
+| anything derivable from an already-built query | `DeferredBookQuery` — `count_stmt()`, `materialize_stmt()`, `compose()`, plus `compile_sql` |
+| "which nodes exist / which executor / what's in the catalog" | `REGISTRY` — it answers from `SPECS` alone; never a module-level dict beside it |
+| an LLM call from inside a node | `AppWorkflow.run_llm_args_parse` / `run_llm_tool_calls` |
+| a book model with fewer fields | `Book` — narrow at the point of use (`model_dump(include=...)`), never a new class |
+| a path, a limit, a model name | `config/constants.py` / `settings` — no literals at the call site |
+
+**2. Take the smallest rung that fits.** The `@task` ladder in `backend/app/domains/README.md` (pure function → `run_llm_*` helper → `@task` method → full `Workflow`) is the specific case of a general rule: prefer a function to a class, a method on the object that already owns the data to a new module, a field to a subclass, a default to a flag. Add the next rung only when the current one demonstrably cannot carry the work.
+
+**3. Don't build for a caller that doesn't exist.** No parameter with one value, no flag with one branch, no base class with one subclass, no "we'll need this later." `ParsedInput` is the standing example of the exception being *documented rather than spread*: it exists for PlanJane alone, and new slices are told not to pre-build it.
+
+**4. Reuse means calling what exists — not hoisting new shared abstractions.** Some duplication here is deliberate and must survive: each slice writes its own `build_arg_parser_request` (so one node can change model or prompt without a flag on a shared base), `planjane/dial/` imports nothing from `app/`, and `airglider/` imports nothing from the app at all. Before factoring two things together, check that they are the same thing rather than two things that currently look alike — and that the merge doesn't cross one of those seams.
+
+**5. Removal is part of the change.** If an edit makes a function, field, test or doc paragraph dead, delete it in the same change instead of leaving it for later; a codebase this size has no room for a deprecated tier. Say what you removed when you report the work.
+
 ## Files to Avoid Reading
 
 To save tokens, do not read these unless the task specifically requires it:
