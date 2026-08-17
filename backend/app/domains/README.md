@@ -16,7 +16,10 @@ books/find_by_title/
 └── __init__.py   # SPEC = NodeSpec(...) tying the three together
 ```
 
-A slice with several LLM calls grows past those four files by one rule
+Those four files *are* the single-call template — `find_by_title/` is the
+worked example (parse args → build the query → count → preview → finalize),
+and a new node starts as a copy of it, not as a blank folder. A slice with
+several LLM calls grows past those four files by one rule
 (`analyze_recommend/` is the worked example): **executor.py stays the flow** —
 `run()` plus every step, methods in the order `run` calls them, pure helpers
 module-level beside them — and each **satellite module is one LLM call's pure
@@ -160,9 +163,9 @@ stops telling you the planner can reach it.
 
 So: `<node>/executor.py` holding `<Node>Executor`, and `NodeSpec.executor`
 pointing at it; `base_workflow.py` holding the bases they build on.
-- `node_types.py` — just `UnknownNodeTypeEnum`. `NodeTypeEnum` is built in
-  `app/registry.py`; it cannot live here without an import cycle back through the
-  slices.
+- `UnknownNodeTypeEnum` lives in `app/registry.py` beside the `NodeTypeEnum`
+  it complements (the old `node_types.py` module here is gone — neither enum
+  can live under `domains/` without an import cycle back through the slices).
 - `planjane/` — **the planner**, split three ways, matching the slice layout
   used elsewhere. `external.py` is what the plan *is* and the address every
   other layer imports it from: `SystemGoal`, `PlanJaneOutput`, and
@@ -190,8 +193,9 @@ pointing at it; `base_workflow.py` holding the bases they build on.
   What decides *whether* to call PlanJane — cache, small talk, out of scope —
   is `app/orchestration/triage.py`, not here: it is not a capability, and
   no `NodeSpec.executor` will ever point at it.
-- `task_runner.py` — `TaskRunnerWorkflow`, executes a classified plan. It takes
-  a `TaskRunnerInput(plan=...)` and nothing else — no `query`, because its work
+- `TaskRunnerWorkflow` lives in **`app/orchestration/task_runner.py`** (it
+  dispatches capabilities rather than being one, like Triage). It takes a
+  `TaskRunnerInput(plan=...)` and nothing else — no `query`, because its work
   is driven entirely by the plan. `_prepare` is the one gate every goal passes:
   resolve the spec, check it has an executor, narrow the context, assemble the
   input. All four ways of failing skip that single goal and leave the rest of
@@ -267,8 +271,10 @@ branches on `runtime_error.type`.
 
 ## Adding a node (the standard path)
 
-1. Create the folder `<domain>/<node>/` with the four files above. A book node's
-   executor subclasses `BookWorkflow[TheOutput]` and implements
+1. Create the folder `<domain>/<node>/` by **copying the matching template** —
+   `find_by_title/` for a single-call node, `analyze_recommend/` for a
+   multi-step one — rather than writing the four files from scratch. A book
+   node's executor subclasses `BookWorkflow[TheOutput]` and implements
    **`run(node_input)`** — the one call shape, same as everything else.
    (There is no `execute()` hook any more: it existed only to keep `run()` from
    being overridden while `run()` was where `self.store` got bound. `store` is a

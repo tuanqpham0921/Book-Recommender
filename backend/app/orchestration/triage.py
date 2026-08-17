@@ -106,29 +106,32 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
         query = node_input.query
         self.result.session_id = self.session_id
 
+        # 1. replay a recorded plan when one exists — no LLM, same output shape
         if use_caching:
             cached = load_cached_parse_output(query)
             if cached is not None:
                 logger.info(f"Replaying cached plan for: {query}")
                 self.result.parse_result = cached
-                self.record.ok = True
+                self.finalize_result(ok=True)
                 return
 
-        # a bare await, not `unwrap()`: triage decides what a failed planner
-        # means (a specific message to the user), so it wants the envelope
+        # 2. plan. A bare await, not `unwrap()`: triage decides what a failed
+        # planner means (a specific message to the user), so it wants the
+        # envelope
         planner = PlanJaneExecutor(self.ctx, messages=self.messages)
         planner_record = await planner(NodeInput(query=query))
 
         # the workflow pre-initializes its output, so this is never None
         self.result.parse_result = planner.result
 
+        # 3. triage owns what a planner failure means to the user
         if not planner_record.ok:
-            self.record.ok = False
             if planner_record.runtime_error:
                 self.record.runtime_error = planner_record.runtime_error
                 await self.sse_stream.send_error(self.planner_failure_message)
+            self.finalize_result(ok=False)
             return
 
         # ok with no goals is a handled turn, not a failure — PlanJane already
         # streamed the reply (small talk / out-of-scope / refusals)
-        self.record.ok = True
+        self.finalize_result(ok=True)

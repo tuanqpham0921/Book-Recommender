@@ -191,13 +191,23 @@ class TestPromptCosts:
             model for model, _, _ in tools_catalog.CATALOG_CONSUMERS
         }
 
-    def test_cached_is_cheaper_than_uncached(self):
+    # The arithmetic tests pin a *priced* consumer rather than the live table:
+    # the live planner model may have no price yet, which renders `?` and has
+    # its own test below.
+
+    def test_cached_is_cheaper_than_uncached(self, monkeypatch):
         # the whole reason both are reported: the catalog is byte-identical
         # every request, so the cached rate is the steady state
+        monkeypatch.setattr(
+            tools_catalog, "CATALOG_CONSUMERS", (("gpt-4.1-mini", 1, "somewhere"),)
+        )
         for cost in prompt_costs(1000):
             assert cost["cached"] < cost["uncached"]
 
-    def test_cost_scales_with_catalog_size(self):
+    def test_cost_scales_with_catalog_size(self, monkeypatch):
+        monkeypatch.setattr(
+            tools_catalog, "CATALOG_CONSUMERS", (("gpt-4.1-mini", 1, "somewhere"),)
+        )
         small = sum(c["uncached"] for c in prompt_costs(1000))
         large = sum(c["uncached"] for c in prompt_costs(2000))
 

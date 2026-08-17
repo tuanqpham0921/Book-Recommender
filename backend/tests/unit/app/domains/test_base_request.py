@@ -9,7 +9,7 @@ from pydantic import model_validator
 
 from app.domains.base_request import BaseRequest
 from app.common.field_types import MAX_STRING_LENGTH, REASONING_FALLBACK
-from app.domains.node_types import UnknownNodeTypeEnum
+from app.registry import UnknownNodeTypeEnum
 
 
 class _FakeDomain(BaseRequest):

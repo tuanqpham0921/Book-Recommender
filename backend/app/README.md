@@ -11,9 +11,9 @@ Architecture overview lives in the root [CLAUDE.md](../../CLAUDE.md); V1 plans i
 | `main.py` | FastAPI app factory, CORS, router registration |
 | `api/routes/` | One file per router (health, session, chat_message, chat_run, feedback) |
 | `api/schemas/` | External request/response models (`ChatIn`, `ReviewIn`, …) |
-| `orchestration/` | `Orchestrator` (entry point per message) + `RequestContext` |
-| `domains/` | Node type system + planner pipeline — see [domains/README.md](domains/README.md) |
-| `common/` | App-level workflow base, `SSEStream`, message types |
+| `orchestration/` | `Orchestrator` (transport per message), `TriageWorkflow`, `TaskRunnerWorkflow`, run recorder |
+| `domains/` | Node type system + PlanJane, the planner — see [domains/README.md](domains/README.md) |
+| `common/` | `RequestContext`, `SSEStream`, message types, prompt loading |
 | `registry.py` | `Registry` — every node lookup (schema, executor, catalog, planner enum) derived from `SPECS` |
 
 ## API surface
@@ -33,10 +33,11 @@ There is no auth yet — a known pre-deploy blocker (docs/backlog.md, Security P
 ## Request flow (current state)
 
 1. `POST /session/{session_id}/message` → `Orchestrator.run` builds a `RequestContext`
-   and delegates to `PlannerWorkflow` (`domains/planner/main.py`).
-2. The planner parses intent → classifies strategies → streams a Mermaid task-plan
-   diagram and the goal list over SSE.
-3. `TaskRunnerWorkflow` (`domains/task_runner.py`) runs the accepted goals in dependency
+   and delegates to `TriageWorkflow` (`orchestration/triage.py`), which decides whether
+   to plan at all — replay a cached plan, or hand the turn to the planner.
+2. `PlanJaneExecutor` (`domains/planjane/`) parses the message into goals against the
+   live tool catalog and streams the plan's Mermaid diagram over SSE.
+3. `TaskRunnerWorkflow` (`orchestration/task_runner.py`) runs the accepted goals in dependency
    order against the **real** executors (`REGISTRY.spec(...).executor` in
    `registry.py`), for the node types registered on this branch. It
    brackets each node with `task.start` / `task.end` SSE events — closed in a `finally`,

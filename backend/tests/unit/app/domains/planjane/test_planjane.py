@@ -20,7 +20,7 @@ from pydantic import ValidationError
 from clients.messages import UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput, ParsedInput
-from app.domains.node_types import UnknownNodeTypeEnum
+from app.registry import UnknownNodeTypeEnum
 from app.domains.planjane import (
     GoalParseRequest,
     SystemGoal,
@@ -211,19 +211,19 @@ class TestFinalizeResult:
     found out-of-scope content now finishes not-ok.
     """
 
-    async def test_ok_true_when_accepted_goals_present(self, parse_wf):
+    def test_ok_true_when_accepted_goals_present(self, parse_wf):
         parse_wf.result.accepted_goals.append(_make_goal())
-        await parse_wf.finalize_result()
+        parse_wf.finalize_result()
         assert parse_wf.record.ok is True
 
-    async def test_ok_false_when_only_out_of_scope_content(self, parse_wf):
+    def test_ok_false_when_only_out_of_scope_content(self, parse_wf):
         # the behaviour change: out-of-scope alone no longer rescues `ok`
         parse_wf.result.out_of_scope = ["Cooking recipe"]
-        await parse_wf.finalize_result()
+        parse_wf.finalize_result()
         assert parse_wf.record.ok is False
 
-    async def test_ok_false_when_nothing_was_planned(self, parse_wf):
-        await parse_wf.finalize_result()
+    def test_ok_false_when_nothing_was_planned(self, parse_wf):
+        parse_wf.finalize_result()
         assert parse_wf.record.ok is False
         assert isinstance(parse_wf.record.ok, bool)
 

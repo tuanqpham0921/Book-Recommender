@@ -52,9 +52,9 @@ FALLBACK_ENCODING = "o200k_base"
 # The models the planner runs, and how many times each sees the whole catalog
 # per request. Classification is absent on purpose: it sends per-node schemas,
 # not the catalog, and is reported separately.
+# (model, catalog sends per request, call site). Unpriced models report `?`.
 CATALOG_CONSUMERS = (
-    ("gpt-4.1", 1, "parse_intent._run_llm_args_parse (goal generation)"),
-    ("gpt-4.1-mini", 1, "parse_intent.generate_user_response (user-facing reply)"),
+    ("gpt-5.6-terra", 1, "planjane.build_goal_parse_request (goal generation)"),
 )
 
 # Prompt engineering, not style: "Do not use" and "Example queries" are the
@@ -248,11 +248,19 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         "| call site | model | tokens | uncached | cached |",
         "|---|---|---:|---:|---:|",
     ]
-    total_uncached = 0.0
-    total_cached = 0.0
+    # Totals stay honest the way _dollars does: one unpriced consumer makes
+    # the total unknown (`?`), never a smaller number that reads as real spend.
+    total_uncached: float | None = 0.0
+    total_cached: float | None = 0.0
     for cost in prompt_costs(stats["block_tokens"]):
-        total_uncached += cost["uncached"] or 0.0
-        total_cached += cost["cached"] or 0.0
+        total_uncached = (
+            None if None in (total_uncached, cost["uncached"])
+            else total_uncached + cost["uncached"]
+        )
+        total_cached = (
+            None if None in (total_cached, cost["cached"])
+            else total_cached + cost["cached"]
+        )
         lines.append(
             f"| {cost['call_site']} | `{cost['model']}` | {cost['tokens']:,} "
             f"| {_dollars(cost['uncached'])} | {_dollars(cost['cached'])} |"
@@ -261,9 +269,12 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         f"| **per request** | | | **{_dollars(total_uncached)}** "
         f"| **{_dollars(total_cached)}** |",
         "",
-        f"At 1,000 requests: {_dollars(total_uncached * 1000)} uncached, "
-        f"{_dollars(total_cached * 1000)} cached — catalog text alone, before "
-        "any user message, reasoning or output.",
+        f"At 1,000 requests: "
+        f"{_dollars(total_uncached * 1000 if total_uncached is not None else None)} "
+        f"uncached, "
+        f"{_dollars(total_cached * 1000 if total_cached is not None else None)} "
+        f"cached — catalog text alone, before any user message, reasoning or "
+        "output.",
         "",
     ]
 
