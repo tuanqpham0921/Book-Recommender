@@ -33,9 +33,9 @@ from app.common.sse_stream import SSEStream
 from app.domains.node_input import WorkflowInput
 from app.common.request_context import RequestContext
 from clients.base import BaseLLMRequest
-from clients.openai_client import OpenAIClient
+from clients.openai_client import EmbeddingsResult, OpenAIClient
 from openai.types.chat import ParsedFunctionToolCall
-from airglider import Workflow
+from airglider import OperationResult, Workflow, task
 
 
 class NodeWorkflowOutput(BaseModel, ABC):
@@ -143,15 +143,67 @@ class AppWorkflow(Workflow[OutputT], ABC):
         field is a state to handle, not an error to raise.
         """
 
+    # ---- the client boundary: thin @task wrappers -----------------------
+    # clients/ is tracing-free (see BaseLLMClient) — a client method raises on
+    # failure and returns its payload. These wrappers are where a client call
+    # becomes a *step*: the envelope, the failure capture, the request summary
+    # in `record.input`, and the token-usage promotion all happen here. Keep
+    # them one line of body each; anything more belongs in the client (I/O) or
+    # in the caller (policy).
+
+    @task
+    async def llm_execute(
+        self, req: BaseLLMRequest, save_payload: bool = False
+    ) -> AssistantMessage:
+        """One completion call as a step. `AssistantMessage.token_usage` rides
+        the promotion hook onto this envelope."""
+        return await self.llm_client.execute(req, save_payload=save_payload)
+
+    @task
+    async def get_embeddings(self, texts: list[str]) -> EmbeddingsResult:
+        """One embeddings call as a step; `EmbeddingsResult.token_usage` is
+        promoted the same way, so embedding spend lands in the trace."""
+        return await self.llm_client.get_embeddings(texts)
+
+    @task
+    async def execute_tool_call(
+        self, tool_call: ParsedFunctionToolCall, **kwargs
+    ) -> ToolMessage:
+        """Run one parsed tool call and wrap what it returns as a ToolMessage.
+
+        Moved off `ToolMessage.execute` so the message class stays pure shape
+        and clients/ carries no instrumentation.
+        """
+        tool_name = tool_call.function.name
+        # parsed_arguments is typed `object | None` by the openai lib; the
+        # parser validated it into a callable node instance
+        tool_instance = cast(Any, tool_call.function.parsed_arguments)
+        output = await tool_instance(**kwargs)
+
+        # A tool that is itself a Workflow or a @task hands back an envelope,
+        # and that is the useful case rather than a mistake: it ran inside this
+        # task's `parent_scope`, so its record — with its own duration, steps
+        # and token usage — has already attached itself under this one. Only the
+        # payload belongs in the message going back to the model, so unwrap it.
+        if isinstance(output, OperationResult):
+            output = output.result
+
+        return ToolMessage(
+            name=tool_name,
+            tool_call_id=tool_call.id,
+            content=output,
+        )
+
+    # ---- LLM helpers over those steps -----------------------------------
+
     async def run_llm_call(
         self, req: BaseLLMRequest, save_payload: bool = False
     ) -> AssistantMessage:
         # unwrap, not a bare await: a node that asked for a completion cannot
         # continue without one, so a failed call stops this workflow rather than
-        # feeding None downstream. The envelope is `OperationResult[Any]`, hence
-        # the cast.
-        step = await self.llm_client.execute(req, save_payload=save_payload)
-        msg = cast(AssistantMessage, step.unwrap())
+        # feeding None downstream.
+        step = await self.llm_execute(req, save_payload=save_payload)
+        msg = step.unwrap()
         self.messages.append(msg)
         return msg
 
@@ -200,8 +252,8 @@ class AppWorkflow(Workflow[OutputT], ABC):
     async def run_tool_call(
         self, tool_call: ParsedFunctionToolCall, **kwargs
     ) -> ToolMessage:
-        step = await ToolMessage.execute(tool_call, **kwargs)
-        tool_msg = cast(ToolMessage, step.unwrap())
+        step = await self.execute_tool_call(tool_call, **kwargs)
+        tool_msg = step.unwrap()
         self.messages.append(tool_msg)
         return tool_msg
 

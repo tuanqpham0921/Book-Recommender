@@ -72,8 +72,9 @@ class GoalParseRequest(BaseModel):
     ) -> OperationResult:
         """Run this already-filled tool schema through the planner's executor.
 
-        The tool schema stays exposed and callable — `ToolMessage.execute`
-        dispatches a parsed tool call exactly this way — while the goals are
+        The tool schema stays exposed and callable — `AppWorkflow.
+        execute_tool_call` dispatches a parsed tool call exactly this way —
+        while the goals are
         processed by the one implementation in `PlanJaneExecutor`, which skips
         the parse it no longer needs.
 

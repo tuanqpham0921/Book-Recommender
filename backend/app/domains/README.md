@@ -65,7 +65,8 @@ that is the point.
   someone already parsed, rather than text to parse. A node accepting both
   annotates `run` with the union (`PlanJaneInput`) and branches once, so the
   tool schema can be exposed and called directly — see `GoalParseRequest.__call__`,
-  which is the shape `ToolMessage.execute` dispatches a parsed tool call into.
+  which is the shape `AppWorkflow.execute_tool_call` dispatches a parsed tool
+  call into.
   It is parameterized rather than typed `BaseRequest` so the branch is a typed
   field, not a cast: a payload of the wrong schema fails building the input.
   PlanJane is its only consumer today — nodes stay NL-only until something
@@ -227,8 +228,11 @@ assumed, not restated, here.
    ladder, smallest rung that fits:
    - a **pure function** for building requests (`build_*_request`) — sync, no
      I/O, testable without a workflow;
-   - the **`run_llm_*` helpers** for LLM calls — the client's `execute` (a
-     `@task`) is the step;
+   - the **`run_llm_*` helpers** for LLM calls — `AppWorkflow`'s thin `@task`
+     wrappers (`llm_execute`, `get_embeddings`, `execute_tool_call`) are the
+     steps. **clients/ itself is tracing-free**: a client method raises and
+     returns its payload, and never grows a `@task` — the app decides what is
+     a step;
    - a **`@task` method** for an async unit that returns a payload
      (`count_books`, `preview_books`, `similarity_search`);
    - a **`Workflow`** only when the sub-work needs its own declared output

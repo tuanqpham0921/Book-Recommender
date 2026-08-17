@@ -17,13 +17,16 @@ picking artifacts by type) moved to `build_input` — see test_node_input.py.
 """
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from airglider import OperationResult, Response, TokenUsage, task
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.domains.node_input import NodeInput, WorkflowInput
 from app.registry import REGISTRY
+from clients.messages import AssistantMessage, ToolMessage
+from clients.openai_client import EmbeddingsResult
 from db.stores.base_store import BaseStore
 from db.stores.book_store import BookStore
 
@@ -122,3 +125,145 @@ class TestOutputTypeGuard:
         # "output was not initialized" from somewhere inside run()
         with pytest.raises(TypeError, match="pinned no output type"):
             _Unpinned(request_context)
+
+
+class TestClientBoundaryWrappers:
+    """clients/ is tracing-free; these wrappers are where a client call
+    becomes a step — envelope, failure capture, token-usage promotion."""
+
+    def make_workflow(self, request_context) -> _Workflow:
+        return _Workflow(request_context)
+
+    async def test_llm_execute_wraps_the_message_in_an_envelope(
+        self, request_context
+    ):
+        request_context.llm_client.execute = AsyncMock(
+            return_value=AssistantMessage(content="hi", token_usage=TokenUsage(
+                model="gpt-4.1-mini", total=10, prompt=7, completion=3
+            ))
+        )
+        wf = self.make_workflow(request_context)
+
+        step = await wf.llm_execute(MagicMock())
+        assert step.ok
+        assert step.unwrap().content == "hi"
+        # promoted: spend on the envelope, the payload's copy nulled
+        assert step.token_usage.by_model["gpt-4.1-mini"].total == 10
+        assert step.unwrap().token_usage is None
+
+    async def test_llm_execute_records_a_client_raise_as_a_failed_step(
+        self, request_context
+    ):
+        request_context.llm_client.execute = AsyncMock(
+            side_effect=RuntimeError("API down")
+        )
+        wf = self.make_workflow(request_context)
+
+        step = await wf.llm_execute(MagicMock())
+        assert not step.ok
+        assert step.runtime_error is not None
+        assert "API down" in step.runtime_error.message
+
+    async def test_get_embeddings_promotes_embedding_spend(self, request_context):
+        request_context.llm_client.get_embeddings = AsyncMock(
+            return_value=EmbeddingsResult(
+                embeddings=[[0.1, 0.2]],
+                token_usage=TokenUsage(
+                    model="text-embedding-3-large", total=7, prompt=7
+                ),
+            )
+        )
+        wf = self.make_workflow(request_context)
+
+        step = await wf.get_embeddings(["hello"])
+        assert step.unwrap().embeddings == [[0.1, 0.2]]
+        assert step.token_usage.by_model["text-embedding-3-large"].prompt == 7
+        assert step.token_usage.unpriced_models == []
+        assert step.unwrap().token_usage is None
+
+
+class TestExecuteToolCall:
+    """Moved from `ToolMessage.execute` when clients/ went tracing-free;
+    the dispatch contract is unchanged."""
+
+    def make_workflow(self, request_context) -> _Workflow:
+        return _Workflow(request_context)
+
+    def _make_tool_call(self, name: str, output):
+        tool_instance = AsyncMock(return_value=output)
+        tool_call = MagicMock()
+        tool_call.id = "call_abc123"
+        tool_call.function.name = name
+        tool_call.function.parsed_arguments = tool_instance
+        return tool_call
+
+    async def test_returns_tool_message_in_an_envelope(self, request_context):
+        wf = self.make_workflow(request_context)
+        tool_call = self._make_tool_call("FindByTitle", {"title": "Dune"})
+
+        result = await wf.execute_tool_call(tool_call)
+        assert isinstance(result, OperationResult)
+        msg = result.unwrap()
+        assert isinstance(msg, ToolMessage)
+        assert msg.name == "FindByTitle"
+        assert msg.tool_call_id == "call_abc123"
+        assert msg.content == {"title": "Dune"}
+
+    async def test_kwargs_forwarded_to_tool(self, request_context):
+        wf = self.make_workflow(request_context)
+        tool_call = self._make_tool_call("SomeTool", "ok")
+
+        await wf.execute_tool_call(tool_call, db="mock_db", user_id=42)
+        tool_call.function.parsed_arguments.assert_awaited_once_with(
+            db="mock_db", user_id=42
+        )
+
+    async def test_unwraps_operation_result_output(self, request_context):
+        wf = self.make_workflow(request_context)
+        tool_call = self._make_tool_call(
+            "FindByTitle",
+            OperationResult(ok=True, response=Response(result={"title": "Dune"})),
+        )
+
+        result = await wf.execute_tool_call(tool_call)
+        assert result.unwrap().content == {"title": "Dune"}
+
+    async def test_a_tool_that_records_itself_nests_under_the_step(
+        self, request_context
+    ):
+        """A tool returning an envelope is the useful case, not a mistake.
+
+        `execute_tool_call` is a `@task`, so it publishes its own record while
+        the tool runs; a tool that is itself instrumented adopts itself under
+        it and its duration, steps and token usage land in the trace at the
+        right depth. Only the payload goes back to the model.
+        """
+
+        @task(log_info=False)
+        async def find_by_title(**kwargs):
+            return {"title": "Dune"}
+
+        wf = self.make_workflow(request_context)
+        tool_call = MagicMock()
+        tool_call.id = "call_1"
+        tool_call.function.name = "FindByTitle"
+        tool_call.function.parsed_arguments = find_by_title
+
+        result = await wf.execute_tool_call(tool_call)
+
+        assert result.unwrap().content == {"title": "Dune"}
+        assert [s.name.split(".")[-1] for s in result.steps] == ["find_by_title"]
+        assert result.steps[0].parent_id == result.id
+
+    async def test_exception_captured_as_failed_result(self, request_context):
+        wf = self.make_workflow(request_context)
+        tool_instance = AsyncMock(side_effect=RuntimeError("db error"))
+        tool_call = MagicMock()
+        tool_call.id = "call_1"
+        tool_call.function.name = "BrokenTool"
+        tool_call.function.parsed_arguments = tool_instance
+
+        result = await wf.execute_tool_call(tool_call)
+        assert result.ok is False
+        assert result.runtime_error is not None
+        assert "db error" in result.runtime_error.message

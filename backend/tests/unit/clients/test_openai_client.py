@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
-from airglider import OperationResult
 from clients.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
@@ -88,9 +87,10 @@ class TestTokenCount:
 
 
 class TestGetEmbeddings:
-    """`get_embeddings` is a `@task`: failures land on the envelope rather
-    than raising through the caller, and the usage the API reports is promoted
-    onto the envelope (`token_usage` on the payload is consumed by the hook)."""
+    """Tracing-free like the rest of the client: failures raise through the
+    caller, and `token_usage` stays on the returned payload — it is the app's
+    wrapper task (`AppWorkflow.get_embeddings`, see test_app_workflow.py) that
+    turns the call into a step and promotes the usage."""
 
     def setup_method(self):
         self.client = make_client()
@@ -105,40 +105,34 @@ class TestGetEmbeddings:
         return fake
 
     @pytest.mark.asyncio
-    async def test_records_input_too_long_on_the_envelope(self):
+    async def test_raises_when_input_too_long(self):
         self.client.max_tokens = 1
-        step = await self.client.get_embeddings(
-            ["a very long text that exceeds one token"]
-        )
-        assert not step.ok
-        assert step.runtime_error is not None
-        assert "too long" in step.runtime_error.message
+        with pytest.raises(ValueError, match="too long"):
+            await self.client.get_embeddings(
+                ["a very long text that exceeds one token"]
+            )
 
     @pytest.mark.asyncio
-    async def test_returns_embeddings_and_promotes_usage(self):
+    async def test_returns_embeddings_with_usage_on_the_payload(self):
         self.client.client.embeddings.create = AsyncMock(
             return_value=self._fake_response([0.1, 0.2], [0.3, 0.4])
         )
 
-        step = await self.client.get_embeddings(["hello", "world"])
-        assert step.unwrap().embeddings == [[0.1, 0.2], [0.3, 0.4]]
-        # promoted off the payload onto the envelope, so it rolls up like any
-        # other step's spend
-        assert step.unwrap().token_usage is None
-        assert step.token_usage.prompt == 7
-        # promotion aggregates: the model lands as a by_model bucket, priced
-        assert step.token_usage.by_model["text-embedding-3-large"].prompt == 7
-        assert step.token_usage.unpriced_models == []
+        result = await self.client.get_embeddings(["hello", "world"])
+        assert result.embeddings == [[0.1, 0.2], [0.3, 0.4]]
+        # untouched here: promotion is the wrapper task's job, so the client
+        # hands the usage over exactly as the API reported it
+        assert result.token_usage is not None
+        assert result.token_usage.model == "text-embedding-3-large"
+        assert result.token_usage.prompt == 7
 
     @pytest.mark.asyncio
-    async def test_records_api_error_on_the_envelope(self):
+    async def test_api_error_raises_through(self):
         self.client.client.embeddings.create = AsyncMock(
             side_effect=RuntimeError("API down")
         )
-        step = await self.client.get_embeddings(["hello"])
-        assert not step.ok
-        assert step.runtime_error is not None
-        assert step.runtime_error.type == "RuntimeError"
+        with pytest.raises(RuntimeError, match="API down"):
+            await self.client.get_embeddings(["hello"])
 
 
 class TestExecute:
@@ -146,25 +140,17 @@ class TestExecute:
         self.client = make_client()
 
     @pytest.mark.asyncio
-    async def test_returns_operation_result(self):
-        fake_completion = make_fake_completion()
-        self.client._chat_stream = AsyncMock(return_value=fake_completion)
-
-        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
-        result = await self.client.execute(req)
-
-        assert isinstance(result, OperationResult)
-
-    @pytest.mark.asyncio
-    async def test_output_is_assistant_message(self):
+    async def test_returns_assistant_message(self):
+        # the message itself, no envelope: the client is tracing-free and the
+        # app's `llm_execute` wrapper is what makes this call a step
         fake_completion = make_fake_completion(content="hello")
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
         req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
-        assert isinstance(result.result, AssistantMessage)
-        assert result.result.content == "hello"
+        assert isinstance(result, AssistantMessage)
+        assert result.content == "hello"
 
     @pytest.mark.asyncio
     async def test_token_usage_propagated(self):
@@ -324,10 +310,11 @@ class TestPing:
             model="gpt-4o", input="ping"
         )
 
-    # NOTE: open_ai client ping is now a task
-    # waiting for @task and workflow tests
-    # @pytest.mark.asyncio
-    # async def test_reraises_on_failure(self):
-    #     self.client.client.responses.create = AsyncMock(side_effect=RuntimeError("timeout"))
-    #     with pytest.raises(RuntimeError, match="timeout"):
-    #         await self.client.ping()
+    @pytest.mark.asyncio
+    async def test_reraises_on_failure(self):
+        # tracing-free again, so a failure raises straight through
+        self.client.client.responses.create = AsyncMock(
+            side_effect=RuntimeError("timeout")
+        )
+        with pytest.raises(RuntimeError, match="timeout"):
+            await self.client.ping()

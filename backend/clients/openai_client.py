@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from .base import BaseLLMClient, BaseLLMRequest
 from clients.messages import AssistantMessage, TokenUsage
 from app.common.sse_stream import SSEStream
-from airglider import task
 from common.utils import save_file
 from config.constants import FilesLocationConstants, OpenAIConstants
 from config.settings import OpenAISettings
@@ -19,12 +18,13 @@ logger = logging.getLogger(__name__)
 class EmbeddingsResult(BaseModel):
     """What one embeddings call produced.
 
-    A model rather than bare vectors so the `@task` envelope can promote
-    `token_usage` — the same hook `AssistantMessage` rides — because embedding
-    spend used to vanish from the run record entirely.
+    A model rather than bare vectors so the app's wrapping `@task`
+    (`AppWorkflow.get_embeddings`) can promote `token_usage` — the same hook
+    `AssistantMessage` rides — because embedding spend used to vanish from the
+    run record entirely.
 
     `embeddings` is excluded from serialization: ~1KB of floats per text that
-    no reader of a `chat_runs` row can use. Callers unwrap and read it live.
+    no reader of a `chat_runs` row can use. Callers read it live.
     """
 
     embeddings: list[list[float]] = Field(default_factory=list, exclude=True)
@@ -48,11 +48,10 @@ class OpenAIClient(BaseLLMClient):
         
         self.semaphore = asyncio.Semaphore(openai_settings.MAX_CONCURRENCY)
     
-    @task
     async def get_embeddings(self, input: list[str]) -> EmbeddingsResult:
-        """Embed `input`. A `@task` like `execute`: the call is its own step in
-        the trace, a failure lands on the envelope rather than raising through
-        the caller, and the usage is promoted off the returned model."""
+        """Embed `input`. Raises through the caller on failure — no tracing
+        here (see `BaseLLMClient`): the step envelope and the usage promotion
+        happen on the app's wrapper, `AppWorkflow.get_embeddings`."""
         if self.token_count(input) > self.max_tokens:
             raise ValueError(f"Input is too long. Max tokens: {self.max_tokens}")
 
@@ -73,7 +72,6 @@ class OpenAIClient(BaseLLMClient):
             ),
         )
 
-    @task
     async def execute(self, req: BaseLLMRequest, save_payload: bool = False) -> AssistantMessage:
         """Execute the chat completion.
 
@@ -117,14 +115,18 @@ class OpenAIClient(BaseLLMClient):
         prompt_details = usage.prompt_tokens_details
         completion_details = usage.completion_tokens_details
 
+        # `or 0` on the inner reads too: the details object can be present
+        # with its count still None. This raised a ValidationError for years —
+        # invisibly, because the client's old `@task` swallowed it into a
+        # failed envelope whose *default* usage was what tests then read.
         return TokenUsage(
             model = model,
             total=usage.total_tokens,
             prompt=usage.prompt_tokens,
             completion=usage.completion_tokens,
-            cached=prompt_details.cached_tokens if prompt_details else 0,
+            cached=(prompt_details.cached_tokens or 0) if prompt_details else 0,
             reasoning_tokens=(
-                completion_details.reasoning_tokens
+                (completion_details.reasoning_tokens or 0)
                 if completion_details
                 else 0
             ),
@@ -159,7 +161,6 @@ class OpenAIClient(BaseLLMClient):
         # list of strings
         return sum(len(encoding.encode(item)) for item in text)
     
-    @task
     async def ping(self):
         """Ping the OpenAI API."""
         

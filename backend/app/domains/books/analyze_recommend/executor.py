@@ -210,9 +210,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
     async def similarity_search(
         self, search_text: str, exclude_isbns: list[str]
     ) -> list[Book]:
-        # a nested @task: its envelope (and the embedding spend it promoted)
-        # attaches under this one
-        embedded = await self.llm_client.get_embeddings([search_text])
+        # a nested @task (the AppWorkflow wrapper — the client itself is
+        # tracing-free): its envelope, with the embedding spend promoted onto
+        # it, attaches under this one
+        embedded = await self.get_embeddings([search_text])
         embedding = embedded.unwrap().embeddings[0]
 
         # TODO: push exclude_isbns into search_by_embedding as a NOT IN — the

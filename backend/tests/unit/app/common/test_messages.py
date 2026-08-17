@@ -1,7 +1,11 @@
-"""Tests for app/common/messages.py"""
+"""Tests for clients/messages.py — the message shapes.
+
+Dispatching a tool call is not here any more: `ToolMessage.execute` moved to
+`AppWorkflow.execute_tool_call` when clients/ went tracing-free, and its tests
+went with it (test_app_workflow.py).
+"""
 
 import json
-from unittest.mock import AsyncMock, MagicMock
 
 from openai.types.chat.parsed_function_tool_call import (
     ParsedFunction,
@@ -15,7 +19,7 @@ from clients.messages import (
     ToolMessage,
     UserMessage,
 )
-from airglider import OperationResult, Response, TokenUsage, task
+from airglider import TokenUsage
 
 
 class _FakeResult(BaseModel):
@@ -170,88 +174,3 @@ class TestToolMessageToOpenaiDict:
         assert result["content"] == json.dumps({"title": "Dune"})
 
 
-class TestToolMessageExecute:
-    def _make_tool_call(self, name: str, output):
-        tool_instance = AsyncMock(return_value=output)
-        tool_call = MagicMock()
-        tool_call.id = "call_abc123"
-        tool_call.function.name = name
-        tool_call.function.parsed_arguments = tool_instance
-        return tool_call
-
-    async def test_returns_operation_result(self):
-        tool_call = self._make_tool_call("FindByTitle", {"title": "Dune"})
-        result = await ToolMessage.execute(tool_call)
-        assert isinstance(result, OperationResult)
-
-    async def test_output_is_tool_message(self):
-        tool_call = self._make_tool_call("FindByTitle", {"title": "Dune"})
-        result = await ToolMessage.execute(tool_call)
-        assert isinstance(result.result, ToolMessage)
-
-    async def test_tool_message_has_correct_name_and_id(self):
-        tool_call = self._make_tool_call("FindByTitle", "some output")
-        result = await ToolMessage.execute(tool_call)
-        msg = result.result
-        assert msg.name == "FindByTitle"
-        assert msg.tool_call_id == "call_abc123"
-
-    async def test_tool_message_content_is_tool_output(self):
-        tool_call = self._make_tool_call("FindByTitle", {"isbn": "123"})
-        result = await ToolMessage.execute(tool_call)
-        assert result.result.content == {"isbn": "123"}
-
-    async def test_kwargs_forwarded_to_tool(self):
-        tool_instance = AsyncMock(return_value="ok")
-        tool_call = MagicMock()
-        tool_call.id = "call_1"
-        tool_call.function.name = "SomeTool"
-        tool_call.function.parsed_arguments = tool_instance
-
-        await ToolMessage.execute(tool_call, db="mock_db", user_id=42)
-        tool_instance.assert_awaited_once_with(db="mock_db", user_id=42)
-
-    async def test_unwraps_operation_result_output(self):
-        tool_call = self._make_tool_call(
-            "FindByTitle",
-            OperationResult(
-                ok=True, response=Response(result={"title": "Dune"})
-            ),
-        )
-        result = await ToolMessage.execute(tool_call)
-        assert result.result.content == {"title": "Dune"}
-
-    async def test_a_tool_that_records_itself_nests_under_execute(self):
-        """A tool returning an envelope is the useful case, not a mistake.
-
-        `execute` is a `@task`, so it publishes its own record while the tool
-        runs; a tool that is itself instrumented adopts itself under it and its
-        duration, steps and token usage land in the trace at the right depth.
-        Only the payload goes back to the model.
-        """
-
-        @task(log_info=False)
-        async def find_by_title(**kwargs):
-            return {"title": "Dune"}
-
-        tool_call = MagicMock()
-        tool_call.id = "call_1"
-        tool_call.function.name = "FindByTitle"
-        tool_call.function.parsed_arguments = find_by_title
-
-        result = await ToolMessage.execute(tool_call)
-
-        assert result.result.content == {"title": "Dune"}
-        assert [step.name.split(".")[-1] for step in result.steps] == ["find_by_title"]
-        assert result.steps[0].parent_id == result.id
-
-    async def test_exception_captured_as_failed_result(self):
-        tool_instance = AsyncMock(side_effect=RuntimeError("db error"))
-        tool_call = MagicMock()
-        tool_call.id = "call_1"
-        tool_call.function.name = "BrokenTool"
-        tool_call.function.parsed_arguments = tool_instance
-
-        result = await ToolMessage.execute(tool_call)
-        assert result.ok is False
-        assert "db error" in result.runtime_error.message

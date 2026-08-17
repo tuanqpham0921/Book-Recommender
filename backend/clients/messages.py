@@ -3,12 +3,15 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Annotated, Any, Literal, Union, cast
+from typing import Annotated, Any, Literal, Union
 
-from airglider import OperationResult, TokenUsage
+# The one airglider import clients keep: TokenUsage is the data shape the
+# app-side @task promotion reads (isinstance-checked). airglider is itself
+# standalone, so this survives extraction — same reasoning as planjane/dial.
+# No instrumentation here: the steps live on AppWorkflow's wrappers.
+from airglider import TokenUsage
 from openai.types.chat import ParsedFunctionToolCall
 from pydantic import BaseModel, Field
-from airglider import task
 from common.utils import to_serializable, remove_empty_values, uuid_8
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,11 @@ class AssistantMessage(BaseMessage):
 
 
 class ToolMessage(BaseMessage):
+    """A tool result on its way back to the model. Pure message shape —
+    *running* a tool call is `AppWorkflow.execute_tool_call`, which is where
+    the dispatch used to live as a classmethod here and took clients/' last
+    piece of instrumentation with it when it moved."""
+
     role: Literal[Role.TOOL] = Role.TOOL
     name: str
     tool_call_id: str
@@ -74,31 +82,6 @@ class ToolMessage(BaseMessage):
     created: str | None = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
-
-    @classmethod
-    @task
-    async def execute(
-        cls, tool_call: ParsedFunctionToolCall, **kwargs
-    ) -> "ToolMessage":
-        tool_name = tool_call.function.name
-        # parsed_arguments is typed `object | None` by the openai lib; the
-        # parser validated it into a callable node instance
-        tool_instance = cast(Any, tool_call.function.parsed_arguments)
-        output = await tool_instance(**kwargs)
-
-        # A tool that is itself a Workflow or a @task hands back an envelope,
-        # and that is the useful case rather than a mistake: it ran inside this
-        # task's `parent_scope`, so its record — with its own duration, steps
-        # and token usage — has already attached itself under this one. Only the
-        # payload belongs in the message going back to the model, so unwrap it.
-        if isinstance(output, OperationResult):
-            output = output.result
-
-        return cls(
-            name=tool_name,
-            tool_call_id=tool_call.id,
-            content=output,
-        )
 
     def to_openai_dict(self) -> dict:
         # OpenAI tool messages require string content and no extra fields
