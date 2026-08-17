@@ -37,9 +37,13 @@ books/find_by_title/
   use instead (see `Book`'s docstring).
 - `<domain>/base_workflow.py` — the domain's base, holding what every node in it
   repeats. `books/base_workflow.py` is `BookWorkflow`: it exposes `self.store`
-  (a property off the request context), and adds `preflight()` (stamp a deferred
-  query on the output, get the match size and a small sample in one round trip)
-  and `stream_books()` (cards to the browser, validated through `BookOut`).
+  (a property off the request context), and adds `count_books()` (stamp a
+  deferred query on the output and record the match size — no rows),
+  `preview_books()` (a `@task`: a few rows off a query, handed back rather than
+  written anywhere) and `stream_books()` (cards to the browser, validated
+  through `BookOut`). Counting and fetching are separate calls on purpose —
+  `BookRetrievalOutput` has no `books` field, so rows a node only *showed* have
+  nowhere to masquerade as rows it produced.
 - `base_request.py` — `BaseRequest`, shared fields + validation.
 - `node_input.py` — `WorkflowInput` / `NodeInput` / `ParsedInput`, and
   `build_input`, which fills a node's declared input from the goal text and its

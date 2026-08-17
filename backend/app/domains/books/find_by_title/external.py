@@ -14,7 +14,9 @@ class FindByTitleInput(NodeInput):
 
 
 class FindByTitleOutput(BookRetrievalOutput):
-    """`num_books` is how many titles matched and `query` is how to reach them;
-    this node counts and does not fetch. `num_books == 0` means the catalog has
-    no such title — a real answer, and the moment to ask the user for a better
-    one rather than to fail the node."""
+    """`num_books` is how many titles matched and `query` is how to reach them.
+
+    The node keeps no rows: it streams a few cards so the section has something
+    in it, and what it hands downstream is the query. `num_books == 0` means the
+    catalog has no such title — a real answer, and the moment to ask the user for
+    a better one rather than to fail the node."""

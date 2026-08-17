@@ -1,8 +1,6 @@
 """What the books domain exposes to the layers around it: the output shape a
 node claims in its `Returns:` (and a downstream `NodeInput` declares a field
 of), and the services view every book node runs against.
-
-`Book` stays in `schemas.py` with the shape vocabulary; imported, not redefined.
 """
 
 from typing import Any
@@ -11,25 +9,26 @@ from pydantic import ConfigDict, Field
 
 from app.common.request_context import RequestContext
 from app.domains.base_workflow import NodeWorkflowOutput
-from app.domains.books.schemas import Book
 from db.stores import DeferredBookQuery
 from db.stores.book_store import BookStore
 
 
 class BookRetrievalOutput(NodeWorkflowOutput):
-    """A list of books, from any retrieval or combine node. An empty `books` is
-    a real answer — nothing matched, not a failure.
+    """How many books matched, and the query that reaches them — never the rows.
+    `num_books == 0` is a real answer: nothing matched, not a failure.
 
-    Counts-first (docs/design/execution-pipeline-v1.md): a retrieval node fills
-    `num_books` and `query` and puts at most a small sample in `books`, all in
-    one `BookWorkflow.preflight` round trip. Only the last node in a plan runs
-    `query` for the full set.
+    Counts-first (docs/design/execution-pipeline-v1.md), taken the whole way: a
+    retrieval or combine node fills `num_books` and `query` and stops. **There
+    is no `books` field**, so there is no second, capped representation of the
+    same set for a downstream node to reach for by accident — composing against
+    `query` is the only thing it can do. Rows are fetched at exactly two points,
+    both of them deliberate: a preview streamed straight to the browser
+    (`BookWorkflow.preview_books`, off the output), and whatever the terminal
+    node materializes as its answer.
 
-    `num_books` vs `len(books)` is the load-bearing comparison — the size of the
-    match vs the size of the fetch. When they differ, `books` is a handful of
-    rows shown under the count as evidence, ranked for recognizability rather
-    than correctness, and not the node's answer. Anything downstream needing the
-    real set goes through `query`.
+    A node that *chooses* rows — the recommend node — declares its own `books`
+    field for them. That is a different claim than "here is a sample of my
+    match", and it now looks different too.
 
     `query` is `exclude=True` on purpose: `to_serializable` skips excluded
     fields but does walk private attrs, so a SQLAlchemy statement stashed
@@ -42,24 +41,14 @@ class BookRetrievalOutput(NodeWorkflowOutput):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    books: list[Book] = Field(
-        default_factory=list,
-        description="rows actually fetched — the whole match, or a sample of it",
-    )
     num_books: int = 0
     query_sql: str | None = None
     query: DeferredBookQuery | None = Field(default=None, exclude=True)
 
-    def to_summary(self, preview_num: int = 3) -> dict[str, Any]:
-        return {
-            "num_books": self.num_books,
-            "num_fetched": len(self.books),
-            # isbn13 alongside the title — titles alone collide across editions
-            "preview": [
-                {"isbn13": book.isbn13, "title": book.title}
-                for book in self.books[:preview_num]
-            ],
-        }
+    def to_summary(self) -> dict[str, Any]:
+        # `has_query` rather than the SQL: `query_sql` is already persisted in
+        # full on the record, and a summary is read at a glance
+        return {"num_books": self.num_books, "has_query": self.query is not None}
 
 
 class BookRequestContext(RequestContext):

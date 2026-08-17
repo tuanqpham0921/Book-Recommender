@@ -51,6 +51,11 @@ class ParsedDependents:
     is a book-producing output. What is left is the real choice: rows if a
     dependency has them, otherwise the query that would produce them.
 
+    Which branch an anchor takes is now structural rather than a guess:
+    `BookRetrievalOutput` carries a query and no rows, and only a node that
+    *chose* rows (`RecommendationOutput`) declares `books`. So a retrieval
+    anchor lands in `queries` because it has nothing else to land as.
+
     `reports` is read by duck typing — `AnalyzeBooksOutput` is a reserved name
     with no class yet. This is the seam for the first node that produces one.
     """
@@ -62,15 +67,18 @@ class ParsedDependents:
     # you can still generate, since I didn't find brave new world, I can only
     # here are some books similar to Dune...
 
-    # what to fetch rows from — the anchor for the similarity search
+    # what to fetch rows from — the anchor for the similarity search, and the
+    # usual case now that retrieval nodes hand on a query rather than rows
     queries: list[DeferredBookQuery] = field(default_factory=list)
-    # rows a dependency already chose (BookRecommendationOutput), used as-is
+    # rows a dependency already chose (RecommendationOutput), used as-is
     books: list[Book] = field(default_factory=list)
     # written reports about books (AnalyzeBooksOutput, reserved)
     reports: list[str] = field(default_factory=list)
     # "<task id>: <class name>" for anything this node can't read — an anchor
-    # that carries neither rows nor a query, i.e. a retrieval that matched
-    # nothing. A real state to report, not a routing mistake.
+    # carrying neither rows nor a query, which now means an output that is not
+    # book-shaped rather than one that found nothing: a retrieval stamps its
+    # query whether or not it matched. A real state to report, not a routing
+    # mistake.
     unknown: list[str] = field(default_factory=list)
 
     @classmethod
@@ -80,17 +88,14 @@ class ParsedDependents:
             task_id = getattr(result, "id", None) or "?"
             claimed = False
 
-            # Rows, or the query that would produce them — never both. A node
-            # that fetched rows also carries the query it used, and counting
-            # both would weight that set twice in the anchor.
+            # Rows, or the query that would produce them — never both, and now
+            # never both on the same class either: rows mean a node that chose
+            # them, a query means a retrieval that counted and stopped. The
+            # `elif` is the belt to that braces, so an output growing both
+            # cannot weight its set twice in the anchor.
             books = getattr(result, "books", None)
             query = getattr(result, "query", None)
-            
-            # NOTE: this is elif
-            # so it will take the preview on instead
-            # eventually, you want len(preview) == num books
-            # then just remove the sql query
-            # but for now lets just work with the deffered query
+
             if books:
                 parsed.books.extend(books)
                 claimed = True

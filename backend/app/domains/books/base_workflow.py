@@ -1,15 +1,23 @@
 """What every book node's executor shares — the books layer of the base class.
 
-`AppWorkflow` pins the call signature for any unit of work; this adds the three
-things only a book node needs: `store` (the request-scoped book store, already
-resolved when the runner narrowed the context), `preflight()` (the counts-first
-opening move — see docs/design/execution-pipeline-v1.md) and `stream_books()`.
+`AppWorkflow` pins the call signature for any unit of work; this adds what only
+a book node needs: `store` (the request-scoped book store, already resolved when
+the runner narrowed the context), the two halves of the counts-first opening
+move — `count_books()` and `preview_books()`, see
+docs/design/execution-pipeline-v1.md — and `stream_books()`.
+
+**Counting and fetching are separate calls, and only one of them writes to the
+output.** They used to be a single `preflight()` returning `(total, sample)`
+from one `BookStore.preview` round trip, which made the sample look like part of
+the node's result no matter where it was assigned. Split, the default is a node
+that counts and hands on a query; fetching rows is a second, visible decision at
+the call site, and costs a second round trip when a node really wants both.
 
 Living below `AppWorkflow` is what puts `Book` and `BookOut` in normal import
 reach here.
 
-A node whose output is not book-shaped does not belong here: `preflight` writes
-fields only `BookRetrievalOutput` has, which is what the type bound says.
+A node whose output is not book-shaped does not belong here: `count_books`
+writes fields only `BookRetrievalOutput` has, which is what the type bound says.
 """
 
 from abc import ABC
@@ -29,6 +37,11 @@ from airglider import task
 
 BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
 
+# What `materialize_books` will pool into one anchor before it gives up. The
+# ceiling is the fetch size too, so below it the anchor is fetched whole rather
+# than sampled — the count and the rows describe the same set.
+MAX_ANCHOR_BOOKS = 5
+
 
 class BookWorkflow(AppWorkflow[BookOutputT], ABC):
     """Base for every node executor in the books domain."""
@@ -46,60 +59,75 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         dispatch, so a mis-wired store fails there rather than at first query.
         """
         return self.ctx.store
+    
+    async def count_books(self, query: DeferredBookQuery) -> int:
+        """Stamp the built-but-unrun query on the output and size it.
 
-    @task
-    async def preflight(
-        self, query: DeferredBookQuery, sample: int = BookConstraints.default_limit
-    ) -> tuple[int, list[Book]]:
-        """Stamp a built-but-unrun query on the output and take one look at it.
+        The counts-first opening move, and for most nodes the whole of it: it
+        writes `query` (what a downstream node composes against), `query_sql`
+        (the readable stand-in that reaches `chat_runs`) and `num_books`, and
+        fetches no rows at all.
 
-        Returns `(total, books)` from a single round trip, so the count and the
-        rows under it cannot disagree. Stamps `query` (for a downstream node to
-        compose against), `query_sql` (the readable stand-in that reaches
-        `chat_runs`) and `num_books`.
-
-        Deliberately does not write `books`: whether the sample is this node's
-        answer is the caller's decision, so that assignment stays at the call
-        site.
+        Not a `@task`: it is one COUNT and three assignments, and everything it
+        learns is already on the node's own envelope through `self.result`, so
+        a span of its own would say nothing the record does not already say.
+        `preview_books` is the one that hands back a payload, and is traced.
         """
         self.result.query = query
         self.result.query_sql = compile_sql(query.stmt)
 
-        total, rows = await self.store.preview(query, limit=sample)
+        total = await self.store.count(query)
         self.result.num_books = total
-        return total, [Book.model_validate(row) for row in rows]
-    
+        return total
+
+    @task
+    async def preview_books(
+        self, query: DeferredBookQuery, limit: int = BookConstraints.default_limit
+    ) -> List[Book]:
+        """A few rows off a query, for something to look at.
+
+        Deliberately returns them rather than writing them anywhere: the rows a
+        node shows are not the set it produced, and `BookRetrievalOutput` no
+        longer has a field that blurs the two. The caller streams them and lets
+        them go.
+
+        Ranked for recognizability, not correctness (see `build_materialize`) —
+        this is evidence under a count, so a caller that needs the real set
+        materializes `query` instead.
+        """
+        rows = await self.store.materialize(query, limit=limit)
+        return [Book.model_validate(row) for row in rows]
+
     @task
     async def materialize_books(
         self, upstream: list[DeferredBookQuery]
     ) -> List[Book]:
         """Pool the upstream queries into one anchor and fetch its books.
 
-        `preflight` returns the pool size and the rows in one round trip, so
-        below the cap the sample *is* the anchor. What it stamps
-        (`query`/`query_sql`/`num_books`) describes the references; `run`
-        overwrites `num_books` with the recommendation's own count.
+        Nothing is stamped on `self.result`: the anchor is what this node
+        *depended on*, not what it produced, and a node calling this one owns
+        its own `query`/`num_books`. The anchor SQL goes to `add_details`
+        instead, which is what the old TODO here was asking for — it is
+        readable in the record without a `DeferredBookQuery` having to survive
+        serialization.
         """
         from db.stores.utils import compose
-        
+
         anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
-        
-        # TODO: something is wrong here
-        # you might want to put the from the caller
-        # that way you can see the anchor query
-        # but DefferedBookQuery is not serializable?
-        # maybe have like a to_sql for debugging purposes
-        preview = await self.preflight(
-            anchor, sample=BookConstraints.default_limit
-        )
-        num_books, books = preview.unwrap()
+        self.add_details(f"Anchor query: {compile_sql(anchor.stmt)}")
+
+        num_books = await self.store.count(anchor)
         self.add_details(f"Dependent results has {num_books} books in total")
-        if num_books > 5:
+        if num_books > MAX_ANCHOR_BOOKS:
             # TODO: for now, re-query and only get the top rated
             # or give the users pre-defined options (random, ...)
-            raise NotImplementedError("need to handle when there are more than 5 books")
-        print("herere1")
-        return books
+            raise NotImplementedError(
+                f"need to handle when there are more than {MAX_ANCHOR_BOOKS} books"
+            )
+
+        # the whole anchor, not a sample of it: the cap above is what makes
+        # that the same thing, so these rows *are* the references
+        return (await self.preview_books(anchor, limit=MAX_ANCHOR_BOOKS)).unwrap()
 
     async def stream_books(
         self, books: Sequence[Book | dict[str, Any]], delay: float = 0.0

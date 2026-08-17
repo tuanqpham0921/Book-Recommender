@@ -27,6 +27,13 @@ class RecommendationOutput(BookRetrievalOutput):
     """The books this node chose. An empty `books` means nothing in the catalog
     satisfied the anchor plus the filters.
 
+    `books` is declared *here* rather than inherited: the base output carries a
+    count and a query and no rows (see `BookRetrievalOutput`), because a
+    retrieval node's rows would only ever be a sample of its match. These are
+    not a sample. They came back ranked from a vector search, they are the
+    node's answer, and there is no query that would reproduce them — which is
+    also why `query` and `query_sql` stay None on this output.
+
     `references` and `search_text` are kept because "why these books" is only
     answerable against what was pointed at and what was embedded; they also feed
     the response generator.
@@ -37,6 +44,10 @@ class RecommendationOutput(BookRetrievalOutput):
     embedding actually saw.
     """
 
+    books: list[Book] = Field(
+        default_factory=list,
+        description="the rows this node chose — its answer, not a sample",
+    )
     references: list[Book] = Field(default_factory=list)
     search_text: str | None = None
 

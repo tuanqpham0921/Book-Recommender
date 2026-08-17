@@ -222,6 +222,17 @@ exactly one sink, so the two agree except on compound messages.
   **The `exclude=True` is load-bearing:** `to_serializable` skips excluded fields but does
   walk `__pydantic_private__`, so a statement stashed as a private attr instead would reach
   the JSONB insert in `record_chat_run` and break it.
+  - **Revised 2026-08-17 — `books` is gone from `BookRetrievalOutput` entirely.** "Stays and
+    stays empty" did not survive contact: `BookWorkflow.preflight()` returned the count and a
+    sample together, so every retrieval node had a few rows in hand and a field to put them
+    in, and `num_books` vs `len(books)` was the only thing marking them as a preview rather
+    than an answer. `preflight` is now split — `count_books()` stamps `query`/`query_sql`/
+    `num_books` and fetches nothing; `preview_books()` is a `@task` returning rows the caller
+    streams and drops — and the output shape carries no rows at all, so composing against
+    `query` is the only thing a downstream node *can* do. A node that genuinely chooses rows
+    declares its own field for them (`RecommendationOutput.books`), which reads as the
+    different claim it is. Cost: a node wanting both a count and cards pays two round trips
+    instead of one.
 - How does a mock executor represent "a query I have not run yet" so this can be tested
   before real executors exist? **Still open** — a mock leaves `query` as `None` today, and
   the terminal node then materializes nothing rather than falling back to `books`.

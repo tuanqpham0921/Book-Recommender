@@ -55,18 +55,19 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
         await self.sse_stream.send_ui_loading(f"finding book titled: {book_title}")
 
         deferred = self.store.title_query(title=book_title)
-        # deferred = deferred.unwrap()
-        result = await self.preflight(deferred)
-        total, books = result.unwrap()
-
-        # a sample, not the answer — `num_books` is the size of the match, and
-        # the gap between the two is what marks these rows as a preview
-        self.result.books = books
+        total = await self.count_books(deferred)
 
         await self.sse_stream.send_chars(
             f"- Found {total} books titled: {book_title}"
         )
-        await self.stream_books(books)
+
+        # Cards for the section, and nothing more: they are streamed and let
+        # go, never assigned to the output. What travels downstream is the
+        # query on `self.result`, which reaches the whole match rather than
+        # these few rows. Skipped entirely when nothing matched.
+        if total:
+            preview = await self.preview_books(deferred)
+            await self.stream_books(preview.unwrap())
 
         self.finalize_result()
 
