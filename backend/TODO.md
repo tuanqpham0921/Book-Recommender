@@ -107,6 +107,8 @@ to summaried:
     * communicate with nl_query between executors
     * a node that call other nodes should start a new workflow and unwrap
         * a node with (query, artifact) might need to process artifacts
+    * don't go down the design path of re-using executors
+        * new implementation (planner-v2 task then link...) should be a new node spec (also just 1-1)
 -----------------------------------------------------------------
 
 continue
