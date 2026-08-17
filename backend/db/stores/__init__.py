@@ -1,7 +1,8 @@
 from .book_store import BookStore
-from .deferred_query import DeferredBookQuery
+from .deferred_query import DeferredBookQuery, compile_sql
 
 __all__ = [
     "BookStore",
     "DeferredBookQuery",
+    "compile_sql",
 ]

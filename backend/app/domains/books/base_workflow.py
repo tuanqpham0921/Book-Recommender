@@ -28,9 +28,8 @@ from app.domains.books.external import BookRequestContext, BookRetrievalOutput
 from app.domains.books.schemas import Book
 from app.domains.base_workflow import AppWorkflow
 from config import BookConstraints
-from db.stores import DeferredBookQuery
+from db.stores import DeferredBookQuery, compile_sql
 from db.stores.book_store import BookStore
-from db.stores.utils import compile_sql
 import asyncio
 
 from airglider import task
@@ -92,7 +91,7 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         longer has a field that blurs the two. The caller streams them and lets
         them go.
 
-        Ranked for recognizability, not correctness (see `build_materialize`) —
+        Ranked for recognizability, not correctness (see `materialize_stmt`) —
         this is evidence under a count, so a caller that needs the real set
         materializes `query` instead.
         """
@@ -112,9 +111,7 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         readable in the record without a `DeferredBookQuery` having to survive
         serialization.
         """
-        from db.stores.utils import compose
-
-        anchor = DeferredBookQuery(compose(upstream, op="or"), label="anchor")
+        anchor = DeferredBookQuery.compose(upstream, op="or", label="anchor")
         self.add_details(f"Anchor query: {compile_sql(anchor.stmt)}")
 
         num_books = await self.store.count(anchor)

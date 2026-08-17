@@ -143,8 +143,10 @@ Shape-level planner questions live in
 
 ## Test coverage (P2)
 
-- **Stores**: zero tests for `book_store.py`, `chat_run_store.py`, `feedback_store.py`,
-  `base_store.py` (`stores/utils.py` got SQL-injection regression tests 2026-07-12).
+- **Stores**: zero tests for `chat_run_store.py`, `feedback_store.py`,
+  `base_store.py` (the deferred-query builders got SQL-injection regression tests
+  2026-07-12; they live in `test_deferred_query.py` now that `stores/utils.py` is
+  folded into `deferred_query.py`/`book_store.py`, 2026-08-17).
 - **Routes**: only `chat_message.py` has a test; `session.py`, `chat_run.py`,
   `feedback.py`, `health.py` have none.
 - **Domain schemas**: no tests for `app/domains/{books,project,users}/schemas/` validators.

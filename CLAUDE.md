@@ -132,7 +132,7 @@ The app's own layer on top is `AppWorkflow` (`app/domains/base_workflow.py`), wh
 - **PostgreSQL + pgvector** via async SQLAlchemy (`db/async_engine.py`)
 - Schema SQL in `db/schema/` (extensions → tables → indexes)
 - SQLAlchemy models in `db/schema/models.py`
-- Repository pattern in `db/stores/` — `book_store.py` is the primary store. Retrieval is **counts-first**: `title_query()` builds a `DeferredBookQuery` that isn't run for rows, `count()` runs only a `COUNT`, `compose()` folds several into one CTE, and `materialize()` is the single place rows are fetched — at the end of a plan. See `db/README.md` and [docs/design/execution-pipeline-v1.md](docs/design/execution-pipeline-v1.md)
+- Repository pattern in `db/stores/` — `book_store.py` is the primary store. Retrieval is **counts-first**: `title_query()` builds a `DeferredBookQuery` that isn't run for rows, `count()` runs only a `COUNT`, `DeferredBookQuery.compose()` folds several into one CTE, and `materialize()` is the single place rows are fetched — at the end of a plan. Statement derivation lives on `DeferredBookQuery` itself; the store builds from dimensions and executes. See `db/README.md` and [docs/design/execution-pipeline-v1.md](docs/design/execution-pipeline-v1.md)
 - `db/ingestion/` populates books from `data/books.csv` — **legacy, ignore**: still uses old `Workflow`/`@task` patterns and will be reworked later; don't refactor it or model new code on it
 
 ### Config

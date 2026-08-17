@@ -213,6 +213,14 @@ exactly one sink, so the two agree except on compound messages.
   holds `build_title_query` / `build_count` / `compose` / `build_materialize`. Executors
   pass the object around and never write SQLAlchemy; otherwise every combine node grows
   its own copy of the composition rules.
+  - **Revised 2026-08-17 — `utils.py` is gone; the derivations moved onto the carrier.**
+    A count travelled executor → workflow helper → store method → builder function —
+    two of those hops were pure plumbing. Now everything derivable from a built query
+    is a method on `DeferredBookQuery` (`count_stmt()`, `materialize_stmt()`,
+    `compose()`, which returns a wrapped query rather than a bare statement), and
+    `BookStore` keeps only what a derivation can't do: build from a dimension
+    (needs the model) and execute (needs the session). Executors still never write
+    SQLAlchemy — the 2026-08-04 point stands, one file smaller.
 - ~~Does retrieval-returns-counts change the retrieval **output contracts**?~~ Resolved
   2026-08-04 — yes, minimally. `BookRetrievalOutput` (`app/domains/books/schemas.py`) gains
   `num_books` (promoted off `FindByTitleOutput`, since every retrieval and combine node now

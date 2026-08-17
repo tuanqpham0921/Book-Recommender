@@ -3,7 +3,7 @@ from typing import TypeVar, Generic
 from sqlalchemy.ext.asyncio import AsyncSession
 from abc import ABC
 
-from db.stores.utils import compile_sql
+from db.stores.deferred_query import compile_sql
 
 logger = logging.getLogger(__name__)
 
