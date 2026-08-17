@@ -37,13 +37,14 @@ books/find_by_title/
   use instead (see `Book`'s docstring).
 - `<domain>/base_workflow.py` — the domain's base, holding what every node in it
   repeats. `books/base_workflow.py` is `BookWorkflow`: it exposes `self.store`
-  (a property off the request context), and adds `count_books()` (stamp a
-  deferred query on the output and record the match size — no rows),
-  `preview_books()` (a `@task`: a few rows off a query, handed back rather than
-  written anywhere) and `stream_books()` (cards to the browser, validated
-  through `BookOut`). Counting and fetching are separate calls on purpose —
-  `BookRetrievalOutput` has no `books` field, so rows a node only *showed* have
-  nowhere to masquerade as rows it produced.
+  (a property off the request context), and adds three `@task`s —
+  `count_books()` (stamp a deferred query on the output and record the match
+  size — no rows), `preview_books()` (a few rows off a query, handed back
+  rather than written anywhere) and `materialize_books()` (pool upstream
+  deferred queries into one anchor and fetch its rows) — plus `stream_books()`
+  (cards to the browser, validated through `BookOut`). Counting and fetching
+  are separate calls on purpose — `BookRetrievalOutput` has no `books` field,
+  so rows a node only *showed* have nowhere to masquerade as rows it produced.
 - `base_request.py` — `BaseRequest`, shared fields + validation.
 - `node_input.py` — `WorkflowInput` / `NodeInput` / `ParsedInput`, and
   `build_input`, which fills a node's declared input from the goal text and its
@@ -56,6 +57,8 @@ books/find_by_title/
   which is the shape `ToolMessage.execute` dispatches a parsed tool call into.
   It is parameterized rather than typed `BaseRequest` so the branch is a typed
   field, not a cast: a payload of the wrong schema fails building the input.
+  PlanJane is its only consumer today — nodes stay NL-only until something
+  needs the second entrance, so don't pre-build it into new slices.
 - `base_workflow.py` — `AppWorkflow`, the domain-agnostic base underneath those.
   It pins the **`run(node_input)`** signature *every* unit of work in the
   app answers to, and resolves the output type from `AppWorkflow[SomeOutput]`,
@@ -185,6 +188,62 @@ pointing at it; `base_workflow.py` holding the bases they build on.
 
 Request schemas describe *what* to do; **executors** (the *how*) are reached
 through the slice's `NodeSpec` — schemas contain no execution logic.
+
+## Writing an executor — the rules
+
+The shape every node follows, distilled from the live slices. The airglider
+half of the contract — what `ok` means, when a producer raises, the two step
+verbs — is in [airglider's README](../../airglider/README.md#the-rules) and is
+assumed, not restated, here.
+
+1. **One tool schema, one executor — 1-1.** A node is its request schema plus
+   the workflow that serves it. New behavior is a new slice with a new `SPEC`,
+   never a flag on an existing executor and never one executor reached two
+   ways. Reworking how a node runs is a new spec too; park the old one.
+2. **The body runs parse → work → finalize.**
+   *Parse*: fill the node's own request schema from the goal text
+   (`build_arg_parser_request(query)` → `run_llm_args_parse`) and stamp it on
+   the slice's `args` field — the record of what this node thought it was
+   asked, even when it only restates the goal. *Work*: whatever the node is
+   for; artifact prep may precede the parse (the recommend node materializes
+   its anchor first). *Finalize*: `self.finalize_result()` last. Each slice
+   overrides it to compute the node's **claim** — "did I fill in what I
+   promised": find_by_title claims args-parsed-and-query-built (zero matches
+   is still ok), recommend claims args-parsed-and-books-chosen. Raise when the
+   node cannot proceed; never hand-set `ok=False` and return.
+3. **`@task` or `Workflow` everything async** — every DB round trip, LLM call
+   and embedding is a step with its own duration, failure and spend. The
+   ladder, smallest rung that fits:
+   - a **pure function** for building requests (`build_*_request`) — sync, no
+     I/O, testable without a workflow;
+   - the **`run_llm_*` helpers** for LLM calls — the client's `execute` (a
+     `@task`) is the step;
+   - a **`@task` method** for an async unit that returns a payload
+     (`count_books`, `preview_books`, `similarity_search`);
+   - a **`Workflow`** only when the sub-work needs its own declared output
+     type and envelope — the Triage → PlanJane shape. A node that runs another
+     node starts it as a workflow and `.unwrap()`s (or reads the envelope,
+     when a failure means something specific to this caller).
+4. **Nodes hear natural language and typed artifacts, nothing else.** The goal
+   text is `node_input.query`; upstream output arrives only through declared
+   input fields, filled by type. The input contract does *selection*;
+   interpretation is the executor's own job (`ParsedDependents`). Duck-type
+   (`getattr`) only shapes that are still reserved names — the moment a shape
+   has a class, read the typed field.
+5. **Book nodes open counts-first**: parse args → build the deferred query →
+   `count_books()` → `preview_books()` for the section's sample cards →
+   hand the *query* downstream on the output. Rows are fetched once, at the
+   end of the plan (`materialize_books`, or the terminal node's answer).
+6. **Two traps with no compiler behind them**: every output field needs a
+   default (the workflow constructs its output empty, before `run`), and a
+   workflow instance is single-use — construct a new one per execution,
+   including retries.
+
+One known wart, deliberately deferred: a business dead-end that raises and a
+genuine bug both land in `runtime_error` (a `StepFailure` is stamped like any
+other failure), so the record cannot yet tell "could not proceed" from
+"crashed". The discriminated-error redesign is parked — don't build logic that
+branches on `runtime_error.type`.
 
 ## Adding a node (the standard path)
 

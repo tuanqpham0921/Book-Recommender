@@ -232,7 +232,10 @@ exactly one sink, so the two agree except on compound messages.
     `query` is the only thing a downstream node *can* do. A node that genuinely chooses rows
     declares its own field for them (`RecommendationOutput.books`), which reads as the
     different claim it is. Cost: a node wanting both a count and cards pays two round trips
-    instead of one.
+    instead of one. The store-level halves of the old move went with it (also 2026-08-17):
+    `BookStore.preview()` / `build_preview` (the one-round-trip `(total, sample)`) and the
+    row-fetching `search_by_title` are deleted, so `count()` and `materialize()` are the
+    only ways a deferred query meets the database.
 - How does a mock executor represent "a query I have not run yet" so this can be tested
   before real executors exist? **Still open** — a mock leaves `query` as `None` today, and
   the terminal node then materializes nothing rather than falling back to `books`.

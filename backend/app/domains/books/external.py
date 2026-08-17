@@ -28,7 +28,11 @@ class BookRetrievalOutput(NodeWorkflowOutput):
 
     A node that *chooses* rows — the recommend node — declares its own `books`
     field for them. That is a different claim than "here is a sample of my
-    match", and it now looks different too.
+    match", and it now looks different too. On such a node `query`/`query_sql`
+    stay None — no query reproduces a ranked choice — so this base is the
+    *selection* shape ("produces books" is what a `depends_on: books` contract
+    matches on), not a promise that `query` is filled; a consumer reads
+    whichever of the two the anchor actually has (see `ParsedDependents`).
 
     `query` is `exclude=True` on purpose: `to_serializable` skips excluded
     fields but does walk private attrs, so a SQLAlchemy statement stashed

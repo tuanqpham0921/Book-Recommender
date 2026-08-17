@@ -111,6 +111,13 @@ behind one or another of these.
 15. **`self.add_details` on a `Workflow` always means that workflow.** So in a
     `@task` *method* on a workflow the two land in different places: the module
     function on the task, `self.` on the workflow. Usually you want the former.
+16. **A payload carrying `token_usage` has it promoted.** When a `@task`'s
+    return value has a `token_usage: TokenUsage` attribute, the decorator
+    moves it onto the task's envelope (`+=`, so it aggregates by model) and
+    sets the payload's copy to `None`. This is how a client call's spend
+    enters the tree without the client knowing about envelopes — the host's
+    `AssistantMessage` and `EmbeddingsResult` both ride it. Type the field
+    `TokenUsage | None`, since the decorator will null it.
 
 ### Known gap
 
