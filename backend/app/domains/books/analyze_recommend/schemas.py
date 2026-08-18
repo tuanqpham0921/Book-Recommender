@@ -43,10 +43,12 @@ class RecommendationStrategy(BaseRequest):
         - "books like 1984 but with more romance"
     """
 
-    node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
+    node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = (
+        AnalyzeRecommendNodeTypeEnum.REQUEST
+    )
 
 
-class DecomposedAsk(BaseModel):
+class RecommendationArgs(BaseModel):
     """Split one recommendation ask into the two halves this node runs apart.
 
     Every ask is some mix of what the books should be LIKE and what must be
@@ -97,4 +99,3 @@ class DecomposedAsk(BaseModel):
         ),
         json_schema_extra={"example": "books with 300 pages or more"},
     )
-

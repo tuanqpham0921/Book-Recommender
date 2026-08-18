@@ -6,7 +6,7 @@ from app.domains.books.external import BookRetrievalOutput
 from app.domains.books.schemas import Book
 from app.domains.node_input import NodeInput
 
-from .schemas import DecomposedAsk
+from .schemas import RecommendationArgs
 
 
 class RecommendInput(NodeInput):
@@ -48,7 +48,7 @@ class RecommendationOutput(BookRetrievalOutput):
     reads `semantic_input` straight off it.
     """
 
-    args: DecomposedAsk | None = None
+    args: RecommendationArgs | None = None
     books: list[Book] = Field(
         default_factory=list,
         description="the rows this node chose — its answer, not a sample",
@@ -63,7 +63,7 @@ class RecommendationOutput(BookRetrievalOutput):
         the set rather than listing it. Titles would only invite the model to
         enumerate what the cards on screen already show.
         """
-        
+
         pages = [book.num_pages for book in self.books if book.num_pages]
         return {
             "num_books": len(self.books),

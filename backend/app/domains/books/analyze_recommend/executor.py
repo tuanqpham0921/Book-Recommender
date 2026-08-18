@@ -36,7 +36,7 @@ from .generate_response import (
     render_summaries,
     summarize_references,
 )
-from .schemas import DecomposedAsk
+from .schemas import RecommendationArgs
 from .external import RecommendInput, RecommendationOutput
 from airglider import task
 
@@ -47,7 +47,7 @@ MAX_RECOMMENDED_BOOKS = 10
 
 
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to decompose the goal text into `DecomposedAsk`.
+    """Ask the LLM to decompose the goal text into `RecommendationArgs`.
 
     Reads the user's own words, unlike `build_analysis_request` next door,
     which reads the documents the dependencies produced. What comes back is a
@@ -65,7 +65,7 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # NOTE: this should carry the previous messages too; clear and direct
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
-        tool_models=[DecomposedAsk],
+        tool_models=[RecommendationArgs],
         max_completion_tokens=2000,
     )
 
@@ -115,7 +115,7 @@ def rank_candidates(
         picked.append(book)
         if len(picked) == limit:
             break
-        
+
     return picked
 
 
@@ -130,7 +130,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
         # 1. collect artifacts — the input contract selected them, interpreting
         # them is this node's own job
-        
+
         parsed_dependents = ParsedDependents.from_anchors(node_input.anchors)
         self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
         if parsed_dependents.unknown:
@@ -152,11 +152,11 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # ("what is the anchor like"), this one reads the user's own words
         # ("what did they ask for on top") — the twist and the bounds, neither
         # of which the documents can carry.
-        
+
         # NOTE: we might not need this if we have the filter node reject
         # like there is no filter constrainst in this nl query
         # but then filter node will always run so maybe this does save tokens?
-        parsed_args: DecomposedAsk = await self.run_llm_args_parse(
+        parsed_args: RecommendationArgs = await self.run_llm_args_parse(
             build_arg_parser_request(node_input.query)
         )
         self.result.args = parsed_args
@@ -173,7 +173,9 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # kept apart from args.semantic_input on purpose — see RecommendationOutput
         self.result.search_text = search_text
         if not search_text:
-            raise ValueError("Nothing to search on: no references and no semantic input")
+            raise ValueError(
+                "Nothing to search on: no references and no semantic input"
+            )
 
         # 5. embed + search
         result = await self.similarity_search(
@@ -197,7 +199,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             recommended_books = rank_candidates(candidates, reference_books)
         else:
             recommended_books = candidates[:MAX_RECOMMENDED_BOOKS]
-        
+
         self.result.books = recommended_books
         self.result.num_books = len(recommended_books)
 
@@ -225,7 +227,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         two halves meet.
         """
         await self.sse_stream.send_ui_loading("analyzing books...")
-        
+
         document_text = render_documents(books, reports)
         if not document_text:
             self.add_details("No reference documents to analyze")
@@ -247,7 +249,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # tracing-free): its envelope, with the embedding spend promoted onto
         # it, attaches under this one
         await self.sse_stream.send_ui_loading("finding similar books...")
-        
+
         embedded = await self.get_embeddings([search_text])
         embedding = embedded.unwrap().embeddings[0]
 
