@@ -149,7 +149,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # anchor is one composed query, run for rows here
         reference_books = list(parsed_dependents.books)
         if parsed_dependents.queries:
-            result = await self.materialize_books(parsed_dependents.queries)
+            result = await self.fetch_anchor_books(parsed_dependents.queries)
             reference_books += result.unwrap()
         self.result.references = reference_books
 

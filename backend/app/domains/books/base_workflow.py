@@ -36,7 +36,7 @@ from airglider import task
 
 BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
 
-# What `materialize_books` will pool into one anchor before it gives up. The
+# What `fetch_anchor_books` will pool into one anchor before it gives up. The
 # ceiling is the fetch size too, so below it the anchor is fetched whole rather
 # than sampled — the count and the rows describe the same set.
 MAX_ANCHOR_BOOKS = 5
@@ -99,7 +99,7 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         return [Book.model_validate(row) for row in rows]
 
     @task
-    async def materialize_books(
+    async def fetch_anchor_books(
         self, upstream: list[DeferredBookQuery]
     ) -> List[Book]:
         """Pool the upstream queries into one anchor and fetch its books.
@@ -125,7 +125,8 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
 
         # the whole anchor, not a sample of it: the cap above is what makes
         # that the same thing, so these rows *are* the references
-        return (await self.preview_books(anchor, limit=MAX_ANCHOR_BOOKS)).unwrap()
+        rows = await self.store.materialize(anchor, limit=MAX_ANCHOR_BOOKS)
+        return [Book.model_validate(row) for row in rows]
 
     async def stream_books(
         self, books: Sequence[Book | dict[str, Any]], delay: float = 0.0

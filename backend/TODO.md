@@ -10,6 +10,14 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+
+
+2. move the eval node scription out of the way
+    * don't change the wording for now
+3. figure out your book filters 
+4. optimize the recommend node since we'll use that often
+
+---
 Guidelines
 
 * keep tool_schema to executor 1-1

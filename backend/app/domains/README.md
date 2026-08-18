@@ -54,7 +54,7 @@ that is the point.
   (a property off the request context), and adds three `@task`s —
   `count_books()` (stamp a deferred query on the output and record the match
   size — no rows), `preview_books()` (a few rows off a query, handed back
-  rather than written anywhere) and `materialize_books()` (pool upstream
+  rather than written anywhere) and `fetch_anchor_books()` (pool upstream
   deferred queries into one anchor and fetch its rows) — plus `stream_books()`
   (cards to the browser, validated through `BookOut`). Counting and fetching
   are separate calls on purpose — `BookRetrievalOutput` has no `books` field,
@@ -259,7 +259,7 @@ assumed, not restated, here.
 5. **Book nodes open counts-first**: parse args → build the deferred query →
    `count_books()` → `preview_books()` for the section's sample cards →
    hand the *query* downstream on the output. Rows are fetched once, at the
-   end of the plan (`materialize_books`, or the terminal node's answer).
+   end of the plan (`fetch_anchor_books`, or the terminal node's answer).
 6. **Two traps with no compiler behind them**: every output field needs a
    default (the workflow constructs its output empty, before `run`), and a
    workflow instance is single-use — construct a new one per execution,
