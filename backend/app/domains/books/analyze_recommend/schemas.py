@@ -45,26 +45,6 @@ class RecommendationStrategy(BaseRequest):
 
     node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
 
-    # The two halves an ask splits into, both filled by the decomposition parse
-    # below. `filter_query` stays natural language rather than growing back the
-    # `BooksFilter` object the taxonomy removed: the bounds are handed to
-    # Filter_Retrieval, which parses its own arguments, so neither node has to
-    # agree with the other about a filter shape — and a bound is never parsed
-    # here and then quietly dropped, because the node that applies it is the
-    # node that reads it.
-    semantic_input: Optional[str] = Field(
-        default=None, json_schema_extra={"example": "cozy and hopeful"}
-    )
-    filter_query: Optional[str] = Field(
-        default=None,
-        description=(
-            "The measurable bounds, as one short phrase in the user's own words "
-            "— page count, publication year, rating, how many ratings, "
-            "child-friendly. None when the ask states no bound."
-        ),
-        json_schema_extra={"example": "books with 300 pages or more"},
-    )
-
 
 class DecomposedAsk(RecommendationStrategy):
     """Split one recommendation ask into the two halves this node runs apart.
@@ -98,10 +78,30 @@ class DecomposedAsk(RecommendationStrategy):
             semantic_input: "adventure"
             filter_query: "short, suitable for children, published after 2010"
 
-    A class of its own, adding no fields: the parse and the planner need
-    different prose about the same arguments, and a class carries exactly one
-    docstring. `RecommendationStrategy`'s is written to help the planner
-    *choose* this node from the catalog; this one is written to be followed
-    while filling the arguments in, and it is the one the parse call ships.
+    The arguments live here rather than on the request above because the two
+    are read by different callers: `RecommendationStrategy`'s docstring is
+    written to help the planner *choose* this node from the catalog and gives
+    it nothing to fill in, while this class is the tool schema the parse call
+    ships — so its prose is written to be followed while filling the fields in.
+    See `FindByTitleArgs` for the same split under a duller name.
     """
+
+    # The two halves an ask splits into. `filter_query` stays natural language
+    # rather than growing back the `BooksFilter` object the taxonomy removed:
+    # the bounds are handed to Filter_Retrieval, which parses its own
+    # arguments, so neither node has to agree with the other about a filter
+    # shape — and a bound is never parsed here and then quietly dropped,
+    # because the node that applies it is the node that reads it.
+    semantic_input: Optional[str] = Field(
+        default=None, json_schema_extra={"example": "cozy and hopeful"}
+    )
+    filter_query: Optional[str] = Field(
+        default=None,
+        description=(
+            "The measurable bounds, as one short phrase in the user's own words "
+            "— page count, publication year, rating, how many ratings, "
+            "child-friendly. None when the ask states no bound."
+        ),
+        json_schema_extra={"example": "books with 300 pages or more"},
+    )
 

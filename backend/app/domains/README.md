@@ -11,7 +11,7 @@ A capability is a **vertical slice**: one folder holding everything about one no
 ```
 books/find_by_title/
 ├── labels.py     # the planner-facing name, as a one-member str Enum
-├── schemas.py    # request schema (docstring = tool description) + output schema
+├── schemas.py    # request schema (docstring = tool description) + its *Args subclass
 ├── executor.py   # the executor that runs it (book nodes: a BookWorkflow)
 └── __init__.py   # SPEC = NodeSpec(...) tying the three together
 ```
@@ -223,8 +223,22 @@ assumed, not restated, here.
    the workflow that serves it. New behavior is a new slice with a new `SPEC`,
    never a flag on an existing executor and never one executor reached two
    ways. Reworking how a node runs is a new spec too; park the old one.
+1a. **The request schema declares the capability; an `*Args` subclass carries
+   the arguments.** `schemas.py` holds both: `FilterRetrieval` is what `SPEC`
+   points at and what the planner reads — a docstring and the `node_type`
+   Literal, no fields — and `FilterRetrievalArgs` adds the fields its own parse
+   call fills in. Two audiences, and only one of them fills anything in: the
+   planner picks a capability and writes a goal *description*, so a field on
+   the request is a field it would be invited to guess at. The subclass is what
+   `tool_models=[...]` ships, what `run_llm_args_parse` returns and what the
+   output's `args` field is typed as; the base is what the catalog renders.
+   Keep the arguments' prose on the subclass too — the planner's half is
+   selection prose and the parse's half is fill prose, and a class carries
+   exactly one docstring (`DecomposedAsk` is the worked example). Nothing stops
+   a request growing a real field later, which is the point of it staying a
+   model: the slot is there when the planner should fill one.
 2. **The body runs parse → work → finalize.**
-   *Parse*: fill the node's own request schema from the goal text
+   *Parse*: fill the node's own `*Args` schema from the goal text
    (`build_arg_parser_request(query)` → `run_llm_args_parse`) and stamp it on
    the slice's `args` field — the record of what this node thought it was
    asked, even when it only restates the goal. *Work*: whatever the node is
@@ -286,7 +300,8 @@ branches on `runtime_error.type`.
    (There is no `execute()` hook any more: it existed only to keep `run()` from
    being overridden while `run()` was where `self.store` got bound. `store` is a
    property now, so there is nothing to lose.)
-   If the node needs its request schema filled in from the goal text, add a
+   If the node needs arguments filled in from the goal text, declare the
+   `*Args` subclass (rule 1a) and add a
    module-level `build_arg_parser_request(query) -> OpenAIParserRequest` beside
    the executor (copy one of the existing two — they are near-identical today,
    and that is on purpose: the duplication is what lets one node change model,

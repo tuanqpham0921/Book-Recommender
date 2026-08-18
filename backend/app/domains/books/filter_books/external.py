@@ -3,7 +3,7 @@ from pydantic import Field
 from app.domains.books.external import BookRetrievalOutput
 from app.domains.node_input import NodeInput
 
-from .schemas import FilterRetrieval
+from .schemas import FilterRetrievalArgs
 
 
 class FilterRetrievalInput(NodeInput):
@@ -34,4 +34,4 @@ class FilterRetrievalOutput(BookRetrievalOutput):
     rather than to fail the node.
     """
 
-    args: FilterRetrieval | None = None
+    args: FilterRetrievalArgs | None = None

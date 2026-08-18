@@ -17,14 +17,14 @@ from clients import OpenAIParserRequest
 from db.schema import BookMetadataFilter
 from db.stores import DeferredBookQuery
 
-from .schemas import FilterRetrieval
+from .schemas import FilterRetrievalArgs
 from .external import FilterRetrievalInput, FilterRetrievalOutput
 
 from common.prompts import basic_fill_schema_prompt
 
 
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to fill `FilterRetrieval` in from the goal text."""
+    """Ask the LLM to fill `FilterRetrievalArgs` in from the goal text."""
     if not query:
         raise ValueError("No query to parse arguments from")
 
@@ -36,10 +36,10 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # NOTE: this should carry the previous messages too; clear and direct
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
-        tool_models=[FilterRetrieval],
+        tool_models=[FilterRetrievalArgs],
         # The goal already picked the node type and tool_choice pins it, so the
-        # class docstring — which is there to help the planner choose between
-        # tools — would only be noise here. Field descriptions still ship.
+        # class docstring — which explains the split to a reader, not the fill
+        # to a model — would only be noise here. Field descriptions still ship.
         include_tool_description=False,
         max_completion_tokens=2000,
     )
@@ -156,7 +156,7 @@ class FilterRetrievalExecutor(BookWorkflow[FilterRetrievalOutput]):
             )
 
         # 2. parse the goal text into this node's own schema
-        parsed_args: FilterRetrieval = await self.run_llm_args_parse(
+        parsed_args: FilterRetrievalArgs = await self.run_llm_args_parse(
             build_arg_parser_request(node_input.query)
         )
         self.result.args = parsed_args

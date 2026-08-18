@@ -11,14 +11,14 @@ from clients.messages import AssistantMessage
 from app.domains.books.base_workflow import BookWorkflow
 from clients import OpenAIParserRequest
 
-from .schemas import FindByTitleRetrieval
+from .schemas import FindByTitleArgs
 from .external import FindByTitleInput, FindByTitleOutput
 
 from common.prompts import basic_fill_schema_prompt
 
 
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to fill `FindByTitleRetrieval` in from the goal text."""
+    """Ask the LLM to fill `FindByTitleArgs` in from the goal text."""
     if not query:
         raise ValueError("No query to parse arguments from")
 
@@ -30,10 +30,10 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # NOTE: this should carry the previous messages too; clear and direct
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
-        tool_models=[FindByTitleRetrieval],
+        tool_models=[FindByTitleArgs],
         # The goal already picked the node type and tool_choice pins it, so the
-        # class docstring — which is there to help the planner choose between
-        # tools — would only be noise here. Field descriptions still ship.
+        # class docstring — which explains the split to a reader, not the fill
+        # to a model — would only be noise here. Field descriptions still ship.
         include_tool_description=False,
         max_completion_tokens=2000,
     )
@@ -55,7 +55,7 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
 
         # 1. parse the goal text into this node's own schema
         query = node_input.query
-        parsed_args: FindByTitleRetrieval = await self.run_llm_args_parse(
+        parsed_args: FindByTitleArgs = await self.run_llm_args_parse(
             build_arg_parser_request(query)
         )
         self.result.args = parsed_args

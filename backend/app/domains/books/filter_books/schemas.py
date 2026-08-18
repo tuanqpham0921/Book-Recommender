@@ -55,6 +55,16 @@ class FilterRetrieval(BaseRequest):
     node_type: Literal[FilterRetrievalNodeTypeEnum.REQUEST] = (
         FilterRetrievalNodeTypeEnum.REQUEST
     )
+
+
+class FilterRetrievalArgs(FilterRetrieval):
+    """The arguments this node parses out of its own goal text.
+
+    See `FindByTitleArgs` — same split, same reason: the request above is what
+    the planner reads and chooses by, this is what the node's own parse call
+    fills in and ships as its tool schema.
+    """
+
     filters: BookMetadataFilter = Field(
         ...,
         description="Metadata bounds to narrow the depended-on books by.",

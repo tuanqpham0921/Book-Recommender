@@ -6,7 +6,7 @@ from app.domains.books.external import BookRetrievalOutput
 from app.domains.books.schemas import Book
 from app.domains.node_input import NodeInput
 
-from .schemas import RecommendationStrategy
+from .schemas import DecomposedAsk
 
 
 class RecommendInput(NodeInput):
@@ -48,7 +48,7 @@ class RecommendationOutput(BookRetrievalOutput):
     reads `semantic_input` straight off it.
     """
 
-    args: RecommendationStrategy | None = None
+    args: DecomposedAsk | None = None
     books: list[Book] = Field(
         default_factory=list,
         description="the rows this node chose — its answer, not a sample",

@@ -1,7 +1,7 @@
 from app.domains.books.external import BookRetrievalOutput
 from app.domains.node_input import NodeInput
 
-from .schemas import FindByTitleRetrieval
+from .schemas import FindByTitleArgs
 
 
 class FindByTitleInput(NodeInput):
@@ -28,4 +28,4 @@ class FindByTitleOutput(BookRetrievalOutput):
     about one node, so the base has no useful annotation for it. None means the
     parse never happened, which is what `finalize_result` reads."""
 
-    args: FindByTitleRetrieval | None = None
+    args: FindByTitleArgs | None = None
