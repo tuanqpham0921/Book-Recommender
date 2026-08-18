@@ -177,8 +177,9 @@ arbitrarily chosen book usually discards the pick and answers with nothing — t
 is silent and looks identical to "no matches". A bounded surprise ("surprise me with a
 short sci-fi") puts the bounds in `Retrieve_Random.filters`, so the pick is drawn from
 inside them rather than tested against them afterwards. This is the same
-search-within-bounds vs. delete-afterwards distinction `Analyze_Recommend.filters` already
-draws, and it is convention only: nothing in the schema enforces it, so the golden test
+search-within-bounds vs. delete-afterwards distinction `Analyze_Recommend` already draws —
+as of 2026-08-17 by decomposing its goal text into a `filter_query` and narrowing its
+candidate pool before it ranks (execution-pipeline-v1.md) — and it is convention only: nothing in the schema enforces it, so the golden test
 is what holds the planner to it.
 
 **Cost:** 345 catalog tokens on every request, and one more node the planner can confuse

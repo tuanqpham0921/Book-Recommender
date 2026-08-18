@@ -89,6 +89,27 @@ can only shrink what the step it depends on found. An empty filter is refused at
 rather than passed through, because a no-op narrowing step reports a count the user reads
 as filtered.
 
+**`Analyze_Recommend` reaches the filter by delegation, not by a filter object
+(2026-08-17).** Case 62/64's expectation — bounds on a recommendation belong *in* the
+recommend node — is now implemented, and not by re-growing the `BooksFilter` field the
+taxonomy removed. The node's argument parse became a **decomposition**: `DecomposedAsk`
+splits the goal text into `semantic_input` (what the books should be like, embedded) and
+`filter_query` (what must be true of them, left as the words the ask used). When the
+second half is present the recommend executor runs `FilterRetrievalExecutor` as a
+sub-workflow over its candidate *pool* — the ~50 books the vector search returned, wrapped
+as a query by `BookStore.isbn13_query()` — and keeps the survivors in similarity order
+before ranking picks the ten it shows.
+
+Three things this buys over a `filters` field. The bounds are parsed by the node that
+applies them, so the two schemas never have to agree on a filter shape and no bound can be
+parsed here and quietly dropped. The narrowing happens *before* the choice rather than
+after it, which is the whole objection to a trailing `Filter_Retrieval`. And the tool
+catalog is unchanged — `RecommendationStrategy`'s docstring is still selection prose,
+because a class carries one docstring and `DecomposedAsk` (a subclass adding no fields)
+carries the parse-time instructions instead. Cost: an ask whose bounds exclude everything
+near the anchor fails the goal rather than answering, which is deliberate — the
+alternative is recommending books that ignore what was asked.
+
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
 than not, and the empty result is indistinguishable from "nothing matched". Bounds on a

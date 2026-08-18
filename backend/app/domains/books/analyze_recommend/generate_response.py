@@ -33,7 +33,7 @@ MAX_RESPONSE_TOKENS = 600
 
 
 def summarize_references(
-    references: Iterable[Book], semantic_input: str | None
+    references: Iterable[Book], semantic_input: str | None, bounds: str | None = None
 ) -> dict[str, Any]:
     """The input half: what the user pointed at, and what they asked for on top.
 
@@ -43,6 +43,11 @@ def summarize_references(
     `semantic_input` is the user's own phrase ("but darker"), not the embedded
     anchor prose. That anchor is a 100-300 word book description; handing it to
     a model asked for a friendly reply gets it paraphrased back at the user.
+
+    `bounds` is the other half of the decomposed ask ("under 300 pages"), which
+    every book on screen already satisfies — the filter step ran before the
+    picking. It is here so the reply can say so, since a constraint the user
+    stated and the answer never acknowledges reads as a constraint ignored.
 
     Editions collapse to one entry per title before anything is counted —
     otherwise the title repeats ("books like Dune and Dune") and its author
@@ -58,6 +63,7 @@ def summarize_references(
         "reference_authors": count_values(book.authors for book in unique),
         "reference_genres": count_values(book.genre for book in unique),
         "asked_for": semantic_input,
+        "bounds": bounds,
     }
 
 
@@ -96,6 +102,12 @@ def render_summaries(
     asked_for = input_summary.get("asked_for")
     if asked_for:
         lines.append(f"- asked for: {asked_for}")
+
+    bounds = input_summary.get("bounds")
+    if bounds:
+        # phrased as already satisfied: the filter ran before the picking, so
+        # this is a fact about every book on screen, not an outstanding request
+        lines.append(f"- every book shown fits: {bounds}")
 
     lines.append("")
     lines.append("output:")

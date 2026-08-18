@@ -114,6 +114,13 @@ matches nothing raises `ValidationError` **naming the field**, which the runner
 turns into a skipped goal (`_prepare`) — that error text is the payload an
 agentic runner would hand back to the planner.
 
+`FilterRetrievalInput.anchors` is the first required dependency field, and it
+shows what "required" costs for a list: `build_input` fills a `list[X]` with
+every match, and an empty list is still a *filled* field, so the requirement has
+to be `Field(..., min_length=1)`. A bare `...` would never fire. Only reach for
+it when the node has no fallback at all — bounds with nothing to bound cannot
+be run against the whole catalog and mean something else entirely.
+
 **Services are not constructor arguments, and are not on the input.**
 `AppWorkflow.__init__(ctx, messages)` is the only `__init__` in the app layer;
 `sse_stream`, `llm_client`, `app_env`, `session_id` and `user_message` are

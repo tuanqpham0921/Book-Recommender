@@ -16,9 +16,13 @@ How this slice is laid out (the reading rule):
 
 import logging
 
+from collections.abc import Sequence
+
 from clients.messages import AssistantMessage
 from common.prompts import basic_fill_schema_prompt
 from app.domains.books.base_workflow import BookWorkflow
+from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.filter_books import FilterRetrievalExecutor, FilterRetrievalInput
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
 from .dependents import ParsedDependents
@@ -32,7 +36,7 @@ from .generate_response import (
     render_summaries,
     summarize_references,
 )
-from .schemas import RecommendationStrategy
+from .schemas import DecomposedAsk
 from .external import RecommendInput, RecommendationOutput
 from airglider import task
 
@@ -43,10 +47,12 @@ MAX_RECOMMENDED_BOOKS = 10
 
 
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to fill `RecommendationStrategy` in from the goal text.
+    """Ask the LLM to decompose the goal text into `DecomposedAsk`.
 
     Reads the user's own words, unlike `build_analysis_request` next door,
-    which reads the documents the dependencies produced.
+    which reads the documents the dependencies produced. What comes back is a
+    split rather than a fill: the semantic half stays here and is embedded, the
+    bounds half travels on to the filter node as text.
     """
     if not query:
         raise ValueError("No query to parse arguments from")
@@ -59,11 +65,13 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # NOTE: this should carry the previous messages too; clear and direct
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
-        tool_models=[RecommendationStrategy],
-        # the goal already picked the node type and tool_choice pins it, so the
-        # class docstring (there to help the planner choose) is noise here.
-        # Field descriptions still ship.
-        include_tool_description=False,
+        tool_models=[DecomposedAsk],
+        # Sent, unlike the other slices: `DecomposedAsk` exists to carry a
+        # docstring written for this call — where each half of the ask goes,
+        # with examples — rather than the catalog prose that helps the planner
+        # choose the node. Splitting an ask is not a fill any field description
+        # can explain on its own.
+        include_tool_description=True,
         max_completion_tokens=2000,
     )
 
@@ -73,6 +81,17 @@ def build_search_text(analyzed: str | None, user_input: str | None) -> str:
     user asked for on top. Either half can be missing: "books like X" has no
     twist, a purely thematic ask has no anchor."""
     return "\n\n".join(part for part in (analyzed, user_input) if part)
+
+
+def keep_ranked(candidates: list[Book], survivors: Sequence[Book]) -> list[Book]:
+    """The candidates that cleared the bounds, still in similarity order.
+
+    The filter node hands back a query, and a query has no ranking — reading
+    its rows would re-order them by rating. So only the surviving ids are read
+    off it, and they select from the list the search already ranked.
+    """
+    kept = {book.isbn13 for book in survivors}
+    return [book for book in candidates if book.isbn13 in kept]
 
 
 def rank_candidates(
@@ -102,6 +121,7 @@ def rank_candidates(
         picked.append(book)
         if len(picked) == limit:
             break
+        
     return picked
 
 
@@ -116,6 +136,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
         # 1. collect artifacts — the input contract selected them, interpreting
         # them is this node's own job
+        
         parsed_dependents = ParsedDependents.from_anchors(node_input.anchors)
         self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
         if parsed_dependents.unknown:
@@ -132,12 +153,16 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             reference_books += result.unwrap()
         self.result.references = reference_books
 
-        # 2. parse the goal text into this node's own schema.
+        # 2. decompose the goal text into this node's two halves.
         # Two parsers, two inputs: the reference analyzer reads the documents
-        # ("what is the anchor like"), the argument parser reads the user's own
-        # words ("what did they ask for on top") — the twist and the bounds,
-        # neither of which the documents can carry.
-        parsed_args: RecommendationStrategy = await self.run_llm_args_parse(
+        # ("what is the anchor like"), this one reads the user's own words
+        # ("what did they ask for on top") — the twist and the bounds, neither
+        # of which the documents can carry.
+        
+        # NOTE: we might not need this if we have the filter node reject
+        # like there is no filter constrainst in this nl query
+        # but then filter node will always run so maybe this does save tokens?
+        parsed_args: DecomposedAsk = await self.run_llm_args_parse(
             build_arg_parser_request(node_input.query)
         )
         self.result.args = parsed_args
@@ -147,10 +172,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             await self.analyze_references(reference_books, parsed_dependents.reports)
         ).unwrap()
 
-        # 4. the filter builder goes here when the FilterBuilder slice exists —
-        # `filters` re-grows on RecommendationStrategy the same day (schemas.py)
-
-        # 5. assemble what gets embedded; either half can be missing, and this
+        # 4. assemble what gets embedded; either half can be missing, and this
         # is where sufficiency is judged — analyze_references returning None is
         # a missing input, an empty *sum* is a dead end
         search_text = build_search_text(analyzed, parsed_args.semantic_input)
@@ -159,14 +181,28 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         if not search_text:
             raise ValueError("Nothing to search on: no references and no semantic input")
 
-        # 6. embed + search
+        # 5. embed + search
         result = await self.similarity_search(
             search_text, exclude_isbns=[book.isbn13 for book in reference_books]
         )
         candidates = result.unwrap()
 
+        # 6. the bounds half, applied to the *pool* — while there is still a
+        # pool to choose from. Filtering after the ranking is what this node's
+        # own catalog entry sends Filter_Retrieval away from: it can only
+        # delete, so on ten ranked books it throws the ranking away and often
+        # answers with nothing.
+        if parsed_args.filter_query:
+            candidates = await self.filter_candidates(
+                candidates, parsed_args.filter_query
+            )
         # 7. rank — pure, no step
-        recommended_books = rank_candidates(candidates, reference_books)
+        # only do it if we have enough books
+        if len(candidates) > MAX_RECOMMENDED_BOOKS * 1.5:
+            recommended_books = rank_candidates(candidates, reference_books)
+        else:
+            recommended_books = candidates[:MAX_RECOMMENDED_BOOKS]
+        
         self.result.books = recommended_books
         self.result.num_books = len(recommended_books)
 
@@ -208,7 +244,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
     @task
     async def similarity_search(
-        self, search_text: str, exclude_isbns: list[str]
+        self, search_text: str, exclude_isbns: list[str], limit: int = 250
     ) -> list[Book]:
         # a nested @task (the AppWorkflow wrapper — the client itself is
         # tracing-free): its envelope, with the embedding spend promoted onto
@@ -220,7 +256,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # references are what the user already named, so returning them is the
         # one answer we know is wrong. Filtered here meanwhile, which shrinks
         # the result set below `limit` instead of backfilling it.
-        rows = await self.store.search_by_embedding(embedding)
+        rows = await self.store.search_by_embedding(embedding, limit=limit)
         excluded = set(exclude_isbns)
         books = [
             Book.model_validate(row)
@@ -229,6 +265,54 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         ]
         return books
 
+    async def filter_candidates(
+        self, candidates: list[Book], filter_query: str
+    ) -> list[Book]:
+        """Put the candidate pool through the filter node and keep what clears.
+
+        The bounds travel as the words the ask used, not as a parsed filter
+        object: `Filter_Retrieval` parses its own arguments, so this node never
+        has to know what a `BookMetadataFilter` looks like, and the two schemas
+        stay free to move apart. That is also why the pool goes in as a query —
+        narrowing queries is what that node does.
+
+        Not a `@task`: the sub-workflow brings its own envelope, and wrapping it
+        in a second one would add a step that does nothing else. `unwrap()`
+        rather than reading the envelope, because a filter that could not run
+        leaves this node no way to honor the ask — recommending books that
+        ignore the bounds is worse than failing the goal.
+        """
+        pool = self.store.isbn13_query([book.isbn13 for book in candidates])
+        # NOTE: optimization point
+        # can just call the schema or build manually without calling Filteretrieval
+        # right now just use isbn13 and query so not too bad
+        node_input = FilterRetrievalInput(
+            query=filter_query,
+            anchors=[BookRetrievalOutput(num_books=len(candidates), query=pool)],
+        )
+        filtered = (
+            await FilterRetrievalExecutor(self.ctx, self.messages)(node_input)
+        ).unwrap()
+        if filtered.query is None:
+            # `query` is optional on the shape because the output is built
+            # empty; the filter node's `ok` is what makes it filled here, so
+            # this only fires if that contract changes underneath us.
+            raise ValueError(f"Filter node narrowed nothing for: {filter_query}")
+
+        # rows only to read their ids back onto the ranked list — the books
+        # themselves are the ones already in `candidates`
+        survivors = (
+            await self.preview_books(filtered.query, limit=len(candidates))
+        ).unwrap()
+        kept = keep_ranked(candidates, survivors)
+        self.add_details(
+            f"{len(kept)} of {len(candidates)} candidates fit: {filter_query}"
+        )
+        if not kept:
+            raise ValueError(f"No book near the anchor fits: {filter_query}")
+        return kept
+
+    @task
     async def response_to_user(self, result: RecommendationOutput) -> None:
         """Write the note above the book cards, streamed as it is generated.
 
@@ -237,7 +321,9 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         `result.search_text` is assembled anchor prose and is not sent.
         """
         input_summary = summarize_references(
-            result.references, result.args.semantic_input if result.args else None
+            result.references,
+            result.args.semantic_input if result.args else None,
+            result.args.filter_query if result.args else None,
         )
         summary_text = render_summaries(input_summary, result.to_summary())
 

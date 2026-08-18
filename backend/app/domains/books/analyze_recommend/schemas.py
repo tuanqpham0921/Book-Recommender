@@ -45,9 +45,63 @@ class RecommendationStrategy(BaseRequest):
 
     node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
 
-    # No `filters` field: the search honors no metadata bounds yet, and a
-    # parsed-then-dropped bound is a promise the planner passes on to the user.
-    # It returns alongside the FilterBuilder step that actually applies it.
+    # The two halves an ask splits into, both filled by the decomposition parse
+    # below. `filter_query` stays natural language rather than growing back the
+    # `BooksFilter` object the taxonomy removed: the bounds are handed to
+    # Filter_Retrieval, which parses its own arguments, so neither node has to
+    # agree with the other about a filter shape — and a bound is never parsed
+    # here and then quietly dropped, because the node that applies it is the
+    # node that reads it.
     semantic_input: Optional[str] = Field(
         default=None, json_schema_extra={"example": "cozy and hopeful"}
     )
+    filter_query: Optional[str] = Field(
+        default=None,
+        description=(
+            "The measurable bounds, as one short phrase in the user's own words "
+            "— page count, publication year, rating, how many ratings, "
+            "child-friendly. None when the ask states no bound."
+        ),
+        json_schema_extra={"example": "books with 300 pages or more"},
+    )
+
+
+class DecomposedAsk(RecommendationStrategy):
+    """Split one recommendation ask into the two halves this node runs apart.
+
+    Every ask is some mix of what the books should be LIKE and what must be
+    TRUE of them. The first is embedded and searched by meaning. The second
+    cannot be — an embedding has no idea what 300 pages is — so it goes on to
+    the filter step as its own short instruction, in the words the ask used.
+
+    Take each half out of the query and leave it out of the other. A half the
+    query does not have is omitted rather than invented.
+
+    semantic_input: taste, theme, tone, mood, premise. Never a measurable
+        bound, and never a named title or author — those were retrieved
+        already and arrive as anchors.
+    filter_query: the measurable bounds only — pages, publication year,
+        rating, number of ratings, suitable for children. A genre, a mood or
+        an author is not a bound.
+
+    Examples:
+        "recommend books like Dune but under 300 pages"
+            semantic_input: None — the anchor book carries what it is like
+            filter_query: "under 300 pages"
+        "something cozy and hopeful, well rated with lots of reviews"
+            semantic_input: "cozy and hopeful"
+            filter_query: "highly rated with a lot of ratings"
+        "books like 1984 but darker"
+            semantic_input: "darker"
+            filter_query: None — nothing here can be measured
+        "a short kid-friendly adventure published after 2010"
+            semantic_input: "adventure"
+            filter_query: "short, suitable for children, published after 2010"
+
+    A class of its own, adding no fields: the parse and the planner need
+    different prose about the same arguments, and a class carries exactly one
+    docstring. `RecommendationStrategy`'s is written to help the planner
+    *choose* this node from the catalog; this one is written to be followed
+    while filling the arguments in, and it is the one the parse call ships.
+    """
+

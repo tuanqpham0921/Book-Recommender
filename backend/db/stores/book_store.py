@@ -103,6 +103,21 @@ class BookStore(BaseStore[BookModel]):
         )
         return DeferredBookQuery(stmt, label="title")
 
+    def isbn13_query(self, isbns: List[str]) -> DeferredBookQuery:
+        """Build the "exactly these books" query — a membership set of ids.
+
+        The one dimension that is not a search: it exists so books already in
+        hand can be handed to something that narrows *queries*, which is how
+        the recommend node puts its candidate pool through the filter node.
+        Carries no score and no order — whoever assembled the list owns its
+        ranking, and reading it back off this query would lose it.
+        """
+        if not isbns:
+            raise ValueError("isbn13_query needs at least one isbn13")
+
+        stmt = select(self.model.isbn13).where(self.model.isbn13.in_(isbns))
+        return DeferredBookQuery(stmt, label="isbn13")
+
     def filter_query(
         self, base: DeferredBookQuery, filters: BookMetadataFilter
     ) -> DeferredBookQuery:
