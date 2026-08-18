@@ -199,6 +199,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # 7. rank — pure, no step
         # only do it if we have enough books
         if len(candidates) > MAX_RECOMMENDED_BOOKS * 1.5:
+            await self.sse_stream.send_ui_loading("selecting best books...")
             recommended_books = rank_candidates(candidates, reference_books)
         else:
             recommended_books = candidates[:MAX_RECOMMENDED_BOOKS]
@@ -229,6 +230,8 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         may still carry the search; the caller judges sufficiency where the
         two halves meet.
         """
+        await self.sse_stream.send_ui_loading("analyzing books...")
+        
         document_text = render_documents(books, reports)
         if not document_text:
             self.add_details("No reference documents to analyze")
@@ -249,6 +252,8 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # a nested @task (the AppWorkflow wrapper — the client itself is
         # tracing-free): its envelope, with the embedding spend promoted onto
         # it, attaches under this one
+        await self.sse_stream.send_ui_loading("finding similar books...")
+        
         embedded = await self.get_embeddings([search_text])
         embedding = embedded.unwrap().embeddings[0]
 

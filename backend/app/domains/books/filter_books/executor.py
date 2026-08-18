@@ -7,6 +7,9 @@ here rather than a `dependents.py`: there is one thing to pull out of an
 anchor, which has not outgrown `run`.
 """
 
+from collections.abc import Callable
+from typing import Any
+
 from clients.messages import AssistantMessage
 from app.domains.books.base_workflow import BookWorkflow
 from app.domains.books.external import BookRetrievalOutput
@@ -54,12 +57,77 @@ def anchor_queries(anchors: list[BookRetrievalOutput]) -> list[DeferredBookQuery
     return [anchor.query for anchor in anchors if anchor.query is not None]
 
 
+def range_phrase(
+    low: float | None,
+    high: float | None,
+    only_low: str,
+    only_high: str,
+    both: str,
+    fmt: Callable[[Any], str] = str,
+) -> str | None:
+    """One bounded dimension as words, or None when it was left unbounded.
+
+    Every numeric bound on `BookMetadataFilter` comes in a min/max pair with
+    the same three cases, so the phrasing is a template per case rather than a
+    branch per field — the four call sites below read as the four sentences
+    the user will see.
+    """
+    if low is not None and high is not None:
+        return both.format(low=fmt(low), high=fmt(high))
+    if low is not None:
+        return only_low.format(low=fmt(low))
+    if high is not None:
+        return only_high.format(high=fmt(high))
+    return None
+
+
 def describe_bounds(filters: BookMetadataFilter) -> str:
-    """The bounds as the user-facing line, e.g. `min_pages=400, max_year=2000`.
-    Only what the parse actually set — every other field is None."""
-    return ", ".join(
-        f"{name}={value}" for name, value in filters.model_dump(exclude_none=True).items()
-    )
+    """The bounds as the user-facing line, e.g. `300 pages or more, published
+    between 2020 and 2022, not for children`.
+
+    Only what the parse actually set — every other field is None, and an
+    all-None filter is a no-op `BookStore.filter_query` refuses outright. The
+    words are the point: this string is read twice by the user (the loading
+    message and the count line) and never by anything else, so it says what the
+    bounds mean rather than which fields carry them. Both ends are inclusive,
+    which is why every phrase is "or more"/"or fewer" rather than "over"/"under".
+    """
+    parts = [
+        range_phrase(
+            filters.min_pages,
+            filters.max_pages,
+            "{low} pages or more",
+            "{high} pages or fewer",
+            "between {low} and {high} pages",
+        ),
+        range_phrase(
+            filters.min_year,
+            filters.max_year,
+            "published in {low} or later",
+            "published in {high} or earlier",
+            "published between {low} and {high}",
+        ),
+        range_phrase(
+            filters.min_rating,
+            filters.max_rating,
+            "rated {low} or higher",
+            "rated {high} or lower",
+            "rated between {low} and {high}",
+            fmt=lambda value: f"{value:.1f}",
+        ),
+        range_phrase(
+            filters.min_ratings_count,
+            filters.max_ratings_count,
+            "with at least {low} ratings",
+            "with at most {high} ratings",
+            "with between {low} and {high} ratings",
+            fmt=lambda value: f"{value:,}",
+        ),
+    ]
+    if filters.is_children is not None:
+        parts.append("for children" if filters.is_children else "not for children")
+
+    return ", ".join(part for part in parts if part)
 
 
 class FilterRetrievalExecutor(BookWorkflow[FilterRetrievalOutput]):
@@ -102,7 +170,7 @@ class FilterRetrievalExecutor(BookWorkflow[FilterRetrievalOutput]):
         deferred = self.store.filter_query(anchor, parsed_args.filters)
         total = (await self.count_books(deferred)).unwrap()
 
-        await self.sse_stream.send_chars(f"- {total} books left after {bounds}")
+        await self.sse_stream.send_chars(f"- {total} books left after: {bounds}")
 
         # 4. Cards for the section, streamed and let go — what travels
         # downstream is the narrowed query on `self.result`. Skipped entirely
