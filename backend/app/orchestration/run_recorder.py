@@ -129,12 +129,12 @@ async def record_chat_run(
                 file_name=record.id + "_summary",
             )
 
-            # flat = to_serializable(record.flatten())
-            # flat = strip_zero_token_usage(remove_empty_values(flat))
-            # save_file(
-            #     flat,
-            #     file_name=record.id,
-            # )
+            flat = to_serializable(record.flatten())
+            flat = strip_zero_token_usage(remove_empty_values(flat))
+            save_file(
+                flat,
+                file_name=record.id,
+            )
 
             # save_file(messages, record.id, + "_record_messages")
 

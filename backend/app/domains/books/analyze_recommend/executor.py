@@ -247,7 +247,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
     @task
     async def similarity_search(
-        self, search_text: str, exclude_isbns: list[str], limit: int = 250
+        self, search_text: str, exclude_isbns: list[str], limit: int = 50
     ) -> list[Book]:
         # a nested @task (the AppWorkflow wrapper — the client itself is
         # tracing-free): its envelope, with the embedding spend promoted onto
