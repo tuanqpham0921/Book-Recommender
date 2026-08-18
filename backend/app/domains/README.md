@@ -223,20 +223,23 @@ assumed, not restated, here.
    the workflow that serves it. New behavior is a new slice with a new `SPEC`,
    never a flag on an existing executor and never one executor reached two
    ways. Reworking how a node runs is a new spec too; park the old one.
-1a. **The request schema declares the capability; an `*Args` subclass carries
-   the arguments.** `schemas.py` holds both: `FilterRetrieval` is what `SPEC`
-   points at and what the planner reads — a docstring and the `node_type`
-   Literal, no fields — and `FilterRetrievalArgs` adds the fields its own parse
-   call fills in. Two audiences, and only one of them fills anything in: the
-   planner picks a capability and writes a goal *description*, so a field on
-   the request is a field it would be invited to guess at. The subclass is what
-   `tool_models=[...]` ships, what `run_llm_args_parse` returns and what the
-   output's `args` field is typed as; the base is what the catalog renders.
-   Keep the arguments' prose on the subclass too — the planner's half is
-   selection prose and the parse's half is fill prose, and a class carries
-   exactly one docstring (`DecomposedAsk` is the worked example). Nothing stops
-   a request growing a real field later, which is the point of it staying a
-   model: the slot is there when the planner should fill one.
+1a. **The request schema declares the capability; a separate `*Args` model
+   carries the arguments.** `schemas.py` holds both, and they share nothing but
+   the file. `FilterRetrieval(BaseRequest)` is what `SPEC` points at and what
+   the planner reads — a docstring and the `node_type` Literal, no fields,
+   because the planner picks a capability and writes a goal *description*, so a
+   field on the request is a field it would be invited to guess at.
+   `FilterRetrievalArgs(BaseModel)` is an **internal tool**, in the same sense
+   as `IdealBookDescription`: it never reaches the planner, so it carries no
+   `node_type`/`confidence`/`reasoning` — only the fields this node's own parse
+   call fills. That model is what `tool_models=[...]` ships, what
+   `run_llm_args_parse` returns and what the output's `args` field is typed as.
+   Give it a one-line docstring saying what the node does, and ship it
+   (`include_tool_description=True`): a pinned tool with a description written
+   for the fill costs a few tokens and is what the model is answering. The
+   catalog prose stays on the request and never travels. Nothing stops a
+   request growing a real field later, which is the point of it staying a
+   model — the slot is there when the planner should fill one.
 2. **The body runs parse → work → finalize.**
    *Parse*: fill the node's own `*Args` schema from the goal text
    (`build_arg_parser_request(query)` → `run_llm_args_parse`) and stamp it on

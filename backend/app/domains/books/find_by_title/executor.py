@@ -31,10 +31,6 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
         tool_models=[FindByTitleArgs],
-        # The goal already picked the node type and tool_choice pins it, so the
-        # class docstring — which explains the split to a reader, not the fill
-        # to a model — would only be noise here. Field descriptions still ship.
-        include_tool_description=False,
         max_completion_tokens=2000,
     )
 

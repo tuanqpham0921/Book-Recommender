@@ -1,6 +1,6 @@
 from app.domains.base_request import BaseRequest
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing import Literal, Optional
 from .labels import AnalyzeRecommendNodeTypeEnum
 
@@ -46,7 +46,7 @@ class RecommendationStrategy(BaseRequest):
     node_type: Literal[AnalyzeRecommendNodeTypeEnum.REQUEST] = AnalyzeRecommendNodeTypeEnum.REQUEST
 
 
-class DecomposedAsk(RecommendationStrategy):
+class DecomposedAsk(BaseModel):
     """Split one recommendation ask into the two halves this node runs apart.
 
     Every ask is some mix of what the books should be LIKE and what must be
@@ -77,13 +77,6 @@ class DecomposedAsk(RecommendationStrategy):
         "a short kid-friendly adventure published after 2010"
             semantic_input: "adventure"
             filter_query: "short, suitable for children, published after 2010"
-
-    The arguments live here rather than on the request above because the two
-    are read by different callers: `RecommendationStrategy`'s docstring is
-    written to help the planner *choose* this node from the catalog and gives
-    it nothing to fill in, while this class is the tool schema the parse call
-    ships — so its prose is written to be followed while filling the fields in.
-    See `FindByTitleArgs` for the same split under a duller name.
     """
 
     # The two halves an ask splits into. `filter_query` stays natural language

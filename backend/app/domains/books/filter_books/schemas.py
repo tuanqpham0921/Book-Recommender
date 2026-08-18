@@ -1,6 +1,6 @@
 from app.domains.base_request import BaseRequest
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing import Literal
 
 from db.schema import BookMetadataFilter
@@ -57,13 +57,9 @@ class FilterRetrieval(BaseRequest):
     )
 
 
-class FilterRetrievalArgs(FilterRetrieval):
-    """The arguments this node parses out of its own goal text.
-
-    See `FindByTitleArgs` — same split, same reason: the request above is what
-    the planner reads and chooses by, this is what the node's own parse call
-    fills in and ships as its tool schema.
-    """
+class FilterRetrievalArgs(BaseModel):
+    """Narrow books an earlier step already found, to those inside the metadata
+    bounds the query states."""
 
     filters: BookMetadataFilter = Field(
         ...,

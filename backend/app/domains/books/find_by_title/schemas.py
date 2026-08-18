@@ -1,6 +1,6 @@
 from app.domains.base_request import BaseRequest
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing import Literal
 from .labels import FindTitleNodeTypeEnum
 
@@ -38,18 +38,8 @@ class FindByTitleRetrieval(BaseRequest):
     node_type: Literal[FindTitleNodeTypeEnum.REQUEST] = FindTitleNodeTypeEnum.REQUEST
 
 
-class FindByTitleArgs(FindByTitleRetrieval):
-    """The arguments this node parses out of its own goal text.
-
-    Split from the request above because the two are read by different callers:
-    the planner reads the request *class docstring* and fills in nothing, while
-    the fields here are filled by this node's own parse call, which ships this
-    class as its tool schema. Keeping them apart is what lets the catalog say
-    what the node needs without the planner being handed a field to guess at —
-    and leaves the request free to grow a field later if the planner should
-    fill one in. A docstring of its own, so `include_tool_description` never
-    reaches up the MRO for the catalog prose.
-    """
+class FindByTitleArgs(BaseModel):
+    """Search the catalog for the book title named in the query."""
 
     title: str = Field(..., json_schema_extra={"example": "Dune"})
 

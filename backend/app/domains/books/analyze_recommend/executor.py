@@ -66,12 +66,6 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # instructions are enough while the conversation is single-turn.
         messages=[AssistantMessage(content=query)],
         tool_models=[DecomposedAsk],
-        # Sent, unlike the other slices: `DecomposedAsk`'s docstring is written
-        # for this call — where each half of the ask goes, with examples — and
-        # splitting an ask is not a fill any field description can explain on
-        # its own. The catalog prose that helps the planner choose the node
-        # stays on `RecommendationStrategy` and is not shipped here.
-        include_tool_description=True,
         max_completion_tokens=2000,
     )
 
