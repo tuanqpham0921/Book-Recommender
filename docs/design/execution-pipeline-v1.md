@@ -72,9 +72,22 @@ Built as **two** nodes rather than the one this record originally sketched, beca
 | `Combine_Intersect` | `IntersectRetrievals` | AND — keep books in *every* input | ≥ 2 | no |
 | `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 | **yes, required** |
 
-Both live in `app/domains/books/schemas/request_schemas.py`, sit in their own
-`CATALOG_TIERS` section, and consume prior task output only — neither queries the
-database.
+All three sit in their own catalog section (`NodeTier.COMBINE`) and consume prior task
+output only — none of them runs a lookup of its own.
+
+**`Filter_Retrieval` is built and registered (2026-08-17).** It is a vertical slice like
+every other node now — `app/domains/books/filter_books/`, on the single-call
+`find_by_title/` template — rather than a schema in a shared `request_schemas.py`; the two
+`Combine_*` nodes are still parked. One line of the original sketch did not survive
+counts-first: "neither queries the database" was written when a filter would delete from a
+materialized list. The executor instead pools its anchors' deferred queries and hands them
+to `BookStore.filter_query()`, which ANDs the `BookMetadataFilter` bounds onto that query;
+the node then counts the narrowed set. So the narrowing happens in SQL over the *whole*
+upstream match, and what travels downstream is the narrowed query rather than a shortened
+list. What the sketch was actually drawing still holds — the node searches for nothing and
+can only shrink what the step it depends on found. An empty filter is refused at the store
+rather than passed through, because a no-op narrowing step reports a count the user reads
+as filtered.
 
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often

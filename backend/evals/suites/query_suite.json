@@ -488,5 +488,12 @@
     "query": "Recommend 2 books like Dune and compare them.",
     "note": "COMPARE OVER A RECOMMENDATION (design-intent expectation, added 2026-07-28). The first case where Analyze_Compare's input is not named books but books the system just chose: Retrieve_by_Title(Dune) → Analyze_Recommend → Analyze_Compare depending on the recommend node. Every other compare case (17, 23, 31, 36, 40, 43, 44, 46, 48) hangs the compare off one retrieval per named title, so this is the only test of the BookRecommendationOutput → Analyze_Compare edge that the shape vocabulary declares legal. KNOWN CONTRADICTION with the current docstrings, which is the point of the case: Analyze_Compare says 'depends_on: at least 2 nodes that produce books' and 'Use when: the user wants a side-by-side read on specific named books', but the correct plan here has exactly ONE upstream node carrying two books and no named titles. The arity that matters for a comparison is two BOOKS, not two nodes; the wording has not been fixed yet, so expect this red until it is. Second, unrelated gap it exposes: Analyze_Recommend has no limit field, so the '2' is unexpressible and will be silently dropped whatever the planner emits. The failure to catch is a second Retrieve_by_Title (or a fabricated one for an invented comparison partner) to satisfy the two-node reading.",
     "expected_nodes": ["Retrieve_by_Title", "Analyze_Recommend", "Analyze_Compare"]
+  },
+  {
+    "id": 71,
+    "difficulty": "medium",
+    "query": "Find the Dune books that are over 500 pages.",
+    "note": "TITLE + FILTER (added 2026-08-17, when Filter_Retrieval was registered). Case 61's shape drawn on the retrieval node that is actually live: the title is the subject, the page bound can only narrow it, so the plan is Retrieve_by_Title then Filter_Retrieval depending on it. Every other Filter_Retrieval case in this suite (61, 63, 65) anchors on a parked node, which makes this the only one whose plan runs end to end — so it exercises the executor and the narrowed-query hand-off, not just the routing. Two failures to catch: folding the page bound into Retrieve_by_Title, which carries no filters and would drop it silently; and routing to Analyze_Recommend because a metadata bound appeared, when nothing here asks for anything *like* anything.",
+    "expected_nodes": ["Retrieve_by_Title", "Filter_Retrieval"]
   }
 ]

@@ -16,7 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from db.schema import BookModel
+from db.schema import BookMetadataFilter, BookModel
 from db.stores import BookStore, DeferredBookQuery
 
 INJECTION_PAYLOAD = "x' OR 1=1 --"
@@ -29,6 +29,12 @@ def _compiled_sql(stmt) -> str:
 def _title(title: str = "Dune") -> DeferredBookQuery:
     # the session is never touched: title_query only builds
     return BookStore(MagicMock()).title_query(title)
+
+
+def _filtered(base: DeferredBookQuery | None = None, **bounds) -> DeferredBookQuery:
+    return BookStore(MagicMock()).filter_query(
+        base or _title(), BookMetadataFilter(**bounds)
+    )
 
 
 class TestTitleQuery:
@@ -49,6 +55,51 @@ class TestTitleQuery:
         compiled = _compiled_sql(_title().stmt).upper()
         assert "LIMIT" not in compiled
         assert "ORDER BY" not in compiled
+
+
+class TestFilterQuery:
+    def test_bounds_are_anded_onto_the_base_query(self):
+        compiled = _compiled_sql(_filtered(min_pages=400, max_year=2000).stmt)
+        assert "books.num_pages >=" in compiled
+        assert "books.published_year <=" in compiled
+        assert " AND " in compiled
+        # the base is still in there — narrowing composes, it doesn't replace
+        assert "similarity(books.title" in compiled
+
+    def test_is_children_narrows_on_the_flag_not_a_comparison(self):
+        compiled = _compiled_sql(_filtered(is_children=False).stmt)
+        assert "books.is_children IS false" in compiled
+
+    def test_keeps_the_deferred_invariants(self):
+        # isbn13 (plus the base's score) and nothing else, so the result is
+        # still composable into a WITH clause
+        compiled = _compiled_sql(_filtered(min_rating=4.0).stmt)
+        assert "books.isbn13" in compiled
+        assert "books.description" not in compiled
+        assert "LIMIT" not in compiled.upper()
+        assert "ORDER BY" not in compiled.upper()
+
+    def test_carries_the_base_score_so_ranking_survives(self):
+        # dropping it would silently re-rank a filtered title search by rating
+        compiled = _compiled_sql(
+            _filtered(min_pages=400).materialize_stmt(BookModel, limit=3)
+        )
+        assert "ORDER BY final.score DESC" in compiled
+
+    def test_two_filtered_queries_compose_without_a_name_collision(self):
+        # the reason the base rides in as an anonymous subquery: two CTEs with
+        # one name in the same statement is a compile error
+        pooled = DeferredBookQuery.compose(
+            [_filtered(_title("Dune"), min_pages=400), _filtered(_title("IT"), max_year=1990)]
+        )
+        compiled = _compiled_sql(pooled.count_stmt()).upper()
+        assert "UNION" in compiled
+        assert "COUNT(*)" in compiled
+
+    def test_empty_filter_is_refused(self):
+        # a no-op narrowing step would report a count the user reads as filtered
+        with pytest.raises(ValueError):
+            _filtered()
 
 
 class TestCountStmt:

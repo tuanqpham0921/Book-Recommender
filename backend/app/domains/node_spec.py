@@ -27,6 +27,7 @@ class NodeTier(str, Enum):
     reads in `Registry.format_catalog()`, so it is prompt text."""
 
     RETRIEVAL = "Retrieval — lookup or fetch data"
+    COMBINE = "Combine — narrow or merge what earlier goals found, without searching again"
     ANALYZE = "Analyze — interpret, compare, or recommend using retrieved data"
 
 

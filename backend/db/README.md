@@ -18,7 +18,10 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `BookStore.title_query()` builds a statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
-  the store** (they need the model and the session); **everything derivable from
+  the store** (they need the model and the session — `filter_query()` is on that
+  side too: narrowing an existing query by `BookMetadataFilter` bounds needs the
+  model's columns, and it hands back another deferred query rather than rows);
+  **everything derivable from
   an already-built query lives on `DeferredBookQuery` itself** — `count_stmt()`,
   `materialize_stmt()`, and `DeferredBookQuery.compose()`, which folds several
   queries into one `WITH` clause (`"or"` pools, `"and"` intersects, both deduped
