@@ -156,10 +156,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # NOTE: we might not need this if we have the filter node reject
         # like there is no filter constrainst in this nl query
         # but then filter node will always run so maybe this does save tokens?
-        parsed_args: RecommendationArgs = await self.run_llm_args_parse(
-            build_arg_parser_request(node_input.query)
-        )
-        self.result.args = parsed_args
+        # parsed_args: RecommendationArgs = await self.run_llm_args_parse(
+        #     build_arg_parser_request(node_input.query)
+        # )
+        # self.result.args = parsed_args
 
         # 3. fold the references into an ideal-book description
         analyzed = (
@@ -169,7 +169,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # 4. assemble what gets embedded; either half can be missing, and this
         # is where sufficiency is judged — analyze_references returning None is
         # a missing input, an empty *sum* is a dead end
-        search_text = build_search_text(analyzed, parsed_args.semantic_input)
+        search_text = build_search_text(analyzed, node_input.query)
         # kept apart from args.semantic_input on purpose — see RecommendationOutput
         self.result.search_text = search_text
         if not search_text:
@@ -188,10 +188,12 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # own catalog entry sends Filter_Retrieval away from: it can only
         # delete, so on ten ranked books it throws the ranking away and often
         # answers with nothing.
-        if parsed_args.filter_query:
-            candidates = await self.filter_candidates(
-                candidates, parsed_args.filter_query
-            )
+        # if parsed_args.filter_query:
+        #     candidates = await self.filter_candidates(
+        #         candidates, parsed_args.filter_query
+        #     )
+        
+        
         # 7. rank — pure, no step
         # only do it if we have enough books
         if len(candidates) > MAX_RECOMMENDED_BOOKS * 1.5:

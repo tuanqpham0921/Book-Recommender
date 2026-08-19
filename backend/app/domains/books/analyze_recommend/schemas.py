@@ -99,3 +99,58 @@ class RecommendationArgs(BaseModel):
         ),
         json_schema_extra={"example": "books with 300 pages or more"},
     )
+
+from enum import Enum
+from config import BookConstraints
+
+class GenreEnum(str, Enum):
+    FICTION    = "fiction"
+    NONFICTION = "non-fiction"
+
+class embedding_exclusion(BaseModel):
+    authors: Optional[list[str]] = Field(default=None, description="Authors to include.")
+    categories: Optional[list[str]] = Field(default=None, description="List of categories or subgenres.")
+    keywords: Optional[list[str]] = Field(default=None, description="Keywords for semantic or fuzzy matching.")
+    # fuzzy_priority: Optional[Literal["authors", "categories"]] = Field(default=None, description="Fuzzy match priority of genere or author")
+
+    genre: Optional[GenreEnum] = Field(default=None, description="Main genre of the book.")
+    min_pages: Optional[int] = Field(
+            default=None,
+            description=f"Minimum page count, inclusive. Corpus range is {BookConstraints.MIN_PAGE_COUNT}-{BookConstraints.MAX_PAGE_COUNT}.",
+        )
+    max_pages: Optional[int] = Field(
+        default=None,
+        description=f"Maximum page count, inclusive. Corpus range is {BookConstraints.MIN_PAGE_COUNT}-{BookConstraints.MAX_PAGE_COUNT}.",
+    )
+
+    is_children: Optional[bool] = Field(
+        default=None,
+        description="True keeps only child-friendly books, False excludes them. Omit when the user did not say.",
+    )
+
+    min_rating: Optional[float] = Field(
+        default=None,
+        description=f"Minimum average rating, inclusive, on a {BookConstraints.MIN_RATING}-{BookConstraints.MAX_RATING} scale.",
+    )
+    max_rating: Optional[float] = Field(
+        default=None,
+        description=f"Maximum average rating, inclusive, on a {BookConstraints.MIN_RATING}-{BookConstraints.MAX_RATING} scale.",
+    )
+
+    min_ratings_count: Optional[int] = Field(
+        default=None,
+        description="Minimum number of ratings, inclusive — how many people rated it, not how highly. Use for 'popular' or 'well-reviewed'.",
+    )
+    max_ratings_count: Optional[int] = Field(
+        default=None,
+        description="Maximum number of ratings, inclusive. Use for 'obscure' or 'underrated'.",
+    )
+
+    min_year: Optional[int] = Field(
+        default=None,
+        description=f"Earliest publication year, inclusive. Corpus range is {BookConstraints.MIN_PUBLISHED_YEAR}-{BookConstraints.MAX_PUBLISHED_YEAR}.",
+    )
+    max_year: Optional[int] = Field(
+        default=None,
+        description=f"Latest publication year, inclusive. Corpus range is {BookConstraints.MIN_PUBLISHED_YEAR}-{BookConstraints.MAX_PUBLISHED_YEAR}.",
+    )

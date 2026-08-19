@@ -10,7 +10,16 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+you want to cap embedding similarity to a threshold (0.7 for now)
+you don't want to always try to get 10 books
+because you could always get books but it would be no better than random recommend
 
+so embedding search with cap
+filters should happen after, you probably don't need a sql thing
+just postprocess it in here.
+
+wait if that's the case, then the current implementation works...
+embedding -> filter_books using the isbn...
 
 2. move the eval node scription out of the way
     * don't change the wording for now
