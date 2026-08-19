@@ -123,3 +123,10 @@ These are especially useful because they require planning.
 ---
 
 The hardest queries aren't necessarily impossible—they require your planner to decompose multiple retrievals, comparisons, set operations (intersection, union, difference), ranking, and filtering. Those are excellent benchmarks for evaluating a book recommendation system.
+----------------
+
+Find Dune by Frank Herbert, then recommend 12 books similar to it. I want at least 2 books by authors who have written books similar to Dune, 3 books from science fiction, 2 books from fantasy, and the rest can be from any genre. Don't recommend anything by Frank Herbert, anything published before 1990, or anything over 600 pages. Prioritize books that have a similar political intrigue and world-building feel to Dune.
+
+Find Dune by Frank Herbert and use it as the primary reference. Then recommend 15 books based on Dune's themes, setting, political intrigue, and world-building. At least 3 should be by authors other than Frank Herbert, 3 should be science fiction, 2 should be fantasy, and 2 should have strong political or geopolitical themes. Don't recommend anything by Frank Herbert, anything published before 1990, or anything longer than 600 pages. Prefer highly rated books, but keep the recommendations diverse rather than returning 15 books that are nearly identical to Dune.”
+
+Find Dune. Recommend 12 books similar to it, but give me exactly 3 science-fiction books, exactly 2 fantasy books, exactly 2 books by authors who have written political fiction, and make sure no more than 2 recommendations share the same author. Exclude Frank Herbert, books over 700 pages, and anything published before 2000. The remaining books should be diverse but still feel similar to Dune in terms of world-building, political conflict, and ambitious scope
