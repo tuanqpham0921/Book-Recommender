@@ -17,7 +17,7 @@ How this slice is laid out (the reading rule):
 import logging
 
 from clients.messages import AssistantMessage
-from common.prompts import basic_fill_schema_prompt
+from app.common.prompt_loader import load_prompt
 from app.domains.books.base_workflow import BookWorkflow
 from app.domains.books.filter_books import describe_bounds
 from app.domains.books.schemas import Book
@@ -44,6 +44,10 @@ logger = logging.getLogger(__name__)
 MAX_ALLOWED_SAME_AUTHOR = 4
 MAX_RECOMMENDED_BOOKS = 10
 
+ARGS_PARSER_PROMPT_PATH = (
+    "domains/books/analyze_recommend/prompts/recommend_args_parser.txt"
+)
+
 
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     """Ask the LLM to decompose the goal text into `RecommendationArgs`.
@@ -53,12 +57,19 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     split rather than a fill, and the split is by where each part lands: the
     keywords join the embedded text, the bounds become WHERE clauses on the
     search, the exclusions are a predicate over what it returns.
+
+    Its own prompt rather than `basic_fill_schema_prompt`, which is the
+    per-slice builder earning its keep (domains/README.md rule 4). The generic
+    one asks for a confidence and a reasoning string, and `RecommendationArgs`
+    is a plain model with neither — so it was requesting two fields that do not
+    exist while saying nothing about the only thing this schema is hard to get
+    right: which of the four parts a phrase belongs in.
     """
     if not query:
         raise ValueError("No query to parse arguments from")
 
     return OpenAIParserRequest(
-        prompt=basic_fill_schema_prompt,
+        prompt=load_prompt(prompt_path=ARGS_PARSER_PROMPT_PATH),
         model="gpt-5-nano",
         reasoning_effort="minimal",
         # the goal text is the planner's own work, not something the user typed
@@ -227,11 +238,18 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
         # 7. rank — pure, no step. Only worth doing when there is a surplus to
         # choose from; below that the candidates already *are* the answer.
-        if len(candidates) > MAX_RECOMMENDED_BOOKS * 1.5:
+        # `num_requested` is what the user asked for, capped at what this node
+        # allows — "give me 20" still gets MAX_RECOMMENDED_BOOKS, not a raise.
+        # The parser reports the number as asked, so the cap lives here, where
+        # the record shows both what was wanted and what was served.
+        limit = MAX_RECOMMENDED_BOOKS
+        if parsed_args.num_requested:
+            limit = min(parsed_args.num_requested, MAX_RECOMMENDED_BOOKS)
+        if len(candidates) > limit * 1.5:
             await self.sse_stream.send_ui_loading("selecting best books...")
-            recommended_books = rank_candidates(candidates, reference_books)
+            recommended_books = rank_candidates(candidates, reference_books, limit=limit)
         else:
-            recommended_books = candidates[:MAX_RECOMMENDED_BOOKS]
+            recommended_books = candidates[:limit]
 
         self.result.books = recommended_books
         self.result.num_books = len(recommended_books)

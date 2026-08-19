@@ -70,11 +70,16 @@ class RecommendationArgs(BaseModel):
     exclude: what the ask rules OUT by name — "not by Herbert", "nothing from
         that series". Only when the user said so; an unmentioned author is not
         an excluded one.
+    num_requested: how many books they asked for, if they gave a number
+        ("5 books like X", "give me 20"). None when they didn't say — the node
+        picks its own default. A number larger than the node allows is still
+        reported here as-is; the node is the one that caps it.
 
     Examples:
         "recommend books like Dune but under 300 pages"
             keywords: [] — the anchor book carries what it is like
             bounds: max_pages 300
+            num_requested: None
         "something cozy and hopeful, well rated with lots of reviews"
             keywords: ["cozy", "hopeful"]
             bounds: min_rating 4.0, min_ratings_count 10000
@@ -84,6 +89,9 @@ class RecommendationArgs(BaseModel):
         "books like Dune but not by Frank Herbert"
             keywords: []
             exclude: authors ["Frank Herbert"]
+        "give me 5 books like Dune"
+            keywords: []
+            num_requested: 5
     """
 
     # Three parts, and the split is by where each one is applied rather than by
@@ -112,5 +120,13 @@ class RecommendationArgs(BaseModel):
         description=(
             "Authors, titles or categories the ask rules out by name. None "
             "unless the user actually excluded something."
+        ),
+    )
+    num_requested: Optional[int] = Field(
+        default=None,
+        description=(
+            "How many books to recommend, when the ask states a number "
+            '("5 books like X", "give me 20"). None when it states none. '
+            "Report the number as asked for; it is capped downstream."
         ),
     )

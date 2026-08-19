@@ -11,6 +11,7 @@ from app.orchestration.triage import TriageOutput
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
 from airglider import OperationResult, Response, TokenUsage
+from config import FilesLocationConstants
 
 
 def _make_goal():
@@ -165,22 +166,26 @@ class TestRecordChatRun:
                 ctx, _make_root_record(planner), _make_workflow(planner)
             )
 
-        # two files: the run as a span list, then the turn's message history
+        # two files, both inside the turn's own directory: the run as a span
+        # list, then the tree of step names
         assert mock_save.call_count == 2
-        flat_call, messages_call = mock_save.call_args_list
+        flat_call, tracer_call = mock_save.call_args_list
+
+        # the chat_id names the folder now, not each file in it — so a turn's
+        # artifacts sit together and a new one is added without renaming
+        chat_id = ctx.user_message.id
+        turn_dir = FilesLocationConstants.EXPORT_DIR / chat_id
+        assert flat_call.kwargs == {"file_name": "record", "path": turn_dir}
+        assert tracer_call.kwargs == {"file_name": "tracer_name", "path": turn_dir}
 
         # one entry per operation, parent before child, and already serialized
         # — save_file receives jsonable data, not live envelopes
-        chat_id = ctx.user_message.id
         spans = flat_call.args[0]
-        assert flat_call.kwargs["file_name"] == chat_id
         assert all(isinstance(span, dict) for span in spans)
         assert [span.get("parent_id") for span in spans] == [None, spans[0]["id"]]
         # remove_empty_values drops the empty `steps` of a projected span, so
         # no row in the file carries a subtree
         assert not any("steps" in span for span in spans)
-
-        assert messages_call.args[1] == f"{chat_id}_record_messages"
 
         mock_store_cls.return_value.insert_run.assert_awaited_once()
 
