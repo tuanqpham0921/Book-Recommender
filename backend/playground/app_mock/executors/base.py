@@ -2,20 +2,20 @@ import asyncio
 import random
 from typing import Any
 
-from app.common.messages import AssistantMessage, ToolMessage
-from app.common.workflow import AppBaseWorkflow, AppWorkflowOutput
+from clients.messages import AssistantMessage, ToolMessage
+from app.domains.base_workflow import NodeBaseWorkflow, NodeWorkflowOutput
 from app.domains.base_request import BaseRequest
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 
 
-class MockExecutorOutput(AppWorkflowOutput):
+class MockExecutorOutput(NodeWorkflowOutput):
     result: str | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {"result": self.result}
 
 
-class MockExecutorWorkflow(AppBaseWorkflow[MockExecutorOutput]):
+class MockExecutorWorkflow(NodeBaseWorkflow[MockExecutorOutput]):
     """Stand-in for a real domain executor that talks to the user: streams a
     canned reply and records it as an AssistantMessage on the shared message
     trace
@@ -62,14 +62,14 @@ class MockExecutorWorkflow(AppBaseWorkflow[MockExecutorOutput]):
         return "I found something you might find useful."
 
 
-class MockDataExecutorOutput(AppWorkflowOutput):
+class MockDataExecutorOutput(NodeWorkflowOutput):
     result: dict[str, Any] | None = None
 
     def to_summary(self) -> dict[str, Any]:
         return {"result": self.result}
 
 
-class MockRetrievalExecutorWorkflow(AppBaseWorkflow[MockDataExecutorOutput]):
+class MockRetrievalExecutorWorkflow(NodeBaseWorkflow[MockDataExecutorOutput]):
     """Stand-in for a real domain executor that fetches data (e.g. a DB
     lookup): no natural-language reply is shown to the user, just structured
     JSON — recorded as a ToolMessage (raw tool output), the same way a real
@@ -115,13 +115,13 @@ class MockRetrievalExecutorWorkflow(AppBaseWorkflow[MockDataExecutorOutput]):
         self.messages.append(
             ToolMessage(name=type(task).__name__, tool_call_id=task.id, content=data)
         )
-        
+
         # NOTE: this is here to help with formatting
         ui_message = f"I have found {len(books)} books for you"
         await self.sse_stream.send_chars(ui_message)
         self.messages.append(ui_message)
         await self.sse_stream.send_divider()
-        
+
         self.finalize_result(ok=True)
 
     async def _stream_books(self, books: list[dict]) -> None:

@@ -1,12 +1,19 @@
 import asyncio
 import logging
+import time
 
 from app.common.sse_stream import SSEStream
-from app.orchestration.request_context import RequestContext
+from app.common.request_context import RequestContext
 
-from app.domains.planner import PlannerWorkflow
-from app.domains.task_runner import TaskRunnerWorkflow
+from app.domains.node_input import NodeInput
+from app.orchestration.triage import TriageWorkflow
+from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
+from airglider import OperationResult, RuntimeErrorInfo
+
+from clients.messages import (
+    APIMessage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,106 +26,116 @@ class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
 
     def __init__(self):
-        """Initialize the orchestrator."""
         pass
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
 
         sse_stream = request_context.sse_stream
-        # created (not just returned from a helper) so that a cancellation
-        # mid-await below still leaves this bound for the finally block —
-        # PlannerWorkflow mutates its own .result in place and
-        # re-raises on cancellation rather than returning it
-        conversation_orchestrator = None
-        task_runner = None
+        # Bound before the try so a cancellation mid-await still leaves them
+        # for the finally block — each workflow mutates its own .record in
+        # place and re-raises rather than returning it.
+        triage_workflow: TriageWorkflow | None = None
+        task_runner: TaskRunnerWorkflow | None = None
+        # Root of the turn's trace tree; the workflow envelopes are hung off it
+        # in the finally block, so ok/duration/token_usage cover the whole turn.
+        record = OperationResult(
+            name=f"orchestrator_{request_context.user_message.id}",
+        )
+        messages: list[APIMessage] = [request_context.user_message]
+        time_start = time.perf_counter()
+        
+        # Core work
         try:
-            # Sent first and unconditionally — this id is generated when the
-            # user message is parsed (before any work starts), so the client
-            # can attach feedback to this run even if the turn later errors,
-            # times out, or is stopped before the 'complete' event fires.
+            # First and unconditionally: this id exists before any work
+            # starts, so the client can attach feedback even if the turn later
+            # errors, times out, or is stopped before 'complete' fires.
             await sse_stream.send_chat_id(request_context.user_message.id)
             await sse_stream.send_ui_loading("Starting conversation...")
 
-            # Core work
-            conversation_orchestrator = PlannerWorkflow(
-                sse_stream,
-                request_context.user_message,
-                request_context.llm_client,
-                app_env=request_context.app_env,
-            )
+            triage_workflow = TriageWorkflow(request_context, messages=messages)
             await asyncio.wait_for(
-                conversation_orchestrator(request_context=request_context),
+                triage_workflow(
+                    NodeInput(query=request_context.user_message.content),
+                    # use_caching=False,
+                ),
                 timeout=CONVERSATION_TIMEOUT,
             )
 
-            planner_result = conversation_orchestrator.output.parse_result
-            if (
-                conversation_orchestrator.result.ok
-                and planner_result
-                and planner_result.accepted_goals
-            ):
-                task_runner = TaskRunnerWorkflow(
-                    sse_stream,
-                    request_context.llm_client,
-                    app_env=request_context.app_env,
-                )
+            # No plan when triage handled the turn without planning (small
+            # talk, a refusal, a cache miss on a failed planner): nothing for
+            # the runner to execute. A bare read, not `unwrap()` — triage has
+            # already told the user what its own failure means.
+            plan = triage_workflow.result.parse_result
+            if triage_workflow.record.ok and plan and plan.accepted_goals:
+                task_runner = TaskRunnerWorkflow(request_context, messages=messages)
                 await asyncio.wait_for(
-                    task_runner(
-                        request_context=request_context,
-                        planner_result=conversation_orchestrator.output,
-                    ),
+                    # the only place triage and the runner are wired together,
+                    # so the runner never learns a triage layer exists
+                    task_runner(TaskRunnerInput(plan=plan)),
                     timeout=CONVERSATION_TIMEOUT,
                 )
 
-            # Normal completion — chat_id lets the client attach feedback
-            # to the chat_runs row recorded in the finally block below
+            # chat_id lets the client attach feedback to the chat_runs row
             await sse_stream.send(
                 "complete",
                 {"status": "completed", "chat_id": request_context.user_message.id},
             )
-            # close the sse_stream
             await sse_stream.close()
             logger.info("✅ Orchestration completed successfully")
 
-        except asyncio.CancelledError:
-            # client disconnected mid-turn (e.g. page refresh) — the finally
-            # block below still records what we've got, then this propagates
-            # so the task is actually marked cancelled
+        except asyncio.CancelledError as e:
+            # client disconnected mid-turn — the finally block still records
+            # what we have, then this propagates so the task is really cancelled
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
             logger.warning(
                 f"⚠️ Orchestration cancelled: chat_id={request_context.user_message.id}"
             )
             raise
-        except TimeoutError:
-            if conversation_orchestrator and conversation_orchestrator.result:
-                conversation_orchestrator.result.add_details(
-                    "Orchestration Task timed out"
-                )
-
+        except TimeoutError as e:
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
+            record.add_details("Orchestration Task timed out")
             logger.warning(
                 f"⚠️ Orchestration timed out: chat_id={request_context.user_message.id}"
             )
             await sse_stream.send_error("The request took too long to process.")
         except Exception as e:
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
             logger.exception(f"❌ Unhandled orchestrator error: {e}")
             await sse_stream.send_error(
                 "Hmm... something went wrong while processing your query."
             )
         finally:
-            # One shielded unit, not two: a second cancellation landing on
-            # *this* task (see EventSourceResponse's disconnect handling —
-            # it keeps re-cancelling every checkpoint, and asyncio.gather()
-            # re-cancels orchestrator_task when its own await is cancelled)
-            # would otherwise raise CancelledError past `except Exception`
-            # (CancelledError is a BaseException, not an Exception, since
-            # 3.8) mid-way through cleanup, skipping sse_stream.close().
-            # Shielding the whole sequence as one background task means that
-            # even if this await is cancelled again, close() still runs —
-            # we just stop waiting for it here.
+            # Here rather than after each await, so the timeout/cancel paths
+            # record their partial work too. isinstance-guarded rather than
+            # letting add_step raise: a raise in this finally would replace the
+            # exception in flight and skip the recording and stream close below.
+            for workflow in (triage_workflow, task_runner):
+                step = getattr(workflow, "record", None)
+                if isinstance(step, OperationResult):
+                    record.add_step(step)
+            record.ok = (
+                record.runtime_error is None
+                and bool(record.steps)
+                and all(step.ok for step in record.steps)
+            )
+            record.timing.duration = round(time.perf_counter() - time_start, 2)
+
+            # One shielded unit, not two. A second cancellation landing on this
+            # task (EventSourceResponse re-cancels every checkpoint on
+            # disconnect) is a BaseException, so it would fly past
+            # `except Exception` mid-cleanup and skip sse_stream.close().
+            # Shielding the whole sequence means close() still runs — we just
+            # stop waiting for it here.
             try:
                 await asyncio.shield(
                     self._finalize(
-                        request_context, conversation_orchestrator, task_runner, sse_stream
+                        request_context,
+                        record,
+                        triage_workflow,
+                        task_runner,
+                        messages,
+                        sse_stream,
                     )
                 )
             except asyncio.CancelledError:
@@ -130,15 +147,23 @@ class Orchestrator:
     @staticmethod
     async def _finalize(
         request_context: RequestContext,
-        conversation_orchestrator: PlannerWorkflow | None,
+        record: OperationResult,
+        triage_workflow: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
+        messages: list[APIMessage] | None,
         sse_stream: SSEStream,
     ) -> None:
         """Record the run, then close the stream. Best-effort — never lets a
         slow/failing step here take down the other, or the caller."""
         try:
             await asyncio.wait_for(
-                record_chat_run(request_context, conversation_orchestrator, task_runner),
+                record_chat_run(
+                    request_context,
+                    record,
+                    triage_workflow,
+                    task_runner,
+                    messages,
+                ),
                 timeout=SAVE_LOG_TIMEOUT,
             )
         except Exception:

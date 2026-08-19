@@ -10,7 +10,7 @@ a runner, and report generators. **Why it's built this way and where it's headed
 |---|---|---|
 | `query_suite.json` | 70 | Core node set, easy→hard |
 | `query_suite_adversarial.json` | 54 | Rejection behavior (17 cases intentionally expect no nodes) |
-| `query_suite_extended.json` | 48 | Catalog scaling — needs the registry PLAYGROUND EXTENSION block enabled |
+| `query_suite_extended.json` | 48 | Catalog scaling — dormant: needs the playground schemas given `NodeSpec`s and passed to `Registry` (see `backend/playground/README.md`) |
 | `query_suite_stress.json` | 9 | Buffer/overflow, confusing chains |
 
 Each case: `id`, `query`, `difficulty`, `expected_nodes`, `note` (+ `category`/`domain`
@@ -82,7 +82,7 @@ the whole thing costs per request, uncached and cached (the catalog is byte-iden
 column is the steady state — `make suite-stats`'s measured hit rate says how close you
 are to it). Two token figures, paid at different points:
 
-- **catalog tokens** — the whole `format_node_type_catalog()` block, rendered into both
+- **catalog tokens** — the whole `Registry.format_catalog()` block, rendered into both
   the goal-generator and parse-response prompts, so it is paid twice per request;
 - **schema tokens** — one node's JSON function-tool schema, sent by
   `strategy_classification.py` only for the nodes an accepted goal targets.
@@ -93,7 +93,7 @@ catalog tokens) and docstrings missing a canonical section — a missing `Do not
 [docs/eval-strategy.md](../../docs/eval-strategy.md).
 
 Dollar figures come from `cost_usd`, stamped onto each run's `token_usage` when it was
-recorded (rates in [config/pricing.py](../config/pricing.py)) — **frozen at record time**,
+recorded (rates in [airglider/src/config.py](../airglider/src/config.py)) — **frozen at record time**,
 so re-running a report never backfills or reprices history. Two distinct gaps get called
 out rather than hidden:
 
@@ -101,7 +101,7 @@ out rather than hidden:
   summary row, never as free;
 - a run whose `token_usage.unpriced_models` is non-empty still *has* a cost, just too low
   — the report prints an explicit "costs are understated" warning naming the models. Add
-  them to `config/pricing.py`; only future runs will be right.
+  them to `airglider/src/config.py`; only future runs will be right.
 
 ## Repo sizing (`app_docs/`)
 

@@ -11,10 +11,10 @@ Architecture overview lives in the root [CLAUDE.md](../../CLAUDE.md); V1 plans i
 | `main.py` | FastAPI app factory, CORS, router registration |
 | `api/routes/` | One file per router (health, session, chat_message, chat_run, feedback) |
 | `api/schemas/` | External request/response models (`ChatIn`, `ReviewIn`, …) |
-| `orchestration/` | `Orchestrator` (entry point per message) + `RequestContext` |
-| `domains/` | Node type system + planner pipeline — see [domains/README.md](domains/README.md) |
-| `common/` | App-level workflow base, `SSEStream`, message types |
-| `registry.py` | node_type → schema class mapping, capability catalog, executor mapping |
+| `orchestration/` | `Orchestrator` (transport per message), `TriageWorkflow`, `TaskRunnerWorkflow`, run recorder |
+| `domains/` | Node type system + PlanJane, the planner — see [domains/README.md](domains/README.md) |
+| `common/` | `RequestContext`, `SSEStream`, message types, prompt loading |
+| `registry.py` | `Registry` — every node lookup (schema, executor, catalog, planner enum) derived from `SPECS` |
 
 ## API surface
 
@@ -33,13 +33,17 @@ There is no auth yet — a known pre-deploy blocker (docs/backlog.md, Security P
 ## Request flow (current state)
 
 1. `POST /session/{session_id}/message` → `Orchestrator.run` builds a `RequestContext`
-   and delegates to `PlannerWorkflow` (`domains/planner/main.py`).
-2. The planner parses intent → classifies strategies → streams a Mermaid task-plan
-   diagram and the goal list over SSE.
-3. **Execution is currently disabled**: `TaskRunnerWorkflow` (`domains/task_runner.py`)
-   is implemented but commented out in `Orchestrator.run`; executors are mocks from
-   `playground/app_mock/` (`registry.py`, `EXECUTORS_CLS_MAPPING`). Re-enabling it with
-   real executors is roadmap Phase 3.
+   and delegates to `TriageWorkflow` (`orchestration/triage.py`), which decides whether
+   to plan at all — replay a cached plan, or hand the turn to the planner.
+2. `PlanJaneExecutor` (`domains/planjane/`) parses the message into goals against the
+   live tool catalog and streams the plan's Mermaid diagram over SSE.
+3. `TaskRunnerWorkflow` (`orchestration/task_runner.py`) runs the accepted goals in dependency
+   order against the **real** executors (`REGISTRY.spec(...).executor` in
+   `registry.py`), for the node types registered on this branch. It
+   brackets each node with `task.start` / `task.end` SSE events — closed in a `finally`,
+   so a node that raises still closes its UI section — and stamps the node's `num_books`
+   onto the section header on close. Retrieval nodes report a count plus a few preview
+   cards; only the terminal node fetches the full rows.
 4. Every turn is recorded to the `chat_runs` table (planner/tasks JSONB) —
    that's what the review page and eval reports read. Requests are stateless: nothing
    reads prior turns back (single-turn by design for V1).

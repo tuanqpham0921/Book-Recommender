@@ -4,6 +4,7 @@ version = "0.2.0"
 description = ""
 authors = ["Tuan Pham <tuanqpham0921@gmail.com>"]
 packages = [
+    { include = "airglider" },
     { include = "app" },
     { include = "common" },
     { include = "db" },
@@ -11,7 +12,7 @@ packages = [
 ]
 
 [tool.pyright]
-include = ["app", "common", "clients", "config", "db"]
+include = ["airglider", "app", "common", "clients", "config", "db"]
 # db/ingestion + db/readiness are legacy (old Workflow/@task patterns), reworked later
 exclude = ["**/__pycache__", "db/ingestion", "db/readiness.py"]
 typeCheckingMode = "basic"
@@ -21,7 +22,9 @@ pythonVersion = "3.11"
 asyncio_mode = "auto"
 log_cli_level = "INFO"
 log_cli = true
-testpaths = ["tests"]
+# airglider ships its tests beside its source (they move with the package when
+# it is extracted); the app's own suites stay under tests/
+testpaths = ["tests", "airglider/tests"]
 markers = [
     "unit: fast, no I/O",
     "integration: cross-layer tests (whole API routes in-process; faked stores, no services)",

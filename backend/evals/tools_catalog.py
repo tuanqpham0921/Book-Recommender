@@ -1,25 +1,19 @@
 """What the planner is told it can do, and what saying it costs.
 
-Every node registered in `app/registry.py` becomes a "tool" the planner LLM
-reads about. Its class docstring *is* the tool description — so the catalog is
-prompt text that gets billed on every single request, whether or not any of
-those tools end up being used. This report inventories it: how many tools,
-how many tokens each one's description costs, and what the whole block costs
-per request at current rates.
+Every registered node becomes a "tool" the planner reads about, and its class
+docstring *is* the tool description — prompt text billed on every request,
+used or not. This report inventories it: tool count, per-tool token cost, and
+what the whole block costs per request at current rates.
 
-Unlike the other two reports here, this one reads no database — it imports the
-live registry, so it always describes the code as it is right now, not a
-recorded run. That makes it the thing to re-run after adding or editing a node.
+Reads no database, only the live registry, so it always describes the code as
+it stands — re-run it after adding or editing a node.
 
-Two separate token costs are reported, because they are paid at different
-points by different models:
+Two token costs, paid at different points by different models:
 
-- **catalog tokens** — `format_node_type_catalog()`, rendered into the goal
-  generator and the parse-response prompts (`parse_intent.py`), so the whole
-  block is paid twice per request, every request.
-- **schema tokens** — the JSON function-tool schema for one node, sent by
-  `strategy_classification.py`. Only the nodes an accepted goal targets are
-  sent, one per classification call, so this is per-goal, not per-request.
+- catalog tokens — `Registry.format_catalog()`, rendered into the goal
+  generator and parse-response prompts, so the block is paid twice per request.
+- schema tokens — one node's JSON function-tool schema, sent per accepted goal
+  by classification. Per-goal, not per-request.
 
 Usage (from backend/, or `make tools-catalog`):
     poetry run python evals/tools_catalog.py
@@ -34,49 +28,37 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Must precede the app imports. Running this as a script puts evals/ first on
-# sys.path, where common.py then shadows the backend's own `common` package —
-# so `app.registry` -> `app.domains.base_request` -> `common.utils` dies with
-# "'common' is not a package". The other two reports never import app.*, so
-# they never hit it. Putting backend/ ahead of evals/ resolves the collision
-# without forcing this to be run as `python -m` from one specific directory.
+# Must precede the app imports: running this as a script puts evals/ first on
+# sys.path, where common.py shadows the backend's own `common` package and
+# `app.registry` dies with "'common' is not a package".
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import tiktoken  # noqa: E402
 from openai import pydantic_function_tool  # noqa: E402
 
-from app.registry import (  # noqa: E402
-    EXECUTORS_CLS_MAPPING,
-    NODE_TYPE_TO_CLS,
-    catalog_entries,
-    class_docstring,
-    format_node_type_catalog,
-)
-from config.pricing import PRICES_CHECKED_ON, cost_of  # noqa: E402
+from app.registry import REGISTRY  # noqa: E402
+from airglider import PRICES_CHECKED_ON, cost_of  # noqa: E402
 from evals.common import current_git_sha, truncate  # noqa: E402
 
-# Long enough for a Purpose: line to survive mostly intact, short enough that
-# the numeric columns stay readable beside it (report.py caps queries at 80).
+# long enough for a Purpose: line, short enough to keep the numeric columns
+# readable beside it
 DESCRIPTION_PRINT_LIMIT = 110
 
 # tiktoken 0.9 predates the gpt-4.1/gpt-5 families, so encoding_for_model
-# raises KeyError on exactly the models this project uses. o200k_base is the
-# encoding those families ship with, so resolve to it rather than guessing.
+# raises KeyError on the models this project uses. o200k_base is what those
+# families ship with.
 FALLBACK_ENCODING = "o200k_base"
 
-# The models the planner actually runs, and how many times each sees the whole
-# catalog in one request — both call sites are in parse_intent.py:
-# _run_llm_args_parse (pinned gpt-4.1) and generate_user_response (BASE_MODEL).
-# strategy_classification.py is deliberately absent: it sends per-node schemas,
+# The models the planner runs, and how many times each sees the whole catalog
+# per request. Classification is absent on purpose: it sends per-node schemas,
 # not the catalog, and is reported separately.
+# (model, catalog sends per request, call site). Unpriced models report `?`.
 CATALOG_CONSUMERS = (
-    ("gpt-4.1", 1, "parse_intent._run_llm_args_parse (goal generation)"),
-    ("gpt-4.1-mini", 1, "parse_intent.generate_user_response (user-facing reply)"),
+    ("gpt-5.6-terra", 1, "planjane.build_goal_parse_request (goal generation)"),
 )
 
-# The sections a node docstring is expected to carry. These are prompt
-# engineering, not style: "Do not use" and "Example queries" are the levers for
-# the discrimination failures tracked in docs/eval-strategy.md.
+# Prompt engineering, not style: "Do not use" and "Example queries" are the
+# levers for the discrimination failures tracked in docs/eval-strategy.md.
 EXPECTED_SECTIONS = (
     "Purpose:",
     "Args:",
@@ -87,10 +69,8 @@ EXPECTED_SECTIONS = (
     "Constraints:",
 )
 
-# A node illustrates itself either with example queries or with example values
-# for the field that decides its routing ("Example genres:",
-# "Example semantic_input:"). Either satisfies the audit; having neither does
-# not.
+# Either example queries or example values for the routing field
+# ("Example genres:") satisfies the audit; neither does not.
 EXAMPLES_SECTION = re.compile(r"Example [A-Za-z_ ]+:")
 
 
@@ -106,19 +86,17 @@ def count_tokens(text: str, encoder) -> int:
 
 
 def render_catalog_entry(name: str, description: str) -> str:
-    """One tool as `format_node_type_catalog` renders it — the name on its own
-    line, the description indented under it. Duplicated deliberately rather
-    than exported from the registry: this measures what the prompt actually
-    contains, so it should break loudly if the renderer changes shape."""
+    """One tool as `Registry.format_catalog` renders it. Duplicated rather than
+    imported: this measures what the prompt actually contains, so it should
+    break loudly if the renderer changes shape."""
     lines = [name]
     lines += [f"  {line}" if line.strip() else "" for line in description.splitlines()]
     return "\n".join(lines)
 
 
 def schema_tokens(cls: type, encoder) -> int | None:
-    """Tokens for the node's JSON function-tool schema — what
-    strategy_classification.py sends per goal. None when the class can't be
-    rendered as a tool, which is worth seeing rather than silently zeroing."""
+    """Tokens for the node's JSON function-tool schema, sent per goal. None
+    when the class can't be rendered as a tool — worth seeing, not zeroing."""
     try:
         tool = pydantic_function_tool(cls, name=cls.__name__)
         return count_tokens(json.dumps(tool), encoder)
@@ -135,14 +113,9 @@ def missing_sections(description: str) -> list[str]:
 
 
 def purpose_line(description: str) -> str:
-    """The docstring's one-line summary — the `Purpose:` section's text, which
-    by convention is the first line and the sentence that most determines
-    whether the planner reaches for this tool.
-
-    Falls back to the first non-empty line for nodes that don't follow the
-    convention, so a malformed docstring still shows *something* here; the
-    audit section is what flags it as malformed.
-    """
+    """The docstring's `Purpose:` text — the sentence that most determines
+    whether the planner reaches for this tool. Falls back to the first non-empty
+    line, so a malformed docstring still shows something; the audit flags it."""
     for line in description.splitlines():
         line = line.strip()
         if line.startswith("Purpose:"):
@@ -154,18 +127,18 @@ def purpose_line(description: str) -> str:
 
 
 def table_cell(text: str, limit: int = DESCRIPTION_PRINT_LIMIT) -> str:
-    """Squash to one line and cap it. Pipes are escaped first: an unescaped
-    one in a docstring would silently split the row into extra columns and
-    shift every number after it."""
+    """Squash to one line and cap it. Pipes are escaped first — an unescaped
+    one would split the row into extra columns and shift every number after."""
     return truncate(text.replace("|", "\\|"), limit)
 
 
 def collect_tools(encoder) -> list[dict]:
     """One row per registered node, in catalog order (which is prompt order)."""
     tools = []
-    for tier, section in catalog_entries().items():
+    for tier, section in REGISTRY.catalog_entries().items():
         for name, description in section.items():
-            cls = NODE_TYPE_TO_CLS[name]
+            spec = REGISTRY.spec(name)
+            cls = spec.request
             tools.append(
                 {
                     "node_type": name,
@@ -178,7 +151,7 @@ def collect_tools(encoder) -> list[dict]:
                     ),
                     "schema_tokens": schema_tokens(cls, encoder),
                     "chars": len(description),
-                    "has_executor": cls in EXECUTORS_CLS_MAPPING,
+                    "has_executor": spec.executor is not None,
                     "missing_sections": missing_sections(description),
                 }
             )
@@ -186,10 +159,9 @@ def collect_tools(encoder) -> list[dict]:
 
 
 def summarize(tools: list[dict], catalog_text: str, encoder) -> dict:
-    """Whole-catalog figures. `block_tokens` is the rendered block as sent —
-    it exceeds the sum of the per-tool counts by the tier headings and blank
-    lines, and it is the number the cost figures use, since that is what the
-    prompt is actually charged for."""
+    """Whole-catalog figures. `block_tokens` is the rendered block as sent, so
+    it exceeds the per-tool sum by the tier headings and blank lines — and it is
+    what the cost figures use, since it is what the prompt is charged for."""
     per_tier: dict[str, int] = {}
     for tool in tools:
         per_tier[tool["tier_short"]] = per_tier.get(tool["tier_short"], 0) + 1
@@ -208,11 +180,9 @@ def summarize(tools: list[dict], catalog_text: str, encoder) -> dict:
 def prompt_costs(block_tokens: int) -> list[dict]:
     """Per-request cost of shipping the catalog, per consuming call site.
 
-    Both an uncached and a fully-cached figure, because the catalog is the
-    most cacheable part of the prompt — it is byte-identical on every request
-    — so the cached column is the realistic steady state and the uncached one
-    is the cold-start ceiling. The truth is between them; report.py's measured
-    cache hit rate says where.
+    Uncached and fully-cached, because the catalog is byte-identical on every
+    request: cached is the steady state, uncached the cold-start ceiling.
+    report.py's measured hit rate says where between them the truth sits.
     """
     costs = []
     for model, times, call_site in CATALOG_CONSUMERS:
@@ -230,14 +200,13 @@ def prompt_costs(block_tokens: int) -> list[dict]:
 
 
 def _dollars(value: float | None) -> str:
-    """Unpriced models render as `?`, never as $0 — the distinction
-    config/pricing.py draws between unknown spend and free spend."""
+    """Unpriced models render as `?`, never $0 — unknown spend is not free."""
     return f"${value:.6f}" if value is not None else "?"
 
 
 def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
     encoder = get_encoder(model)
-    catalog_text = format_node_type_catalog()
+    catalog_text = REGISTRY.format_catalog()
     tools = collect_tools(encoder)
     stats = summarize(tools, catalog_text, encoder)
 
@@ -247,7 +216,7 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         f"- generated: {generated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}",
         f"- commit: `{git_sha}`",
         f"- tokenizer: `{encoder.name}` (via `--model {model}`)",
-        f"- rates checked: {PRICES_CHECKED_ON} (`config/pricing.py`)",
+        f"- rates checked: {PRICES_CHECKED_ON} (`airglider/src/config.py`)",
         "",
         "Read from the live registry, not from a recorded run — this describes "
         "the code as it stands at the commit above.",
@@ -279,11 +248,19 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         "| call site | model | tokens | uncached | cached |",
         "|---|---|---:|---:|---:|",
     ]
-    total_uncached = 0.0
-    total_cached = 0.0
+    # Totals stay honest the way _dollars does: one unpriced consumer makes
+    # the total unknown (`?`), never a smaller number that reads as real spend.
+    total_uncached: float | None = 0.0
+    total_cached: float | None = 0.0
     for cost in prompt_costs(stats["block_tokens"]):
-        total_uncached += cost["uncached"] or 0.0
-        total_cached += cost["cached"] or 0.0
+        total_uncached = (
+            None if None in (total_uncached, cost["uncached"])
+            else total_uncached + cost["uncached"]
+        )
+        total_cached = (
+            None if None in (total_cached, cost["cached"])
+            else total_cached + cost["cached"]
+        )
         lines.append(
             f"| {cost['call_site']} | `{cost['model']}` | {cost['tokens']:,} "
             f"| {_dollars(cost['uncached'])} | {_dollars(cost['cached'])} |"
@@ -292,9 +269,12 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
         f"| **per request** | | | **{_dollars(total_uncached)}** "
         f"| **{_dollars(total_cached)}** |",
         "",
-        f"At 1,000 requests: {_dollars(total_uncached * 1000)} uncached, "
-        f"{_dollars(total_cached * 1000)} cached — catalog text alone, before "
-        "any user message, reasoning or output.",
+        f"At 1,000 requests: "
+        f"{_dollars(total_uncached * 1000 if total_uncached is not None else None)} "
+        f"uncached, "
+        f"{_dollars(total_cached * 1000 if total_cached is not None else None)} "
+        f"cached — catalog text alone, before any user message, reasoning or "
+        "output.",
         "",
     ]
 
@@ -329,8 +309,7 @@ def build_report(git_sha: str, generated_at: datetime, model: str) -> str:
 
 
 def build_audit(tools: list[dict], stats: dict) -> list[str]:
-    """Only the problems, and only when there are any — a clean catalog should
-    produce a short report, not a wall of green checkmarks."""
+    """Only the problems, and only when there are any."""
     lines = ["## Audit", ""]
     clean = True
 

@@ -11,7 +11,7 @@ SELECT
 FROM chat_runs,
      jsonb_array_elements(orchestration -> 'steps') AS step
 WHERE step ->> 'name' IN (
-    'app.domains.planner.parse_intent.InitialParseWorkflow',
+    'app.domains.planner.parse_intent.PlanJaneExecutor',
     'app.domains.planner.strategy_classification.StrategyClassificationWorkflow'
 )
 GROUP BY step ->> 'name';
@@ -25,7 +25,7 @@ SELECT
 FROM chat_runs,
      jsonb_array_elements(orchestration -> 'steps') AS step
 WHERE step ->> 'name' IN (
-    'app.domains.planner.parse_intent.InitialParseWorkflow',
+    'app.domains.planner.parse_intent.PlanJaneExecutor',
     'app.domains.planner.strategy_classification.StrategyClassificationWorkflow'
 )
 AND step -> 'runtime_error' IS NOT NULL

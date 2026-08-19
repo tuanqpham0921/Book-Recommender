@@ -70,9 +70,42 @@ Shape-level planner questions live in
   record embedding ("title, page count, description …") answer "find books with 100 pages"
   without the structured filter path?
 
+## Node contracts & refusal (P2 — deferred 2026-08-19)
+
+Both items are written up in [design/node-refusal-v1.md](design/node-refusal-v1.md), with
+the deferral criteria and what would say it's time. They share one root: **a node handed
+work it cannot do has no way to say so** — only `ok=True` (I did the job) or a raise (the
+code broke).
+
+- **The args parser cannot decline.** `OpenAIParserRequest.to_payload`
+  (`clients/openai_requests.py`) pins `tool_choice` to the one tool model, so the parse is
+  mandatory: "give me a book about war" routed to `Retrieve_by_Title` yields
+  `title="war"` and an `ok=True` count. Proposal: let the parser *choose* the tool; a
+  declined parse becomes a refusal message and `ok=False` **with no runtime error**, which
+  travels back to the planner for a clear out-of-capability reply. This amends executor
+  rule 2 in `app/domains/README.md` ("never hand-set `ok=False` and return") — the amendment
+  is the point, not an oversight. Deferred: with 3 of 11 nodes registered (`guide.py`),
+  that query has no correct plan to find, so the mis-route is a catalog gap rather than a
+  routing-quality bug.
+- **`num_books == 0` is `ok=True`, which is right for the producer and wrong for the
+  consumer.** An empty match is a real answer the reply should state — but a 0-count query
+  composed into a downstream anchor is an OR branch that scans and returns nothing while
+  making the anchor look populated. **Partly fixed 2026-08-18**: `ParsedDependents`
+  (`app/domains/books/analyze_recommend/dependents.py`) sorts 0-count anchors into a
+  separate `empty` pile instead of pooling them, and the recommend executor raises when all
+  are empty. Remaining options — answer in the producing node, withhold empties in
+  `TaskRunnerWorkflow._dependency_outputs`, or skip a node whose dependencies are all
+  empty — interact with the missing generation node, so the last one is the one that
+  survives it.
+
 ## Correctness (P1 = ship-blocking, otherwise P2)
 
-- **P1 — `AnyStrategyRequest` union drift** (`app/registry.py`, consumed by
+- **~~P1 — `AnyStrategyRequest` union drift~~ — resolved 2026-08-10.** The hand-listed
+  union is gone; `Registry.request_union()` builds it from the registered specs on
+  demand, so the union and the registered node types are the same list by construction
+  and cannot drift again. Nothing consumes it yet (`strategy_classification.py` was
+  removed with the planner rewrite) — it exists for the human-in-the-loop resume path
+  described below, which is what needed it. Original report, kept for the reasoning:
   `app/domains/planner/strategy_classification.py`) — the union has **10 members**;
   `NODE_TYPE_TO_CLS` has **28 registered node types**. `Analyze_Compare` (re-registered
   2026-07-18) and all 17 extension types are registered, planned, and executed but are not
@@ -138,8 +171,10 @@ Shape-level planner questions live in
 
 ## Test coverage (P2)
 
-- **Stores**: zero tests for `book_store.py`, `chat_run_store.py`, `feedback_store.py`,
-  `base_store.py` (`stores/utils.py` got SQL-injection regression tests 2026-07-12).
+- **Stores**: zero tests for `chat_run_store.py`, `feedback_store.py`,
+  `base_store.py` (the deferred-query builders got SQL-injection regression tests
+  2026-07-12; they live in `test_deferred_query.py` now that `stores/utils.py` is
+  folded into `deferred_query.py`/`book_store.py`, 2026-08-17).
 - **Routes**: only `chat_message.py` has a test; `session.py`, `chat_run.py`,
   `feedback.py`, `health.py` have none.
 - **Domain schemas**: no tests for `app/domains/{books,project,users}/schemas/` validators.
@@ -164,14 +199,20 @@ From the owner's design notes — these need real design thought, not drive-by f
 3. Remove private attributes (keep state in the output; may need `create` instead of
    `parse`) — matters once buffers get loaded.
 4. **Checkpoint gap**: interrupts work, but child-workflow progress is lost because
-   steps are only appended *after* a child finishes (`run_async_step` → await → 
-   `add_steps`). Better checkpointing needs incremental `add_steps` (append the child's
+   steps are only appended *after* a child finishes (`parent_scope` attaches on the way
+   out). Better checkpointing needs incremental `add_steps` (append the child's
    `OperationResult` reference before running, let it mutate) — requires rethinking
    result append/overwrite semantics. *(Cross-referenced in roadmap deferred:
    checkpoint/resume.)*
-5. `self.result` message overwriting is lossy — figure out message vs details; maybe
-   push prior text to details as "prev message: …", and stop overwriting in
-   app/workflow.
+5. ~~`self.result` message overwriting is lossy — figure out message vs details.~~
+   **Done (2026-08-07):** resolved by deleting `OperationResult.message` outright
+   rather than making the overwrite lossless. Every layer (`@task`, `Workflow.__call__`,
+   `run_async_step`, `finalize_result`, each workflow's own `success_message`/
+   `failure_message`) wrote the field and nothing read it back — not the API, not
+   `record_chat_run`, not the review page, not the eval reports — so the "lossy
+   overwrite" only ever destroyed text no consumer saw. Free-text now goes in `details`
+   via `add_details`, and failure text is on `runtime_error.message`, which *is* read
+   (review page, `report.py`).
 - Once resume/checkpoint exists: DAG processing may move into model validation so the
   orchestrator can pick up and continue; steps become config describing what runs next.
 

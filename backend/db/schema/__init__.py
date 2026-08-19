@@ -1,6 +1,6 @@
 from .extensions import REQUIRED_EXTENSIONS
 from .models import BookModel, ChatRunModel, FeedbackModel, TestRunModel
-from .filter_schemas import BookMetadataFilter, BooksFilter
+from .filter_schemas import BookMetadataFilter, BooksFilter, ExclusionBookFilter
 
 __all__ = [
     "BookModel",
@@ -9,5 +9,6 @@ __all__ = [
     "TestRunModel",
     "REQUIRED_EXTENSIONS",
     "BookMetadataFilter",
-    "BooksFilter"
+    "BooksFilter",
+    "ExclusionBookFilter",
 ]

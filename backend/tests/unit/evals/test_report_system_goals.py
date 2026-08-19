@@ -24,12 +24,14 @@ from evals.report_system_goals import (
 
 def make_planner(*goal_types, token_usage=None):
     planner = {
-        "output": {
-            "parse_result": {
-                "accepted_goals": [
-                    {"_id": f"goal_{i}", "target_node_type": goal_type}
-                    for i, goal_type in enumerate(goal_types)
-                ]
+        "response": {
+            "result": {
+                "parse_result": {
+                    "accepted_goals": [
+                        {"_id": f"goal_{i}", "target_node_type": goal_type}
+                        for i, goal_type in enumerate(goal_types)
+                    ]
+                }
             }
         }
     }
@@ -73,18 +75,20 @@ class TestAcceptedGoalTypes:
 
     def test_missing_parse_result_is_empty(self):
         # e.g. the run errored before parsing finished
-        assert accepted_goal_types({"output": {}}) == []
+        assert accepted_goal_types({"response": {"result": {}}}) == []
         assert accepted_goal_types(None) == []
 
     def test_malformed_goals_are_skipped(self):
         planner = {
-            "output": {
-                "parse_result": {
-                    "accepted_goals": [
-                        {"target_node_type": "Retrieve_by_Title"},
-                        {"target_node_type": 42},
-                        "not a dict",
-                    ]
+            "response": {
+                "result": {
+                    "parse_result": {
+                        "accepted_goals": [
+                            {"target_node_type": "Retrieve_by_Title"},
+                            {"target_node_type": 42},
+                            "not a dict",
+                        ]
+                    }
                 }
             }
         }

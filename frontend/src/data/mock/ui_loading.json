@@ -1,0 +1,10 @@
+[
+    {
+        "type": "ui.loading",
+        "data": "Getting Book By Title..."
+    },
+    {
+        "type": "ui.loading",
+        "data": "recommending books..."
+    }
+]

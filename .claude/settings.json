@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /home/tuani/Book-Recommender/backend && poetry run python -m pyflakes app/orchestration/orchestrator.py app/orchestration/run_recorder.py common/operation.py common/workflow.py 2>&1 | head -20; echo \"--- readmes mentioning add_step/OperationResult ---\"; grep -rln \"add_step\\\\|OperationResult\" --include=*.md . ../docs 2>/dev/null)",
+      "Read(//home/tuani/**)",
+      "Bash(poetry check *)"
+    ]
+  }
+}

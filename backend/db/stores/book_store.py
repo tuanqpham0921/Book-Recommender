@@ -1,171 +1,200 @@
-from typing import List, Optional, Any, Dict, cast
+from typing import List, Any, Dict
+
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.schema import BooksFilter
+from sqlalchemy.orm import defer
 
-from db.schema import BookModel
+from config import BookConstraints
+from db.schema import BookMetadataFilter, BookModel
 from .base_store import BaseStore
-from .utils import (
-    build_title_search,
-    build_isbn_search,
-    build_filtered_search,
-    build_embedding_search
-)
+from .deferred_query import DeferredBookQuery
 
-from sqlalchemy import select, func
-from typing import AsyncIterator
+
+def metadata_predicates(model: type[BookModel], filters: BookMetadataFilter) -> list:
+    """The WHERE terms one metadata filter stands for, for the caller to AND.
+
+    Every bound is inclusive and independent, so the filter is read as a list
+    of comparisons rather than a shape. A book whose column is NULL fails the
+    comparison and drops out — an unknown page count is not "under 300 pages".
+    """
+    lower = (
+        (filters.min_pages, model.num_pages),
+        (filters.min_rating, model.average_rating),
+        (filters.min_ratings_count, model.ratings_count),
+        (filters.min_year, model.published_year),
+    )
+    upper = (
+        (filters.max_pages, model.num_pages),
+        (filters.max_rating, model.average_rating),
+        (filters.max_ratings_count, model.ratings_count),
+        (filters.max_year, model.published_year),
+    )
+
+    predicates = [column >= bound for bound, column in lower if bound is not None]
+    predicates += [column <= bound for bound, column in upper if bound is not None]
+    if filters.is_children is not None:
+        predicates.append(model.is_children.is_(filters.is_children))
+    return predicates
+
+
+def embedding_search_stmt(
+    query_embedding: List[float],
+    filters: BookMetadataFilter | None = None,
+    exclude_isbns: List[str] | None = None,
+    similarity_threshold: float = BookConstraints.MIN_SIMILARITY,
+    limit: int = 50,
+) -> Select:
+    """The books nearest an embedding, narrowed to those worth ranking.
+
+    Pure and model-bound rather than a store method — like `metadata_predicates`,
+    but returned rather than applied, so a caller can record it (`compile_sql`)
+    before running it. That is the whole reason this is split out: the search
+    returns rows in cosine order, and no `DeferredBookQuery` reproduces that
+    order (see `RecommendationOutput`), so it can never be a deferred query
+    whose statement rides downstream on its own — recording it has to happen
+    here, at the one point something still holds it unexecuted.
+
+    Three narrowings, all optional, and all of them have to land *inside* this
+    statement rather than on its result: the search orders the whole table and
+    truncates at `limit`, so anything applied afterwards is applied to an
+    already-capped set.
+
+    - `similarity_threshold` is the floor. Without it this returns the top
+      `limit` rows however far away they are — the whole table, ordered and
+      truncated — so an ask with no near match answers with strangers.
+    - `filters` are the metadata bounds the recommend node parsed. An all-None
+      filter contributes no predicates and is a harmless no-op, unlike
+      `filter_query()` which refuses one: there narrowing is the node's whole
+      job, so a no-op would report a count read as filtered.
+    - `exclude_isbns` drops the books the ask already named. In SQL rather than
+      in the caller, so the excluded rows do not eat `limit` slots.
+
+    `embedding` is deferred with `raiseload=True`, matching `materialize_stmt`:
+    the vector is ~4KB per row and nothing downstream reads it (`to_dict()`
+    excludes it by default), so fetching it for 50 rows only to throw it away
+    is a wasted round trip.
+    """
+    embed_col = BookModel.embedding
+    # cosine similarity = 1 - cosine distance
+    similarity = 1 - embed_col.cosine_distance(query_embedding)
+    stmt = (
+        select(BookModel, similarity.label("similarity_score"))
+        # BookModel declares columns with plain Column(...), not Mapped[...],
+        # so pyright sees Column[Unknown] here instead of the QueryableAttribute
+        # `defer()`'s stub wants — same stub gap as `src.c.score` below.
+        .options(defer(embed_col, raiseload=True))  # type: ignore[reportArgumentType]
+        .where(embed_col.is_not(None), similarity >= similarity_threshold)
+        .order_by(text("similarity_score DESC"))
+        .limit(limit)
+    )
+    if filters:
+        stmt = stmt.where(*metadata_predicates(BookModel, filters))
+    if exclude_isbns:
+        stmt = stmt.where(BookModel.isbn13.notin_(exclude_isbns))
+    return stmt
+
 
 class BookStore(BaseStore[BookModel]):
-    """SQLAlchemy-based book data access layer."""
+    """SQLAlchemy-based book data access layer.
+
+    The store builds queries from a search dimension (which needs the model)
+    and executes statements (which needs the session). What can be derived
+    from an already-built query — counting it, materializing it, pooling
+    several — lives on `DeferredBookQuery` itself.
+
+    One exception: the embedding search is built by the module-level
+    `embedding_search_stmt` instead of a method here, so a caller can record
+    its SQL (`compile_sql`) before executing it — a `@task` on the store would
+    mean airglider imported into `db/`, which stays free of it on purpose.
+    `search_similar` is the execute half, taking the built statement the same
+    way `count`/`materialize` take a `DeferredBookQuery`.
+    """
 
     def __init__(self, session: AsyncSession):
         super().__init__(session, BookModel)
 
-    async def get_by_isbn(self, isbn: str) -> List[Dict[str, Any]]:
-        """Get a single book by ISBN-13"""
-        
-        stmt = build_isbn_search(self.model, isbn)
-        result = await self._execute_statement(stmt)
-        row = result.scalars().first()
-        return [self.row_to_dict(row)] if row else []
+    async def search_similar(self, stmt: Select) -> List[Dict[str, Any]]:
+        """Run a statement built by `embedding_search_stmt` and shape the rows.
 
-    async def search_by_title(
-        self, title: str, authors: list[str], limit: int = 10, similarity_threshold: float = 0.7
-    ) -> List[Dict[str, Any]]:
-        """Search books by title with fuzzy matching."""
-        
-        stmt = build_title_search(self.model, title, authors, limit, similarity_threshold)
-        result = await self._execute_statement(stmt)
-        rows = result.scalars().all()
-        return [self.row_to_dict(row) for row in rows]
-    
-    async def search_by_filters(
-        self, 
-        filters: BooksFilter,
-    ) -> List[Dict[str, Any]]:
-        """Search books using structured filters."""
-        
-        stmt = build_filtered_search(self.model, filters)
-        result = await self._execute_statement(stmt)
-        rows = result.scalars().all()
-        return [self.row_to_dict(row) for row in rows]
-
-    async def search_by_book_filter(
-        self, 
-        filters: BooksFilter,
-    ) -> List[Dict[str, Any]]:
-        """Search books separately per author, then combine results."""
-        
-        if not filters.authors:
-            # No authors specified, use regular search
-            return await self.search_by_filters(filters)
-        
-        all_results = []
-        
-        # to ensure we have each authors in the results
-        for author_name in filters.authors:
-            # Create a filter for just this author
-            author_filter = filters.model_copy(
-                update={"authors": [author_name]},
-                deep=True
-            )
-            
-            results = await self.search_by_filters(author_filter)
-            all_results.extend(results)
-        
-        # Remove duplicates (in case a book appears for multiple authors)
-        seen_isbns = set()
-        unique_results = []
-        for book in all_results:
-            if book.get('isbn13') not in seen_isbns:
-                unique_results.append(book)
-                seen_isbns.add(book.get('isbn13'))
-        
-        return unique_results
-    
-    async def search_by_embedding(
-        self,
-        query_embedding: List[float],
-        filters: Optional[BooksFilter] = None,
-        similarity_threshold: float = 0.7,
-        limit: int = 50
-    ) -> List[Dict[str, Any]]:
-        """Search books using embedding similarity."""
-        
-        stmt = build_embedding_search(
-            self.model,
-            query_embedding,
-            filters,
-            similarity_threshold,
-            limit
-        )
-        
-        result = await self._execute_statement(stmt)
+        Row shaping — not just `.scalars()` — because the statement selects the
+        model plus a computed `similarity_score` column alongside it; that score
+        has no home on `BookModel` and is folded into the dict here instead.
+        """
+        result = await self.execute_statement(stmt)
         rows = result.all()
-        
-        # Convert to dicts and include similarity scores
+
         books_with_scores = []
         for row in rows:
-            book_dict = self.row_to_dict(row[0])  # The book object
-            book_dict['similarity_score'] = float(row[1])  # The similarity score
+            book_dict = row[0].to_dict()  # The book object
+            book_dict["similarity_score"] = float(row[1])  # The similarity score
             books_with_scores.append(book_dict)
-        
+
         return books_with_scores
-    
-    
-    async def iter_missing_embeddings(
-        self,
-        *,
-        batch_size: int = 500,
-    ) -> AsyncIterator[dict[str, Any]]:
-        """Stream books missing embeddings."""
-        stmt = (
-            select(
-                BookModel.isbn13,
-                BookModel.title,
-                BookModel.description,
+
+    # --- deferred queries: build now, count now, fetch rows once at the end ---
+
+    def title_query(
+        self, title: str, similarity_threshold: float = 0.7
+    ) -> DeferredBookQuery:
+        """Build the title search without running it: isbn13 plus the fuzzy
+        score, with no ORDER BY and no LIMIT so the result can be composed
+        into a CTE."""
+        stmt = select(
+            self.model.isbn13,
+            func.similarity(self.model.title, title).label("score"),
+        ).where(
+            or_(
+                self.model.title.ilike(f"{title}"),
+                func.similarity(self.model.title, title) > similarity_threshold,
             )
-            .where(BookModel.embedding.is_(None))
-            .where(BookModel.description.is_not(None))
-            .execution_options(yield_per=batch_size)
         )
-        result = await self.session.stream(stmt)
-        async for row in result.mappings():
-            yield dict(row)
-    
-    async def get_num_book_missing_embeddings(self) -> int:
-        """Get the number of books that are missing embeddings."""
-        stmt = select(func.count()).select_from(BookModel).where(BookModel.embedding.is_(None))
-        result = await self.session.execute(stmt)
-        # COUNT(*) always yields one row, so scalar() is never None here
-        return cast(int, result.scalar())
+        return DeferredBookQuery(stmt, label="title")
 
-    def row_to_dict(self, row: BookModel) -> Dict[str, Any]:
-        """Convert BookModel to standardized dictionary."""
-        if not row:
-            return {}
+    def filter_query(
+        self, base: DeferredBookQuery, filters: BookMetadataFilter
+    ) -> DeferredBookQuery:
+        """Narrow an already-built query by metadata bounds, without running it.
 
-        # cast: BookModel uses legacy Column declarations, so pyright sees
-        # instance attributes as Column objects instead of their values
-        isbn13 = cast(Optional[str], row.isbn13)
-        average_rating = cast(Optional[float], row.average_rating)
-        thumbnail = cast(Optional[str], row.thumbnail)
+        Joins the books table back onto the base query's isbn13s and ANDs the
+        bounds on, so the narrowing happens in SQL over the whole upstream
+        match — not over rows someone had to fetch first. Keeps the deferred
+        invariants (isbn13 only, no LIMIT, no ORDER BY), so the result composes
+        like any other.
 
-        return {
-            "isbn13": isbn13,
-            "title": row.title,
-            "authors": row.authors,
-            "categories": row.categories,
-            "published_year": row.published_year,
-            "num_pages": row.num_pages,
-            "average_rating": float(average_rating) if average_rating else None,
-            "description": row.description,
-            "thumbnail": (
-                thumbnail
-                or f"https://covers.openlibrary.org/b/isbn/{isbn13}-L.jpg"
-                if isbn13
-                else "data/cover-not-found.jpg"
-            ),
-            "ratings_count": row.ratings_count,
-            "genre": row.genre,
-            "is_children": row.is_children
-        }
+        Building a query is the store's job because it needs the model; which
+        bounds to apply is the filter node's. An empty filter is refused here
+        rather than silently returning the base query: a no-op narrowing step
+        would report a count the user reads as filtered.
+        """
+        predicates = metadata_predicates(self.model, filters)
+        if not predicates:
+            raise ValueError("Cannot filter on an empty metadata filter")
+
+        # An anonymous subquery rather than a named CTE: two filtered queries
+        # can end up composed into one statement, and two CTEs sharing a name
+        # there is a compile error. The alias is generated per compile instead.
+        src = base.stmt.subquery()
+        columns = [self.model.isbn13]
+        # a single-dimension base still carries its own score; dropping it here
+        # would silently re-rank whatever materializes this by rating
+        if "score" in src.c.keys():
+            columns.append(src.c.score)
+
+        stmt = (
+            select(*columns)
+            .join(src, self.model.isbn13 == src.c.isbn13)
+            .where(*predicates)
+        )
+        return DeferredBookQuery(stmt, label="filtered")
+
+    async def count(self, query: DeferredBookQuery) -> int:
+        """How many books the query matches. Zero is an answer, not a failure."""
+        result = await self.execute_statement(query.count_stmt())
+        return int(result.scalar_one())
+
+    async def materialize(
+        self, query: DeferredBookQuery, limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Run a deferred query for rows — the last step of a plan."""
+        result = await self.execute_statement(query.materialize_stmt(self.model, limit))
+        return [row.to_dict() for row in result.scalars().all()]

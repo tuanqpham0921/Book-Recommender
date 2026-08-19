@@ -79,8 +79,8 @@ class ChatRunModel(Base):
     runtime_error = Column(Text, nullable=True)
     duration_s = Column(Float, nullable=True)
     total_tokens = Column(Integer, nullable=True)
-    # promoted out of planner.output.diagram so the review page (and any
-    # querying) doesn't need to unpack the JSONB envelope just to render it
+    # promoted out of planner.response.result.diagram so the review page does
+    # not have to unpack the JSONB envelope to render it
     mermaid = Column(Text, nullable=True)
 
     # full-fidelity envelopes: parse/strategy results live inside planner,
@@ -100,14 +100,12 @@ class ChatRunModel(Base):
 
 
 class FeedbackModel(Base):
-    """One review of a chat run from the internal /review page: the
-    reviewer's overall like/dislike plus a JSONB list of
-    {title, message, positive} comments. One row per (chat_id, session_id) —
-    session_id is the *reviewing* session, not the one that produced the
-    run — upserted whole on re-submit (see feedback_review_idx). chat_id
-    CASCADEs from chat_runs (the review page only lists already-persisted
-    runs, so the target run always exists by submit time). A run's review
-    count is derived by counting rows here, never stored on chat_runs."""
+    """One review of a chat run from the internal /review page: an overall
+    like/dislike plus a JSONB list of {title, message, positive} comments.
+
+    One row per (chat_id, session_id) — session_id is the *reviewing* session —
+    upserted whole on re-submit (see feedback_review_idx). chat_id CASCADEs from
+    chat_runs. A run's review count is counted from these rows, never stored."""
 
     __tablename__ = "feedback"
 
@@ -147,10 +145,8 @@ class FeedbackModel(Base):
 
 class TestRunModel(Base):
     """Links an eval-suite case to the chat run it produced: suite file stem
-    (e.g. 'query_suite') plus the entry id inside it. Written by
-    evals/run_suites.py after a suite run finishes; evals/report.py joins
-    this with chat_runs to build the regression report. CASCADE so wiping
-    chat_runs between eval campaigns auto-cleans these rows."""
+    plus the entry id inside it. Written by evals/run_suites.py; evals/report.py
+    joins it with chat_runs. CASCADE so wiping chat_runs auto-cleans these."""
 
     __tablename__ = "test_runs"
 

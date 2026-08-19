@@ -1,0 +1,2193 @@
+{
+  "id": "op_237196ea",
+  "name": "orchestrator_chat_84f5fac1",
+  "ok": true,
+  "timing": {
+    "start_time": "2026-08-14T19:15:35.675200+00:00",
+    "duration": 17.85
+  },
+  "token_usage": {
+    "total": 5902,
+    "prompt": 5254,
+    "completion": 648,
+    "cached": 0,
+    "reasoning_tokens": 192,
+    "by_model": {
+      "gpt-5-nano": {
+        "total": 2400,
+        "prompt": 2283,
+        "completion": 117,
+        "cached": 0,
+        "reasoning_tokens": 0
+      },
+      "gpt-5-mini": {
+        "total": 3502,
+        "prompt": 2971,
+        "completion": 531,
+        "cached": 0,
+        "reasoning_tokens": 192
+      }
+    },
+    "cost_usd": 0.001966
+  },
+  "steps": [
+    {
+      "id": "op_07eb6215",
+      "parent_id": "op_237196ea",
+      "name": "app.orchestration.triage.TriageWorkflow",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-08-14T19:15:35.675678+00:00",
+        "duration": 0.01
+      },
+      "input": {
+        "node_input": {
+          "query": "Show me books similar to Pride and Prejudice"
+        }
+      },
+      "response": {
+        "result": {
+          "session_id": "dev_ccbccb8b",
+          "parse_result": {
+            "accepted_goals": [
+              {
+                "node_type": "system_goal",
+                "id": "1",
+                "description": "Find the book Pride and Prejudice by title",
+                "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
+                "confidence": 1.0,
+                "target_node_type": "Retrieve_by_Title",
+                "_refusal": false
+              },
+              {
+                "node_type": "system_goal",
+                "id": "2",
+                "description": "Recommend books similar to Pride and Prejudice",
+                "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
+                "confidence": 1.0,
+                "target_node_type": "Analyze_Recommend",
+                "depends_on": [
+                  "1"
+                ],
+                "_refusal": false
+              }
+            ]
+          }
+        },
+        "output_type": "TriageOutput"
+      },
+      "token_usage": {
+        "total": 0,
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0,
+        "cost_usd": 0.0
+      }
+    },
+    {
+      "id": "op_ff54653f",
+      "parent_id": "op_237196ea",
+      "name": "app.orchestration.task_runner.TaskRunnerWorkflow",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-08-14T19:15:35.684649+00:00",
+        "duration": 17.83
+      },
+      "input": {
+        "node_input": {
+          "plan": {
+            "accepted_types": [
+              "Retrieve_by_Title",
+              "Analyze_Recommend"
+            ],
+            "num_rejected_system": 0
+          }
+        }
+      },
+      "response": {
+        "result": {
+          "session_id": "dev_ccbccb8b",
+          "task_results": {
+            "1": {
+              "id": "1",
+              "args": {
+                "node_type": "Retrieve_by_Title",
+                "confidence": 1.0,
+                "reasoning": "User asked to find a book by title",
+                "title": "Pride and Prejudice",
+                "_refusal": false
+              },
+              "books": [
+                {
+                  "isbn13": "9780141439518",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0141439513",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 480,
+                  "average_rating": 4.25,
+                  "ratings_count": 11552,
+                  "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                  "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                },
+                {
+                  "isbn13": "9780192802385",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0192802380",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 333,
+                  "average_rating": 4.25,
+                  "ratings_count": 2369,
+                  "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                  "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                }
+              ],
+              "num_books": 2,
+              "query_sql": "SELECT books.isbn13, similarity(books.title, 'Pride and Prejudice') AS score \nFROM books \nWHERE lower(books.title) LIKE lower('Pride and Prejudice') OR similarity(books.title, 'Pride and Prejudice') > 0.7"
+            },
+            "2": {
+              "id": "2",
+              "args": {
+                "node_type": "Analyze_Recommend",
+                "confidence": 1.0,
+                "reasoning": "User wants similar books to Pride and Prejudice",
+                "semantic_input": "books similar to Pride and Prejudice",
+                "_refusal": false
+              },
+              "depends_on": [
+                "1"
+              ],
+              "books": [
+                {
+                  "isbn13": "9781593080495",
+                  "title": "Sense and Sensibility",
+                  "isbn10": "1593080492",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 336,
+                  "average_rating": 4.07,
+                  "ratings_count": 636,
+                  "description": "9781593080495 Romantic walks through lush Devonshire and genteel dinner parties at a stately manor draw two pretty sisters into the schemes and manipulations of landed gentry determined to marry wisely and well.",
+                  "thumbnail": "http://books.google.com/books/content?id=PTUH6Zg2QQYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Sense and Sensibility",
+                  "similarity_score": 0.6114227495626607
+                },
+                {
+                  "isbn13": "9781840220551",
+                  "title": "The Complete Novels of Jane Austen",
+                  "isbn10": "1840220554",
+                  "authors": "Jane Austen",
+                  "categories": "England",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 1431,
+                  "average_rating": 4.55,
+                  "ratings_count": 924,
+                  "description": "9781840220551 Jane Austen is without question, one of England's most enduring and skilled novelists. With her wit, social precision, and unerring ability to create some of literature's most charismatic and believable heroines, she mesmerises her readers as much today as when her novels were first published. Whether it is her sharp, ironic gaze at the Gothic genre invoked by the adventures of Catherine Morland in Northanger Abbey; the diffident and much put-upon Fanny Price struggling to cope with her emotions in Mansfield Park; her delightfully paced comedy of manners and the machinations of the sisters Elinor and Marianne in Sense and Sensibility; the quiet strength of Anne Elliot in Persuasion succeeding in a world designed to subjugate her very existence; and Emma - 'a heroine whom no one but myself will like' teased Austen - yet another irresistible character on fire with imagination and foresight. Indeed not unlike her renowned creator. Jane Austen is as sure-footed in her steps through society's whirlpools of convention and prosaic mores as she is in her sometimes restrained but ever precise and enduring prose.",
+                  "thumbnail": "http://books.google.com/books/content?id=k9Bm_uBn778C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                  "title_and_subtiles": "The Complete Novels of Jane Austen",
+                  "similarity_score": 0.5545230267192142
+                },
+                {
+                  "isbn13": "9781593081256",
+                  "title": "Sense and Sensibility",
+                  "isbn10": "1593081251",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 325,
+                  "average_rating": 4.07,
+                  "ratings_count": 1199,
+                  "description": "9781593081256 Two sisters, one practical and conventional and the other emotional and sentimental, find that only through compromise of their mutual differences can they get along.",
+                  "thumbnail": "http://books.google.com/books/content?id=yhiJVxesrWwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Sense and Sensibility",
+                  "similarity_score": 0.5367587221642771
+                },
+                {
+                  "isbn13": "9780192802644",
+                  "title": "Mansfield Park",
+                  "isbn10": "019280264X",
+                  "authors": "Jane Austen",
+                  "categories": "Literary Criticism",
+                  "genre": "Nonfiction",
+                  "published_year": 2003,
+                  "num_pages": 418,
+                  "average_rating": 3.85,
+                  "ratings_count": 1471,
+                  "description": "9780192802644 '\"Me!\" cried Fanny...\"Indeed you must excuse me. I could not act any thing if you were to give me the world. No, indeed, I cannot act.\"' At the age of ten, Fanny Price leaves the poverty of her Portsmouth home to be brought up among the family of her wealthy uncle, Sir Thomas Bertram, in the chilly grandeur of Mansfield Park. There she accepts her lowly status, and gradually falls in love with her cousin Edmund. When the dazzling and sophisticated Henry and Mary Crawford arrive, Fanny watches as her cousins become embroiled in rivalry and sexual jealousy. As the company starts to rehearse a play by way of entertainment, Fanny struggles to retain her independence in the face of the Crawfords' dangerous attractions; and when Henry turns his attentions to her, the drama really begins... This new edition does full justice to Austen's complex and subtle story, placing it in its Regency context and elucidating the theatrical background that pervades the novel.",
+                  "thumbnail": "http://books.google.com/books/content?id=jl6iDrN4ARwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Mansfield Park",
+                  "similarity_score": 0.5319346471320028
+                },
+                {
+                  "isbn13": "9780486420493",
+                  "title": "The House of Mirth",
+                  "isbn10": "0486420493",
+                  "authors": "Edith Wharton",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2002,
+                  "num_pages": 272,
+                  "average_rating": 3.95,
+                  "ratings_count": 743,
+                  "description": "9780486420493 A satire of New York society at the turn of the century follows Lily Bart, who is torn between the pressure to marry a wealthy husband and the desire to be true to herself.",
+                  "thumbnail": "http://books.google.com/books/content?id=GJYoAwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                  "title_and_subtiles": "The House of Mirth",
+                  "similarity_score": 0.4992153490344995
+                },
+                {
+                  "isbn13": "9780965429900",
+                  "title": "Desire and Duty",
+                  "isbn10": "0965429903",
+                  "authors": "Teddy F. Bader;Marilyn Bader",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 1997,
+                  "num_pages": 286,
+                  "average_rating": 2.85,
+                  "ratings_count": 114,
+                  "description": "9780965429900 Jane Austen's story of Elizabeth Bennet Darcy ends with Elizabeth's marriage. The Baders continue her story as wife, mother and confidante to her sister in law, Georgiana. Set in the years 1805-1816, the story tells the romantic adventures of beautiful, shy, devout Georgiana. Along the way, issues of duty and desire, in marriage and in one's relationship to God, are presented.",
+                  "thumbnail": "http://books.google.com/books/content?id=Zn6FAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Desire and Duty: A Sequel to Jane Austen's Pride and Prejudice",
+                  "similarity_score": 0.4953454217353328
+                },
+                {
+                  "isbn13": "9780771014178",
+                  "title": "The Jane Austen Cookbook",
+                  "isbn10": "0771014171",
+                  "authors": "Maggie Black;Deirdre Le Faye",
+                  "categories": "Cooking",
+                  "genre": "Nonfiction",
+                  "published_year": 2002,
+                  "num_pages": 128,
+                  "average_rating": 3.91,
+                  "ratings_count": 265,
+                  "description": "9780771014178 Jane Austen wrote her novels in the midst of a large and sociable family. Brothers and sisters, nieces and nephews, friends and acquaintances were always coming and going, which offered numerous occasions for convivial eating and drinking. One of Jane\u2019s dearest friends, Martha Lloyd, lived with the family for many years and recorded in her \u201cHousehold Book\u201d over 100 recipes enjoyed by the Austens. A selection of this family fare, now thoroughly tested and modernized for today\u2019s cooks, is recreated here, together with some of the more sophisticated dishes which Jane and her characters would have enjoyed at balls, picnics, and supper parties. A fascinating introduction describes Jane\u2019s own interest in food, drawing upon both the novels and her letters, and explains the social conventions of shopping, eating, and entertaining in late Georgian and Regency England. The book is illustrated throughout with delightful contemporary line drawings, prints, and watercolours. Authentic recipes, modernized for today\u2019s cooks, include: \u2022 Buttered Prawns \u2022 Wine-Roasted Gammon and Pigeon Pie \u2022 Broil\u2019d Eggs \u2022 White Soup and Salmagundy \u2022 Pyramid Creams \u2022 Martha\u2019s Almond Cheesecakes",
+                  "thumbnail": "http://books.google.com/books/content?id=vtgBAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The Jane Austen Cookbook",
+                  "similarity_score": 0.4882964689799849
+                },
+                {
+                  "isbn13": "9780452286535",
+                  "title": "The Jane Austen Book Club",
+                  "isbn10": "0452286530",
+                  "authors": "Karen Joy Fowler",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2005,
+                  "num_pages": 288,
+                  "average_rating": 3.08,
+                  "ratings_count": 56434,
+                  "description": "9780452286535 As six Californians get together to form a book club to discuss the novels of Jane Austen, their lives are turned upside down by troubled marriages, illicit affairs, changing relationships, and love, in a comedy of contemporary manners. By the author of Sarah Canary. Reprint.",
+                  "thumbnail": "http://books.google.com/books/content?id=ucmLDQAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The Jane Austen Book Club",
+                  "similarity_score": 0.48804714675404215
+                },
+                {
+                  "isbn13": "9781593081539",
+                  "title": "The House of Mirth",
+                  "isbn10": "1593081537",
+                  "authors": "Edith Wharton",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 348,
+                  "average_rating": 3.95,
+                  "ratings_count": 338,
+                  "description": "9781593081539 The tragic story of a beautiful young woman caught up in the shallow and corrupt world of New York society at the turn of the century, where wealth and social status are everything.",
+                  "thumbnail": "http://books.google.com/books/content?id=CedoNRdNuc0C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The House of Mirth",
+                  "similarity_score": 0.4826396280254388
+                },
+                {
+                  "isbn13": "9780099474463",
+                  "title": "Lady of Quality",
+                  "isbn10": "0099474468",
+                  "authors": "Georgette Heyer",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2005,
+                  "num_pages": 267,
+                  "average_rating": 3.87,
+                  "ratings_count": 5706,
+                  "description": "9780099474463 Independent and spirited. Miss Annis Wychwood gives little thought to finding herself a suitable husband, thus dashing the dreams of many hopeful suitors. When she becomes embroiled in the affairs of the runaway heiress Lucilla, though, she encounters the beautiful fugitive's guardian - as rakish and uncivil a rogue she has ever met. Although, chafing a bit at the restrictions of Regency society in Bath, Annis does have to admit that Oliver Carleton, at least, is never boring.",
+                  "thumbnail": "http://books.google.com/books/content?id=YwPmnE8bYGwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Lady of Quality",
+                  "similarity_score": 0.4720692740478034
+                }
+              ],
+              "num_books": 10,
+              "references": [
+                {
+                  "isbn13": "9780141439518",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0141439513",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 480,
+                  "average_rating": 4.25,
+                  "ratings_count": 11552,
+                  "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                  "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                },
+                {
+                  "isbn13": "9780192802385",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0192802380",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 333,
+                  "average_rating": 4.25,
+                  "ratings_count": 2369,
+                  "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                  "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                }
+              ],
+              "search_text": "A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course.\n\nbooks similar to Pride and Prejudice"
+            }
+          },
+          "completed_task": [
+            {
+              "id": "1",
+              "args": {
+                "node_type": "Retrieve_by_Title",
+                "confidence": 1.0,
+                "reasoning": "User asked to find a book by title",
+                "title": "Pride and Prejudice",
+                "_refusal": false
+              },
+              "books": [
+                {
+                  "isbn13": "9780141439518",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0141439513",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 480,
+                  "average_rating": 4.25,
+                  "ratings_count": 11552,
+                  "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                  "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                },
+                {
+                  "isbn13": "9780192802385",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0192802380",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 333,
+                  "average_rating": 4.25,
+                  "ratings_count": 2369,
+                  "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                  "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                }
+              ],
+              "num_books": 2,
+              "query_sql": "SELECT books.isbn13, similarity(books.title, 'Pride and Prejudice') AS score \nFROM books \nWHERE lower(books.title) LIKE lower('Pride and Prejudice') OR similarity(books.title, 'Pride and Prejudice') > 0.7"
+            },
+            {
+              "id": "2",
+              "args": {
+                "node_type": "Analyze_Recommend",
+                "confidence": 1.0,
+                "reasoning": "User wants similar books to Pride and Prejudice",
+                "semantic_input": "books similar to Pride and Prejudice",
+                "_refusal": false
+              },
+              "depends_on": [
+                "1"
+              ],
+              "books": [
+                {
+                  "isbn13": "9781593080495",
+                  "title": "Sense and Sensibility",
+                  "isbn10": "1593080492",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 336,
+                  "average_rating": 4.07,
+                  "ratings_count": 636,
+                  "description": "9781593080495 Romantic walks through lush Devonshire and genteel dinner parties at a stately manor draw two pretty sisters into the schemes and manipulations of landed gentry determined to marry wisely and well.",
+                  "thumbnail": "http://books.google.com/books/content?id=PTUH6Zg2QQYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Sense and Sensibility",
+                  "similarity_score": 0.6114227495626607
+                },
+                {
+                  "isbn13": "9781840220551",
+                  "title": "The Complete Novels of Jane Austen",
+                  "isbn10": "1840220554",
+                  "authors": "Jane Austen",
+                  "categories": "England",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 1431,
+                  "average_rating": 4.55,
+                  "ratings_count": 924,
+                  "description": "9781840220551 Jane Austen is without question, one of England's most enduring and skilled novelists. With her wit, social precision, and unerring ability to create some of literature's most charismatic and believable heroines, she mesmerises her readers as much today as when her novels were first published. Whether it is her sharp, ironic gaze at the Gothic genre invoked by the adventures of Catherine Morland in Northanger Abbey; the diffident and much put-upon Fanny Price struggling to cope with her emotions in Mansfield Park; her delightfully paced comedy of manners and the machinations of the sisters Elinor and Marianne in Sense and Sensibility; the quiet strength of Anne Elliot in Persuasion succeeding in a world designed to subjugate her very existence; and Emma - 'a heroine whom no one but myself will like' teased Austen - yet another irresistible character on fire with imagination and foresight. Indeed not unlike her renowned creator. Jane Austen is as sure-footed in her steps through society's whirlpools of convention and prosaic mores as she is in her sometimes restrained but ever precise and enduring prose.",
+                  "thumbnail": "http://books.google.com/books/content?id=k9Bm_uBn778C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                  "title_and_subtiles": "The Complete Novels of Jane Austen",
+                  "similarity_score": 0.5545230267192142
+                },
+                {
+                  "isbn13": "9781593081256",
+                  "title": "Sense and Sensibility",
+                  "isbn10": "1593081251",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 325,
+                  "average_rating": 4.07,
+                  "ratings_count": 1199,
+                  "description": "9781593081256 Two sisters, one practical and conventional and the other emotional and sentimental, find that only through compromise of their mutual differences can they get along.",
+                  "thumbnail": "http://books.google.com/books/content?id=yhiJVxesrWwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Sense and Sensibility",
+                  "similarity_score": 0.5367587221642771
+                },
+                {
+                  "isbn13": "9780192802644",
+                  "title": "Mansfield Park",
+                  "isbn10": "019280264X",
+                  "authors": "Jane Austen",
+                  "categories": "Literary Criticism",
+                  "genre": "Nonfiction",
+                  "published_year": 2003,
+                  "num_pages": 418,
+                  "average_rating": 3.85,
+                  "ratings_count": 1471,
+                  "description": "9780192802644 '\"Me!\" cried Fanny...\"Indeed you must excuse me. I could not act any thing if you were to give me the world. No, indeed, I cannot act.\"' At the age of ten, Fanny Price leaves the poverty of her Portsmouth home to be brought up among the family of her wealthy uncle, Sir Thomas Bertram, in the chilly grandeur of Mansfield Park. There she accepts her lowly status, and gradually falls in love with her cousin Edmund. When the dazzling and sophisticated Henry and Mary Crawford arrive, Fanny watches as her cousins become embroiled in rivalry and sexual jealousy. As the company starts to rehearse a play by way of entertainment, Fanny struggles to retain her independence in the face of the Crawfords' dangerous attractions; and when Henry turns his attentions to her, the drama really begins... This new edition does full justice to Austen's complex and subtle story, placing it in its Regency context and elucidating the theatrical background that pervades the novel.",
+                  "thumbnail": "http://books.google.com/books/content?id=jl6iDrN4ARwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Mansfield Park",
+                  "similarity_score": 0.5319346471320028
+                },
+                {
+                  "isbn13": "9780486420493",
+                  "title": "The House of Mirth",
+                  "isbn10": "0486420493",
+                  "authors": "Edith Wharton",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2002,
+                  "num_pages": 272,
+                  "average_rating": 3.95,
+                  "ratings_count": 743,
+                  "description": "9780486420493 A satire of New York society at the turn of the century follows Lily Bart, who is torn between the pressure to marry a wealthy husband and the desire to be true to herself.",
+                  "thumbnail": "http://books.google.com/books/content?id=GJYoAwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                  "title_and_subtiles": "The House of Mirth",
+                  "similarity_score": 0.4992153490344995
+                },
+                {
+                  "isbn13": "9780965429900",
+                  "title": "Desire and Duty",
+                  "isbn10": "0965429903",
+                  "authors": "Teddy F. Bader;Marilyn Bader",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 1997,
+                  "num_pages": 286,
+                  "average_rating": 2.85,
+                  "ratings_count": 114,
+                  "description": "9780965429900 Jane Austen's story of Elizabeth Bennet Darcy ends with Elizabeth's marriage. The Baders continue her story as wife, mother and confidante to her sister in law, Georgiana. Set in the years 1805-1816, the story tells the romantic adventures of beautiful, shy, devout Georgiana. Along the way, issues of duty and desire, in marriage and in one's relationship to God, are presented.",
+                  "thumbnail": "http://books.google.com/books/content?id=Zn6FAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Desire and Duty: A Sequel to Jane Austen's Pride and Prejudice",
+                  "similarity_score": 0.4953454217353328
+                },
+                {
+                  "isbn13": "9780771014178",
+                  "title": "The Jane Austen Cookbook",
+                  "isbn10": "0771014171",
+                  "authors": "Maggie Black;Deirdre Le Faye",
+                  "categories": "Cooking",
+                  "genre": "Nonfiction",
+                  "published_year": 2002,
+                  "num_pages": 128,
+                  "average_rating": 3.91,
+                  "ratings_count": 265,
+                  "description": "9780771014178 Jane Austen wrote her novels in the midst of a large and sociable family. Brothers and sisters, nieces and nephews, friends and acquaintances were always coming and going, which offered numerous occasions for convivial eating and drinking. One of Jane\u2019s dearest friends, Martha Lloyd, lived with the family for many years and recorded in her \u201cHousehold Book\u201d over 100 recipes enjoyed by the Austens. A selection of this family fare, now thoroughly tested and modernized for today\u2019s cooks, is recreated here, together with some of the more sophisticated dishes which Jane and her characters would have enjoyed at balls, picnics, and supper parties. A fascinating introduction describes Jane\u2019s own interest in food, drawing upon both the novels and her letters, and explains the social conventions of shopping, eating, and entertaining in late Georgian and Regency England. The book is illustrated throughout with delightful contemporary line drawings, prints, and watercolours. Authentic recipes, modernized for today\u2019s cooks, include: \u2022 Buttered Prawns \u2022 Wine-Roasted Gammon and Pigeon Pie \u2022 Broil\u2019d Eggs \u2022 White Soup and Salmagundy \u2022 Pyramid Creams \u2022 Martha\u2019s Almond Cheesecakes",
+                  "thumbnail": "http://books.google.com/books/content?id=vtgBAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The Jane Austen Cookbook",
+                  "similarity_score": 0.4882964689799849
+                },
+                {
+                  "isbn13": "9780452286535",
+                  "title": "The Jane Austen Book Club",
+                  "isbn10": "0452286530",
+                  "authors": "Karen Joy Fowler",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2005,
+                  "num_pages": 288,
+                  "average_rating": 3.08,
+                  "ratings_count": 56434,
+                  "description": "9780452286535 As six Californians get together to form a book club to discuss the novels of Jane Austen, their lives are turned upside down by troubled marriages, illicit affairs, changing relationships, and love, in a comedy of contemporary manners. By the author of Sarah Canary. Reprint.",
+                  "thumbnail": "http://books.google.com/books/content?id=ucmLDQAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The Jane Austen Book Club",
+                  "similarity_score": 0.48804714675404215
+                },
+                {
+                  "isbn13": "9781593081539",
+                  "title": "The House of Mirth",
+                  "isbn10": "1593081537",
+                  "authors": "Edith Wharton",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 348,
+                  "average_rating": 3.95,
+                  "ratings_count": 338,
+                  "description": "9781593081539 The tragic story of a beautiful young woman caught up in the shallow and corrupt world of New York society at the turn of the century, where wealth and social status are everything.",
+                  "thumbnail": "http://books.google.com/books/content?id=CedoNRdNuc0C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The House of Mirth",
+                  "similarity_score": 0.4826396280254388
+                },
+                {
+                  "isbn13": "9780099474463",
+                  "title": "Lady of Quality",
+                  "isbn10": "0099474468",
+                  "authors": "Georgette Heyer",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2005,
+                  "num_pages": 267,
+                  "average_rating": 3.87,
+                  "ratings_count": 5706,
+                  "description": "9780099474463 Independent and spirited. Miss Annis Wychwood gives little thought to finding herself a suitable husband, thus dashing the dreams of many hopeful suitors. When she becomes embroiled in the affairs of the runaway heiress Lucilla, though, she encounters the beautiful fugitive's guardian - as rakish and uncivil a rogue she has ever met. Although, chafing a bit at the restrictions of Regency society in Bath, Annis does have to admit that Oliver Carleton, at least, is never boring.",
+                  "thumbnail": "http://books.google.com/books/content?id=YwPmnE8bYGwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Lady of Quality",
+                  "similarity_score": 0.4720692740478034
+                }
+              ],
+              "num_books": 10,
+              "references": [
+                {
+                  "isbn13": "9780141439518",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0141439513",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 480,
+                  "average_rating": 4.25,
+                  "ratings_count": 11552,
+                  "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                  "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                },
+                {
+                  "isbn13": "9780192802385",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0192802380",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 333,
+                  "average_rating": 4.25,
+                  "ratings_count": 2369,
+                  "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                  "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                }
+              ],
+              "search_text": "A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course.\n\nbooks similar to Pride and Prejudice"
+            }
+          ]
+        },
+        "output_type": "TaskRunnerOutput"
+      },
+      "token_usage": {
+        "total": 5902,
+        "prompt": 5254,
+        "completion": 648,
+        "cached": 0,
+        "reasoning_tokens": 192,
+        "by_model": {
+          "gpt-5-nano": {
+            "total": 2400,
+            "prompt": 2283,
+            "completion": 117,
+            "cached": 0,
+            "reasoning_tokens": 0
+          },
+          "gpt-5-mini": {
+            "total": 3502,
+            "prompt": 2971,
+            "completion": 531,
+            "cached": 0,
+            "reasoning_tokens": 192
+          }
+        },
+        "cost_usd": 0.001966
+      },
+      "steps": [
+        {
+          "id": "op_66c7e5dc",
+          "parent_id": "op_ff54653f",
+          "name": "app.domains.books.find_by_title.executor.FindByTitleExecutor",
+          "ok": true,
+          "timing": {
+            "start_time": "2026-08-14T19:15:35.685851+00:00",
+            "duration": 2.85
+          },
+          "input": {
+            "node_input": {
+              "query": "Find the book Pride and Prejudice by title"
+            }
+          },
+          "response": {
+            "result": {
+              "id": "1",
+              "args": {
+                "node_type": "Retrieve_by_Title",
+                "confidence": 1.0,
+                "reasoning": "User asked to find a book by title",
+                "title": "Pride and Prejudice",
+                "_refusal": false
+              },
+              "books": [
+                {
+                  "isbn13": "9780141439518",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0141439513",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 480,
+                  "average_rating": 4.25,
+                  "ratings_count": 11552,
+                  "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                  "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                },
+                {
+                  "isbn13": "9780192802385",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0192802380",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 333,
+                  "average_rating": 4.25,
+                  "ratings_count": 2369,
+                  "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                  "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                }
+              ],
+              "num_books": 2,
+              "query_sql": "SELECT books.isbn13, similarity(books.title, 'Pride and Prejudice') AS score \nFROM books \nWHERE lower(books.title) LIKE lower('Pride and Prejudice') OR similarity(books.title, 'Pride and Prejudice') > 0.7"
+            },
+            "output_type": "FindByTitleOutput"
+          },
+          "token_usage": {
+            "total": 773,
+            "prompt": 718,
+            "completion": 55,
+            "cached": 0,
+            "reasoning_tokens": 0,
+            "by_model": {
+              "gpt-5-nano": {
+                "total": 773,
+                "prompt": 718,
+                "completion": 55,
+                "cached": 0,
+                "reasoning_tokens": 0
+              }
+            },
+            "cost_usd": 5.8e-05
+          },
+          "steps": [
+            {
+              "id": "op_24147c5c",
+              "parent_id": "op_66c7e5dc",
+              "name": "clients.openai_client.OpenAIClient.execute",
+              "ok": true,
+              "timing": {
+                "start_time": "2026-08-14T19:15:35.687489+00:00",
+                "duration": 2.1
+              },
+              "input": {
+                "req": {
+                  "model": "gpt-5-nano",
+                  "prompt_chars": 1053,
+                  "num_messages": 1,
+                  "streaming": false,
+                  "reasoning_effort": "minimal",
+                  "tools": [
+                    "FindByTitleRetrieval"
+                  ]
+                },
+                "save_payload": false
+              },
+              "response": {
+                "result": {
+                  "role": "assistant",
+                  "id": "chatcmpl-ECrfNCWwVv1phnd7xPrLygyol6pKr",
+                  "tool_calls": [
+                    {
+                      "id": "call_N8xTjBmN2IbKD16K6OK5E10d",
+                      "function": {
+                        "arguments": "{\"node_type\":\"Retrieve_by_Title\",\"confidence\":1.0,\"reasoning\":\"User asked to find a book by title\",\"title\":\"Pride and Prejudice\"}",
+                        "name": "FindByTitleRetrieval",
+                        "parsed_arguments": {
+                          "node_type": "Retrieve_by_Title",
+                          "confidence": 1.0,
+                          "reasoning": "User asked to find a book by title",
+                          "title": "Pride and Prejudice",
+                          "_refusal": false
+                        }
+                      },
+                      "type": "function",
+                      "index": 0
+                    }
+                  ],
+                  "created": "2026-08-14T19:15:37.788558+00:00"
+                },
+                "output_type": "AssistantMessage"
+              },
+              "details": [
+                "wrapped a bare return value",
+                "promoted output token usage"
+              ],
+              "token_usage": {
+                "total": 773,
+                "prompt": 718,
+                "completion": 55,
+                "cached": 0,
+                "reasoning_tokens": 0,
+                "by_model": {
+                  "gpt-5-nano": {
+                    "total": 773,
+                    "prompt": 718,
+                    "completion": 55,
+                    "cached": 0,
+                    "reasoning_tokens": 0
+                  }
+                },
+                "cost_usd": 5.8e-05
+              }
+            }
+          ]
+        },
+        {
+          "id": "op_da0aa186",
+          "parent_id": "op_ff54653f",
+          "name": "app.domains.books.analyze_recommend.executor.RecommendBooksExecutor",
+          "ok": true,
+          "timing": {
+            "start_time": "2026-08-14T19:15:38.532414+00:00",
+            "duration": 14.98
+          },
+          "input": {
+            "node_input": {
+              "query": "Recommend books similar to Pride and Prejudice",
+              "anchors": [
+                {
+                  "num_books": 2,
+                  "num_fetched": 2,
+                  "preview": [
+                    {
+                      "isbn13": "9780141439518",
+                      "title": "Pride and Prejudice"
+                    },
+                    {
+                      "isbn13": "9780192802385",
+                      "title": "Pride and Prejudice"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "response": {
+            "result": {
+              "id": "2",
+              "args": {
+                "node_type": "Analyze_Recommend",
+                "confidence": 1.0,
+                "reasoning": "User wants similar books to Pride and Prejudice",
+                "semantic_input": "books similar to Pride and Prejudice",
+                "_refusal": false
+              },
+              "depends_on": [
+                "1"
+              ],
+              "books": [
+                {
+                  "isbn13": "9781593080495",
+                  "title": "Sense and Sensibility",
+                  "isbn10": "1593080492",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 336,
+                  "average_rating": 4.07,
+                  "ratings_count": 636,
+                  "description": "9781593080495 Romantic walks through lush Devonshire and genteel dinner parties at a stately manor draw two pretty sisters into the schemes and manipulations of landed gentry determined to marry wisely and well.",
+                  "thumbnail": "http://books.google.com/books/content?id=PTUH6Zg2QQYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Sense and Sensibility",
+                  "similarity_score": 0.6114227495626607
+                },
+                {
+                  "isbn13": "9781840220551",
+                  "title": "The Complete Novels of Jane Austen",
+                  "isbn10": "1840220554",
+                  "authors": "Jane Austen",
+                  "categories": "England",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 1431,
+                  "average_rating": 4.55,
+                  "ratings_count": 924,
+                  "description": "9781840220551 Jane Austen is without question, one of England's most enduring and skilled novelists. With her wit, social precision, and unerring ability to create some of literature's most charismatic and believable heroines, she mesmerises her readers as much today as when her novels were first published. Whether it is her sharp, ironic gaze at the Gothic genre invoked by the adventures of Catherine Morland in Northanger Abbey; the diffident and much put-upon Fanny Price struggling to cope with her emotions in Mansfield Park; her delightfully paced comedy of manners and the machinations of the sisters Elinor and Marianne in Sense and Sensibility; the quiet strength of Anne Elliot in Persuasion succeeding in a world designed to subjugate her very existence; and Emma - 'a heroine whom no one but myself will like' teased Austen - yet another irresistible character on fire with imagination and foresight. Indeed not unlike her renowned creator. Jane Austen is as sure-footed in her steps through society's whirlpools of convention and prosaic mores as she is in her sometimes restrained but ever precise and enduring prose.",
+                  "thumbnail": "http://books.google.com/books/content?id=k9Bm_uBn778C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                  "title_and_subtiles": "The Complete Novels of Jane Austen",
+                  "similarity_score": 0.5545230267192142
+                },
+                {
+                  "isbn13": "9781593081256",
+                  "title": "Sense and Sensibility",
+                  "isbn10": "1593081251",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 325,
+                  "average_rating": 4.07,
+                  "ratings_count": 1199,
+                  "description": "9781593081256 Two sisters, one practical and conventional and the other emotional and sentimental, find that only through compromise of their mutual differences can they get along.",
+                  "thumbnail": "http://books.google.com/books/content?id=yhiJVxesrWwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Sense and Sensibility",
+                  "similarity_score": 0.5367587221642771
+                },
+                {
+                  "isbn13": "9780192802644",
+                  "title": "Mansfield Park",
+                  "isbn10": "019280264X",
+                  "authors": "Jane Austen",
+                  "categories": "Literary Criticism",
+                  "genre": "Nonfiction",
+                  "published_year": 2003,
+                  "num_pages": 418,
+                  "average_rating": 3.85,
+                  "ratings_count": 1471,
+                  "description": "9780192802644 '\"Me!\" cried Fanny...\"Indeed you must excuse me. I could not act any thing if you were to give me the world. No, indeed, I cannot act.\"' At the age of ten, Fanny Price leaves the poverty of her Portsmouth home to be brought up among the family of her wealthy uncle, Sir Thomas Bertram, in the chilly grandeur of Mansfield Park. There she accepts her lowly status, and gradually falls in love with her cousin Edmund. When the dazzling and sophisticated Henry and Mary Crawford arrive, Fanny watches as her cousins become embroiled in rivalry and sexual jealousy. As the company starts to rehearse a play by way of entertainment, Fanny struggles to retain her independence in the face of the Crawfords' dangerous attractions; and when Henry turns his attentions to her, the drama really begins... This new edition does full justice to Austen's complex and subtle story, placing it in its Regency context and elucidating the theatrical background that pervades the novel.",
+                  "thumbnail": "http://books.google.com/books/content?id=jl6iDrN4ARwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Mansfield Park",
+                  "similarity_score": 0.5319346471320028
+                },
+                {
+                  "isbn13": "9780486420493",
+                  "title": "The House of Mirth",
+                  "isbn10": "0486420493",
+                  "authors": "Edith Wharton",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2002,
+                  "num_pages": 272,
+                  "average_rating": 3.95,
+                  "ratings_count": 743,
+                  "description": "9780486420493 A satire of New York society at the turn of the century follows Lily Bart, who is torn between the pressure to marry a wealthy husband and the desire to be true to herself.",
+                  "thumbnail": "http://books.google.com/books/content?id=GJYoAwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                  "title_and_subtiles": "The House of Mirth",
+                  "similarity_score": 0.4992153490344995
+                },
+                {
+                  "isbn13": "9780965429900",
+                  "title": "Desire and Duty",
+                  "isbn10": "0965429903",
+                  "authors": "Teddy F. Bader;Marilyn Bader",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 1997,
+                  "num_pages": 286,
+                  "average_rating": 2.85,
+                  "ratings_count": 114,
+                  "description": "9780965429900 Jane Austen's story of Elizabeth Bennet Darcy ends with Elizabeth's marriage. The Baders continue her story as wife, mother and confidante to her sister in law, Georgiana. Set in the years 1805-1816, the story tells the romantic adventures of beautiful, shy, devout Georgiana. Along the way, issues of duty and desire, in marriage and in one's relationship to God, are presented.",
+                  "thumbnail": "http://books.google.com/books/content?id=Zn6FAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Desire and Duty: A Sequel to Jane Austen's Pride and Prejudice",
+                  "similarity_score": 0.4953454217353328
+                },
+                {
+                  "isbn13": "9780771014178",
+                  "title": "The Jane Austen Cookbook",
+                  "isbn10": "0771014171",
+                  "authors": "Maggie Black;Deirdre Le Faye",
+                  "categories": "Cooking",
+                  "genre": "Nonfiction",
+                  "published_year": 2002,
+                  "num_pages": 128,
+                  "average_rating": 3.91,
+                  "ratings_count": 265,
+                  "description": "9780771014178 Jane Austen wrote her novels in the midst of a large and sociable family. Brothers and sisters, nieces and nephews, friends and acquaintances were always coming and going, which offered numerous occasions for convivial eating and drinking. One of Jane\u2019s dearest friends, Martha Lloyd, lived with the family for many years and recorded in her \u201cHousehold Book\u201d over 100 recipes enjoyed by the Austens. A selection of this family fare, now thoroughly tested and modernized for today\u2019s cooks, is recreated here, together with some of the more sophisticated dishes which Jane and her characters would have enjoyed at balls, picnics, and supper parties. A fascinating introduction describes Jane\u2019s own interest in food, drawing upon both the novels and her letters, and explains the social conventions of shopping, eating, and entertaining in late Georgian and Regency England. The book is illustrated throughout with delightful contemporary line drawings, prints, and watercolours. Authentic recipes, modernized for today\u2019s cooks, include: \u2022 Buttered Prawns \u2022 Wine-Roasted Gammon and Pigeon Pie \u2022 Broil\u2019d Eggs \u2022 White Soup and Salmagundy \u2022 Pyramid Creams \u2022 Martha\u2019s Almond Cheesecakes",
+                  "thumbnail": "http://books.google.com/books/content?id=vtgBAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The Jane Austen Cookbook",
+                  "similarity_score": 0.4882964689799849
+                },
+                {
+                  "isbn13": "9780452286535",
+                  "title": "The Jane Austen Book Club",
+                  "isbn10": "0452286530",
+                  "authors": "Karen Joy Fowler",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2005,
+                  "num_pages": 288,
+                  "average_rating": 3.08,
+                  "ratings_count": 56434,
+                  "description": "9780452286535 As six Californians get together to form a book club to discuss the novels of Jane Austen, their lives are turned upside down by troubled marriages, illicit affairs, changing relationships, and love, in a comedy of contemporary manners. By the author of Sarah Canary. Reprint.",
+                  "thumbnail": "http://books.google.com/books/content?id=ucmLDQAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The Jane Austen Book Club",
+                  "similarity_score": 0.48804714675404215
+                },
+                {
+                  "isbn13": "9781593081539",
+                  "title": "The House of Mirth",
+                  "isbn10": "1593081537",
+                  "authors": "Edith Wharton",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 348,
+                  "average_rating": 3.95,
+                  "ratings_count": 338,
+                  "description": "9781593081539 The tragic story of a beautiful young woman caught up in the shallow and corrupt world of New York society at the turn of the century, where wealth and social status are everything.",
+                  "thumbnail": "http://books.google.com/books/content?id=CedoNRdNuc0C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "The House of Mirth",
+                  "similarity_score": 0.4826396280254388
+                },
+                {
+                  "isbn13": "9780099474463",
+                  "title": "Lady of Quality",
+                  "isbn10": "0099474468",
+                  "authors": "Georgette Heyer",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2005,
+                  "num_pages": 267,
+                  "average_rating": 3.87,
+                  "ratings_count": 5706,
+                  "description": "9780099474463 Independent and spirited. Miss Annis Wychwood gives little thought to finding herself a suitable husband, thus dashing the dreams of many hopeful suitors. When she becomes embroiled in the affairs of the runaway heiress Lucilla, though, she encounters the beautiful fugitive's guardian - as rakish and uncivil a rogue she has ever met. Although, chafing a bit at the restrictions of Regency society in Bath, Annis does have to admit that Oliver Carleton, at least, is never boring.",
+                  "thumbnail": "http://books.google.com/books/content?id=YwPmnE8bYGwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Lady of Quality",
+                  "similarity_score": 0.4720692740478034
+                }
+              ],
+              "num_books": 10,
+              "references": [
+                {
+                  "isbn13": "9780141439518",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0141439513",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2003,
+                  "num_pages": 480,
+                  "average_rating": 4.25,
+                  "ratings_count": 11552,
+                  "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                  "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                },
+                {
+                  "isbn13": "9780192802385",
+                  "title": "Pride and Prejudice",
+                  "isbn10": "0192802380",
+                  "authors": "Jane Austen",
+                  "categories": "Fiction",
+                  "genre": "Fiction",
+                  "published_year": 2004,
+                  "num_pages": 333,
+                  "average_rating": 4.25,
+                  "ratings_count": 2369,
+                  "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                  "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                  "title_and_subtiles": "Pride and Prejudice"
+                }
+              ],
+              "search_text": "A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course.\n\nbooks similar to Pride and Prejudice"
+            },
+            "output_type": "RecommendationOutput"
+          },
+          "details": [
+            "Dependents: {'num_queries': 0, 'num_books': 2, 'num_reports': 0, 'unknown': []}",
+            "Analyzed 2 reference books and 0 reports into 165 words",
+            "Wrote a 88 word reply from 2 references and 10 recommendations"
+          ],
+          "token_usage": {
+            "total": 5129,
+            "prompt": 4536,
+            "completion": 593,
+            "cached": 0,
+            "reasoning_tokens": 192,
+            "by_model": {
+              "gpt-5-nano": {
+                "total": 1627,
+                "prompt": 1565,
+                "completion": 62,
+                "cached": 0,
+                "reasoning_tokens": 0
+              },
+              "gpt-5-mini": {
+                "total": 3502,
+                "prompt": 2971,
+                "completion": 531,
+                "cached": 0,
+                "reasoning_tokens": 192
+              }
+            },
+            "cost_usd": 0.001908
+          },
+          "steps": [
+            {
+              "id": "op_0b6de018",
+              "parent_id": "op_da0aa186",
+              "name": "clients.openai_client.OpenAIClient.execute",
+              "ok": true,
+              "timing": {
+                "start_time": "2026-08-14T19:15:38.534633+00:00",
+                "duration": 1.16
+              },
+              "input": {
+                "req": {
+                  "model": "gpt-5-nano",
+                  "prompt_chars": 1053,
+                  "num_messages": 1,
+                  "streaming": false,
+                  "reasoning_effort": "minimal",
+                  "tools": [
+                    "RecommendationStrategy"
+                  ]
+                },
+                "save_payload": false
+              },
+              "response": {
+                "result": {
+                  "role": "assistant",
+                  "id": "chatcmpl-ECrfPmhLq6hxh0yZRsA0eogO9CWr1",
+                  "tool_calls": [
+                    {
+                      "id": "call_g2LIGsGbWdVqzrVreEMT2KAa",
+                      "function": {
+                        "arguments": "{\"node_type\":\"Analyze_Recommend\",\"confidence\":1.0,\"reasoning\":\"User wants similar books to Pride and Prejudice\",\"semantic_input\":\"books similar to Pride and Prejudice\",\"filters\":null}",
+                        "name": "RecommendationStrategy",
+                        "parsed_arguments": {
+                          "node_type": "Analyze_Recommend",
+                          "confidence": 1.0,
+                          "reasoning": "User wants similar books to Pride and Prejudice",
+                          "semantic_input": "books similar to Pride and Prejudice",
+                          "_refusal": false
+                        }
+                      },
+                      "type": "function",
+                      "index": 0
+                    }
+                  ],
+                  "created": "2026-08-14T19:15:39.690732+00:00"
+                },
+                "output_type": "AssistantMessage"
+              },
+              "details": [
+                "wrapped a bare return value",
+                "promoted output token usage"
+              ],
+              "token_usage": {
+                "total": 1627,
+                "prompt": 1565,
+                "completion": 62,
+                "cached": 0,
+                "reasoning_tokens": 0,
+                "by_model": {
+                  "gpt-5-nano": {
+                    "total": 1627,
+                    "prompt": 1565,
+                    "completion": 62,
+                    "cached": 0,
+                    "reasoning_tokens": 0
+                  }
+                },
+                "cost_usd": 0.000103
+              }
+            },
+            {
+              "id": "op_626d1c02",
+              "parent_id": "op_da0aa186",
+              "name": "app.domains.books.analyze_recommend.executor.RecommendBooksExecutor.analyze_references",
+              "ok": true,
+              "timing": {
+                "start_time": "2026-08-14T19:15:39.691601+00:00",
+                "duration": 5.97
+              },
+              "input": {
+                "books": [
+                  {
+                    "isbn13": "9780141439518",
+                    "title": "Pride and Prejudice",
+                    "isbn10": "0141439513",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2003,
+                    "num_pages": 480,
+                    "average_rating": 4.25,
+                    "ratings_count": 11552,
+                    "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+                    "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Pride and Prejudice"
+                  },
+                  {
+                    "isbn13": "9780192802385",
+                    "title": "Pride and Prejudice",
+                    "isbn10": "0192802380",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 333,
+                    "average_rating": 4.25,
+                    "ratings_count": 2369,
+                    "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+                    "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Pride and Prejudice"
+                  }
+                ]
+              },
+              "response": {
+                "result": "A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course.",
+                "output_type": "str"
+              },
+              "details": [
+                "wrapped a bare return value"
+              ],
+              "token_usage": {
+                "total": 2230,
+                "prompt": 1812,
+                "completion": 418,
+                "cached": 0,
+                "reasoning_tokens": 192,
+                "by_model": {
+                  "gpt-5-mini": {
+                    "total": 2230,
+                    "prompt": 1812,
+                    "completion": 418,
+                    "cached": 0,
+                    "reasoning_tokens": 192
+                  }
+                },
+                "cost_usd": 0.001289
+              },
+              "steps": [
+                {
+                  "id": "op_ee920d1c",
+                  "parent_id": "op_626d1c02",
+                  "name": "clients.openai_client.OpenAIClient.execute",
+                  "ok": true,
+                  "timing": {
+                    "start_time": "2026-08-14T19:15:39.697585+00:00",
+                    "duration": 5.96
+                  },
+                  "input": {
+                    "req": {
+                      "model": "gpt-5-mini",
+                      "prompt_chars": 5986,
+                      "num_messages": 1,
+                      "streaming": false,
+                      "reasoning_effort": "low",
+                      "tools": [
+                        "ReferenceAnalysis"
+                      ]
+                    },
+                    "save_payload": false
+                  },
+                  "response": {
+                    "result": {
+                      "role": "assistant",
+                      "id": "chatcmpl-ECrfQ0LqdSs5Wy4wdhKt65qqnKGTw",
+                      "tool_calls": [
+                        {
+                          "id": "call_7jZJIgrvreAEPeI6rOnfNZGg",
+                          "function": {
+                            "arguments": "{\"semantic_input\":\"A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course.\"}",
+                            "name": "ReferenceAnalysis",
+                            "parsed_arguments": {
+                              "semantic_input": "A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course."
+                            }
+                          },
+                          "type": "function",
+                          "index": 0
+                        }
+                      ],
+                      "created": "2026-08-14T19:15:45.658547+00:00"
+                    },
+                    "output_type": "AssistantMessage"
+                  },
+                  "details": [
+                    "wrapped a bare return value",
+                    "promoted output token usage"
+                  ],
+                  "token_usage": {
+                    "total": 2230,
+                    "prompt": 1812,
+                    "completion": 418,
+                    "cached": 0,
+                    "reasoning_tokens": 192,
+                    "by_model": {
+                      "gpt-5-mini": {
+                        "total": 2230,
+                        "prompt": 1812,
+                        "completion": 418,
+                        "cached": 0,
+                        "reasoning_tokens": 192
+                      }
+                    },
+                    "cost_usd": 0.001289
+                  }
+                }
+              ]
+            },
+            {
+              "id": "op_1960876d",
+              "parent_id": "op_da0aa186",
+              "name": "app.domains.books.analyze_recommend.executor.RecommendBooksExecutor.similarity_search",
+              "ok": true,
+              "timing": {
+                "start_time": "2026-08-14T19:15:46.371492+00:00",
+                "duration": 1.18
+              },
+              "input": {
+                "search_text": "A social comedy set within a tightly ordered, class-conscious community where marriage and reputation govern the rhythms of daily life, and private feelings must be negotiated through polite conversation, dances, visits and letters. The central conflict is social and moral rather than violent: characters are tested by pride, prejudice, scandal, and the pressures of inheritance and social standing, so that misunderstandings, withheld information and awkward first impressions set the plot in motion. The mood balances light irony and wit with clear moral seriousness; dialogue and social ritual carry emotional weight and reveal character, and moments of sharp humor sit beside scenes of sincere self-scrutiny. The story traces personal growth\u2014learning to see past social masks, to own one\u2019s mistakes, and to temper instinctive judgments\u2014while charting shifting alliances, courtships and the practical calculations that underlie seemingly sentimental choices. The setting is domestic and public in equal measure: parlors, social visits and country estates provide a compressed social world in which every remark can change a life\u2019s course.\n\nbooks similar to Pride and Prejudice",
+                "exclude_isbns": [
+                  "9780141439518",
+                  "9780192802385"
+                ]
+              },
+              "response": {
+                "result": [
+                  {
+                    "isbn13": "9781593080495",
+                    "title": "Sense and Sensibility",
+                    "isbn10": "1593080492",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2003,
+                    "num_pages": 336,
+                    "average_rating": 4.07,
+                    "ratings_count": 636,
+                    "description": "9781593080495 Romantic walks through lush Devonshire and genteel dinner parties at a stately manor draw two pretty sisters into the schemes and manipulations of landed gentry determined to marry wisely and well.",
+                    "thumbnail": "http://books.google.com/books/content?id=PTUH6Zg2QQYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Sense and Sensibility",
+                    "similarity_score": 0.6114227495626607
+                  },
+                  {
+                    "isbn13": "9781840220551",
+                    "title": "The Complete Novels of Jane Austen",
+                    "isbn10": "1840220554",
+                    "authors": "Jane Austen",
+                    "categories": "England",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 1431,
+                    "average_rating": 4.55,
+                    "ratings_count": 924,
+                    "description": "9781840220551 Jane Austen is without question, one of England's most enduring and skilled novelists. With her wit, social precision, and unerring ability to create some of literature's most charismatic and believable heroines, she mesmerises her readers as much today as when her novels were first published. Whether it is her sharp, ironic gaze at the Gothic genre invoked by the adventures of Catherine Morland in Northanger Abbey; the diffident and much put-upon Fanny Price struggling to cope with her emotions in Mansfield Park; her delightfully paced comedy of manners and the machinations of the sisters Elinor and Marianne in Sense and Sensibility; the quiet strength of Anne Elliot in Persuasion succeeding in a world designed to subjugate her very existence; and Emma - 'a heroine whom no one but myself will like' teased Austen - yet another irresistible character on fire with imagination and foresight. Indeed not unlike her renowned creator. Jane Austen is as sure-footed in her steps through society's whirlpools of convention and prosaic mores as she is in her sometimes restrained but ever precise and enduring prose.",
+                    "thumbnail": "http://books.google.com/books/content?id=k9Bm_uBn778C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                    "title_and_subtiles": "The Complete Novels of Jane Austen",
+                    "similarity_score": 0.5545230267192142
+                  },
+                  {
+                    "isbn13": "9781593081256",
+                    "title": "Sense and Sensibility",
+                    "isbn10": "1593081251",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 325,
+                    "average_rating": 4.07,
+                    "ratings_count": 1199,
+                    "description": "9781593081256 Two sisters, one practical and conventional and the other emotional and sentimental, find that only through compromise of their mutual differences can they get along.",
+                    "thumbnail": "http://books.google.com/books/content?id=yhiJVxesrWwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Sense and Sensibility",
+                    "similarity_score": 0.5367587221642771
+                  },
+                  {
+                    "isbn13": "9780192802644",
+                    "title": "Mansfield Park",
+                    "isbn10": "019280264X",
+                    "authors": "Jane Austen",
+                    "categories": "Literary Criticism",
+                    "genre": "Nonfiction",
+                    "published_year": 2003,
+                    "num_pages": 418,
+                    "average_rating": 3.85,
+                    "ratings_count": 1471,
+                    "description": "9780192802644 '\"Me!\" cried Fanny...\"Indeed you must excuse me. I could not act any thing if you were to give me the world. No, indeed, I cannot act.\"' At the age of ten, Fanny Price leaves the poverty of her Portsmouth home to be brought up among the family of her wealthy uncle, Sir Thomas Bertram, in the chilly grandeur of Mansfield Park. There she accepts her lowly status, and gradually falls in love with her cousin Edmund. When the dazzling and sophisticated Henry and Mary Crawford arrive, Fanny watches as her cousins become embroiled in rivalry and sexual jealousy. As the company starts to rehearse a play by way of entertainment, Fanny struggles to retain her independence in the face of the Crawfords' dangerous attractions; and when Henry turns his attentions to her, the drama really begins... This new edition does full justice to Austen's complex and subtle story, placing it in its Regency context and elucidating the theatrical background that pervades the novel.",
+                    "thumbnail": "http://books.google.com/books/content?id=jl6iDrN4ARwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Mansfield Park",
+                    "similarity_score": 0.5319346471320028
+                  },
+                  {
+                    "isbn13": "9780192802637",
+                    "title": "Persuasion",
+                    "isbn10": "0192802631",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 249,
+                    "average_rating": 4.13,
+                    "ratings_count": 421344,
+                    "description": "9780192802637 The romance between Captain Wentworth and Anne, the daughter of Sir Walter Elliot, seems doomed because of the young man's family connections and lack of wealth.",
+                    "thumbnail": "http://books.google.com/books/content?id=lpD5anvUaRUC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Persuasion",
+                    "similarity_score": 0.5194156210279225
+                  },
+                  {
+                    "isbn13": "9780486420493",
+                    "title": "The House of Mirth",
+                    "isbn10": "0486420493",
+                    "authors": "Edith Wharton",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2002,
+                    "num_pages": 272,
+                    "average_rating": 3.95,
+                    "ratings_count": 743,
+                    "description": "9780486420493 A satire of New York society at the turn of the century follows Lily Bart, who is torn between the pressure to marry a wealthy husband and the desire to be true to herself.",
+                    "thumbnail": "http://books.google.com/books/content?id=GJYoAwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                    "title_and_subtiles": "The House of Mirth",
+                    "similarity_score": 0.4992153490344995
+                  },
+                  {
+                    "isbn13": "9780965429900",
+                    "title": "Desire and Duty",
+                    "isbn10": "0965429903",
+                    "authors": "Teddy F. Bader;Marilyn Bader",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1997,
+                    "num_pages": 286,
+                    "average_rating": 2.85,
+                    "ratings_count": 114,
+                    "description": "9780965429900 Jane Austen's story of Elizabeth Bennet Darcy ends with Elizabeth's marriage. The Baders continue her story as wife, mother and confidante to her sister in law, Georgiana. Set in the years 1805-1816, the story tells the romantic adventures of beautiful, shy, devout Georgiana. Along the way, issues of duty and desire, in marriage and in one's relationship to God, are presented.",
+                    "thumbnail": "http://books.google.com/books/content?id=Zn6FAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Desire and Duty: A Sequel to Jane Austen's Pride and Prejudice",
+                    "similarity_score": 0.4953454217353328
+                  },
+                  {
+                    "isbn13": "9780393977516",
+                    "title": "Sense and Sensibility",
+                    "isbn10": "039397751X",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2002,
+                    "num_pages": 269,
+                    "average_rating": 4.07,
+                    "ratings_count": 740,
+                    "description": "9780393977516 Two sisters are drawn into unhappy romances despite the cool judgment of one and the emotional intensity of the other in this nineteenth-century novel that is accompanied by related writings, annotations, and criticisms.",
+                    "title_and_subtiles": "Sense and Sensibility: Authoritative Text, Contexts, Criticism",
+                    "similarity_score": 0.4914181535908685
+                  },
+                  {
+                    "isbn13": "9780771014178",
+                    "title": "The Jane Austen Cookbook",
+                    "isbn10": "0771014171",
+                    "authors": "Maggie Black;Deirdre Le Faye",
+                    "categories": "Cooking",
+                    "genre": "Nonfiction",
+                    "published_year": 2002,
+                    "num_pages": 128,
+                    "average_rating": 3.91,
+                    "ratings_count": 265,
+                    "description": "9780771014178 Jane Austen wrote her novels in the midst of a large and sociable family. Brothers and sisters, nieces and nephews, friends and acquaintances were always coming and going, which offered numerous occasions for convivial eating and drinking. One of Jane\u2019s dearest friends, Martha Lloyd, lived with the family for many years and recorded in her \u201cHousehold Book\u201d over 100 recipes enjoyed by the Austens. A selection of this family fare, now thoroughly tested and modernized for today\u2019s cooks, is recreated here, together with some of the more sophisticated dishes which Jane and her characters would have enjoyed at balls, picnics, and supper parties. A fascinating introduction describes Jane\u2019s own interest in food, drawing upon both the novels and her letters, and explains the social conventions of shopping, eating, and entertaining in late Georgian and Regency England. The book is illustrated throughout with delightful contemporary line drawings, prints, and watercolours. Authentic recipes, modernized for today\u2019s cooks, include: \u2022 Buttered Prawns \u2022 Wine-Roasted Gammon and Pigeon Pie \u2022 Broil\u2019d Eggs \u2022 White Soup and Salmagundy \u2022 Pyramid Creams \u2022 Martha\u2019s Almond Cheesecakes",
+                    "thumbnail": "http://books.google.com/books/content?id=vtgBAAAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Jane Austen Cookbook",
+                    "similarity_score": 0.4882964689799849
+                  },
+                  {
+                    "isbn13": "9780452286535",
+                    "title": "The Jane Austen Book Club",
+                    "isbn10": "0452286530",
+                    "authors": "Karen Joy Fowler",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2005,
+                    "num_pages": 288,
+                    "average_rating": 3.08,
+                    "ratings_count": 56434,
+                    "description": "9780452286535 As six Californians get together to form a book club to discuss the novels of Jane Austen, their lives are turned upside down by troubled marriages, illicit affairs, changing relationships, and love, in a comedy of contemporary manners. By the author of Sarah Canary. Reprint.",
+                    "thumbnail": "http://books.google.com/books/content?id=ucmLDQAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Jane Austen Book Club",
+                    "similarity_score": 0.48804714675404215
+                  },
+                  {
+                    "isbn13": "9781593081539",
+                    "title": "The House of Mirth",
+                    "isbn10": "1593081537",
+                    "authors": "Edith Wharton",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 348,
+                    "average_rating": 3.95,
+                    "ratings_count": 338,
+                    "description": "9781593081539 The tragic story of a beautiful young woman caught up in the shallow and corrupt world of New York society at the turn of the century, where wealth and social status are everything.",
+                    "thumbnail": "http://books.google.com/books/content?id=CedoNRdNuc0C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The House of Mirth",
+                    "similarity_score": 0.4826396280254388
+                  },
+                  {
+                    "isbn13": "9780099474463",
+                    "title": "Lady of Quality",
+                    "isbn10": "0099474468",
+                    "authors": "Georgette Heyer",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2005,
+                    "num_pages": 267,
+                    "average_rating": 3.87,
+                    "ratings_count": 5706,
+                    "description": "9780099474463 Independent and spirited. Miss Annis Wychwood gives little thought to finding herself a suitable husband, thus dashing the dreams of many hopeful suitors. When she becomes embroiled in the affairs of the runaway heiress Lucilla, though, she encounters the beautiful fugitive's guardian - as rakish and uncivil a rogue she has ever met. Although, chafing a bit at the restrictions of Regency society in Bath, Annis does have to admit that Oliver Carleton, at least, is never boring.",
+                    "thumbnail": "http://books.google.com/books/content?id=YwPmnE8bYGwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Lady of Quality",
+                    "similarity_score": 0.4720692740478034
+                  },
+                  {
+                    "isbn13": "9780470008294",
+                    "title": "Jane Austen For Dummies",
+                    "isbn10": "0470008296",
+                    "authors": "Joan Elizabeth Klingel Ray",
+                    "categories": "Biography & Autobiography",
+                    "genre": "Nonfiction",
+                    "published_year": 2006,
+                    "num_pages": 362,
+                    "average_rating": 4.02,
+                    "ratings_count": 517,
+                    "description": "9780470008294 Explains Austen's methods, motivations, and morals The fun and easy way(r) to understand and enjoy Jane Austen Want to know more about Jane Austen? This friendly guide gives the scoop on her life, works, and lasting impact on our culture. It chronicles the events of her brief life, examines each of her novels, and looks at why her stories - of women and marriage, class and money, scandal and hypocrisy, emotion and satire - still have meaning for us today. Discover * Why Austen is so popular * The impact on manners, courtships, and dating * Love and life in Austen's world * Her life and key influences * Her most memorable characters",
+                    "thumbnail": "http://books.google.com/books/content?id=m8WTNQEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Jane Austen For Dummies",
+                    "similarity_score": 0.47174897115327397
+                  },
+                  {
+                    "isbn13": "9780192840318",
+                    "title": "Evelina, Or, The History of a Young Lady's Entrance Into the World",
+                    "isbn10": "0192840312",
+                    "authors": "Fanny Burney",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2002,
+                    "num_pages": 455,
+                    "average_rating": 3.66,
+                    "ratings_count": 11701,
+                    "description": "9780192840318 'Lord Orville did me the honour to hand me to the coach, talking all the way of the honour I had done him! O these fashionable people!' Frances Burney's first and most enduringly popular novel is a vivid, satirical, and seductive account of the pleasures and dangers of fashionable life in late eighteenth-century London. As she describes her heroine's entry into society, womanhood and, inevitably, love, Burney exposes the vulnerability of female innocence in an image-conscious and often cruel world where social snobbery and sexual aggression are played out in the public arenas of pleasure-gardens, theatre visits, and balls. But Evelina's innocence also makes her a shrewd commentator on the excesses and absurdities of manners and social ambitions - as well as attracting the attention of the eminently eligible Lord Orville. Evelina, comic and shrewd, is at once a guide to fashionable London, a satirical attack on the new consumerism, an investigation of women's position in the late eighteenth century, and a love story. The new introduction and full notes to this edition help make this richness all the more readily available to a modern reader.",
+                    "thumbnail": "http://books.google.com/books/content?id=F-aBwgEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Evelina, Or, The History of a Young Lady's Entrance Into the World",
+                    "similarity_score": 0.4696857650161277
+                  },
+                  {
+                    "isbn13": "9780140251579",
+                    "title": "The Making of Pride and Prejudice",
+                    "isbn10": "014025157X",
+                    "authors": "Sue Birtwistle;Susie Conklin",
+                    "categories": "Performing Arts",
+                    "genre": "Nonfiction",
+                    "published_year": 1995,
+                    "num_pages": 128,
+                    "average_rating": 4.43,
+                    "ratings_count": 3860,
+                    "description": "9780140251579 This book reveals in detail how Jane Austen's classic novel is transformed into a stunning television drama. Filmed on location at Wiltshire and Derbyshire, 'Pride and Prejudice', with its lavish sets and distinguished cast, was scripted by award-winning dramatist Andrew Davies. Chronicling 18 months of work - from the original concept to the first broadcast - 'The Making of Pride and Prejudice' brings vividly to life the challenges and triumphs involved in every stage of production of this sumptuous television series. Follow a typical day's filming, including the wholesale transformation of Lacock village into Jane Austen's Meryton. Discover how Colin Firth approaches the part of Darcy, how actors' costumes and wigs are designed and how Carl Davis recreates the period music and composes an original score. Piece together the roles of many behind-the-scenes contributors to the series, from researchers and fencing masters to experts in period cookery and gardening.",
+                    "thumbnail": "http://books.google.com/books/content?id=ssBRUQiDk74C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Making of Pride and Prejudice",
+                    "similarity_score": 0.45362210117093593
+                  },
+                  {
+                    "isbn13": "9780099474425",
+                    "title": "The Convenient Marriage",
+                    "isbn10": "0099474425",
+                    "authors": "Georgette Heyer",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2005,
+                    "num_pages": 272,
+                    "average_rating": 3.68,
+                    "ratings_count": 8899,
+                    "description": "9780099474425 When the eligible Earl of Rule offers for the hand of the Beauty of the Winwood Family, he has no notion of the distress he causes his intended. For Miss Lizzie Winwood is promised to the excellent, but impoverished Mr Edward Heron. Disaster can only be averted by the delightful impetuosity of her youngest sister, Horatia, who conceives her own, distinctly original plans ... Fo over fifty years until her death in 1974, Georgette Heyer was the undisputed queen of historical romantic fiction, and the The Convenient Marriage shows why she configures to be loved by a huge readership to this day.",
+                    "thumbnail": "http://books.google.com/books/content?id=pqKV8h7Lj_cC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Convenient Marriage",
+                    "similarity_score": 0.44837428989575745
+                  },
+                  {
+                    "isbn13": "9781593080235",
+                    "title": "Middlemarch",
+                    "isbn10": "1593080239",
+                    "authors": "George Eliot;Megan McDaniel",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2003,
+                    "num_pages": 848,
+                    "average_rating": 3.95,
+                    "ratings_count": 478,
+                    "description": "9781593080235 Enter the provincial town of Middlemarch, circa 1830, where the individual destinies of tradespeople, middle classes, and country gentry shape and are shaped by the community.",
+                    "thumbnail": "http://books.google.com/books/content?id=rTuCTr1pdc4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Middlemarch",
+                    "similarity_score": 0.44786262368342133
+                  },
+                  {
+                    "isbn13": "9781593080365",
+                    "title": "Main Street",
+                    "isbn10": "1593080360",
+                    "authors": "Sinclair Lewis",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2003,
+                    "num_pages": 560,
+                    "average_rating": 3.76,
+                    "ratings_count": 283,
+                    "description": "9781593080365 Features the story of a college graduate from St. Paul who leaves to marry a doctor in a small, middle-class town, only to find her efforts to bring culture and beauty to the town thwarted by its residents, testing her idealism.",
+                    "thumbnail": "http://books.google.com/books/content?id=YNM9wKuY0UsC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Main Street",
+                    "similarity_score": 0.44278899055501797
+                  },
+                  {
+                    "isbn13": "9780140442243",
+                    "title": "Home of the Gentry",
+                    "isbn10": "0140442243",
+                    "authors": "Ivan Turgenev",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1970,
+                    "num_pages": 298,
+                    "average_rating": 3.92,
+                    "ratings_count": 2070,
+                    "description": "9780140442243 The nobleman Lavretsky, broken and disillusioned by a failed marriage, returns from Paris to his Russian estate, where he begins to fall in love with a young woman named Liza.",
+                    "thumbnail": "http://books.google.com/books/content?id=j7snw8iJobgC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Home of the Gentry",
+                    "similarity_score": 0.44260500841848227
+                  },
+                  {
+                    "isbn13": "9780140188264",
+                    "title": "North of South",
+                    "isbn10": "0140188266",
+                    "authors": "Shiva Naipaul",
+                    "categories": "Social Science",
+                    "genre": "Nonfiction",
+                    "published_year": 1996,
+                    "num_pages": 352,
+                    "average_rating": 3.93,
+                    "ratings_count": 264,
+                    "description": "9780140188264 When her father leaves the Church in a crisis of conscience, Margaret Hale is uprooted from her comfortable home in Hampshire to move with her family to the north of England. Initially repulsed by the ugliness of her new surroundings in the industrial town of Milton, Margaret becomes aware of the poverty and suffering of the local mill workers and develops a passionate sense of social justice. This is intensified by her tempestuous relationship with the mill-owner and self-made man, John Thornton, as their fierce opposition over his treatment of his employees masks a deeper attraction. In North and South, Elizabeth Gaskell skillfully fused individual feeling with social concern, and in Margaret Hale created one of the most original heroines of Victorian literature.",
+                    "thumbnail": "http://books.google.com/books/content?id=hxdDSQJaEAgC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "North of South: An African Journey",
+                    "similarity_score": 0.44242714967090246
+                  },
+                  {
+                    "isbn13": "9780143039501",
+                    "title": "The Complete Novels",
+                    "isbn10": "0143039504",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2006,
+                    "num_pages": 1278,
+                    "average_rating": 4.55,
+                    "ratings_count": 417,
+                    "description": "9780143039501 A definitive compilation of the author's seven great novels offers a vivid portrait of English middle-class life, its mores, institutions, and society around the turn of the nineteenth century.",
+                    "thumbnail": "http://books.google.com/books/content?id=a6LokmcqqSEC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Complete Novels",
+                    "similarity_score": 0.437970239436151
+                  },
+                  {
+                    "isbn13": "9780192833075",
+                    "title": "Miss Or Mrs?",
+                    "isbn10": "0192833073",
+                    "authors": "Wilkie Collins",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1999,
+                    "num_pages": 360,
+                    "average_rating": 3.79,
+                    "ratings_count": 170,
+                    "description": "9780192833075 B`..melodrama is perennial and the craving for it is perennial and must be satisfied' T. S. Eliot ('Wilkie Collins and Dickens') Collins's ability to construct a gripping situation and to create an atmosphere of mystery and menace is fully evident in the three novellas reprinted here. All proceed through a series of dramatic scenes to a climax that in one case at least is literally explosive. The fast-paced Miss or Mrs? (1871) opens on a yacht, features a remarkably unconventional heroine, and entails murder attempts, blackmail, clandestine marriage and commercial fraud. Dramatic and psychologically absorbing, the action of The Haunted Hotel (1878) takes place in an ancient Venetian palazzo converted into a modern hotel that houses a grisly secreI. Lastly, set in a beautiful water-mill, The Guilty River (1886) depicts a group of alienated characters, whose relationships threaten to erupt in violence and murder. Varied in setting and tone, these stories demonstrate Collins's plot-making skill at its most succinct and intricate. *Introduction * Textual Note * Bibliography * Chronology * * Explanatory Notes *Appendix: Collins's prefaces",
+                    "thumbnail": "http://books.google.com/books/content?id=GKeGDDgp9oYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Miss Or Mrs?: The Haunted Hotel ; The Guilty River",
+                    "similarity_score": 0.4326215406861713
+                  },
+                  {
+                    "isbn13": "9780517147689",
+                    "title": "The Complete Novels",
+                    "isbn10": "0517147688",
+                    "authors": "Jane Austen",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1981,
+                    "num_pages": 1103,
+                    "average_rating": 4.55,
+                    "ratings_count": 298,
+                    "description": "9780517147689 A line illustrated anthology of Jane Austen's complete works includes Sense and Sensibility, Pride and Prejudice, Mansfield Park, Emma, Northanger Abbey, Persuasion, and the obscure Lady Susan.",
+                    "thumbnail": "http://books.google.com/books/content?id=o7TgAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Complete Novels",
+                    "similarity_score": 0.43236126109757267
+                  },
+                  {
+                    "isbn13": "9780486414232",
+                    "title": "An Ideal Husband",
+                    "isbn10": "048641423X",
+                    "authors": "Oscar Wilde",
+                    "categories": "Humor",
+                    "genre": "Fiction",
+                    "published_year": 2001,
+                    "num_pages": 78,
+                    "average_rating": 4.04,
+                    "ratings_count": 32213,
+                    "description": "9780486414232 Although Oscar Wilde (1854\u20131900) created a wide range of poetry, essays, and fairy tales (and one novel) in his brief, tragic life, he is perhaps best known as a dramatist. His witty, clever drama, populated by brilliant talkers skilled in the art of riposte and paradox, are still staples of the theatrical repertoire. An Ideal Husband revolves around a blackmail scheme that forces a married couple to reexamine their moral standards \u2014 providing, along the way, a wry commentary on the rarity of politicians who can claim to be ethically pure. A supporting cast of young lovers, society matrons, an overbearing father, and a formidable femme fatale continually exchange sparkling repartee, keeping the play moving at a lively pace. ike most of Wilde's plays, this scintillating drawing-room comedy is wise, well-constructed, and deeply satisfying. An instant success at its 1895 debut, the play continues to delight audiences over one hundred years later. An Ideal Husband is a must-read for Wilde fans, students of English literature, and anyone delighted by wit, urbanity, and timeless sophistication.",
+                    "thumbnail": "http://books.google.com/books/content?id=MapWGG3WJQgC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                    "title_and_subtiles": "An Ideal Husband",
+                    "similarity_score": 0.4322156298752098
+                  },
+                  {
+                    "isbn13": "9780192831873",
+                    "title": "The Antiquary",
+                    "isbn10": "0192831879",
+                    "authors": "Sir Walter Scott",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2002,
+                    "num_pages": 528,
+                    "average_rating": 3.85,
+                    "ratings_count": 339,
+                    "description": "9780192831873 'It was early in a fine summer's day, near the end of the eighteenth century, when a young man, of genteel appearance, having occasion to go towards the north-east of Scotland, provided himself with a ticket in one of those public carriages which travel between Edinburgh and the Queensferry...' So begins Scott's personal favourite among his novels, in characteristically wry and urbane style, as a mysterious young man calling himself 'Lovel' travels idly but fatefully toward the Scottish seaside town of Fairport. Here he is befriended by the antiquary Jonathan Oldbuck, who has taken refuge from his own personal disappointments in the obsessive study of miscellaneous history. Their slow unravelling of Lovel's true identity will unearth and redeem the secrets and lies which have devastated the guilt-haunted Earl of Glenallan, and will reinstate the tottering fortunes of Sir Arthur Wardour and his daughter Isabella. First published in 1816 in the aftermath of Waterloo, The Antiquary deals with the problem of how to understand the past so as to enable the future. Set in the tense times of the wars with revolutionary France, it displays Scott's matchless skill at painting the social panorama and in creating vivid characters, from the earthy beggar Edie Ochiltree to the loqacious and shrewdly humorous Antiquary himself. The text is based on Scott's own final, authorized version, the 'Magnum Opus' edition of 1829.",
+                    "thumbnail": "http://books.google.com/books/content?id=AcdCn8k3H1IC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Antiquary",
+                    "similarity_score": 0.4315046007188281
+                  },
+                  {
+                    "isbn13": "9780972121798",
+                    "title": "Tea with Jane Austen",
+                    "isbn10": "097212179X",
+                    "authors": "Kim Wilson",
+                    "categories": "Biography & Autobiography",
+                    "genre": "Nonfiction",
+                    "published_year": 2004,
+                    "num_pages": 128,
+                    "average_rating": 3.78,
+                    "ratings_count": 1415,
+                    "description": "9780972121798 While to us tea is an everyday commodity, in Austen's time it was relatively expensive, and to be able to offer it to visitors implied some degree of social status. This book examines the social customs of the time, and includes recipes.",
+                    "thumbnail": "http://books.google.com/books/content?id=sqoVPPhhcvYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Tea with Jane Austen",
+                    "similarity_score": 0.42754070691735946
+                  },
+                  {
+                    "isbn13": "9780099476351",
+                    "title": "Sprig Muslin",
+                    "isbn10": "0099476355",
+                    "authors": "Georgette Heyer",
+                    "categories": "England",
+                    "genre": "Nonfiction",
+                    "published_year": 2005,
+                    "num_pages": 268,
+                    "average_rating": 3.79,
+                    "ratings_count": 4847,
+                    "description": "9780099476351 Sir Gareth Ludlow knows it is his duty as a man of honour to restore so young and pretty a girl as Amanda, wandering unattended, to her family. But it is to prove no easy task for the Corinthian.",
+                    "thumbnail": "http://books.google.com/books/content?id=csG8_CumWtYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Sprig Muslin",
+                    "similarity_score": 0.42389728144328676
+                  },
+                  {
+                    "isbn13": "9780140442328",
+                    "title": "A Harlot High and Low",
+                    "isbn10": "0140442324",
+                    "authors": "Honore Balzac",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1970,
+                    "num_pages": 554,
+                    "average_rating": 4.05,
+                    "ratings_count": 1473,
+                    "description": "9780140442328 Handsome would-be poet Lucien Chardon is poor and naive, but highly ambitious. Failing to make his name in his dull provincial hometown, he is taken up by a patroness, the captivating married woman Madame de Bargeton, and prepares to forge his way in the glamorous beau monde of Paris. But Lucien has entered a world far more dangerous than he realized, as Madame de Bargeton's reputation becomes compromised and the fickle, venomous denizens of the courts and salons conspire to keep him out of their ranks. Lucien eventually learns that, wherever he goes, talent counts for nothing in comparison to money, intrigue and unscrupulousness. Lost Illusions is one of the greatest novels in the rich procession of the Comedie humaine, Balzac's panoramic social and moral history of his times.",
+                    "thumbnail": "http://books.google.com/books/content?id=tcVnaPgSagAC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "A Harlot High and Low",
+                    "similarity_score": 0.4214036995052697
+                  },
+                  {
+                    "isbn13": "9788171565641",
+                    "title": "Aspects of the Novel",
+                    "isbn10": "8171565646",
+                    "authors": "E. M. Forster",
+                    "categories": "English fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 141,
+                    "average_rating": 3.83,
+                    "ratings_count": 10,
+                    "description": "9788171565641 Forster's lively, informed originality and wit have made this book a classic. Avoiding the chronological approach of what he calls \"pseudoscholarship,\" he freely examines aspects all English-language novels have in common: story, people, plot, fantasy, prophecy, pattern, and rhythm. Index.",
+                    "thumbnail": "http://books.google.com/books/content?id=qWU9PgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Aspects of the Novel",
+                    "similarity_score": 0.4200437917041824
+                  },
+                  {
+                    "isbn13": "9780140620474",
+                    "title": "Far from the Madding Crowd",
+                    "isbn10": "0140620478",
+                    "authors": "Thomas Hardy",
+                    "categories": "England",
+                    "genre": "Fiction",
+                    "published_year": 1994,
+                    "num_pages": 374,
+                    "average_rating": 3.94,
+                    "ratings_count": 312,
+                    "description": "9780140620474 Independent and spirited Bathsheba Everdene has come to Weatherbury to take up her position as a farmer on the largest estate in the area. Her bold presence draws three very different suitors: the gentleman-farmer Boldwood, soldier-seducer Sergeant Troy and the devoted shepherd Gabriel Oak. Each, in contrasting ways, unsettles her decisions and complicates her life, and tragedy ensues, threatening the stability of the whole community. The first of his works set in Wessex, Hardy\u2019s novel of swift passion and slow courtship is imbued with his evocative descriptions of rural life and landscapes, and with unflinching honesty about sexual relationships.",
+                    "thumbnail": "http://books.google.com/books/content?id=6K8FZuDtHkUC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Far from the Madding Crowd",
+                    "similarity_score": 0.41675093763986226
+                  },
+                  {
+                    "isbn13": "9780316926348",
+                    "title": "Brideshead Revisited",
+                    "isbn10": "0316926345",
+                    "authors": "Evelyn Waugh",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1982,
+                    "num_pages": 351,
+                    "average_rating": 4.0,
+                    "ratings_count": 76839,
+                    "description": "9780316926348 Waugh tells the story of the Marchmain family. Aristocratic, beautiful and charming, the Marchmains are indeed a symbol of England and her decline in this novel of the upper class of the 1920s and the abdication of responsibility in the 1930s.",
+                    "thumbnail": "http://books.google.com/books/content?id=ucqvugEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Brideshead Revisited",
+                    "similarity_score": 0.4164827291922226
+                  },
+                  {
+                    "isbn13": "9780440243069",
+                    "title": "The Gilded Web",
+                    "isbn10": "0440243068",
+                    "authors": "Mary Balogh",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2006,
+                    "num_pages": 480,
+                    "average_rating": 3.58,
+                    "ratings_count": 2562,
+                    "description": "9780440243069 Fleeing the heat and crowds of a London ballroom, innocent Alexandra Purnell seeks refuge outside, only to be whisked away by Edmond, Earl of Amberley, who rescues her from certain scandal by offering her marriage. Reprint.",
+                    "thumbnail": "http://books.google.com/books/content?id=K1mKDQAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Gilded Web",
+                    "similarity_score": 0.4124211131818316
+                  },
+                  {
+                    "isbn13": "9780440241058",
+                    "title": "Slightly Wicked",
+                    "isbn10": "0440241057",
+                    "authors": "Mary Balogh",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2003,
+                    "num_pages": 342,
+                    "average_rating": 4.0,
+                    "ratings_count": 8070,
+                    "description": "9780440241058 Judith allows herself one night of reckless passion with a heroic stranger before settling into a dreary life as her aunt's companion, but she is shocked when the stranger arrives at her aunt's home, Harewood Grange, to woo her cousin.",
+                    "thumbnail": "http://books.google.com/books/content?id=_9eMDQAAQBAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Slightly Wicked",
+                    "similarity_score": 0.4109349435416281
+                  },
+                  {
+                    "isbn13": "9780767912273",
+                    "title": "To Have and to Hold",
+                    "isbn10": "0767912276",
+                    "authors": "Jane Green",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 352,
+                    "average_rating": 3.63,
+                    "ratings_count": 22462,
+                    "description": "9780767912273 Setting aside her dreams of living a grass-roots life in the English countryside, Alice accepts the proposal of wealthy man-about-town Joe, who shatters Alice's romantic ideals by criticizing her looks and cheating on her before an indiscretion forces them to move to a country house in America. Reprint. 125,000 first printing.",
+                    "thumbnail": "http://books.google.com/books/content?id=VSGub7hcqI8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "To Have and to Hold",
+                    "similarity_score": 0.4065175947591566
+                  },
+                  {
+                    "isbn13": "9780373836086",
+                    "title": "Sylvester",
+                    "isbn10": "0373836082",
+                    "authors": "Georgette Heyer",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 410,
+                    "average_rating": 4.11,
+                    "ratings_count": 9626,
+                    "description": "9780373836086 Proposing to the woman that he believes will complement his high position in life, the powerful Duke of Salford is scandalized when he learns that the sought-after maiden has written a romance novel that casts him as the villain. Reprint.",
+                    "thumbnail": "http://books.google.com/books/content?id=-wO7fVdHF2gC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Sylvester",
+                    "similarity_score": 0.4064865174496062
+                  },
+                  {
+                    "isbn13": "9780099474395",
+                    "title": "The Talisman Ring",
+                    "isbn10": "0099474395",
+                    "authors": "Georgette Heyer",
+                    "categories": "Great Britain",
+                    "genre": "Fiction",
+                    "published_year": 2005,
+                    "num_pages": 268,
+                    "average_rating": 4.0,
+                    "ratings_count": 5332,
+                    "description": "9780099474395 A witty and enthralling Regency romance by one of the best-known and most beloved historical novelists. The legend of the Headless Horseman and a proposed marriage de convenance both have their impact on the mystery of a golden talisman ring and Lord Lavenham's young heir, Ludovic. Neither Sir Tristram Shield nor Eustacie, his young French cousin, share the slightest inclination to marry one another, yet it is Lord Lavenham's dying wish. For there is no one else to provide for the old man's granddaughter while Ludovic remains a fugitive from justice ... Yet again Georgette Heyer shows the qualities that made her one of the most successful and best-loved romantic novelists of her age, and why her popularity endures to this day.",
+                    "thumbnail": "http://books.google.com/books/content?id=7Efhi0DF2i0C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Talisman Ring",
+                    "similarity_score": 0.4058190279745233
+                  },
+                  {
+                    "isbn13": "9780345487629",
+                    "title": "The Devilish Pleasures of a Duke",
+                    "isbn10": "0345487621",
+                    "authors": "Jillian Hunter",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2007,
+                    "num_pages": 345,
+                    "average_rating": 3.98,
+                    "ratings_count": 933,
+                    "description": "9780345487629 Rescuing Emma Boscastle, an instructor at her London academy for young ladies, from the unwanted attentions of a scoundrel during a wedding she had organized, injured rogue Adrian Ruxley finds himself recuperating under Emma's roof and tempting the proper young lady into a seductive display of impropriety. Original.",
+                    "thumbnail": "http://books.google.com/books/content?id=R_GG7dMrjLwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Devilish Pleasures of a Duke",
+                    "similarity_score": 0.4050137803675329
+                  },
+                  {
+                    "isbn13": "9780380818204",
+                    "title": "The Marriage Lesson",
+                    "isbn10": "0380818205",
+                    "authors": "Victoria Alexander",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2001,
+                    "num_pages": 372,
+                    "average_rating": 3.9,
+                    "ratings_count": 1449,
+                    "description": "9780380818204 Lesson #1: Never Tempt a Lady Become a bride? Never! Lady Marianne Shelton has come to London to experience life, and marriage is not part of her plan. To finance her independent future, the pretty country miss pens a series of anonymous stories. Soon they are the talk of the ton-and only she knows that her wicked hero is based on none other than bold, brash Thomas Effington, the future Duke of Roxborough. Lesson #2: Never Deny a Marquess, Thomas has been thrust into le of Marianne's protector. When she threatens to experience life with the first willing rogue to come along, he decides the best recourse is to tutor her himself. And when he accidentally compromises her honor, he's willing to accept their only recourse: a wedding. Marianne claims she wants no part of marriage, but her intoxicating allure and disarming willingness make her irresistible. And now Thomas is determined to teach her a lesson: that true love will last forever.",
+                    "thumbnail": "http://books.google.com/books/content?id=CLc-ICBzMskC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Marriage Lesson",
+                    "similarity_score": 0.403552038512772
+                  },
+                  {
+                    "isbn13": "9780192837806",
+                    "title": "Scenes of Clerical Life",
+                    "isbn10": "019283780X",
+                    "authors": "George Eliot",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2000,
+                    "num_pages": 310,
+                    "average_rating": 3.78,
+                    "ratings_count": 2276,
+                    "description": "9780192837806 When Scenes of Clerical Life, George Eliot's first novel, was published anonymously in 1857, it was immediately recognized, in the words of Saturday Review, as `the production of a peculiar and remarkable writer'. The three stories that make up the Scenes, `The Sad Fortunes of the ReverendAmos Barton', `Mr Gilfil's Love Story', and `Janet's Repentance', intriguingly foreshadow George Eliot's later work. The first readers, including Dickens and Thackeray, were struck by the humorous irony, the truthfulness of the presentation of the lives of ordinary people, and the compassionateacceptance of human weakness which characterize Eliot's writing.",
+                    "thumbnail": "http://books.google.com/books/content?id=tCfq__XvAiUC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                    "title_and_subtiles": "Scenes of Clerical Life",
+                    "similarity_score": 0.4023994313770949
+                  },
+                  {
+                    "isbn13": "9780758210371",
+                    "title": "The Man Who Loved Jane Austen",
+                    "isbn10": "075821037X",
+                    "authors": "Sally Smith O'Rourke",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2006,
+                    "num_pages": 303,
+                    "average_rating": 3.37,
+                    "ratings_count": 1719,
+                    "description": "9780758210371 After discovering a letter to Jane Austen from Fitzwilliam Darcy--a supposedly fictional character--in the back of her antique vanity's mirror, Eliza Knight searches for the only man who knows the truth behind this mystery.",
+                    "thumbnail": "http://books.google.com/books/content?id=aLc26Y6HjnMC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Man Who Loved Jane Austen",
+                    "similarity_score": 0.3993317905153815
+                  },
+                  {
+                    "isbn13": "9780141439631",
+                    "title": "The Portrait of a Lady",
+                    "isbn10": "0141439637",
+                    "authors": "Henry James",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2003,
+                    "num_pages": 797,
+                    "average_rating": 3.77,
+                    "ratings_count": 60027,
+                    "description": "9780141439631 When Isabel Archer, a beautiful, spirited American is brought to Europe by her wealthy aunt Touchett, it is expected that she will soon marry. But Isabel, resolved to enjoy the freedom that her fortune has opened up and to determine her own fate, does not hesitate to turn down two eligible suitors. It is only when she finds herself irresistibly drawn to the cultivated but worthless Gilbert Osmond that she discovers that wealth is a two-edged sword and that there is a price to be paid for independence. With its subtle delineation of American characters in a European setting, Portrait of a Lady is one of the most accomplished and popular of Henry James's early novels.",
+                    "thumbnail": "http://books.google.com/books/content?id=Y6EcVaBi2AAC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Portrait of a Lady",
+                    "similarity_score": 0.39799503239612877
+                  },
+                  {
+                    "isbn13": "9780451528209",
+                    "title": "Madame Bovary",
+                    "isbn10": "0451528204",
+                    "authors": "Gustave Flaubert;Mildred Marmur",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2001,
+                    "num_pages": 448,
+                    "average_rating": 3.66,
+                    "ratings_count": 468,
+                    "description": "9780451528209 An ordinary woman's unfulfilled dreams of romantic love lead her to a series of desperate acts, including adultery, in a classic novel set against the backdrop of nineteenth-century bourgeois France. Reissue.",
+                    "thumbnail": "http://books.google.com/books/content?id=t_Q_TncPS1UC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Madame Bovary",
+                    "similarity_score": 0.3974288342308394
+                  },
+                  {
+                    "isbn13": "9780743487566",
+                    "title": "The Scarlet Letter",
+                    "isbn10": "0743487567",
+                    "authors": "Nathaniel Hawthorne;Margaret Brantley",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 400,
+                    "average_rating": 3.39,
+                    "ratings_count": 1361,
+                    "description": "9780743487566 ENDURING LITERATURE ILLUMINATED BY PRACTICAL SCHOLARSHIP Hawthorne's classic treatise on morality, judgment, and exile in Puritan America. EACH ENRICHED CLASSIC EDITION INCLUDES: \u2022 A concise introduction that gives readers important background information \u2022 A chronology of the author's life and work \u2022 A timeline of significant events that provides the book's historical context \u2022 An outline of key themes and plot points to help readers form their own interpretations \u2022 Detailed explanatory notes \u2022 Critical analysis, including contemporary and modern perspectives on the work \u2022 Discussion questions to promote lively classroom and book group interaction \u2022 A list of recommended related books and films to broaden the reader's experience Enriched Classics offer readers affordable editions of great works of literature enhanced by helpful notes and insightful commentary. The scholarship provided in Enriched Classics enables readers to appreciate, understand, and enjoy the world's finest books to their full potential. SERIES EDITED BY CYNTHIA BRANTLEY JOHNSON",
+                    "thumbnail": "http://books.google.com/books/content?id=y5qkBRTY3WkC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
+                    "title_and_subtiles": "The Scarlet Letter",
+                    "similarity_score": 0.3970247835320766
+                  },
+                  {
+                    "isbn13": "9780192834423",
+                    "title": "The Bostonians",
+                    "isbn10": "0192834428",
+                    "authors": "Henry James",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 1998,
+                    "num_pages": 504,
+                    "average_rating": 3.59,
+                    "ratings_count": 84,
+                    "description": "9780192834423 Olive Chancellor and Basil Ransom, cousins, clash, when Olive wants Verena Tarrant to use her eloquence for the woman's movement, and Basil wants Verena to give up politics and marry him.",
+                    "thumbnail": "http://books.google.com/books/content?id=hGX8aqWTX_8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Bostonians",
+                    "similarity_score": 0.396787412476415
+                  },
+                  {
+                    "isbn13": "9780446616836",
+                    "title": "Love Beyond Reason",
+                    "isbn10": "0446616834",
+                    "authors": "Sandra Brown",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2005,
+                    "num_pages": 272,
+                    "average_rating": 3.64,
+                    "ratings_count": 1764,
+                    "description": "9780446616836 This story reflects the trends and attitudes that were popular at the time, but its theme are eternal and universal. As in all romance fiction, the plot revolves around star-crossed lovers. There are moments of passion, anguish, and tenderness-all integral facets of falling in love.",
+                    "thumbnail": "http://books.google.com/books/content?id=srU7PgAACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Love Beyond Reason",
+                    "similarity_score": 0.39635423435525685
+                  },
+                  {
+                    "isbn13": "9780553580839",
+                    "title": "The Summer House",
+                    "isbn10": "0553580833",
+                    "authors": "Jean Stone",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2000,
+                    "num_pages": 352,
+                    "average_rating": 3.87,
+                    "ratings_count": 127,
+                    "description": "9780553580839 Married to the man her father molded as the perfect presidential candidate, Liz Adams cannot hide the pain of her dictated life in the face of tragedy and finds at Martha's Vineyard the long-lost love she let slip away. Original.",
+                    "thumbnail": "http://books.google.com/books/content?id=xYB2TYqEdQEC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "The Summer House",
+                    "similarity_score": 0.39604211474392936
+                  },
+                  {
+                    "isbn13": "9781585675753",
+                    "title": "Spring Fever",
+                    "isbn10": "158567575X",
+                    "authors": "P.G. Wodehouse",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2004,
+                    "num_pages": 276,
+                    "average_rating": 4.06,
+                    "ratings_count": 468,
+                    "description": "9781585675753 The fall brings four more antic novels from comic genius, P. G. Wodehouse. In Picadilly Jim (soon to be a major motion picture), Jimmy Crocker has a scandalous reputation on both sides of the Atlantic and must do an about-face to win back the woman of his dreams. Uneasy Money sees the hard-up Lord Dawlish off to America to make a fortune, while in Cocktail Time events turn on the fate of a filmscript. Spring Fever is a light-hearted comedy involving love and various complications.",
+                    "thumbnail": "http://books.google.com/books/content?id=8_ecxwEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Spring Fever",
+                    "similarity_score": 0.3928202215627412
+                  },
+                  {
+                    "isbn13": "9780060598853",
+                    "title": "Back to the Bedroom",
+                    "isbn10": "0060598859",
+                    "authors": "Janet Evanovich",
+                    "categories": "Fiction",
+                    "genre": "Fiction",
+                    "published_year": 2005,
+                    "num_pages": 234,
+                    "average_rating": 3.67,
+                    "ratings_count": 9839,
+                    "description": "9780060598853 Dear Reader: In a previous life, before the time of Plum, I wrote twelve short romance novels. Red-hot screwball comedies, each and every one of them. Nine of these stories were originally published by the Loveswept line between the years 1988 and 1992. All immediately went out of print and could be found only at used bookstores and yard sales. I'm excited to tell you that those nine stories are now being re-released by HarperCollins. Back to the Bedroom is presented here in almost original form. I've done only minor editing to correct some embarrassing bloopers missed the first time around. I lived in northern Virginia when I wrote Back to the Bedroom. My children were young, and we spent a lot of time visiting the Washington, D.C. museums and wandering through the historic neighborhoods. One day while strolling Capitol Hill I came upon two townhouses that captured my imagination. The houses were totally different -- a birthday cake of a house and a bran muffin of a house, and yet they shared a common wall. I wondered about the people who lived inside the houses. And eventually the houses inspired Back to the Bedroom. Back to the Bedroom is the story of a young woman with the soul of a birthday cake living in a bran muffin house -- and a nice-looking guy with the substance of a bran muffin living in a birthday cake. They share some misadventures, some romantic moments, some misunderstandings, and ultimately they turn into wedding cake. And for Plum fans, you'll be interested to find that this was the first of the four romances to feature Elsie Hawkins, the prototype for Grandma Mazur. Janet Evanovich",
+                    "thumbnail": "http://books.google.com/books/content?id=fcPjlwEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+                    "title_and_subtiles": "Back to the Bedroom",
+                    "similarity_score": 0.39210562159900897
+                  }
+                ],
+                "output_type": "list"
+              },
+              "details": [
+                "wrapped a bare return value"
+              ],
+              "token_usage": {
+                "total": 0,
+                "prompt": 0,
+                "completion": 0,
+                "cached": 0,
+                "reasoning_tokens": 0,
+                "cost_usd": 0.0
+              }
+            },
+            {
+              "id": "op_8ce19f8e",
+              "parent_id": "op_da0aa186",
+              "name": "app.domains.books.analyze_recommend.executor.RecommendBooksExecutor.response_to_user",
+              "ok": true,
+              "timing": {
+                "start_time": "2026-08-14T19:15:47.549910+00:00",
+                "duration": 5.96
+              },
+              "input": {
+                "result": {
+                  "num_books": 10,
+                  "authors": {
+                    "Jane Austen": 4,
+                    "Edith Wharton": 2,
+                    "Teddy F. Bader;Marilyn Bader": 1,
+                    "Maggie Black;Deirdre Le Faye": 1,
+                    "Karen Joy Fowler": 1,
+                    "Georgette Heyer": 1
+                  },
+                  "genres": {
+                    "Fiction": 8,
+                    "Nonfiction": 2
+                  },
+                  "min_pages": 128,
+                  "max_pages": 1431
+                }
+              },
+              "response": {
+                "result": {
+                  "role": "assistant",
+                  "id": "chatcmpl-ECrfXHMvVzGwcuLEG6DCu3nvYu9n4",
+                  "content": "Here are ten to browse. Most of them stay squarely in fiction, with a few nonfiction picks tucked in, and the list leans toward a small number of repeat names (Austen appears multiple times, and Wharton turns up more than once) so there\u2019s a clear place to go deeper if one author clicks. The selection ranges from short reads to very long ones, so you can grab something light or settle into a heftier book. Take a look at the cards and pick any that catch your eye.",
+                  "created": "2026-08-14T19:15:53.512727+00:00"
+                },
+                "output_type": "AssistantMessage"
+              },
+              "details": [
+                "wrapped a bare return value"
+              ],
+              "token_usage": {
+                "total": 1272,
+                "prompt": 1159,
+                "completion": 113,
+                "cached": 0,
+                "reasoning_tokens": 0,
+                "by_model": {
+                  "gpt-5-mini": {
+                    "total": 1272,
+                    "prompt": 1159,
+                    "completion": 113,
+                    "cached": 0,
+                    "reasoning_tokens": 0
+                  }
+                },
+                "cost_usd": 0.000516
+              },
+              "steps": [
+                {
+                  "id": "op_6f1f2584",
+                  "parent_id": "op_8ce19f8e",
+                  "name": "clients.openai_client.OpenAIClient.execute",
+                  "ok": true,
+                  "timing": {
+                    "start_time": "2026-08-14T19:15:47.551875+00:00",
+                    "duration": 5.96
+                  },
+                  "input": {
+                    "req": {
+                      "model": "gpt-5-mini",
+                      "prompt_chars": 4304,
+                      "num_messages": 1,
+                      "streaming": true,
+                      "reasoning_effort": "minimal"
+                    },
+                    "save_payload": false
+                  },
+                  "response": {
+                    "result": {
+                      "role": "assistant",
+                      "id": "chatcmpl-ECrfXHMvVzGwcuLEG6DCu3nvYu9n4",
+                      "content": "Here are ten to browse. Most of them stay squarely in fiction, with a few nonfiction picks tucked in, and the list leans toward a small number of repeat names (Austen appears multiple times, and Wharton turns up more than once) so there\u2019s a clear place to go deeper if one author clicks. The selection ranges from short reads to very long ones, so you can grab something light or settle into a heftier book. Take a look at the cards and pick any that catch your eye.",
+                      "created": "2026-08-14T19:15:53.512727+00:00"
+                    },
+                    "output_type": "AssistantMessage"
+                  },
+                  "details": [
+                    "wrapped a bare return value",
+                    "promoted output token usage"
+                  ],
+                  "token_usage": {
+                    "total": 1272,
+                    "prompt": 1159,
+                    "completion": 113,
+                    "cached": 0,
+                    "reasoning_tokens": 0,
+                    "by_model": {
+                      "gpt-5-mini": {
+                        "total": 1272,
+                        "prompt": 1159,
+                        "completion": 113,
+                        "cached": 0,
+                        "reasoning_tokens": 0
+                      }
+                    },
+                    "cost_usd": 0.000516
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

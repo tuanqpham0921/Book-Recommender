@@ -3,6 +3,7 @@ import remarkGfm from 'remark-gfm';
 import { useRef, useEffect, useState, lazy, Suspense } from 'react'
 import { Copy, Check } from 'lucide-react';
 import { BookGridStack } from '@/components/book/BooksGrid';
+import TaskSection from '@/components/chatbot/TaskSection';
 
 // Dynamic import for MermaidDiagram (large library)
 const MermaidDiagram = lazy(() => import('@/components/MermaidDiagram'));
@@ -16,6 +17,66 @@ const MermaidLoading = () => (
         </div>
     </div>
 );
+
+/**
+ * Render one section. Pulled out of the map so `task` sections can call it on
+ * their own children — that nesting is the only recursion in the tree, and it
+ * is one level deep: a task holds text and books, never another task.
+ */
+function renderSection(section, responseId, sectionIndex) {
+    const key = section.id || `${responseId}-section-${sectionIndex}`;
+
+    // Task section — a step in the plan, holding its own sections
+    if (section.type === 'task') {
+        return (
+            <TaskSection key={key} section={section}>
+                {(section.sections || []).map((child, childIndex) =>
+                    renderSection(child, key, childIndex)
+                )}
+            </TaskSection>
+        );
+    }
+
+    // Text section
+    if (section.type === 'text' && section.content) {
+        return (
+            <div key={key} className="message-bubble response markdown-container">
+                <Markdown remarkPlugins={[remarkGfm]}>{section.content}</Markdown>
+            </div>
+        );
+    }
+
+    // Books section
+    if (section.type === 'books' && section.books && section.books.length > 0) {
+        return (
+            <div key={key} className="book-cards-container mb-5">
+                <BookGridStack books={section.books} />
+            </div>
+        );
+    }
+
+    // Diagram section
+    if (section.type === 'diagram' && section.mermaid) {
+        return (
+            <Suspense key={key} fallback={<MermaidLoading />}>
+                <div className="message-bubble response">
+                    <MermaidDiagram chart={section.mermaid} className="w-full" />
+                </div>
+            </Suspense>
+        );
+    }
+
+    // Error section
+    if (section.type === 'error' && section.content) {
+        return (
+            <div key={key} className="message-bubble text-[var(--accent-negative)] italic mt-2">
+                <span>{section.content}</span>
+            </div>
+        );
+    }
+
+    return null;
+}
 
 function ChatMessages({ messages }) {
     const containerRef = useRef(null)
@@ -82,53 +143,9 @@ function ChatMessages({ messages }) {
                         {/* SECTIONS-BASED RENDERING WITH STABLE IDs */}
                         {response.sections && response.sections.length > 0 && (
                             // Render sections in order using stable section IDs
-                            response.sections.map((section, sectionIndex) => {
-                                // Use section.id if available, otherwise fallback to index
-                                const key = section.id || `${response.id}-section-${sectionIndex}`;
-
-                                // Text section
-                                if (section.type === 'text' && section.content) {
-                                    return (
-                                        <div key={key} className="message-bubble response markdown-container">
-                                            <Markdown remarkPlugins={[remarkGfm]}>{section.content}</Markdown>
-                                        </div>
-                                    );
-                                }
-
-                                // Books section
-                                if (section.type === 'books' && section.books && section.books.length > 0) {
-                                    return (
-                                        <div key={key} className="book-cards-container mb-5">
-                                            <BookGridStack books={section.books} />
-                                        </div>
-                                    );
-                                }
-
-                                // Diagram section
-                                if (section.type === 'diagram' && section.mermaid) {
-                                    return (
-                                        <Suspense key={key} fallback={<MermaidLoading />}>
-                                            <div className="message-bubble response">
-                                                <MermaidDiagram
-                                                    chart={section.mermaid}
-                                                    className="w-full"
-                                                />
-                                            </div>
-                                        </Suspense>
-                                    );
-                                }
-
-                                // Error section
-                                if (section.type === 'error' && section.content) {
-                                    return (
-                                        <div key={key} className="message-bubble text-[var(--accent-negative)] italic mt-2">
-                                            <span>{section.content}</span>
-                                        </div>
-                                    );
-                                }
-
-                                return null;
-                            })
+                            response.sections.map((section, sectionIndex) =>
+                                renderSection(section, response.id, sectionIndex)
+                            )
                         )}
 
                         {/* Loading state */}

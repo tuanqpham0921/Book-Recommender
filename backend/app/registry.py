@@ -1,220 +1,212 @@
+"""The live node registry — everything the planner and the task runner look up.
+
+Each capability is a vertical slice exporting one `NodeSpec`; a domain's
+`guide.py` lists its specs; this module collects them into `SPECS` and hands
+that tuple to a single `Registry`. See `app/domains/README.md`.
+
+The specs are the only state — request schema, executor, catalog entry and the
+enum the planner emits under are all answered from that one indexed tuple, so
+there are no parallel dicts to drift apart.
+
+`make tools-catalog` renders this module rather than a checked-in snapshot.
+"""
+
 import inspect
 import logging
+from collections.abc import Iterable, Iterator
 from enum import Enum
 from typing import Annotated, Union
 
 from pydantic import Field
 
+from app.domains.books.guide import BOOK_SPECS
+from app.domains.node_spec import NodeSpec, NodeTier
+
 logger = logging.getLogger(__name__)
 
-from app.domains.books.registry import (
-    BOOK_NODE_TYPE_TO_CLS,
-    BOOK_RETRIEVAL_CLASSES,
-    BOOK_ANALYZE_CLASSES,
-    BOOK_COMBINE_CLASSES,
-    BOOK_REQUEST_CLASSES,
-    FindByISBN13Retrieval,
-    FindByAuthorRetrieval,
-    FindByCoAuthorsRetrieval,
-    FindByGenreRetrieval,
-    FindByTitleRetrieval,
-    RandomBookRetrieval,
-    RecommendationStrategy,
-    UnionRetrieval,
-    IntersectRetrievals,
-    FilterRetrieval,
-)
-from app.domains.project.registry import (
-    PROJECT_NODE_TYPE_TO_CLS,
-    PROJECT_RETRIEVAL_CLASSES,
-    PROJECT_REQUEST_CLASSES,
-    FeedbackRequest,
-    ProjectInfoRequest,
-)
-from app.domains.node_types import NodeTypeEnum
-from app.domains.users.schemas.request_schemas import (
-    DeveloperInfoRequest,
-    UserInfoRequest,
-)
-from app.domains.users.node_types import UserNodeTypeEnum
-from playground.app_mock.executors.registry import MOCK_EXECUTORS_CLS_MAPPING
-
-# -------------------------------------------------------------------
-# BOOK DOMAIN — class tuples and BOOK_NODE_TYPE_TO_CLS come from
-# app.domains.books.registry (imported above); this domain doesn't define
-# them inline anymore.
-
-# -------------------------------------------------------------------
-# PROJECT DOMAIN — class tuples and PROJECT_NODE_TYPE_TO_CLS come from
-# app.domains.project.registry (imported above); this domain doesn't define
-# them inline anymore.
-
-# -------------------------------------------------------------------
-# USER DOMAIN
-USER_RETRIEVAL_CLASSES = (
-    UserInfoRequest,
-    DeveloperInfoRequest,
-)
-
-USER_REQUEST_CLASSES = USER_RETRIEVAL_CLASSES
-# -------------------------------------------------------------------
-# All request schema classes — add new ones here
-
-RETRIEVAL_CLASSES = BOOK_RETRIEVAL_CLASSES + USER_RETRIEVAL_CLASSES + PROJECT_RETRIEVAL_CLASSES
-COMBINE_CLASSES = BOOK_COMBINE_CLASSES
-ANALYZE_CLASSES = BOOK_ANALYZE_CLASSES
-
-REQUEST_CLASSES = RETRIEVAL_CLASSES + COMBINE_CLASSES + ANALYZE_CLASSES
-AnyStrategyRequest = Annotated[
-    Union[
-        RecommendationStrategy,
-        FindByTitleRetrieval,
-        FindByISBN13Retrieval,
-        FindByAuthorRetrieval,
-        FindByCoAuthorsRetrieval,
-        FindByGenreRetrieval,
-        RandomBookRetrieval,
-        UnionRetrieval,
-        IntersectRetrievals,
-        FilterRetrieval,
-        UserInfoRequest,
-        DeveloperInfoRequest,
-        FeedbackRequest,
-        ProjectInfoRequest,
-    ],
-    Field(discriminator="node_type"),
-]
+# The planner hands back `NodeTypeEnum` members, internal code passes plain
+# strings; every lookup accepts either, so no caller reaches for `.value`.
+NodeTypeKey = str | Enum
 
 
-# Manual node_type → class lookup — add new mappings here (book/project
-# entries come from their own domains.*.registry modules)
-NODE_TYPE_TO_CLS: dict[str, type] = {
-    **BOOK_NODE_TYPE_TO_CLS,
-    **PROJECT_NODE_TYPE_TO_CLS,
-    UserNodeTypeEnum.USER_INFO.value: UserInfoRequest,
-    UserNodeTypeEnum.DEVELOPER_INFO.value: DeveloperInfoRequest,
-}
-
-
-def get_request_class(node_type: NodeTypeEnum | str) -> type:
-    # isinstance instead of hasattr: same runtime behavior, narrows the type
-    key = node_type.value if isinstance(node_type, Enum) else node_type
-    return NODE_TYPE_TO_CLS[key]
+class UnknownNodeTypeEnum(Enum):
+    UNKNOWN = "unknown"
 
 
 def class_docstring(cls: type) -> str:
+    """A node's tool description. A free function because it reads only the
+    class, and `evals/tools_catalog.py` calls it too."""
     docs = inspect.getdoc(cls)
     if not docs:
         return "No description"
     return docs.strip()
 
 
-CATALOG_TIERS: dict[str, tuple[type, ...]] = {
-    "Retrieval — lookup or fetch data": RETRIEVAL_CLASSES,
-    "Combine — intersect or narrow what retrieval steps already returned": COMBINE_CLASSES,
-    "Analyze — interpret, compare, or recommend using retrieved data": ANALYZE_CLASSES,
-}
+class Registry:
+    """Every node lookup in the app, derived from a tuple of `NodeSpec`.
 
-
-def catalog_entries() -> dict[str, dict[str, str]]:
-    """Structured capability catalog: tier label -> {node_type: description}.
-
-    Every entry comes from NODE_TYPE_TO_CLS, so each node type appears exactly
-    once with its registered name. Registered classes missing from every tier
-    in CATALOG_TIERS fall into an "Other supported actions" section; a tier
-    class that was never registered has no node_type name for the LLM to use,
-    so it is skipped with a warning.
+    Construction indexes the specs by `node_type` and rejects duplicates;
+    everything else is a read over that index. Registration is also how a node
+    is parked — a spec absent from the tuple has no catalog entry, no enum
+    member and no executor, so the planner cannot target it.
     """
-    cls_to_node_type = {cls: name for name, cls in NODE_TYPE_TO_CLS.items()}
-    entries: dict[str, dict[str, str]] = {}
-    listed: set[type] = set()
 
-    for label, classes in CATALOG_TIERS.items():
-        section: dict[str, str] = {}
-        for cls in classes:
-            name = cls_to_node_type.get(cls)
-            if name is None:
-                logger.warning(
-                    f"{cls.__name__} is in catalog tier {label!r} but not in "
-                    "NODE_TYPE_TO_CLS — skipped from the capability catalog"
+    def __init__(self, specs: Iterable[NodeSpec]) -> None:
+        self.specs: tuple[NodeSpec, ...] = tuple(specs)
+
+        self._by_node_type: dict[str, NodeSpec] = {}
+        for spec in self.specs:
+            if spec.node_type in self._by_node_type:
+                raise RuntimeError(
+                    f"Duplicate node_type across domain guides: {spec.node_type!r}"
                 )
-                continue
-            section[name] = class_docstring(cls)
-            listed.add(cls)
-        if section:
-            entries[label] = section
+            self._by_node_type[spec.node_type] = spec
 
-    extra = {
-        name: class_docstring(cls)
-        for name, cls in NODE_TYPE_TO_CLS.items()
-        if cls not in listed
-    }
-    if extra:
-        entries["Other supported actions"] = extra
+        # Built once so the enum has one identity per process: a fresh Enum
+        # produces members that fail `is` against the annotated ones.
+        self.node_type_enum: type[Enum] = self._build_node_type_enum()
 
-    return entries
+    # ------------------------------------------------------------------
+    # Membership and iteration
 
+    @staticmethod
+    def key(node_type: NodeTypeKey) -> str:
+        """Normalize an enum member or a string to the registered name."""
+        return node_type.value if isinstance(node_type, Enum) else node_type
 
-def format_node_type_catalog() -> str:
-    """Render catalog_entries() as the prompt block the planner LLM sees.
+    def __contains__(self, node_type: object) -> bool:
+        if not isinstance(node_type, (str, Enum)):
+            return False
+        return self.key(node_type) in self._by_node_type
 
-    Each capability is its name on one line with the (possibly multi-line)
-    description indented under it, so long docstrings stay visually attached
-    to their name instead of bleeding into the next entry.
-    """
-    lines = []
-    for label, section in catalog_entries().items():
-        lines += ["", f"## {label}", ""]
-        for name, description in section.items():
-            lines.append(name)
-            lines += [
-                f"  {doc_line}" if doc_line.strip() else ""
-                for doc_line in description.splitlines()
-            ]
-            lines.append("")
-    if not lines:
-        raise  RuntimeError("Node type catalog is empty.")
-    
-    return "\n".join(lines).rstrip()
+    def __iter__(self) -> Iterator[NodeSpec]:
+        return iter(self.specs)
+
+    def __len__(self) -> int:
+        return len(self.specs)
+
+    @property
+    def node_types(self) -> tuple[str, ...]:
+        """The registered capability names, in guide order (= prompt order)."""
+        return tuple(self._by_node_type)
+
+    # ------------------------------------------------------------------
+    # Spec lookups
+
+    def spec(self, node_type: NodeTypeKey) -> NodeSpec | None:
+        """The spec for a node type, or None — the "parked or hallucinated"
+        answer callers branch on."""
+        return self._by_node_type.get(self.key(node_type))
+
+    def request(self, node_type: NodeTypeKey) -> type | None:
+        """The request schema class, or None if the node type is unregistered."""
+        spec = self.spec(node_type)
+        return spec.request if spec else None
+
+    def executor(self, node_type: NodeTypeKey) -> type | None:
+        """The workflow that runs this node. None covers both "not registered"
+        and "not yet runnable"; read `spec()` to tell those apart."""
+        spec = self.spec(node_type)
+        return spec.executor if spec else None
+
+    def executors(self) -> tuple[type, ...]:
+        """Every runnable executor class, deduplicated by registration order."""
+        return tuple(s.executor for s in self.specs if s.executor is not None)
+
+    def in_tier(self, tier: NodeTier) -> tuple[NodeSpec, ...]:
+        return tuple(s for s in self.specs if s.tier is tier)
+
+    # ------------------------------------------------------------------
+    # What the planner is constrained by
+
+    def _build_node_type_enum(self) -> type[Enum]:
+        """The capability names the planner LLM may emit, as one flat enum.
+
+        Flat rather than a union of each slice's label enum: a union renders as
+        an anyOf of one-member enums — more tokens per node and a weaker
+        constraint on the model.
+
+        UNKNOWN is a member on purpose, so the LLM can decline instead of
+        picking the nearest wrong capability; `planjane/executor.py` then
+        refuses that one goal rather than failing the whole tool call.
+        """
+        return Enum(  # type: ignore[misc]
+            "NodeTypeEnum",
+            {
+                **{s.node_type: s.node_type for s in self.specs},
+                UnknownNodeTypeEnum.UNKNOWN.name: UnknownNodeTypeEnum.UNKNOWN.value,
+            },
+            type=str,
+            module=__name__,
+        )
+
+    def request_union(self):
+        """The registered request schemas as one discriminated union, for
+        validating a tool call (or rehydrating a recorded plan) back into typed
+        requests. Discriminated on `node_type`, whose Literal default `NodeSpec`
+        already checked. Derived on demand so it cannot drift from the specs.
+        """
+        return Annotated[
+            Union[tuple(s.request for s in self.specs)],  # type: ignore[valid-type]
+            Field(discriminator="node_type"),
+        ]
+
+    # ------------------------------------------------------------------
+    # The capability catalog the planner reads
+
+    def catalog_entries(self) -> dict[str, dict[str, str]]:
+        """Structured capability catalog: tier label -> {node_type: description}.
+
+        Walks `NodeTier` in declaration order, so prompt sections keep a stable
+        order and every spec lands in exactly one of them. Empty tiers are
+        dropped rather than rendered as an empty heading.
+        """
+        entries: dict[str, dict[str, str]] = {}
+        for tier in NodeTier:
+            section = {
+                spec.node_type: class_docstring(spec.request)
+                for spec in self.in_tier(tier)
+            }
+            if section:
+                entries[tier.value] = section
+        return entries
+
+    def format_catalog(self) -> str:
+        """Render `catalog_entries()` as the prompt block the planner LLM sees.
+
+        Name on one line, description indented under it, so a long docstring
+        stays visually attached instead of bleeding into the next entry.
+        """
+        lines: list[str] = []
+        for label, section in self.catalog_entries().items():
+            lines += ["", f"## {label}", ""]
+            for name, description in section.items():
+                lines.append(name)
+                lines += [
+                    f"  {doc_line}" if doc_line.strip() else ""
+                    for doc_line in description.splitlines()
+                ]
+                lines.append("")
+        if not lines:
+            raise RuntimeError("Node type catalog is empty.")
+
+        return "\n".join(lines).rstrip()
 
 
 # -------------------------------------------------------------------
-# EXECUTOR MAPPING
+# The live registry — add a domain's guide to SPECS
 
-# NOTE: temporary — points at the mock executors under playground/app_mock
-# until real domain executors are built, then this should map to those instead.
-EXECUTORS_CLS_MAPPING = MOCK_EXECUTORS_CLS_MAPPING
+SPECS: tuple[NodeSpec, ...] = BOOK_SPECS
 
+REGISTRY = Registry(SPECS)
+
+# Module-level because it is a *type*: `SystemGoal.target_node_type` is
+# annotated with it at class-definition time. See `_build_node_type_enum`.
+NodeTypeEnum = REGISTRY.node_type_enum
 
 
 def main() -> None:
-    print(format_node_type_catalog())
-
-
-# # -------------------------------------------------------------------
-# # PLAYGROUND EXTENSION — comment out this whole block to run with only the
-# # app-registered node types above; nothing else in this file needs to change.
-# # Folds the scalability-testing schemas from
-# # playground/app_mock/extended_registry.py into the live planner registry.
-# # Must run before the __main__ guard below, so `python -m app.registry`
-# # reflects the same registry state everything else sees.
-# from playground.app_mock.extended_registry import (
-#     ExtendedANALYZE_CLASSES,
-#     ExtendedLIBRARY_CLASSES,
-#     ExtendedNODE_TYPE_TO_CLS,
-#     ExtendedRETRIEVAL_CLASSES,
-# )
-
-# RETRIEVAL_CLASSES = RETRIEVAL_CLASSES + ExtendedRETRIEVAL_CLASSES
-# ANALYZE_CLASSES = ANALYZE_CLASSES + ExtendedANALYZE_CLASSES
-# # ExtendedLIBRARY_CLASSES is neither retrieval nor analyze (read/write actions
-# # on the user's shelf) — folded into REQUEST_CLASSES only, so it still counts
-# # as a request class without joining either tier's class list
-# REQUEST_CLASSES = RETRIEVAL_CLASSES + ANALYZE_CLASSES + ExtendedLIBRARY_CLASSES
-
-# NODE_TYPE_TO_CLS.update(ExtendedNODE_TYPE_TO_CLS)
-# CATALOG_TIERS["Retrieval — lookup or fetch data"] = RETRIEVAL_CLASSES
-# CATALOG_TIERS["Analyze — interpret, compare, or recommend using retrieved data"] = ANALYZE_CLASSES
+    print(REGISTRY.format_catalog())
 
 
 if __name__ == "__main__":

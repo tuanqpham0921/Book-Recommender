@@ -8,11 +8,18 @@ class GenreEnum(str, Enum):
     NONFICTION = "non-fiction"
 
 class ExclusionBookFilter(BaseModel):
+    """What a search rules OUT by name — never what it is about.
+
+    Only what the user actually excluded: an author they did not mention is not
+    an author they ruled out. Matching is by name rather than by id, so these
+    are the words the ask used ("Herbert"), not catalog identifiers.
+    """
+
     model_config = ConfigDict(extra="forbid")
-    
+
     book_titles: Optional[list[str]] = Field(default=None, description="Titles to exclude.")
     authors: Optional[list[str]] = Field(default=None, description="Authors to exclude.")
-    categories: Optional[list[str]] = Field(default=None, description="List of categories or subgenres.")
+    categories: Optional[list[str]] = Field(default=None, description="Categories or subgenres to exclude.")
     # keywords: Optional[list[str]] = Field(default=None, description="Keywords for semantic or fuzzy matching.")
 
     def model_post_init(self, __context) -> None:

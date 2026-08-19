@@ -1,9 +1,9 @@
 """Shared plumbing for the two eval report generators.
 
-`report_system_goals.py` answers *did the planner pick the right nodes* and
-`report.py` answers *what did the run cost, in tokens, dollars and seconds*.
-Both read the same join (test_runs ⋈ chat_runs) and the same suite JSONs, so
-the fetching, filtering and CLI live here rather than being kept in sync twice.
+`report_system_goals.py` answers *did the planner pick the right nodes*,
+`report.py` answers *what did the run cost*. Both read the same
+test_runs ⋈ chat_runs join and the same suite JSONs, so the fetching, filtering
+and CLI live here rather than being kept in sync twice.
 
 Everything below the DB shim is pure and unit-testable.
 """
@@ -22,15 +22,13 @@ def fetch_rows(
     suite_names: list[str] | None, *, include_planner: bool = False
 ) -> list[dict]:
     """One dict per test_runs row joined with its chat_runs row, ordered by
-    (suite_name, suite_case_id, run created_at).
+    (suite_name, suite_case_id, created_at).
 
     `include_planner` pulls the whole planner envelope, which the goals report
-    needs to reach `accepted_goals`. The stats report leaves it off and takes
-    just the `token_usage` slice instead — the envelope carries every SSE event
-    and task result, so it is far the heaviest column in the table.
+    needs for `accepted_goals`. The stats report takes only the `token_usage`
+    slice — the envelope is far the heaviest column in the table.
     """
-    # imported here so the pure helpers stay importable without the backend's
-    # DB config (mirrors run_suites.record_test_runs)
+    # imported here so the pure helpers stay importable without the DB config
     import asyncio
 
     from sqlalchemy import select
@@ -50,9 +48,8 @@ def fetch_rows(
         ChatRunModel.duration_s,
         ChatRunModel.total_tokens,
         ChatRunModel.user_message,
-        # explicit -> instead of subscript: works on any PG version. Cached
-        # counts, the per-model split and cost_usd live only in the JSONB,
-        # never promoted to columns.
+        # explicit -> rather than subscript, for older PG. Cached counts, the
+        # per-model split and cost_usd live only in the JSONB.
         ChatRunModel.planner.op("->")("token_usage").label("token_usage"),
     ]
     if include_planner:
@@ -85,8 +82,7 @@ def fetch_rows(
 
 def latest_per_case(rows: list[dict]) -> list[dict]:
     """Keep only the most recent run of each (suite_name, suite_case_id).
-    Assumes rows are ordered by created_at within a case (as fetch_rows
-    returns them), so the last row wins."""
+    Assumes rows are ordered by created_at within a case, so the last wins."""
     latest: dict[tuple, dict] = {}
     for row in rows:
         latest[(row["suite_name"], row["suite_case_id"])] = row
@@ -105,9 +101,8 @@ def group_by_suite(rows: list[dict]) -> dict[str, list[dict]]:
 
 
 def load_suite_entries(suite_name: str) -> dict[int, dict]:
-    """{case_id: entry} from evals/suites/<suite_name>.json; {} when the file
-    is missing or malformed — reported cases then fall back to the recorded
-    user_message and show no difficulty/note."""
+    """{case_id: entry} from evals/suites/<suite_name>.json; {} when missing or
+    malformed, so cases fall back to the recorded user_message."""
     path = SUITES_DIR / f"{suite_name}.json"
     try:
         entries = json.loads(path.read_text())

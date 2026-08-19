@@ -40,7 +40,7 @@ What it does:
 5. Compares per-question cost of retrieving the top *k* chunks against just pasting the
    whole corpus into the prompt, cached and uncached.
 
-Chat rates come from [`config/pricing.py`](../../config/pricing.py). Embedding rates are
+Chat rates come from [`airglider/src/config.py`](../../airglider/src/config.py). Embedding rates are
 defined in the notebook, with the same staleness warning — the app does not bill
 embeddings today, so they have no home in `pricing.py` yet.
 
