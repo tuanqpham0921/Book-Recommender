@@ -23,6 +23,7 @@ from app.domains.books.filter_books import describe_bounds
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
 from db.schema import BookMetadataFilter, ExclusionBookFilter
+from db.stores import compile_sql, embedding_search_stmt
 from .dependents import ParsedDependents
 from .analyze_references import (
     IdealBookDescription,
@@ -291,6 +292,14 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         result. The store orders the whole table by distance and truncates at
         `limit`, so anything cut afterwards is cut from an already-capped 50 —
         which is how a page bound could leave two books to choose between.
+
+        Build, record, execute: `embedding_search_stmt` returns the statement
+        rather than running it, so it can be recorded before the store touches
+        it — the trace shows every narrowing that was actually applied. The
+        vector itself renders as `embed(search_text)` rather than 1024 floats;
+        `search_text` is not lost, it is this task's own `input` (see `@task`
+        in airglider) and `RecommendationOutput.search_text`, so the label
+        points at a value the record already holds twice.
         """
         # a nested @task (the AppWorkflow wrapper — the client itself is
         # tracing-free): its envelope, with the embedding spend promoted onto
@@ -300,9 +309,13 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         embedded = await self.get_embeddings([search_text])
         embedding = embedded.unwrap().embeddings[0]
 
-        rows = await self.store.search_by_embedding(
+        stmt = embedding_search_stmt(
             embedding, filters=filters, exclude_isbns=exclude_isbns, limit=limit
         )
+        self.add_details(
+            f"Similarity search: {compile_sql(stmt, embedding_as='embed(search_text)')}"
+        )
+        rows = await self.store.search_similar(stmt)
         return [Book.model_validate(row) for row in rows]
 
     @task

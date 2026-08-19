@@ -1,7 +1,8 @@
 from typing import List, Any, Dict
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import Select, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from config import BookConstraints
 from db.schema import BookMetadataFilter, BookModel
@@ -36,6 +37,63 @@ def metadata_predicates(model: type[BookModel], filters: BookMetadataFilter) -> 
     return predicates
 
 
+def embedding_search_stmt(
+    query_embedding: List[float],
+    filters: BookMetadataFilter | None = None,
+    exclude_isbns: List[str] | None = None,
+    similarity_threshold: float = BookConstraints.MIN_SIMILARITY,
+    limit: int = 50,
+) -> Select:
+    """The books nearest an embedding, narrowed to those worth ranking.
+
+    Pure and model-bound rather than a store method — like `metadata_predicates`,
+    but returned rather than applied, so a caller can record it (`compile_sql`)
+    before running it. That is the whole reason this is split out: the search
+    returns rows in cosine order, and no `DeferredBookQuery` reproduces that
+    order (see `RecommendationOutput`), so it can never be a deferred query
+    whose statement rides downstream on its own — recording it has to happen
+    here, at the one point something still holds it unexecuted.
+
+    Three narrowings, all optional, and all of them have to land *inside* this
+    statement rather than on its result: the search orders the whole table and
+    truncates at `limit`, so anything applied afterwards is applied to an
+    already-capped set.
+
+    - `similarity_threshold` is the floor. Without it this returns the top
+      `limit` rows however far away they are — the whole table, ordered and
+      truncated — so an ask with no near match answers with strangers.
+    - `filters` are the metadata bounds the recommend node parsed. An all-None
+      filter contributes no predicates and is a harmless no-op, unlike
+      `filter_query()` which refuses one: there narrowing is the node's whole
+      job, so a no-op would report a count read as filtered.
+    - `exclude_isbns` drops the books the ask already named. In SQL rather than
+      in the caller, so the excluded rows do not eat `limit` slots.
+
+    `embedding` is deferred with `raiseload=True`, matching `materialize_stmt`:
+    the vector is ~4KB per row and nothing downstream reads it (`to_dict()`
+    excludes it by default), so fetching it for 50 rows only to throw it away
+    is a wasted round trip.
+    """
+    embed_col = BookModel.embedding
+    # cosine similarity = 1 - cosine distance
+    similarity = 1 - embed_col.cosine_distance(query_embedding)
+    stmt = (
+        select(BookModel, similarity.label("similarity_score"))
+        # BookModel declares columns with plain Column(...), not Mapped[...],
+        # so pyright sees Column[Unknown] here instead of the QueryableAttribute
+        # `defer()`'s stub wants — same stub gap as `src.c.score` below.
+        .options(defer(embed_col, raiseload=True))  # type: ignore[reportArgumentType]
+        .where(embed_col.is_not(None), similarity >= similarity_threshold)
+        .order_by(text("similarity_score DESC"))
+        .limit(limit)
+    )
+    if filters:
+        stmt = stmt.where(*metadata_predicates(BookModel, filters))
+    if exclude_isbns:
+        stmt = stmt.where(BookModel.isbn13.notin_(exclude_isbns))
+    return stmt
+
+
 class BookStore(BaseStore[BookModel]):
     """SQLAlchemy-based book data access layer.
 
@@ -43,60 +101,28 @@ class BookStore(BaseStore[BookModel]):
     and executes statements (which needs the session). What can be derived
     from an already-built query — counting it, materializing it, pooling
     several — lives on `DeferredBookQuery` itself.
+
+    One exception: the embedding search is built by the module-level
+    `embedding_search_stmt` instead of a method here, so a caller can record
+    its SQL (`compile_sql`) before executing it — a `@task` on the store would
+    mean airglider imported into `db/`, which stays free of it on purpose.
+    `search_similar` is the execute half, taking the built statement the same
+    way `count`/`materialize` take a `DeferredBookQuery`.
     """
 
     def __init__(self, session: AsyncSession):
         super().__init__(session, BookModel)
 
-    async def search_by_embedding(
-        self,
-        query_embedding: List[float],
-        filters: BookMetadataFilter | None = None,
-        exclude_isbns: List[str] | None = None,
-        similarity_threshold: float = BookConstraints.MIN_SIMILARITY,
-        limit: int = 50,
-    ) -> List[Dict[str, Any]]:
-        """The books nearest an embedding, narrowed to those worth ranking.
+    async def search_similar(self, stmt: Select) -> List[Dict[str, Any]]:
+        """Run a statement built by `embedding_search_stmt` and shape the rows.
 
-        This is not a deferred query and cannot be one: it returns rows in
-        cosine order, and that order is the point — no `DeferredBookQuery`
-        reproduces it (see `RecommendationOutput`). So everything that would
-        otherwise narrow it downstream has to narrow it *here*, before the
-        `limit` truncates, or the cut lands on an already-capped 50.
-
-        Three narrowings, all optional:
-
-        - `similarity_threshold` is the floor. Without it this returns the top
-          `limit` rows however far away they are — the whole table, ordered and
-          truncated — so an ask with no near match answers with strangers.
-        - `filters` are the metadata bounds the recommend node parsed. An
-          all-None filter contributes no predicates and is a harmless no-op,
-          unlike `filter_query()` which refuses one: there narrowing is the
-          node's whole job, so a no-op would report a count read as filtered.
-        - `exclude_isbns` drops the books the ask already named. In SQL rather
-          than in the caller, so the excluded rows do not eat `limit` slots.
+        Row shaping — not just `.scalars()` — because the statement selects the
+        model plus a computed `similarity_score` column alongside it; that score
+        has no home on `BookModel` and is folded into the dict here instead.
         """
-        embed_col = self.model.embedding
-        # cosine similarity = 1 - cosine distance
-        similarity = 1 - embed_col.cosine_distance(query_embedding)
-        stmt = (
-            select(self.model, similarity.label("similarity_score"))
-            # .where(embed_col.is_not(None), similarity >= similarity_threshold)
-            .order_by(text("similarity_score DESC"))
-            .limit(limit)
-        )
-        if filters:
-            stmt = stmt.where(*metadata_predicates(self.model, filters))
-        if exclude_isbns:
-            stmt = stmt.where(self.model.isbn13.notin_(exclude_isbns))
-
-        # from db.stores.deferred_query import compile_sql
-        # print(compile_sql(stmt))
-        
         result = await self.execute_statement(stmt)
         rows = result.all()
 
-        # Convert to dicts and include similarity scores
         books_with_scores = []
         for row in rows:
             book_dict = row[0].to_dict()  # The book object

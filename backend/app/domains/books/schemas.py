@@ -65,7 +65,7 @@ class Book(BaseModel):
     thumbnail: str | None = None
     title_and_subtiles: str | None = None
 
-    # Not a column: `BookStore.search_by_embedding` attaches it, and it is the
+    # Not a column: `BookStore.search_similar` attaches it, and it is the
     # only record of how close a recommendation was — so "why these books" stays
     # answerable from the run log. None on a book that arrived another way.
     similarity_score: float | None = None

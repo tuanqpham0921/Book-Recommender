@@ -54,9 +54,10 @@ class BookConstraints:
     # candidate at all, as cosine similarity. Without a floor the vector search
     # returns its top N however far away they are — the whole table ordered,
     # truncated — so an ask with no near match comes back full of strangers.
-    # TODO: 0.7 is a first guess and has never been enforced; `similarity_score`
-    # is recorded on every recommended book in `chat_runs`, so tune it off that.
-    MIN_SIMILARITY = 0.7
+    # Deliberately permissive: enforced now (see `embedding_search_stmt`), and
+    # `similarity_score` is recorded on every recommended book in `chat_runs`,
+    # so tune this off the real distribution rather than off a guess.
+    MIN_SIMILARITY = 0.35
 
     MIN_LIMIT = 1
     MAX_LIMIT = 5

@@ -11,22 +11,44 @@ query from a search dimension (that needs the model) and execute a statement
 (that needs the session).
 """
 
+import re
 from typing import List
 
 from sqlalchemy import Select, func, intersect, select, union
 from sqlalchemy.orm import defer
 
+# A pgvector literal renders as every float in the vector: 43KB for the 1024
+# dims this catalog uses, against ~580 for the rest of the statement. Nothing
+# reads it, and dropping `literal_binds` to avoid it would take the bounds and
+# the isbn13s with it — those are the reason the SQL is rendered at all.
+#
+# 120 chars of digits and commas is far above any hand-written list literal and
+# far below a real vector, so this matches the vector and only the vector.
+_VECTOR_LITERAL = re.compile(r"'\[[-0-9.,e+ ]{120,}\]'")
 
-def compile_sql(stmt) -> str:
-    """Compile a SQLAlchemy statement to a readable SQL string."""
+
+def compile_sql(stmt, embedding_as: str = "embedding") -> str:
+    """Compile a SQLAlchemy statement to a readable SQL string.
+
+    Any vector literal collapses to `embedding_as`, because only the caller
+    knows what the vector was made from: the recommend node labels it
+    `embed(search_text)`, naming a value its own record already holds twice
+    (the task's `input.search_text`, and `RecommendationOutput.search_text`),
+    so the statement stays reproducible without carrying a third copy.
+
+    The default fires on no statement built today — no deferred query carries a
+    vector — and is here so one that starts to cannot silently write 43KB into
+    `chat_runs`.
+    """
     try:
         compiled = stmt.compile(
             compile_kwargs={"literal_binds": True, "render_postcompile": True}
         )
-        return str(compiled)
+        sql = str(compiled)
     except Exception:
         # fallback without literal binds
-        return str(stmt.compile())
+        sql = str(stmt.compile())
+    return _VECTOR_LITERAL.sub(embedding_as, sql)
 
 
 class DeferredBookQuery:

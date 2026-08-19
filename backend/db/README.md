@@ -11,9 +11,12 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `Base.metadata.create_all` is *not* how tables come to exist — which is why
   `index=True` flags on models do nothing (docs/backlog.md, Performance).
 - `stores/` — repository pattern; routes/workflows never touch sessions directly.
-  `base_store.py` (shared execute helpers), `book_store.py` (primary store:
-  embedding search plus the deferred-query API below), `chat_run_store.py`
-  (review queue, ordered least-reviewed-first), `feedback_store.py` (review upsert).
+  `base_store.py` (shared execute helpers), `book_store.py` (primary store: the
+  deferred-query API below, plus the module-level `embedding_search_stmt` — a
+  pure builder rather than a store method, so a caller can record its SQL
+  before running it; `BookStore.search_similar(stmt)` is the execute half),
+  `chat_run_store.py` (review queue, ordered least-reviewed-first),
+  `feedback_store.py` (review upsert).
 - **Deferred queries** (`deferred_query.py`). Retrieval nodes do not fetch rows:
   `BookStore.title_query()` builds a statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.

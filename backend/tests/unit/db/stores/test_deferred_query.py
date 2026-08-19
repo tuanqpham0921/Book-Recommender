@@ -15,9 +15,10 @@ are derived on `DeferredBookQuery` itself (`count_stmt` / `materialize_stmt` /
 from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy import select
 
 from db.schema import BookMetadataFilter, BookModel
-from db.stores import BookStore, DeferredBookQuery
+from db.stores import BookStore, DeferredBookQuery, compile_sql
 
 INJECTION_PAYLOAD = "x' OR 1=1 --"
 
@@ -158,3 +159,40 @@ class TestMaterializeStmt:
         )
         compiled = _compiled_sql(pooled.materialize_stmt(BookModel))
         assert "ORDER BY books.average_rating DESC NULLS LAST" in compiled
+
+
+class TestCompileSqlVectorElision:
+    """`compile_sql` renders every literal except a pgvector one, which would
+    otherwise be 1024 floats (~20KB) of a string nothing reads. See
+    `BookStore.embedding_search_stmt` for the real caller."""
+
+    def _vector_stmt(self):
+        embed_col = BookModel.embedding
+        similarity = 1 - embed_col.cosine_distance([0.01] * 1024)
+        return select(BookModel.isbn13, similarity.label("similarity_score")).where(
+            similarity >= 0.35
+        )
+
+    def test_the_vector_literal_is_replaced_by_the_label(self):
+        sql = compile_sql(self._vector_stmt(), embedding_as="embed(search_text)")
+        assert "embed(search_text)" in sql
+        assert "0.01" not in sql
+
+    def test_other_literals_in_the_same_statement_survive(self):
+        # this is what distinguishes elision from turning literal_binds off —
+        # everything worth reading stays, only the vector goes
+        sql = compile_sql(self._vector_stmt(), embedding_as="embed(search_text)")
+        assert "0.35" in sql
+
+    def test_default_label_is_embedding(self):
+        sql = compile_sql(self._vector_stmt())
+        assert "embedding" in sql
+
+    def test_a_statement_with_no_vector_is_unaffected(self):
+        # the guard must not fire on ordinary SQL — count_books/fetch_anchor_books
+        # never carry a vector and must render exactly as before
+        stmt = _title().count_stmt()
+        plain = str(
+            stmt.compile(compile_kwargs={"literal_binds": True, "render_postcompile": True})
+        )
+        assert compile_sql(stmt) == plain

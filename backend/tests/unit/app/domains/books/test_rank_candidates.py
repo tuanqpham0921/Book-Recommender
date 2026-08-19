@@ -6,7 +6,7 @@ module-level functions rather than methods (domains/README.md, executor
 rule 3). They are the two narrowings the node does to its own candidate pool,
 in the order it does them: what the ask ruled out, then which of the rest to
 show. The numeric bounds are not here because they are not in Python at all —
-they go into the search's WHERE (`BookStore.search_by_embedding`).
+they go into the search's WHERE (`embedding_search_stmt`).
 """
 
 import pytest
