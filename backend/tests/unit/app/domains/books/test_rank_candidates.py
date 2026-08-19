@@ -1,39 +1,93 @@
-"""The recommend node's pure halves — `keep_ranked` and `rank_candidates`.
+"""The recommend node's pure halves — `apply_exclusions` and `rank_candidates`.
 
 No workflow, no store, no LLM: candidates in similarity order go in, the
 recommendation list comes out. That directness is the reason both are
 module-level functions rather than methods (domains/README.md, executor
-rule 3). Between them sits the filter step, which is not pure — it runs the
-`Filter_Retrieval` node — so what is tested here is the pair of decisions
-either side of it: which candidates survived, and which of those to show.
+rule 3). They are the two narrowings the node does to its own candidate pool,
+in the order it does them: what the ask ruled out, then which of the rest to
+show. The numeric bounds are not here because they are not in Python at all —
+they go into the search's WHERE (`BookStore.search_by_embedding`).
 """
 
 import pytest
 
-from app.domains.books.analyze_recommend.executor import keep_ranked, rank_candidates
+from app.domains.books.analyze_recommend.executor import (
+    apply_exclusions,
+    rank_candidates,
+)
 from app.domains.books.schemas import Book
+from db.schema import ExclusionBookFilter
 
 
-def book(n: int, authors: str = "Someone Else") -> Book:
-    return Book(isbn13=f"{n:013d}", title=f"Book {n}", authors=authors)
+def book(n: int, authors: str = "Someone Else", **fields) -> Book:
+    return Book(isbn13=f"{n:013d}", title=f"Book {n}", authors=authors, **fields)
 
 
-class TestKeepRanked:
-    def test_keeps_similarity_order_not_the_survivors_order(self):
-        # the survivors come off a query, which ranks by rating rather than by
-        # closeness — reading them in that order would re-rank the answer
-        candidates = [book(n) for n in range(5)]
-        survivors = [candidates[3], candidates[1]]
-        assert keep_ranked(candidates, survivors) == [candidates[1], candidates[3]]
+class TestApplyExclusions:
+    def test_no_exclusion_passes_everything_through(self):
+        candidates = [book(n) for n in range(3)]
+        assert apply_exclusions(candidates, None) is candidates
 
-    def test_drops_candidates_that_did_not_clear_the_bounds(self):
-        candidates = [book(n) for n in range(4)]
-        assert keep_ranked(candidates, [candidates[2]]) == [candidates[2]]
+    def test_all_none_exclusion_is_a_no_op(self):
+        # the parse builds the object whenever the ask mentioned excluding
+        # anything at all, so an empty one has to mean "nothing excluded"
+        candidates = [book(n) for n in range(3)]
+        assert apply_exclusions(candidates, ExclusionBookFilter()) == candidates
 
-    def test_nothing_surviving_is_an_empty_list(self):
-        # the caller turns this into the "no book near the anchor fits" raise;
-        # the function itself has no opinion about it
-        assert keep_ranked([book(1), book(2)], []) == []
+    def test_drops_by_author_on_a_partial_name(self):
+        # the model writes what the user said ("Herbert"), not the column
+        herbert = book(1, authors="Frank Herbert")
+        other = book(2)
+        kept = apply_exclusions(
+            [herbert, other], ExclusionBookFilter(authors=["Herbert"])
+        )
+        assert kept == [other]
+
+    def test_drops_a_co_authored_row_the_other_way_round(self):
+        # excluding "Frank Herbert" has to catch "Frank Herbert, Brian Herbert"
+        collab = book(1, authors="Frank Herbert, Brian Herbert")
+        kept = apply_exclusions(
+            [collab, book(2)], ExclusionBookFilter(authors=["Frank Herbert"])
+        )
+        assert [b.isbn13 for b in kept] == [book(2).isbn13]
+
+    def test_matching_ignores_case(self):
+        kept = apply_exclusions(
+            [book(1, authors="Frank Herbert")],
+            ExclusionBookFilter(authors=["frank herbert"]),
+        )
+        assert kept == []
+
+    def test_drops_by_title_and_category_too(self):
+        by_title = book(1)
+        by_category = book(2, categories="Juvenile Fiction")
+        keep = book(3)
+        kept = apply_exclusions(
+            [by_title, by_category, keep],
+            ExclusionBookFilter(book_titles=["Book 1"], categories=["juvenile"]),
+        )
+        assert kept == [keep]
+
+    def test_a_book_missing_the_column_is_not_excluded(self):
+        # authors is nullable; a null is "unknown", not "matches everything"
+        unknown = book(1, authors=None)
+        assert apply_exclusions([unknown], ExclusionBookFilter(authors=["X"])) == [
+            unknown
+        ]
+
+    def test_similarity_order_survives(self):
+        candidates = [book(n, authors="Frank Herbert" if n % 2 else "Other")
+                      for n in range(6)]
+        kept = apply_exclusions(candidates, ExclusionBookFilter(authors=["Herbert"]))
+        assert [b.isbn13 for b in kept] == [candidates[n].isbn13 for n in (0, 2, 4)]
+
+    def test_excluding_everything_is_an_empty_list_not_a_raise(self):
+        # the node turns this into a reply saying so — it is an answer, and
+        # this function has no opinion about it
+        assert apply_exclusions(
+            [book(1, authors="Frank Herbert")],
+            ExclusionBookFilter(authors=["Herbert"]),
+        ) == []
 
 
 class TestRankCandidates:

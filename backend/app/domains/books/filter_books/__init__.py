@@ -1,7 +1,7 @@
 from app.domains.books.external import BookRequestContext
 from app.domains.node_spec import NodeSpec, NodeTier
 
-from .executor import FilterRetrievalExecutor
+from .executor import FilterRetrievalExecutor, describe_bounds
 from .labels import FilterRetrievalNodeTypeEnum
 from .schemas import FilterRetrieval
 from .external import FilterRetrievalInput, FilterRetrievalOutput
@@ -19,6 +19,9 @@ SPEC = NodeSpec(
 __all__ = [
     "SPEC",
     "FilterRetrievalExecutor",
+    # a pure renderer over `BookMetadataFilter`, not part of the node: the
+    # recommend slice parses its own bounds and needs the same sentence.
+    "describe_bounds",
     "FilterRetrievalNodeTypeEnum",
     "FilterRetrievalInput",
     "FilterRetrievalOutput",

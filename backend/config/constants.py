@@ -50,6 +50,14 @@ class BookConstraints:
     MIN_PUBLISHED_YEAR = 1876
     MAX_PUBLISHED_YEAR = 2019
 
+    # How close a book has to sit to the embedded description to count as a
+    # candidate at all, as cosine similarity. Without a floor the vector search
+    # returns its top N however far away they are — the whole table ordered,
+    # truncated — so an ask with no near match comes back full of strangers.
+    # TODO: 0.7 is a first guess and has never been enforced; `similarity_score`
+    # is recorded on every recommended book in `chat_runs`, so tune it off that.
+    MIN_SIMILARITY = 0.7
+
     MIN_LIMIT = 1
     MAX_LIMIT = 5
     default_limit = 3

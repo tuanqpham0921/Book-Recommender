@@ -102,30 +102,6 @@ class TestFilterQuery:
             _filtered()
 
 
-class TestIsbn13Query:
-    def test_selects_the_ids_it_was_given(self):
-        compiled = _compiled_sql(
-            BookStore(MagicMock()).isbn13_query(["9780441013593", "9780553293357"]).stmt
-        )
-        assert "books.isbn13 IN" in compiled
-        # no score to carry: the caller's list owns the ranking
-        assert "AS score" not in compiled
-        assert "LIMIT" not in compiled.upper()
-        assert "ORDER BY" not in compiled.upper()
-
-    def test_empty_list_is_rejected(self):
-        # an empty IN () matches nothing, which downstream reads as "filtered
-        # everything out" rather than "was asked about no books"
-        with pytest.raises(ValueError):
-            BookStore(MagicMock()).isbn13_query([])
-
-    def test_narrows_like_any_other_base_query(self):
-        pool = BookStore(MagicMock()).isbn13_query(["9780441013593"])
-        compiled = _compiled_sql(_filtered(pool, min_pages=300).stmt)
-        assert "books.isbn13 IN" in compiled
-        assert "books.num_pages >=" in compiled
-
-
 class TestCountStmt:
     def test_counts_over_a_cte_without_selecting_rows(self):
         compiled = _compiled_sql(_title().count_stmt()).upper()

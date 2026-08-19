@@ -40,12 +40,13 @@ class RecommendationOutput(BookRetrievalOutput):
     answerable against what was pointed at and what was embedded; they also feed
     the response generator.
 
-    `search_text` is not `args.semantic_input`: `args` stays as the argument
-    parser filled it — the user's own words — while `search_text` is the
-    assembled anchor prose plus those words, i.e. what the embedding actually
-    saw. `args` is declared here, typed as the schema this node parses, because
+    `search_text` is not `args.keywords`: `args` stays as the argument parser
+    filled it — the user's own words, plus the bounds and exclusions that never
+    reach an embedding at all — while `search_text` is the assembled anchor
+    prose plus those keywords, i.e. what the embedding actually saw. `args` is
+    declared here, typed as the schema this node parses, because
     `NodeWorkflowOutput` no longer carries an untyped one; `response_to_user`
-    reads `semantic_input` straight off it.
+    reads `keywords` straight off it.
     """
 
     args: RecommendationArgs | None = None

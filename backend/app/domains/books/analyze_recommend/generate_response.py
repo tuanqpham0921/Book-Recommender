@@ -33,21 +33,30 @@ MAX_RESPONSE_TOKENS = 600
 
 
 def summarize_references(
-    references: Iterable[Book], semantic_input: str | None, bounds: str | None = None
+    references: Iterable[Book],
+    keywords: Iterable[str],
+    bounds: str = "",
+    found: int = 0,
 ) -> dict[str, Any]:
     """The input half: what the user pointed at, and what they asked for on top.
 
     Only `title`, `authors` and `genre` are read off each book, which keeps
     descriptions and identifiers out of the reply.
 
-    `semantic_input` is the user's own phrase ("but darker"), not the embedded
-    anchor prose. That anchor is a 100-300 word book description; handing it to
-    a model asked for a friendly reply gets it paraphrased back at the user.
+    `keywords` are the user's own words ("darker"), not the embedded anchor
+    prose. That anchor is a 100-300 word book description; handing it to a
+    model asked for a friendly reply gets it paraphrased back at the user.
 
-    `bounds` is the other half of the decomposed ask ("under 300 pages"), which
-    every book on screen already satisfies — the filter step ran before the
-    picking. It is here so the reply can say so, since a constraint the user
-    stated and the answer never acknowledges reads as a constraint ignored.
+    `bounds` is the measurable half of the ask ("under 300 pages"), which every
+    book on screen already satisfies — those went into the search itself rather
+    than being applied to its result. It is here so the reply can say so, since
+    a constraint the user stated and the answer never acknowledges reads as a
+    constraint ignored.
+
+    `found` is how many candidates the search turned up in total. Paired with
+    the recommendation count it is the difference between "here are ten" and
+    "only these three exist" — and when it is 0 it is the whole story, which is
+    a reply this node writes rather than an error it raises.
 
     Editions collapse to one entry per title before anything is counted —
     otherwise the title repeats ("books like Dune and Dune") and its author
@@ -62,8 +71,9 @@ def summarize_references(
         "referenced_titles": [book.title for book in unique],
         "reference_authors": count_values(book.authors for book in unique),
         "reference_genres": count_values(book.genre for book in unique),
-        "asked_for": semantic_input,
+        "asked_for": ", ".join(keywords),
         "bounds": bounds,
+        "candidates_found": found,
     }
 
 
@@ -105,13 +115,27 @@ def render_summaries(
 
     bounds = input_summary.get("bounds")
     if bounds:
-        # phrased as already satisfied: the filter ran before the picking, so
-        # this is a fact about every book on screen, not an outstanding request
-        lines.append(f"- every book shown fits: {bounds}")
+        # in `input` rather than `output` because it is what was *asked*: the
+        # bounds went into the search itself, so every book below satisfies
+        # them, and if none do that is what the counts say instead
+        lines.append(f"- limited to: {bounds}")
 
     lines.append("")
     lines.append("output:")
-    lines.append(f"- {output_summary.get('num_books', 0)} books recommended")
+    num_books = output_summary.get("num_books", 0)
+    lines.append(f"- {num_books} books recommended")
+
+    # How big the pool was, whenever it is not simply the answer. Both
+    # directions matter to the reply: a pool of 3 means "these are all there
+    # are" rather than a shortlist, and a pool of 12 that recommended 0 means
+    # the search found books and the exclusions took them.
+    #
+    # Always stated when nothing was recommended, even at 0 — that is the one
+    # case where the reply is *about* the pool, and an omitted line would leave
+    # "found nothing" and "found some, kept none" indistinguishable.
+    found = input_summary.get("candidates_found", 0)
+    if found != num_books or not num_books:
+        lines.append(f"- {found} came close enough to consider")
 
     out_authors = output_summary.get("authors") or {}
     if out_authors:

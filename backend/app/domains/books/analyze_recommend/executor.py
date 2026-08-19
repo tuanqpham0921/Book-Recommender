@@ -16,15 +16,13 @@ How this slice is laid out (the reading rule):
 
 import logging
 
-from collections.abc import Sequence
-
 from clients.messages import AssistantMessage
 from common.prompts import basic_fill_schema_prompt
 from app.domains.books.base_workflow import BookWorkflow
-from app.domains.books.external import BookRetrievalOutput
-from app.domains.books.filter_books import FilterRetrievalExecutor, FilterRetrievalInput
+from app.domains.books.filter_books import describe_bounds
 from app.domains.books.schemas import Book
 from clients import OpenAIParserRequest
+from db.schema import BookMetadataFilter, ExclusionBookFilter
 from .dependents import ParsedDependents
 from .analyze_references import (
     IdealBookDescription,
@@ -51,8 +49,9 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
 
     Reads the user's own words, unlike `build_analysis_request` next door,
     which reads the documents the dependencies produced. What comes back is a
-    split rather than a fill: the semantic half stays here and is embedded, the
-    bounds half travels on to the filter node as text.
+    split rather than a fill, and the split is by where each part lands: the
+    keywords join the embedded text, the bounds become WHERE clauses on the
+    search, the exclusions are a predicate over what it returns.
     """
     if not query:
         raise ValueError("No query to parse arguments from")
@@ -77,15 +76,43 @@ def build_search_text(analyzed: str | None, user_input: str | None) -> str:
     return "\n\n".join(part for part in (analyzed, user_input) if part)
 
 
-def keep_ranked(candidates: list[Book], survivors: Sequence[Book]) -> list[Book]:
-    """The candidates that cleared the bounds, still in similarity order.
+def excluded_by(book: Book, exclude: ExclusionBookFilter) -> bool:
+    """Whether this book is one the ask ruled out by name.
 
-    The filter node hands back a query, and a query has no ranking — reading
-    its rows would re-order them by rating. So only the surviving ids are read
-    off it, and they select from the list the search already ranked.
+    Casefolded substring both ways: the model writes "Herbert" where the column
+    holds "Frank Herbert", and writes "Frank Herbert" where a co-authored row
+    holds "Frank Herbert, Brian Herbert". `authors`, `categories` and `title`
+    are each a single string on `Book`, so there is no list to walk.
     """
-    kept = {book.isbn13 for book in survivors}
-    return [book for book in candidates if book.isbn13 in kept]
+    fields = (
+        (exclude.authors, book.authors),
+        (exclude.categories, book.categories),
+        (exclude.book_titles, book.title),
+    )
+    return any(
+        any(term.casefold() in value.casefold() for term in terms if term)
+        for terms, value in fields
+        if terms and value
+    )
+
+
+def apply_exclusions(
+    candidates: list[Book], exclude: ExclusionBookFilter | None
+) -> list[Book]:
+    """Drop the candidates the ask ruled out, keeping similarity order.
+
+    In Python rather than in the search's WHERE, unlike the numeric bounds next
+    to it: these are names the model wrote from the user's phrasing, and a
+    forgiving substring match finds "Frank Herbert" from "Herbert" where SQL
+    equality would quietly exclude nothing at all.
+
+    Order survives because the list never leaves Python — which is the whole
+    reason this node stopped handing its pool to the filter node, whose query
+    would have come back ranked by rating.
+    """
+    if exclude is None:
+        return candidates
+    return [book for book in candidates if not excluded_by(book, exclude)]
 
 
 def rank_candidates(
@@ -147,19 +174,15 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
             reference_books += result.unwrap()
         self.result.references = reference_books
 
-        # 2. decompose the goal text into this node's two halves.
+        # 2. decompose the goal text into this node's three parts.
         # Two parsers, two inputs: the reference analyzer reads the documents
         # ("what is the anchor like"), this one reads the user's own words
-        # ("what did they ask for on top") — the twist and the bounds, neither
-        # of which the documents can carry.
-
-        # NOTE: we might not need this if we have the filter node reject
-        # like there is no filter constrainst in this nl query
-        # but then filter node will always run so maybe this does save tokens?
-        # parsed_args: RecommendationArgs = await self.run_llm_args_parse(
-        #     build_arg_parser_request(node_input.query)
-        # )
-        # self.result.args = parsed_args
+        # ("what did they ask for on top") — the twist, the bounds and the
+        # exclusions, none of which the documents can carry.
+        parsed_args: RecommendationArgs = await self.run_llm_args_parse(
+            build_arg_parser_request(node_input.query)
+        )
+        self.result.args = parsed_args
 
         # 3. fold the references into an ideal-book description
         analyzed = (
@@ -168,34 +191,41 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
         # 4. assemble what gets embedded; either half can be missing, and this
         # is where sufficiency is judged — analyze_references returning None is
-        # a missing input, an empty *sum* is a dead end
-        search_text = build_search_text(analyzed, node_input.query)
-        # kept apart from args.semantic_input on purpose — see RecommendationOutput
+        # a missing input, an empty *sum* is a dead end.
+        # The keywords rather than the raw goal text: "under 300 pages" in the
+        # vector can only blur it, and that bound is carried by `bounds` below.
+        search_text = build_search_text(analyzed, " ".join(parsed_args.keywords))
+        # kept apart from args.keywords on purpose — see RecommendationOutput
         self.result.search_text = search_text
         if not search_text:
-            raise ValueError(
-                "Nothing to search on: no references and no semantic input"
-            )
+            raise ValueError("Nothing to search on: no references and no keywords")
 
-        # 5. embed + search
+        # 5. embed + search, with the bounds inside the search rather than
+        # after it. The vector search does not select a subset — it orders the
+        # whole table and truncates — so a bound applied afterwards cuts an
+        # already-capped 50 and can leave two books. Applied here, the 50 that
+        # come back all fit.
+        bounds = describe_bounds(parsed_args.bounds) if parsed_args.bounds else ""
+        if bounds:
+            await self.sse_stream.send_ui_loading(f"limited to: {bounds}")
         result = await self.similarity_search(
-            search_text, exclude_isbns=[book.isbn13 for book in reference_books]
+            search_text,
+            exclude_isbns=[book.isbn13 for book in reference_books],
+            filters=parsed_args.bounds,
         )
         candidates = result.unwrap()
 
-        # 6. the bounds half, applied to the *pool* — while there is still a
-        # pool to choose from. Filtering after the ranking is what this node's
-        # own catalog entry sends Filter_Retrieval away from: it can only
-        # delete, so on ten ranked books it throws the ranking away and often
-        # answers with nothing.
-        # if parsed_args.filter_query:
-        #     candidates = await self.filter_candidates(
-        #         candidates, parsed_args.filter_query
-        #     )
-        
-        
-        # 7. rank — pure, no step
-        # only do it if we have enough books
+        # 6. the names the ask ruled out — pure, over the pool, and before the
+        # ranking rather than after it: an exclusion applied to ten chosen
+        # books deletes from the answer, applied here it only narrows what the
+        # answer is chosen from.
+        found = len(candidates)
+        candidates = apply_exclusions(candidates, parsed_args.exclude)
+        if found != len(candidates):
+            self.add_details(f"{len(candidates)} of {found} candidates not excluded")
+
+        # 7. rank — pure, no step. Only worth doing when there is a surplus to
+        # choose from; below that the candidates already *are* the answer.
         if len(candidates) > MAX_RECOMMENDED_BOOKS * 1.5:
             await self.sse_stream.send_ui_loading("selecting best books...")
             recommended_books = rank_candidates(candidates, reference_books)
@@ -205,12 +235,16 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         self.result.books = recommended_books
         self.result.num_books = len(recommended_books)
 
-        # 8. show, then tell
+        # 8. show, then tell — and tell even when there is nothing to show.
+        # This node is the turn's answer, so a search that came back empty is a
+        # sentence the user is owed ("nothing that short sits near those
+        # books"), not a raise: raising would surface as the generic failure
+        # message and say nothing about what was too tight.
         await self.stream_books(recommended_books)
-        await self.response_to_user(self.result)
+        await self.response_to_user(self.result, bounds=bounds, found=found)
 
         # 9. last, not before the reply: this node owns the answer, so a run
-        # that found books and then failed to say anything about them is not ok
+        # that searched and then failed to say anything about it is not ok
         self.finalize_result()
 
     @task
@@ -224,9 +258,9 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         `Workflow` — the payload is a string, no declared output type to carry.
 
         None when there is nothing to fold: the producer completed, the input
-        was missing (`ok=True`, empty payload). The user's own semantic_input
-        may still carry the search; the caller judges sufficiency where the
-        two halves meet.
+        was missing (`ok=True`, empty payload). The user's own keywords may
+        still carry the search; the caller judges sufficiency where the two
+        halves meet.
         """
         await self.sse_stream.send_ui_loading("analyzing books...")
 
@@ -245,8 +279,19 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
     @task
     async def similarity_search(
-        self, search_text: str, exclude_isbns: list[str], limit: int = 50
+        self,
+        search_text: str,
+        exclude_isbns: list[str],
+        filters: BookMetadataFilter | None = None,
+        limit: int = 50,
     ) -> list[Book]:
+        """The candidate pool: books near the embedded text that fit the bounds.
+
+        Every narrowing goes into the one statement rather than onto its
+        result. The store orders the whole table by distance and truncates at
+        `limit`, so anything cut afterwards is cut from an already-capped 50 —
+        which is how a page bound could leave two books to choose between.
+        """
         # a nested @task (the AppWorkflow wrapper — the client itself is
         # tracing-free): its envelope, with the embedding spend promoted onto
         # it, attaches under this one
@@ -255,78 +300,33 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         embedded = await self.get_embeddings([search_text])
         embedding = embedded.unwrap().embeddings[0]
 
-        # TODO: push exclude_isbns into search_by_embedding as a NOT IN — the
-        # references are what the user already named, so returning them is the
-        # one answer we know is wrong. Filtered here meanwhile, which shrinks
-        # the result set below `limit` instead of backfilling it.
-        rows = await self.store.search_by_embedding(embedding, limit=limit)
-        excluded = set(exclude_isbns)
-        books = [
-            Book.model_validate(row)
-            for row in rows
-            if row.get("isbn13") not in excluded
-        ]
-        return books
-
-    async def filter_candidates(
-        self, candidates: list[Book], filter_query: str
-    ) -> list[Book]:
-        """Put the candidate pool through the filter node and keep what clears.
-
-        The bounds travel as the words the ask used, not as a parsed filter
-        object: `Filter_Retrieval` parses its own arguments, so this node never
-        has to know what a `BookMetadataFilter` looks like, and the two schemas
-        stay free to move apart. That is also why the pool goes in as a query —
-        narrowing queries is what that node does.
-
-        Not a `@task`: the sub-workflow brings its own envelope, and wrapping it
-        in a second one would add a step that does nothing else. `unwrap()`
-        rather than reading the envelope, because a filter that could not run
-        leaves this node no way to honor the ask — recommending books that
-        ignore the bounds is worse than failing the goal.
-        """
-        pool = self.store.isbn13_query([book.isbn13 for book in candidates])
-        # NOTE: optimization point
-        # can just call the schema or build manually without calling Filteretrieval
-        # right now just use isbn13 and query so not too bad
-        node_input = FilterRetrievalInput(
-            query=filter_query,
-            anchors=[BookRetrievalOutput(num_books=len(candidates), query=pool)],
+        rows = await self.store.search_by_embedding(
+            embedding, filters=filters, exclude_isbns=exclude_isbns, limit=limit
         )
-        filtered = (
-            await FilterRetrievalExecutor(self.ctx, self.messages)(node_input)
-        ).unwrap()
-        if filtered.query is None:
-            # `query` is optional on the shape because the output is built
-            # empty; the filter node's `ok` is what makes it filled here, so
-            # this only fires if that contract changes underneath us.
-            raise ValueError(f"Filter node narrowed nothing for: {filter_query}")
-
-        # rows only to read their ids back onto the ranked list — the books
-        # themselves are the ones already in `candidates`
-        survivors = (
-            await self.preview_books(filtered.query, limit=len(candidates))
-        ).unwrap()
-        kept = keep_ranked(candidates, survivors)
-        self.add_details(
-            f"{len(kept)} of {len(candidates)} candidates fit: {filter_query}"
-        )
-        if not kept:
-            raise ValueError(f"No book near the anchor fits: {filter_query}")
-        return kept
+        return [Book.model_validate(row) for row in rows]
 
     @task
-    async def response_to_user(self, result: RecommendationOutput) -> None:
+    async def response_to_user(
+        self, result: RecommendationOutput, bounds: str = "", found: int = 0
+    ) -> None:
         """Write the note above the book cards, streamed as it is generated.
 
         The model gets two summaries and no book descriptions (see
         generate_response.py). The user's own phrasing comes off `result.args`;
         `result.search_text` is assembled anchor prose and is not sent.
+
+        `bounds` and `found` are the search's own account of itself, and they
+        are what let the reply be honest when it is thin: the bounds as words
+        the user will recognize, and how many candidates the search turned up
+        before the exclusions ran. Zero recommendations is a reply this writes
+        rather than an error — which is why they are passed in rather than read
+        off `result`, where a bound that excluded everything leaves no trace.
         """
         input_summary = summarize_references(
             result.references,
-            result.args.semantic_input if result.args else None,
-            result.args.filter_query if result.args else None,
+            result.args.keywords if result.args else [],
+            bounds=bounds,
+            found=found,
         )
         summary_text = render_summaries(input_summary, result.to_summary())
 
@@ -340,5 +340,10 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         )
 
     def finalize_result(self):
-        ok = self.result.args is not None and bool(self.result.books)
+        # ok means "the ask was parsed and answered", not "books were found".
+        # An empty catalog match is an answer this node writes — the same way
+        # `num_books == 0` is one for the filter node — so requiring `books`
+        # here would mark a correct "nothing that short is near those" as a
+        # failed goal. What is not ok is never getting as far as the reply.
+        ok = self.result.args is not None
         return super().finalize_result(ok=ok)

@@ -3,6 +3,7 @@ from typing import List, Any, Dict
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import BookConstraints
 from db.schema import BookMetadataFilter, BookModel
 from .base_store import BaseStore
 from .deferred_query import DeferredBookQuery
@@ -50,28 +51,48 @@ class BookStore(BaseStore[BookModel]):
     async def search_by_embedding(
         self,
         query_embedding: List[float],
-        similarity_threshold: float = 0.7,
+        filters: BookMetadataFilter | None = None,
+        exclude_isbns: List[str] | None = None,
+        similarity_threshold: float = BookConstraints.MIN_SIMILARITY,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
-        """Search books using embedding similarity.
+        """The books nearest an embedding, narrowed to those worth ranking.
 
-        Takes no `BooksFilter`: metadata narrowing is Filter_Retrieval's job in
-        the deferred pipeline, applied to the composed query rather than here.
+        This is not a deferred query and cannot be one: it returns rows in
+        cosine order, and that order is the point — no `DeferredBookQuery`
+        reproduces it (see `RecommendationOutput`). So everything that would
+        otherwise narrow it downstream has to narrow it *here*, before the
+        `limit` truncates, or the cut lands on an already-capped 50.
+
+        Three narrowings, all optional:
+
+        - `similarity_threshold` is the floor. Without it this returns the top
+          `limit` rows however far away they are — the whole table, ordered and
+          truncated — so an ask with no near match answers with strangers.
+        - `filters` are the metadata bounds the recommend node parsed. An
+          all-None filter contributes no predicates and is a harmless no-op,
+          unlike `filter_query()` which refuses one: there narrowing is the
+          node's whole job, so a no-op would report a count read as filtered.
+        - `exclude_isbns` drops the books the ask already named. In SQL rather
+          than in the caller, so the excluded rows do not eat `limit` slots.
         """
         embed_col = self.model.embedding
+        # cosine similarity = 1 - cosine distance
+        similarity = 1 - embed_col.cosine_distance(query_embedding)
         stmt = (
-            select(
-                self.model,
-                # cosine similarity = 1 - cosine distance
-                (1 - embed_col.cosine_distance(query_embedding)).label(
-                    "similarity_score"
-                ),
-            )
-            .where(embed_col.is_not(None))
+            select(self.model, similarity.label("similarity_score"))
+            # .where(embed_col.is_not(None), similarity >= similarity_threshold)
             .order_by(text("similarity_score DESC"))
             .limit(limit)
         )
+        if filters:
+            stmt = stmt.where(*metadata_predicates(self.model, filters))
+        if exclude_isbns:
+            stmt = stmt.where(self.model.isbn13.notin_(exclude_isbns))
 
+        # from db.stores.deferred_query import compile_sql
+        # print(compile_sql(stmt))
+        
         result = await self.execute_statement(stmt)
         rows = result.all()
 
@@ -102,21 +123,6 @@ class BookStore(BaseStore[BookModel]):
             )
         )
         return DeferredBookQuery(stmt, label="title")
-
-    def isbn13_query(self, isbns: List[str]) -> DeferredBookQuery:
-        """Build the "exactly these books" query — a membership set of ids.
-
-        The one dimension that is not a search: it exists so books already in
-        hand can be handed to something that narrows *queries*, which is how
-        the recommend node puts its candidate pool through the filter node.
-        Carries no score and no order — whoever assembled the list owns its
-        ranking, and reading it back off this query would lose it.
-        """
-        if not isbns:
-            raise ValueError("isbn13_query needs at least one isbn13")
-
-        stmt = select(self.model.isbn13).where(self.model.isbn13.in_(isbns))
-        return DeferredBookQuery(stmt, label="isbn13")
 
     def filter_query(
         self, base: DeferredBookQuery, filters: BookMetadataFilter

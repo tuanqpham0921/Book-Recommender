@@ -249,8 +249,16 @@ assumed, not restated, here.
    its anchor first). *Finalize*: `self.finalize_result()` last. Each slice
    overrides it to compute the node's **claim** — "did I fill in what I
    promised": find_by_title claims args-parsed-and-query-built (zero matches
-   is still ok), recommend claims args-parsed-and-books-chosen. Raise when the
+   is still ok), recommend claims args-parsed-and-answered. Raise when the
    node cannot proceed; never hand-set `ok=False` and return.
+
+   **An empty result is not a failure to claim.** Zero matches, zero survivors
+   and zero recommendations are all answers the node reports — the claim is
+   about the node doing its job, not about the catalog containing something.
+   For an analyze node that owns the turn's reply, the claim therefore ends at
+   *answered*: `Analyze_Recommend` writes "nothing that short sits near those
+   books" and finalizes ok, because raising would surface as the generic
+   failure message and tell the user nothing about what was too tight.
 3. **`@task` or `Workflow` everything async** — every DB round trip, LLM call
    and embedding is a step with its own duration, failure and spend. The
    ladder, smallest rung that fits:

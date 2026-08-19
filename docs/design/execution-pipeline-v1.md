@@ -89,26 +89,48 @@ can only shrink what the step it depends on found. An empty filter is refused at
 rather than passed through, because a no-op narrowing step reports a count the user reads
 as filtered.
 
-**`Analyze_Recommend` reaches the filter by delegation, not by a filter object
-(2026-08-17).** Case 62/64's expectation — bounds on a recommendation belong *in* the
-recommend node — is now implemented, and not by re-growing the `BooksFilter` field the
-taxonomy removed. The node's argument parse became a **decomposition**: `DecomposedAsk`
-splits the goal text into `semantic_input` (what the books should be like, embedded) and
-`filter_query` (what must be true of them, left as the words the ask used). When the
-second half is present the recommend executor runs `FilterRetrievalExecutor` as a
-sub-workflow over its candidate *pool* — the ~50 books the vector search returned, wrapped
-as a query by `BookStore.isbn13_query()` — and keeps the survivors in similarity order
-before ranking picks the ten it shows.
+**`Analyze_Recommend` applies its own bounds, inside its own search
+(2026-08-19).** Case 62/64's expectation — bounds on a recommendation belong *in* the
+recommend node — is implemented there rather than by delegating to `Filter_Retrieval`.
+The node's argument parse is a **decomposition** into three parts, split by where each
+one lands: `keywords` join the text that gets embedded, `bounds` (a `BookMetadataFilter`)
+become WHERE clauses on the vector search itself, and `exclude` (an `ExclusionBookFilter`
+— authors, titles, categories the ask ruled out by name) is a pure predicate over what
+comes back.
 
-Three things this buys over a `filters` field. The bounds are parsed by the node that
-applies them, so the two schemas never have to agree on a filter shape and no bound can be
-parsed here and quietly dropped. The narrowing happens *before* the choice rather than
-after it, which is the whole objection to a trailing `Filter_Retrieval`. And the tool
-catalog is unchanged — `RecommendationStrategy`'s docstring is still selection prose,
-because a class carries one docstring and `DecomposedAsk` (a subclass adding no fields)
-carries the parse-time instructions instead. Cost: an ask whose bounds exclude everything
-near the anchor fails the goal rather than answering, which is deliberate — the
-alternative is recommending books that ignore what was asked.
+The reason the bounds go *into* the search rather than onto its result is what
+`search_by_embedding` actually does: it does not select a subset, it orders the whole
+table by cosine distance and truncates at `limit`. A bound applied afterwards therefore
+cuts an already-capped 50, and "like Dune, under 300 pages" can be left with two books,
+because most Dune-adjacent books are long. Applied inside, all 50 fit and the ranking has
+a real pool to choose from. The exclusions stay in Python on purpose — they are names the
+model wrote from the user's phrasing, and a casefolded substring match finds "Frank
+Herbert" from "Herbert" where SQL equality would silently exclude nothing.
+
+This replaced a **delegation** (2026-08-17 – 2026-08-19) in which the parse produced a
+natural-language `filter_query` and the executor ran `FilterRetrievalExecutor` as a
+sub-workflow over its pool, wrapped as a query by `BookStore.isbn13_query()`. Three things
+went wrong with it. The ask was parsed twice, with nothing happening between the two calls
+— the filter node's parse read only what the recommend parse had written. The sub-workflow
+carried UI it should not have: sections are opened by the *task runner*, so the filter
+node's own `- N books left after: …` line and its preview cards landed inside the
+Recommendation section, ahead of the recommendations. And it still filtered a capped pool.
+`isbn13_query` and `keep_ranked` existed only to serve that hand-off and went with it.
+
+The property that survives unchanged, and the one the taxonomy actually rests on: the
+narrowing happens *before* the choice rather than after it, which is the whole objection to
+a trailing `Filter_Retrieval`. The tool catalog is also unchanged — `RecommendationStrategy`
+is fieldless and its docstring is still selection prose, while `RecommendationArgs` is an
+internal tool the planner never sees.
+
+**Cost, and a reversal.** Under the delegation, an ask whose bounds excluded everything
+near the anchor *failed the goal*. It no longer does: `Analyze_Recommend` is the turn's
+answer, so an empty match is a sentence it writes ("nothing that short sits near those
+books") and the node still finalizes `ok`. `ok` claims *parsed and answered*, not *books
+chosen* — the same way `num_books == 0` is a real answer for `Filter_Retrieval`. Raising
+there would surface as the generic failure message and tell the user nothing about which
+constraint was too tight. The reply is given the bounds in words and the pre-exclusion pool
+size so it can say which.
 
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often

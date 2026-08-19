@@ -178,9 +178,10 @@ is silent and looks identical to "no matches". A bounded surprise ("surprise me 
 short sci-fi") puts the bounds in `Retrieve_Random.filters`, so the pick is drawn from
 inside them rather than tested against them afterwards. This is the same
 search-within-bounds vs. delete-afterwards distinction `Analyze_Recommend` already draws —
-as of 2026-08-17 by decomposing its goal text into a `filter_query` and narrowing its
-candidate pool before it ranks (execution-pipeline-v1.md) — and it is convention only: nothing in the schema enforces it, so the golden test
-is what holds the planner to it.
+as of 2026-08-19 by parsing the bounds out of its own goal text and putting them in its
+vector search's WHERE, so the pool it ranks already fits (execution-pipeline-v1.md) — and
+it is convention only: nothing in the schema enforces it, so the golden test is what holds
+the planner to it.
 
 **Cost:** 345 catalog tokens on every request, and one more node the planner can confuse
 with `Analyze_Recommend` — the two are separated by whether the user expressed taste,

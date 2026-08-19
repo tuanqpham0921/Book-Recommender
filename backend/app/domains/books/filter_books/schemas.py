@@ -31,11 +31,10 @@ class FilterRetrieval(BaseRequest):
     an invented anchor. Do not use for genre, author, title or theme either —
     those are search subjects with their own retrieval nodes. And do not use to
     bound a recommendation: Analyze_Recommend reads the bounds out of its own
-    goal text and runs this same narrowing over its candidate pool *before* it
-    picks, so it answers with the closest books that already fit — leave the
-    bounds in that goal's description. A filter node after the fact can only
-    delete, which on a ranked recommendation throws the ranking away and often
-    leaves nothing.
+    goal text and applies them *inside* its search, so every book it considers
+    already fits — leave the bounds in that goal's description. A filter node
+    after the fact can only delete, which on a ranked recommendation throws the
+    ranking away and often leaves nothing.
 
     Constraints: at least one filter bound — an empty filter is a no-op and
     will be refused. Bounds are combined as AND. This node searches for nothing

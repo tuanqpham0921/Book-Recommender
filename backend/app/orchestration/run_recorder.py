@@ -104,8 +104,8 @@ async def record_chat_run(
     # it'll timeout not error (why?)
 
     try:
-        tracer_name = to_tracer(record)
-        save_file(tracer_name, record.id + "_tracer_name")
+        
+        user_id = request_context.user_message.id
         
         row = build_chat_run_row(
             session_id=request_context.session_id,
@@ -121,20 +121,23 @@ async def record_chat_run(
             # the DB row above keeps every token_usage as recorded, so a
             # genuinely free step still serializes cost_usd: 0.0 there.
 
-            save_file(
-                {
-                    "summary": record.to_summary(),
-                    "chat_run": strip_zero_token_usage(remove_empty_values(row)),
-                },
-                file_name=record.id + "_summary",
-            )
+            # save_file(
+            #     {
+            #         "summary": record.to_summary(),
+            #         "chat_run": strip_zero_token_usage(remove_empty_values(row)),
+            #     },
+            #     file_name=record.id + "_summary",
+            # )
 
             flat = to_serializable(record.flatten())
             flat = strip_zero_token_usage(remove_empty_values(flat))
             save_file(
                 flat,
-                file_name=record.id,
+                file_name=user_id,
             )
+            
+            tracer_name = to_tracer(record)
+            save_file(tracer_name, user_id + "_tracer_name")
 
             # save_file(messages, record.id, + "_record_messages")
 
