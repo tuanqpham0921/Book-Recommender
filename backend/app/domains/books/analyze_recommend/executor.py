@@ -262,24 +262,26 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         self.finalize_result()
         
     def check_artifacts(self, parsed_artifacts: ParsedDependents):
+        # currently we'll treat this as an error rather than retrying to
+        # recover. The two cases read the same from here but not from the
+        # trace, so the message names which one it was: anchors that
+        # matched nothing is a plan that ran correctly and found no books,
+        # anchors this node cannot read is a planner mis-usage.
         if parsed_artifacts.is_empty():
-            # currently we'll treat this as an error rather than retrying to
-            # recover. The two cases read the same from here but not from the
-            # trace, so the message names which one it was: anchors that
-            # matched nothing is a plan that ran correctly and found no books,
-            # anchors this node cannot read is a planner mis-usage.
-            if parsed_artifacts.empty:
-                raise RuntimeError(
-                    f"Every anchor came back empty: {parsed_artifacts.empty}. "
-                    f"Nothing to recommend from."
-                )
             raise RuntimeError(
                 f"No anchor books were passed in. Might be a planner mis-usage "
                 f"(unreadable anchors: {parsed_artifacts.unknown})."
             )
 
+        # case where where are zeros num books query
+        if parsed_artifacts.empty:
+            self.add_details(
+                f"artifacts contains zero books queries {len(parsed_artifacts.empty)}"
+            )
+
+        # documents there are unknowns
         if parsed_artifacts.unknown:
-            logger.warning(
+            self.add_details(
                 f"Ignoring anchors with neither rows nor a query: "
                 f"{parsed_artifacts.unknown}"
             )

@@ -17,6 +17,94 @@ debugging" → `docs/design/node-refusal-v1.md` (+ two backlog bullets under "No
 & refusal").
 
 -----
+
+imagine the shape of recommend if you make anchorless..
+you are welcoming the planner to basically dump all recommendations to here...
+
+ReferencesRetrievalsToolSchema:
+    titles: list[strs]
+    authors: list[strs] - you can configure this to co-authors
+
+RetrieveByTraitsToolSchema:
+    keywords
+
+ReRankToolSchema:
+    post_embedding_filters: [Bookfields]
+    post_embedding_filters: [Bookfields]
+    recommend_limit: int
+
+run(query=..., artifacts):
+    if --- compare book to book, then recommend shorter ---
+        if --- artifacts have compare already ---
+            check if we need to compare or retrieve
+        elif --- artifacts doesn't have it ---
+            get reference book/authors
+            compare get the winner ...
+            
+    if -- recommend similar thriller books by Frank hebert with 300 pages or more"
+        you do references is more complex
+        you have to do authors, then filter then make sure there are some for semantic search
+
+    elif --- simple recommend books like, or about genre ---
+        1. check if there are reference books
+        2. if there are references (titles or authors)
+            retrieve them
+                if retrieval fail, raise or hitl
+            if there are multiple titles
+                parse and check what you got or dont (llm or algo)
+
+        3. check if there are keywords
+        4. combine the reference books and the keywords
+            if none then return
+    elif --- children books, books in the 1990s, books by ... ---
+        1. check there is no title (since that's a direct look up)
+        2. metadata look up is just find top ones (1990s, or children)
+
+    if --- there's semantic search, so no just get by children, 1990s ---
+        6. build a ideal book description
+
+    ---- common op for recommend------------
+    7. perform the search
+    8. run rerank parser for post embedding search
+    9. rerank results
+    10. show and tell
+
+so don't try to colapse into analyze_recommend
+    we should make analyze recommend more clear that it's a similarity cosine search (which needs artifacts)
+    if you don't then you'll make the recommend node the planner
+tho this could work, since recommending books aren't too complicated
+    those if statments, are either llm router or algo, which has
+    to happen at run-time rather than pre-run
+
+and the argument if people do pick is that you are keeping it
+flat and let the llm decide before run. caching determinisitc plans
+are also similar to the ifs statements. Tho it can be more reliable
+with the ifs in the nested, that's the wiring in a static graph.
+
+you could have multiple versions of the recommend node each
+with a primary task, but this is similar to the caching idea
+
+it's also harder to know what is down stream in a nested thing
+testing is harder (or just different):
+you'll have to do
+mock
+    b1 <- go in here
+        mock (if not algo, then mock llm)
+            b11
+            b12 <- go in here
+    b2
+while the planner have its downside
+    with just 1 query you should be able to see the whole picture
+
+this can be for later, since you don't have eval for it
+and you'll need to see if this actually work, scale, and managable
+tho with the airglider more flushed out, I think it's definitely do-able
+
+basically everything above the common ops is what we have
+it's doing the routing before the search / rerank
+
+
+-----
 you want to cap embedding similarity to a threshold (0.7 for now)
 you don't want to always try to get 10 books
 because you could always get books but it would be no better than random recommend
