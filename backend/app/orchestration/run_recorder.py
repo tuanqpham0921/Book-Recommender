@@ -17,6 +17,7 @@ from common.utils import (
     remove_empty_values,
     strip_zero_token_usage,
 )
+from config import FilesLocationConstants
 from db.stores.chat_run_store import ChatRunStore
 from app.common.request_context import RequestContext
 from app.orchestration.triage import TriageWorkflow, TriageOutput
@@ -129,15 +130,14 @@ async def record_chat_run(
             #     file_name=record.id + "_summary",
             # )
 
+            user_dir = FilesLocationConstants.EXPORT_DIR / user_id
+
             flat = to_serializable(record.flatten())
             flat = strip_zero_token_usage(remove_empty_values(flat))
-            save_file(
-                flat,
-                file_name=user_id,
-            )
-            
+            save_file(flat, file_name="record", path=user_dir)
+
             tracer_name = to_tracer(record)
-            save_file(tracer_name, user_id + "_tracer_name")
+            save_file(tracer_name, file_name="tracer_name", path=user_dir)
 
             # save_file(messages, record.id, + "_record_messages")
 
