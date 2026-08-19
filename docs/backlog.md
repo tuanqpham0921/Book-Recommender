@@ -70,6 +70,34 @@ Shape-level planner questions live in
   record embedding ("title, page count, description …") answer "find books with 100 pages"
   without the structured filter path?
 
+## Node contracts & refusal (P2 — deferred 2026-08-19)
+
+Both items are written up in [design/node-refusal-v1.md](design/node-refusal-v1.md), with
+the deferral criteria and what would say it's time. They share one root: **a node handed
+work it cannot do has no way to say so** — only `ok=True` (I did the job) or a raise (the
+code broke).
+
+- **The args parser cannot decline.** `OpenAIParserRequest.to_payload`
+  (`clients/openai_requests.py`) pins `tool_choice` to the one tool model, so the parse is
+  mandatory: "give me a book about war" routed to `Retrieve_by_Title` yields
+  `title="war"` and an `ok=True` count. Proposal: let the parser *choose* the tool; a
+  declined parse becomes a refusal message and `ok=False` **with no runtime error**, which
+  travels back to the planner for a clear out-of-capability reply. This amends executor
+  rule 2 in `app/domains/README.md` ("never hand-set `ok=False` and return") — the amendment
+  is the point, not an oversight. Deferred: with 3 of 11 nodes registered (`guide.py`),
+  that query has no correct plan to find, so the mis-route is a catalog gap rather than a
+  routing-quality bug.
+- **`num_books == 0` is `ok=True`, which is right for the producer and wrong for the
+  consumer.** An empty match is a real answer the reply should state — but a 0-count query
+  composed into a downstream anchor is an OR branch that scans and returns nothing while
+  making the anchor look populated. **Partly fixed 2026-08-18**: `ParsedDependents`
+  (`app/domains/books/analyze_recommend/dependents.py`) sorts 0-count anchors into a
+  separate `empty` pile instead of pooling them, and the recommend executor raises when all
+  are empty. Remaining options — answer in the producing node, withhold empties in
+  `TaskRunnerWorkflow._dependency_outputs`, or skip a node whose dependencies are all
+  empty — interact with the missing generation node, so the last one is the one that
+  survives it.
+
 ## Correctness (P1 = ship-blocking, otherwise P2)
 
 - **~~P1 — `AnyStrategyRequest` union drift~~ — resolved 2026-08-10.** The hand-listed

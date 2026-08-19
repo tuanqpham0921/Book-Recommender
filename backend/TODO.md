@@ -10,6 +10,13 @@ golden-test/suite notes → `docs/eval-strategy.md`. Historical cleanup logs liv
 history (`git log -p -- backend/TODO.md`).
 
 ---
+
+Migrated 2026-08-19: "make the node args parse choose the tool → ok=False message back to
+the planner", the `num_books == 0` propagation bug, and "add more nodes before over
+debugging" → `docs/design/node-refusal-v1.md` (+ two backlog bullets under "Node contracts
+& refusal").
+
+-----
 you want to cap embedding similarity to a threshold (0.7 for now)
 you don't want to always try to get 10 books
 because you could always get books but it would be no better than random recommend

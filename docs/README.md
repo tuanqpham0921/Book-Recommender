@@ -15,6 +15,7 @@ here. Eval campaign outputs (reports, notes per run) stay in `backend/evals/resu
 | [design/planner-shape.md](design/planner-shape.md) | Decision record: capability nodes vs. entity + intent (accepted for V1), plus the open planner experiments |
 | [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md) | Design record (proposed): retrieve → filter → analyze → generate, and the three nodes it needs |
 | [design/human-in-the-loop.md](design/human-in-the-loop.md) | Design record (proposed): pause / persist / resume — candidate pause points and known blockers |
+| [design/node-refusal-v1.md](design/node-refusal-v1.md) | Design record (proposed, deferred): what a node does when it's handed work it can't do — refusal instead of a raise, and empty results reaching consumers |
 
 ## Conventions
 
