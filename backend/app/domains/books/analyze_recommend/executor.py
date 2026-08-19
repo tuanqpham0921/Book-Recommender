@@ -169,20 +169,15 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
         # 1. collect artifacts — the input contract selected them, interpreting
         # them is this node's own job
-
-        parsed_dependents = ParsedDependents.from_anchors(node_input.anchors)
-        self.add_details(f"Dependents: {parsed_dependents.to_summary()}")
-        if parsed_dependents.unknown:
-            logger.warning(
-                f"Ignoring anchors with neither rows nor a query: "
-                f"{parsed_dependents.unknown}"
-            )
+        parsed_artifacts = ParsedDependents.from_anchors(node_input.anchors)
+        self.add_details(f"artifacts: {parsed_artifacts.to_summary()}")
+        self.check_artifacts(parsed_artifacts)
 
         # rows a dependency already chose come through as-is; the rest of the
         # anchor is one composed query, run for rows here
-        reference_books = list(parsed_dependents.books)
-        if parsed_dependents.queries:
-            result = await self.fetch_anchor_books(parsed_dependents.queries)
+        reference_books = list(parsed_artifacts.books)
+        if parsed_artifacts.queries:
+            result = await self.fetch_anchor_books(parsed_artifacts.queries)
             reference_books += result.unwrap()
         self.result.references = reference_books
 
@@ -198,7 +193,7 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
 
         # 3. fold the references into an ideal-book description
         analyzed = (
-            await self.analyze_references(reference_books, parsed_dependents.reports)
+            await self.analyze_references(reference_books, parsed_artifacts.reports)
         ).unwrap()
 
         # 4. assemble what gets embedded; either half can be missing, and this
@@ -265,6 +260,29 @@ class RecommendBooksExecutor(BookWorkflow[RecommendationOutput]):
         # 9. last, not before the reply: this node owns the answer, so a run
         # that searched and then failed to say anything about it is not ok
         self.finalize_result()
+        
+    def check_artifacts(self, parsed_artifacts: ParsedDependents):
+        if parsed_artifacts.is_empty():
+            # currently we'll treat this as an error rather than retrying to
+            # recover. The two cases read the same from here but not from the
+            # trace, so the message names which one it was: anchors that
+            # matched nothing is a plan that ran correctly and found no books,
+            # anchors this node cannot read is a planner mis-usage.
+            if parsed_artifacts.empty:
+                raise RuntimeError(
+                    f"Every anchor came back empty: {parsed_artifacts.empty}. "
+                    f"Nothing to recommend from."
+                )
+            raise RuntimeError(
+                f"No anchor books were passed in. Might be a planner mis-usage "
+                f"(unreadable anchors: {parsed_artifacts.unknown})."
+            )
+
+        if parsed_artifacts.unknown:
+            logger.warning(
+                f"Ignoring anchors with neither rows nor a query: "
+                f"{parsed_artifacts.unknown}"
+            )
 
     @task
     async def analyze_references(
