@@ -7,11 +7,17 @@ here: the slice stays importable, but the planner never sees it and
 docs/design/node-taxonomy-v1.md.
 """
 
-from app.domains.books import analyze_recommend, filter_books, find_by_title
+from app.domains.books import (
+    analyze_recommend,
+    filter_books,
+    find_by_author,
+    find_by_title,
+)
 from app.domains.node_spec import NodeSpec
 
 BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_title.SPEC,
+    find_by_author.SPEC,
     filter_books.SPEC,
     analyze_recommend.SPEC,
 )

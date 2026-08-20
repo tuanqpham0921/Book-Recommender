@@ -150,6 +150,34 @@ class BookStore(BaseStore[BookModel]):
         )
         return DeferredBookQuery(stmt, label="title")
 
+    def author_query(
+        self, author: str, similarity_threshold: float = 0.7
+    ) -> DeferredBookQuery:
+        """Build the author search without running it — same shape as
+        `title_query`: isbn13 plus the fuzzy score, no ORDER BY and no LIMIT,
+        so the result composes into a CTE.
+
+        Matched as a substring rather than by equality, and scored with
+        `word_similarity` rather than `similarity`, because `books.authors` is
+        one semicolon-delimited credit string per book
+        ("Brian Herbert;Kevin J. Anderson"). Whole-string similarity against a
+        two-name credit scores a solo author low enough to lose them;
+        `word_similarity` scores the name against the best-matching extent of
+        the credit, so a co-credited book still surfaces on either author's
+        bibliography.
+        """
+        stmt = select(
+            self.model.isbn13,
+            func.word_similarity(author, self.model.authors).label("score"),
+        ).where(
+            or_(
+                self.model.authors.ilike(f"%{author}%"),
+                func.word_similarity(author, self.model.authors)
+                > similarity_threshold,
+            )
+        )
+        return DeferredBookQuery(stmt, label="author")
+
     def filter_query(
         self, base: DeferredBookQuery, filters: BookMetadataFilter
     ) -> DeferredBookQuery:

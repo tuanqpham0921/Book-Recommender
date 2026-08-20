@@ -1,7 +1,7 @@
 # Execution pipeline: retrieve → filter → analyze → generate (design record)
 
 **Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
-(2026-08-04) on `minimal_end_to_end_v1`, for the two nodes registered there; the combine
+(2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there; the combine
 tier's *schemas* exist with no executors, and there is no generation node.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once

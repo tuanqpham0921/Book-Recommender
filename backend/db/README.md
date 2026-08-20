@@ -18,7 +18,7 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `chat_run_store.py` (review queue, ordered least-reviewed-first),
   `feedback_store.py` (review upsert).
 - **Deferred queries** (`deferred_query.py`). Retrieval nodes do not fetch rows:
-  `BookStore.title_query()` builds a statement, `count()` runs only a `COUNT`
+  `BookStore.title_query()` / `author_query()` build a statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
   the store** (they need the model and the session — `filter_query()` is on that
