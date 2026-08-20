@@ -9,13 +9,13 @@ from sse_starlette.sse import EventSourceResponse
 from starlette.background import BackgroundTask
 
 from app.api.schemas import ChatIn
-from clients.messages import UserMessage
+from app.common.messages import UserMessage
 from app.orchestration.orchestrator import Orchestrator
 from app.api.dependencies import (
     get_request_context_factory,
     get_orchestrator,
 )
-from app.common.request_context import RequestContext
+from app.orchestration.request_context import RequestContext
 
 logger = logging.getLogger(__name__)
 

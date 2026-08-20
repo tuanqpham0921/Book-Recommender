@@ -1,8 +1,7 @@
 # Execution pipeline: retrieve → filter → analyze → generate (design record)
 
-**Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
-(2026-08-04) on `minimal_end_to_end_v1`, for the two nodes registered there; the combine
-tier's *schemas* exist with no executors, and there is no generation node.
+**Date:** 2026-07-24 · **Status:** partly implemented — the combine tier's *schemas* are
+registered; no executors, no counts-only retrieval, no generation node.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
 [roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
@@ -72,65 +71,9 @@ Built as **two** nodes rather than the one this record originally sketched, beca
 | `Combine_Intersect` | `IntersectRetrievals` | AND — keep books in *every* input | ≥ 2 | no |
 | `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 | **yes, required** |
 
-All three sit in their own catalog section (`NodeTier.COMBINE`) and consume prior task
-output only — none of them runs a lookup of its own.
-
-**`Filter_Retrieval` is built and registered (2026-08-17).** It is a vertical slice like
-every other node now — `app/domains/books/filter_books/`, on the single-call
-`find_by_title/` template — rather than a schema in a shared `request_schemas.py`; the two
-`Combine_*` nodes are still parked. One line of the original sketch did not survive
-counts-first: "neither queries the database" was written when a filter would delete from a
-materialized list. The executor instead pools its anchors' deferred queries and hands them
-to `BookStore.filter_query()`, which ANDs the `BookMetadataFilter` bounds onto that query;
-the node then counts the narrowed set. So the narrowing happens in SQL over the *whole*
-upstream match, and what travels downstream is the narrowed query rather than a shortened
-list. What the sketch was actually drawing still holds — the node searches for nothing and
-can only shrink what the step it depends on found. An empty filter is refused at the store
-rather than passed through, because a no-op narrowing step reports a count the user reads
-as filtered.
-
-**`Analyze_Recommend` applies its own bounds, inside its own search
-(2026-08-19).** Case 62/64's expectation — bounds on a recommendation belong *in* the
-recommend node — is implemented there rather than by delegating to `Filter_Retrieval`.
-The node's argument parse is a **decomposition** into three parts, split by where each
-one lands: `keywords` join the text that gets embedded, `bounds` (a `BookMetadataFilter`)
-become WHERE clauses on the vector search itself, and `exclude` (an `ExclusionBookFilter`
-— authors, titles, categories the ask ruled out by name) is a pure predicate over what
-comes back.
-
-The reason the bounds go *into* the search rather than onto its result is what
-`search_by_embedding` actually does: it does not select a subset, it orders the whole
-table by cosine distance and truncates at `limit`. A bound applied afterwards therefore
-cuts an already-capped 50, and "like Dune, under 300 pages" can be left with two books,
-because most Dune-adjacent books are long. Applied inside, all 50 fit and the ranking has
-a real pool to choose from. The exclusions stay in Python on purpose — they are names the
-model wrote from the user's phrasing, and a casefolded substring match finds "Frank
-Herbert" from "Herbert" where SQL equality would silently exclude nothing.
-
-This replaced a **delegation** (2026-08-17 – 2026-08-19) in which the parse produced a
-natural-language `filter_query` and the executor ran `FilterRetrievalExecutor` as a
-sub-workflow over its pool, wrapped as a query by `BookStore.isbn13_query()`. Three things
-went wrong with it. The ask was parsed twice, with nothing happening between the two calls
-— the filter node's parse read only what the recommend parse had written. The sub-workflow
-carried UI it should not have: sections are opened by the *task runner*, so the filter
-node's own `- N books left after: …` line and its preview cards landed inside the
-Recommendation section, ahead of the recommendations. And it still filtered a capped pool.
-`isbn13_query` and `keep_ranked` existed only to serve that hand-off and went with it.
-
-The property that survives unchanged, and the one the taxonomy actually rests on: the
-narrowing happens *before* the choice rather than after it, which is the whole objection to
-a trailing `Filter_Retrieval`. The tool catalog is also unchanged — `RecommendationStrategy`
-is fieldless and its docstring is still selection prose, while `RecommendationArgs` is an
-internal tool the planner never sees.
-
-**Cost, and a reversal.** Under the delegation, an ask whose bounds excluded everything
-near the anchor *failed the goal*. It no longer does: `Analyze_Recommend` is the turn's
-answer, so an empty match is a sentence it writes ("nothing that short sits near those
-books") and the node still finalizes `ok`. `ok` claims *parsed and answered*, not *books
-chosen* — the same way `num_books == 0` is a real answer for `Filter_Retrieval`. Raising
-there would surface as the generic failure message and tell the user nothing about which
-constraint was too tight. The reply is given the bounds in words and the pre-exclusion pool
-size so it can say which.
+Both live in `app/domains/books/schemas/request_schemas.py`, sit in their own
+`CATALOG_TIERS` section, and consume prior task output only — neither queries the
+database.
 
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
@@ -187,12 +130,7 @@ now four nodes — traded for one unambiguous home per operation.
 these nodes consume task output without analyzing it. The planner's dependency remapping
 and topological sort gate on `DependentRequest`.
 
-**Known limitation, plumbing now exists (2026-08-04):** `compose(queries, op="and")` pushes
-the predicate into SQL as an `INTERSECT` over CTEs, which is what the paragraph below asks
-for. The `Combine_Intersect` executor still has to be written, and the node is not
-registered on `minimal_end_to_end_v1`. Original statement of the problem:
-
-`Combine_Intersect` intersects *materialized* result sets,
+**Known limitation, unresolved:** `Combine_Intersect` intersects *materialized* result sets,
 and retrieval today returns a `limit`-capped list (default 3). Intersecting two capped
 lists is usually empty — "fantasy books by Sanderson" would intersect a 3-book author page
 against a 3-book genre page and return nothing. The node is semantically right and
@@ -209,22 +147,7 @@ open `Analyze_Compare` question in
 pending exactly this node, and the "retrieve ×2 → analyze ×2 → compare" plan shape cannot
 be evaluated until per-book analysis exists.
 
-### Generation node — **removed 2026-08-08**
-
-> **Status: reverted.** `generation_node.py`, `PlanJaneOutput.generation_nodes` and the
-> tests are deleted; recover them from git history if this is revisited. The section
-> below is kept as the record of what was decided and why, since the reasoning (a fixed
-> stage costs no catalog tokens and cannot be misrouted; every sink is the attachment
-> point; 160 goldens would have to carry it as a goal) is what any second attempt should
-> start from. What the plan renders today is goals only.
->
-> The generic hook it used — `extra_nodes` on `get_goals_mermaid_diagram` /
-> `get_parsed_mermaid_diagram` — was removed on 2026-08-10, along with
-> `get_parsed_mermaid_diagram` itself: PlanJane is now the only thing in the app that
-> renders a diagram, and the parsed-arguments one had no live caller. A future
-> planner-attached node needs no hook to replace it, since the goal diagram builds a
-> `list[MermaidBox]` — appending one more box is the seam. See
-> `app/domains/planjane/dial/`.
+### Generation node
 
 Owns the final answer. Sketched fields: the **portion of the query** it is answering
 (`str`), plus the upstream outputs it renders. Every retrieval and analyze node just
@@ -262,52 +185,13 @@ exactly one sink, so the two agree except on compound messages.
   expectations describe the old world. They need re-deciding, not just re-running.
 - ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
   stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.
-- ~~Does the CTE composition live in the executors or in `db/stores/book_store.py`?~~
-  Resolved 2026-08-04 — **the store layer**. `db/stores/deferred_query.py` holds the
-  carrier (`DeferredBookQuery`: a SELECT of isbn13 plus an optional `score`, with no LIMIT
-  and no ORDER BY — the two invariants that make it composable), and `db/stores/utils.py`
-  holds `build_title_query` / `build_count` / `compose` / `build_materialize`. Executors
-  pass the object around and never write SQLAlchemy; otherwise every combine node grows
-  its own copy of the composition rules.
-  - **Revised 2026-08-17 — `utils.py` is gone; the derivations moved onto the carrier.**
-    A count travelled executor → workflow helper → store method → builder function —
-    two of those hops were pure plumbing. Now everything derivable from a built query
-    is a method on `DeferredBookQuery` (`count_stmt()`, `materialize_stmt()`,
-    `compose()`, which returns a wrapped query rather than a bare statement), and
-    `BookStore` keeps only what a derivation can't do: build from a dimension
-    (needs the model) and execute (needs the session). Executors still never write
-    SQLAlchemy — the 2026-08-04 point stands, one file smaller.
-- ~~Does retrieval-returns-counts change the retrieval **output contracts**?~~ Resolved
-  2026-08-04 — yes, minimally. `BookRetrievalOutput` (`app/domains/books/schemas.py`) gains
-  `num_books` (promoted off `FindByTitleOutput`, since every retrieval and combine node now
-  reports one), `query_sql` (persisted, readable), and `query` (the carrier,
-  `exclude=True`). `books` stays and stays empty until something materializes, so
-  `num_books` is the size of the match and `len(books)` the size of the fetch.
-  **The `exclude=True` is load-bearing:** `to_serializable` skips excluded fields but does
-  walk `__pydantic_private__`, so a statement stashed as a private attr instead would reach
-  the JSONB insert in `record_chat_run` and break it.
-  - **Revised 2026-08-17 — `books` is gone from `BookRetrievalOutput` entirely.** "Stays and
-    stays empty" did not survive contact: `BookWorkflow.preflight()` returned the count and a
-    sample together, so every retrieval node had a few rows in hand and a field to put them
-    in, and `num_books` vs `len(books)` was the only thing marking them as a preview rather
-    than an answer. `preflight` is now split — `count_books()` stamps `query`/`query_sql`/
-    `num_books` and fetches nothing; `preview_books()` is a `@task` returning rows the caller
-    streams and drops — and the output shape carries no rows at all, so composing against
-    `query` is the only thing a downstream node *can* do. A node that genuinely chooses rows
-    declares its own field for them (`RecommendationOutput.books`), which reads as the
-    different claim it is. Cost: a node wanting both a count and cards pays two round trips
-    instead of one. The store-level halves of the old move went with it (also 2026-08-17):
-    `BookStore.preview()` / `build_preview` (the one-round-trip `(total, sample)`) and the
-    row-fetching `search_by_title` are deleted, so `count()` and `materialize()` are the
-    only ways a deferred query meets the database.
+- Does the CTE composition live in the executors or in `db/stores/book_store.py`? The
+  store currently exposes `search_by_filters` / `search_by_book_filter` / `search_by_title`
+  / `search_by_embedding`, all of which materialize rows.
+- Does retrieval-returns-counts change the retrieval **output contracts** in
+  `app/domains/books/schemas/output_schemas.py` (today they carry `BookSummary` lists)?
 - How does a mock executor represent "a query I have not run yet" so this can be tested
-  before real executors exist? **Still open** — a mock leaves `query` as `None` today, and
-  the terminal node then materializes nothing rather than falling back to `books`.
-- **New, from building it:** `compose()` drops `score`, because a per-dimension similarity
-  score means nothing across dimensions. So a pooled query ranks by rating, and a small
-  `limit` on the pool can rank the actual anchor below its own sequels — "Dune" comes third
-  behind two better-rated books in the Dune+Neuromancer pool. Carrying `max(score)` through
-  the union would fix it; not built.
+  before real executors exist?
 
 ## Before building this
 

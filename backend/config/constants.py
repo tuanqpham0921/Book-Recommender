@@ -16,6 +16,10 @@ class AppConfig:
 class OpenAIConstants:
     MAX_TOKENS = 100_000
 
+class DatabaseConstants:
+    """Database constants."""
+    SCHEMA = "public"
+
 class FilesLocationConstants:
     """Repository paths resolved from the backend package root."""
 
@@ -39,6 +43,40 @@ class FilesLocationConstants:
     
     LOG_DIR = PROJECT_ROOT / "logs"
 
+class BookGuides:
+    """Book guides constants."""
+    CLASSICAL_YEAR    = "before 1900"
+    EARLY_MODERN_YEAR = "between 1900 and 1950"
+    HISTORICAL_YEAR   = "between 1950 and 2000"
+    MODERN_YEAR       = "between 2000 and 2015"
+    RECENT_YEAR       = "after 2016 to present"   
+    
+    RATING_POOR        = "less than 2.0"
+    RATING_BELOW_AVG   = "between 2.0 and 3.0"
+    RATING_AVERAGE     = "between 3.0 and 4.0"
+    RATING_GOOD        = "between 4.0 and 4.5"
+    RATING_EXCELLENT   = "more than 4.5"
+    
+    SHORT_BOOK       = "less than 150 pages"
+    MEDIUM_BOOK      = "between 150 and 300 pages" 
+    LONG_BOOK        = "betwen 300 and 500 pages"
+    VERY_LONG_BOOK   = "more than 500 pages"
+    
+    def __str__(self):
+        """Return string representation of all constraints."""
+        result = "BookGuides:\n"
+
+        # Get all class attributes that are constants (uppercase or constraint names)
+        constraints = {
+            name: value for name, value in self.__class__.__dict__.items()
+            if not name.startswith('_') and not callable(value)
+        }
+
+        for attr_name, attr_value in constraints.items():
+            result += f"  {attr_name} = {attr_value}\n"
+
+        return result
+
 class BookConstraints:
     """Domain constraints for book data."""
     MIN_PAGE_COUNT = 4
@@ -49,15 +87,6 @@ class BookConstraints:
     
     MIN_PUBLISHED_YEAR = 1876
     MAX_PUBLISHED_YEAR = 2019
-
-    # How close a book has to sit to the embedded description to count as a
-    # candidate at all, as cosine similarity. Without a floor the vector search
-    # returns its top N however far away they are — the whole table ordered,
-    # truncated — so an ask with no near match comes back full of strangers.
-    # Deliberately permissive: enforced now (see `embedding_search_stmt`), and
-    # `similarity_score` is recorded on every recommended book in `chat_runs`,
-    # so tune this off the real distribution rather than off a guess.
-    MIN_SIMILARITY = 0.35
 
     MIN_LIMIT = 1
     MAX_LIMIT = 5
@@ -75,5 +104,13 @@ class BookConstraints:
         
         for attr_name, attr_value in constraints.items():
             result += f"  {attr_name} = {attr_value}\n"
-
+            
         return result
+
+# TODO: these might need to be moved to the settings file
+# things that are where they are right now are mostly for testing and development
+class IngestionConstants:
+    """Constants for ingestion."""
+    APPROXIMATE_LOAD_LIMIT = 5000
+    BATCH_SIZE = 10
+    TESTING_LIMIT = 100

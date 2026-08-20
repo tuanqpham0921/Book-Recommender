@@ -93,21 +93,16 @@ async def get_request_context_factory(
     session_factory=Depends(get_sqlalchemy_session_factory),
 ):
     """Factory to create request contexts with runtime arguments."""
-    from clients.messages import UserMessage
-    from app.common.request_context import RequestContext
+    from app.common.messages import UserMessage
+    from app.orchestration.request_context import RequestContext
 
     async def create_context(session_id: str, user_message: UserMessage):
-        # The *widest* context, always — this runs before there is a plan, so
-        # it cannot know which nodes will run, and wiring per-node views here
-        # would make this module import every slice. The task runner narrows
-        # it at dispatch, via NodeSpec.context.
         return RequestContext(
             app_env=app_env,
             session_id=session_id,
             user_message=user_message,
             llm_client=llm_client,
-            # keyed by class; a domain's context narrows to its own store
-            stores={BookStore: book_store},
+            book_store=book_store,
             sse_stream=sse_stream,
             session_factory=session_factory,
         )

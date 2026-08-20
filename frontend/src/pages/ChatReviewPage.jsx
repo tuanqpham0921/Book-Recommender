@@ -248,11 +248,9 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
     const [expanded, setExpanded] = useState(false)
     const [feedback, setFeedback] = useState(null)
     const diagram = run.planner?.output?.diagram
-    // There used to be a second diagram here — the same graph with each box
-    // carrying the arguments the parser filled in. The backend retired it when
-    // PlanJane became the only thing that renders a diagram, so nothing writes
-    // `parsed_diagram` any more. (It never showed on this page regardless: it
-    // was written onto the task-runner envelope, and this read the planner's.)
+    // same graph as `diagram`, but each box carries the arguments the parser
+    // filled in; absent on runs recorded before the argument parser existed
+    const parsedDiagram = run.planner?.output?.parsed_diagram
     const parseResult = run.planner?.output?.parse_result
     const errorDetail = run.planner?.runtime_error
     // cached is a subset of prompt tokens; runs recorded before the cached
@@ -395,6 +393,17 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                             <Suspense fallback={<div className="text-[var(--text-muted)] p-2">Loading diagram...</div>}>
                                 <div className="border border-[var(--border-light)] rounded p-2 mt-1">
                                     <MermaidDiagram chart={diagram} className="w-full" />
+                                </div>
+                            </Suspense>
+                        </details>
+                    )}
+
+                    {parsedDiagram && (
+                        <details className="mb-3" open>
+                            <summary className="cursor-pointer text-[var(--text-hover)] font-semibold">Parsed arguments diagram</summary>
+                            <Suspense fallback={<div className="text-[var(--text-muted)] p-2">Loading diagram...</div>}>
+                                <div className="border border-[var(--border-light)] rounded p-2 mt-1">
+                                    <MermaidDiagram chart={parsedDiagram} className="w-full" />
                                 </div>
                             </Suspense>
                         </details>

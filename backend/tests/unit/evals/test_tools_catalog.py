@@ -73,14 +73,14 @@ class TestRenderCatalogEntry:
         assert out.splitlines()[2] == ""
 
     def test_the_real_renderer_still_produces_this_shape(self):
-        # guards the duplication: if Registry.format_catalog changes how it
+        # guards the duplication: if format_node_type_catalog changes how it
         # indents, per-tool token counts silently stop matching the prompt
-        from app.registry import REGISTRY, class_docstring
+        from app.registry import NODE_TYPE_TO_CLS, class_docstring, format_node_type_catalog
 
-        name = REGISTRY.node_types[0]
-        entry = render_catalog_entry(name, class_docstring(REGISTRY.request(name)))
+        name = next(iter(NODE_TYPE_TO_CLS))
+        entry = render_catalog_entry(name, class_docstring(NODE_TYPE_TO_CLS[name]))
 
-        assert entry in REGISTRY.format_catalog()
+        assert entry in format_node_type_catalog()
 
 
 class TestMissingSections:
@@ -191,30 +191,20 @@ class TestPromptCosts:
             model for model, _, _ in tools_catalog.CATALOG_CONSUMERS
         }
 
-    # The arithmetic tests pin a *priced* consumer rather than the live table:
-    # the live planner model may have no price yet, which renders `?` and has
-    # its own test below.
-
-    def test_cached_is_cheaper_than_uncached(self, monkeypatch):
+    def test_cached_is_cheaper_than_uncached(self):
         # the whole reason both are reported: the catalog is byte-identical
         # every request, so the cached rate is the steady state
-        monkeypatch.setattr(
-            tools_catalog, "CATALOG_CONSUMERS", (("gpt-4.1-mini", 1, "somewhere"),)
-        )
         for cost in prompt_costs(1000):
             assert cost["cached"] < cost["uncached"]
 
-    def test_cost_scales_with_catalog_size(self, monkeypatch):
-        monkeypatch.setattr(
-            tools_catalog, "CATALOG_CONSUMERS", (("gpt-4.1-mini", 1, "somewhere"),)
-        )
+    def test_cost_scales_with_catalog_size(self):
         small = sum(c["uncached"] for c in prompt_costs(1000))
         large = sum(c["uncached"] for c in prompt_costs(2000))
 
         assert large == pytest.approx(small * 2)
 
     def test_unpriced_model_yields_none_not_zero(self, monkeypatch):
-        # matches airglider/src/config.py: unknown spend must never render as free
+        # matches config/pricing.py: unknown spend must never render as free
         monkeypatch.setattr(
             tools_catalog, "CATALOG_CONSUMERS", (("gpt-9-omega", 1, "somewhere"),)
         )
@@ -268,9 +258,9 @@ class TestBuildReport:
         assert "o200k_base" in report
 
     def test_lists_every_registered_node(self, report):
-        from app.registry import REGISTRY
+        from app.registry import NODE_TYPE_TO_CLS
 
-        for name in REGISTRY.node_types:
+        for name in NODE_TYPE_TO_CLS:
             assert f"`{name}`" in report
 
     def test_reports_a_nonzero_cost(self, report):
@@ -278,11 +268,10 @@ class TestBuildReport:
         assert "$0.000000" not in report.split("## Tools")[0]
 
     def test_every_tool_row_carries_a_purpose(self, report):
-        from app.registry import REGISTRY, class_docstring
+        from app.registry import NODE_TYPE_TO_CLS, class_docstring
 
-        for spec in REGISTRY:
-            name = spec.node_type
-            purpose = purpose_line(class_docstring(spec.request))
+        for name, cls in NODE_TYPE_TO_CLS.items():
+            purpose = purpose_line(class_docstring(cls))
             assert purpose, f"{name} has no purpose line"
             # the head survives truncation even for the longest descriptions
             assert purpose[:40] in report, f"{name}'s purpose is missing from the table"

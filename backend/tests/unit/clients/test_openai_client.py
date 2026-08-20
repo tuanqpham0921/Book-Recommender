@@ -2,22 +2,22 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from clients.openai_client import OpenAIClient
 from config.settings import OpenAISettings
-from clients.messages import AssistantMessage
+from common.operation import OperationResult
+from app.common.messages import AssistantMessage
 
 # Every real request payload carries a model (OpenAIBaseRequest.base_payload
 # always sets it) and execute() reads it back to attribute token spend, so the
-# fakes must carry one too. Priced in airglider.src.config, so cost is exercised.
+# fakes must carry one too. Priced in config.pricing, so cost is exercised.
 FAKE_MODEL = "gpt-4.1-mini"
 
 
 def async_iter(items):
     """Return an async iterable over items."""
-
     async def _gen():
         for item in items:
             yield item
-
     return _gen()
+
 
 
 def make_settings(**overrides):
@@ -44,9 +44,7 @@ def make_fake_completion(content="hi", total=10, prompt=7, completion=3, cached=
         prompt_tokens_details=MagicMock(cached_tokens=cached),
     )
     message = MagicMock(content=content, tool_calls=None, refusal=None)
-    completion = MagicMock(
-        id="cmpl-123", choices=[MagicMock(message=message)], usage=usage
-    )
+    completion = MagicMock(id="cmpl-123", choices=[MagicMock(message=message)], usage=usage)
     return completion
 
 
@@ -87,50 +85,27 @@ class TestTokenCount:
 
 
 class TestGetEmbeddings:
-    """Tracing-free like the rest of the client: failures raise through the
-    caller, and `token_usage` stays on the returned payload — it is the app's
-    wrapper task (`AppWorkflow.get_embeddings`, see test_app_workflow.py) that
-    turns the call into a step and promotes the usage."""
-
     def setup_method(self):
         self.client = make_client()
-
-    @staticmethod
-    def _fake_response(*embeddings: list[float]) -> MagicMock:
-        fake = MagicMock()
-        fake.data = [MagicMock(embedding=e) for e in embeddings]
-        fake.model = "text-embedding-3-large"
-        fake.usage.prompt_tokens = 7
-        fake.usage.total_tokens = 7
-        return fake
 
     @pytest.mark.asyncio
     async def test_raises_when_input_too_long(self):
         self.client.max_tokens = 1
         with pytest.raises(ValueError, match="too long"):
-            await self.client.get_embeddings(
-                ["a very long text that exceeds one token"]
-            )
+            await self.client.get_embeddings(["a very long text that exceeds one token"])
 
     @pytest.mark.asyncio
-    async def test_returns_embeddings_with_usage_on_the_payload(self):
-        self.client.client.embeddings.create = AsyncMock(
-            return_value=self._fake_response([0.1, 0.2], [0.3, 0.4])
-        )
+    async def test_returns_embeddings(self):
+        fake_response = MagicMock()
+        fake_response.data = [MagicMock(embedding=[0.1, 0.2]), MagicMock(embedding=[0.3, 0.4])]
+        self.client.client.embeddings.create = AsyncMock(return_value=fake_response)
 
         result = await self.client.get_embeddings(["hello", "world"])
-        assert result.embeddings == [[0.1, 0.2], [0.3, 0.4]]
-        # untouched here: promotion is the wrapper task's job, so the client
-        # hands the usage over exactly as the API reported it
-        assert result.token_usage is not None
-        assert result.token_usage.model == "text-embedding-3-large"
-        assert result.token_usage.prompt == 7
+        assert result == [[0.1, 0.2], [0.3, 0.4]]
 
     @pytest.mark.asyncio
-    async def test_api_error_raises_through(self):
-        self.client.client.embeddings.create = AsyncMock(
-            side_effect=RuntimeError("API down")
-        )
+    async def test_reraises_api_error(self):
+        self.client.client.embeddings.create = AsyncMock(side_effect=RuntimeError("API down"))
         with pytest.raises(RuntimeError, match="API down"):
             await self.client.get_embeddings(["hello"])
 
@@ -140,17 +115,25 @@ class TestExecute:
         self.client = make_client()
 
     @pytest.mark.asyncio
-    async def test_returns_assistant_message(self):
-        # the message itself, no envelope: the client is tracing-free and the
-        # app's `llm_execute` wrapper is what makes this call a step
+    async def test_returns_operation_result(self):
+        fake_completion = make_fake_completion()
+        self.client._chat_stream = AsyncMock(return_value=fake_completion)
+
+        req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
+        result = await self.client.execute(req)
+
+        assert isinstance(result, OperationResult)
+
+    @pytest.mark.asyncio
+    async def test_output_is_assistant_message(self):
         fake_completion = make_fake_completion(content="hello")
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
         req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
         result = await self.client.execute(req)
 
-        assert isinstance(result, AssistantMessage)
-        assert result.content == "hello"
+        assert isinstance(result.output, AssistantMessage)
+        assert result.output.content == "hello"
 
     @pytest.mark.asyncio
     async def test_token_usage_propagated(self):
@@ -166,9 +149,7 @@ class TestExecute:
 
     @pytest.mark.asyncio
     async def test_cached_tokens_propagated(self):
-        fake_completion = make_fake_completion(
-            total=10, prompt=8, completion=2, cached=6
-        )
+        fake_completion = make_fake_completion(total=10, prompt=8, completion=2, cached=6)
         self.client._chat_stream = AsyncMock(return_value=fake_completion)
 
         req = MagicMock(sse_stream=None, to_payload=lambda: {"model": FAKE_MODEL})
@@ -310,11 +291,10 @@ class TestPing:
             model="gpt-4o", input="ping"
         )
 
-    @pytest.mark.asyncio
-    async def test_reraises_on_failure(self):
-        # tracing-free again, so a failure raises straight through
-        self.client.client.responses.create = AsyncMock(
-            side_effect=RuntimeError("timeout")
-        )
-        with pytest.raises(RuntimeError, match="timeout"):
-            await self.client.ping()
+    # NOTE: open_ai client ping is now a task
+    # waiting for @task and workflow tests
+    # @pytest.mark.asyncio
+    # async def test_reraises_on_failure(self):
+    #     self.client.client.responses.create = AsyncMock(side_effect=RuntimeError("timeout"))
+    #     with pytest.raises(RuntimeError, match="timeout"):
+    #         await self.client.ping()

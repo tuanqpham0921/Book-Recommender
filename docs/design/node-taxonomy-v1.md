@@ -58,17 +58,11 @@ response generation that always gets attached when the intent is to find books")
 | `Retrieve_Developer_Info` | `DeveloperInfoRequest` | Kept |
 
 Every retrieval node's structured result is typed via
-`app/domains/books/schemas.py` (`Book` + one `Output` class per node) — the contract
-downstream nodes and eval/review tooling see. `Book` carries every `books` column
-except `embedding`; that one omission is load-bearing, since these models are
-serialized into `chat_runs` JSONB and a per-book vector would bloat every run record.
-
-There is deliberately **no narrower book model** (revised 2026-08-07). An earlier
-`BookSummary`/`ReferenceBook` pair tried to keep presentation fields out of the LLM
-prompts, but the prompt-facing renderers already select fields by hand, so the types
-were never what enforced it — only a second field list free to drift from the first,
-which it did. Narrowing belongs at the point of use: a renderer picking fields, or
-`model_dump(include=...)`.
+`app/domains/books/schemas/output_schemas.py` (`BookSummary` + one `Output` class per
+node) — the contract downstream nodes and eval/review tooling see. It deliberately
+excludes `description`, `thumbnail`, and `embedding`: those are presentation/internal
+fields (thumbnail still streams to the UI separately via `send_book_card`), not
+reasoning inputs.
 
 **Deferred, not yet dimensioned:** `published_year`, `average_rating`, `num_pages`,
 `ratings_count`, `is_children`, `categories` are real `BookModel` columns without their
@@ -177,11 +171,9 @@ arbitrarily chosen book usually discards the pick and answers with nothing — t
 is silent and looks identical to "no matches". A bounded surprise ("surprise me with a
 short sci-fi") puts the bounds in `Retrieve_Random.filters`, so the pick is drawn from
 inside them rather than tested against them afterwards. This is the same
-search-within-bounds vs. delete-afterwards distinction `Analyze_Recommend` already draws —
-as of 2026-08-19 by parsing the bounds out of its own goal text and putting them in its
-vector search's WHERE, so the pool it ranks already fits (execution-pipeline-v1.md) — and
-it is convention only: nothing in the schema enforces it, so the golden test is what holds
-the planner to it.
+search-within-bounds vs. delete-afterwards distinction `Analyze_Recommend.filters` already
+draws, and it is convention only: nothing in the schema enforces it, so the golden test
+is what holds the planner to it.
 
 **Cost:** 345 catalog tokens on every request, and one more node the planner can confuse
 with `Analyze_Recommend` — the two are separated by whether the user expressed taste,
@@ -259,141 +251,6 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
   `find_by_traits.py` deleted, `find_by_author.py`/`find_by_genre.py` added, and all
   four retrieval mocks now build their `build_data()` payload through the new output
   schemas instead of ad-hoc dicts.
-
-**Done (2026-08-04) — vertical slices and `NodeSpec`:**
-
-- A node is now one folder, not entries scattered across five files.
-  `app/domains/<domain>/<node>/` holds `labels.py`, `schemas.py`, `executor.py`
-  and an `__init__.py` exporting a single
-  [`NodeSpec`](../../backend/app/domains/node_spec.py) (node_type, tier, request,
-  output, executor). `app/domains/books/registry.py` became `guide.py` and is now
-  just the tuple of that domain's specs — one line per node.
-- `app/registry.py` **derives** `NODE_TYPE_TO_CLS`, the tier class tuples,
-  `CATALOG_TIERS`, `AnyStrategyRequest`, `NodeTypeEnum` and the executor mapping
-  from `SPECS`. Those five used to be maintained by hand and could disagree; they
-  now cannot. Parking a node is deleting its SPEC from the guide, replacing the
-  comment block that used to explain which three lists a parked class was absent
-  from.
-- `NodeTypeEnum` is a flat enum built from the specs, not a `Union` of per-domain
-  enums. A union renders in the JSON schema as an `anyOf` of one-member enums —
-  it grows per node and constrains the model less than one enum. It also ends the
-  class of bug where the enum advertised 11 names while the registry held 2; the
-  enum and the registry are now the same list by construction. `unknown` stays a
-  member so the planner keeps its graceful "no capability fits" refusal.
-- `NodeSpec.__post_init__` checks the spec's `node_type` against the request
-  schema's `Literal` default. This is the guard for a real bug: a slice written
-  as `Retrieve_By_Title` (capital `By`) against a codebase that says
-  `Retrieve_by_Title` everywhere would have silently broken the
-  `report_system_goals` golden diff.
-- Executors subclass `NodeExecutor` (renamed `NodeBaseWorkflow` on 2026-08-07,
-  see below — [`app/domains/base_workflow.py`](../../backend/app/domains/base_workflow.py)),
-  which pins the `run(task, dependent_results, request_context)` signature the
-  task runner calls and resolves the output type from the generic parameter.
-- The output-shape vocabulary is now partly real classes:
-  `app/domains/books/schemas.py` defines `Book`, `BookRetrievalOutput` and
-  `BookRecommendationOutput`, and each node's output subclasses the shape its
-  docstring claims. `AnalyzeBooksOutput` and `ActionConfirmationOutput` remain
-  reserved names with no class — no registered node produces either yet. This
-  closes half of the gap the old `output_schemas.py` module docstring described.
-
-**Done (2026-08-07) — a books-domain executor base:**
-
-- [`app/domains/books/base_workflow.py`](../../backend/app/domains/books/base_workflow.py)
-  adds `BookBaseWorkflow`, one layer under `NodeBaseWorkflow`, holding the three
-  things every book node was repeating: `self.store` (bound from the request
-  context before the slice runs), `preflight()` and `stream_books()`. Book slices
-  implement **`execute(query, dependent_results)`**; `run()` belongs to the base
-  now, which is what makes the store binding impossible to forget.
-- `preflight(query)` is the counts-first opening move as one call: it stamps
-  `query`/`query_sql`/`num_books` on the output and returns `(total, sample)` from
-  a single `BookStore.preview` round trip. It deliberately does not assign
-  `output.books` — whether a sample is the node's answer is the caller's call, so
-  that line stays visible in the slice.
-- `stream_books()` moved off the generic base with it, which no longer imports
-  `Book` (it could only do so under `TYPE_CHECKING`, since `books/schemas.py`
-  imports back into it) or the API's `BookOut`.
-- Both bases were renamed to say what they are: `node_executor.py`/`NodeExecutor`
-  → `base_workflow.py`/`NodeBaseWorkflow`, matching `NodeBaseWorkflow` one layer
-  up. **Only the two bases changed**, after weighing a full sweep of "executor"
-  → "workflow" (87 Python references, 27 files) and rejecting it. The rule that
-  came out of that: **`Base` marks a reusable base class**, since concrete work
-  is named `*Workflow` throughout the planner (`PlannerWorkflow`,
-  `TaskRunnerWorkflow`); **`Executor` marks the subset of concrete workflows the
-  planner can dispatch** — a node with a request schema, a `NodeSpec` and a
-  catalog entry, reached through `EXECUTORS_CLS_MAPPING`. So slices keep
-  `<node>/executor.py`/`<Node>Executor`, and so do `NodeSpec.executor` and the
-  mocks. Written up in `backend/app/domains/README.md`.
-
-**Done (2026-08-07) — argument parsing moved into the slices:**
-
-- `NodeBaseWorkflow.parse_arguments()` and `build_arg_parser_request()` are gone,
-  and with them the `tool_cls` class attribute each executor declared to feed
-  them (it duplicated `NodeSpec.request` anyway). A slice now writes its own
-  module-level `build_arg_parser_request(query)` and calls
-  `NodeBaseWorkflow.run_llm_args_parse(req)` directly — the same shape
-  `build_analysis_request` / `build_response_request` already had in the
-  analyze_recommend slice, so there is one way to build an LLM request instead of
-  two.
-- The slice also assigns `self.output.args` itself. That line used to be a side
-  effect of `parse_arguments`, which meant nothing at the call site said the
-  node's parsed arguments had been recorded.
-- **The tradeoff is deliberate duplication**: the two builders are near-identical
-  today (same prompt, `gpt-5-nano`, minimal reasoning, one `AssistantMessage`).
-  Held in a base class, per-node divergence — a bigger model for a node with a
-  harder schema, previous messages for a node that needs them — costs a flag or
-  an override hook each time. Held in the slice it costs nothing. Only
-  `ARG_PARSER_PROMPT_PATH` stays shared, in `app/domains/base_workflow.py`.
-- Direction of travel for `NodeBaseWorkflow`: it now pins the `run()` signature,
-  resolves the output type, and carries the UI section fields — nothing else.
-  The owner's note in `backend/TODO.md` ("you might not need node_workflow …
-  since a lot of that is for the app_workflow") is the next step past this one.
-
-**Done (2026-08-08) — one call shape, and services off the context:**
-
-That "next step past this one" landed, and went further than merging the two
-bases. `AppBaseWorkflow` and `NodeBaseWorkflow` are now a single **`AppWorkflow`**
-(`app/domains/base_workflow.py`), `BookBaseWorkflow` is **`BookWorkflow`**, and
-the ladder is three deep: `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`.
-
-- **`run(query, artifacts)` is the signature of *every* unit of work**, not just
-  the dispatchable ones. The planner, the parse step, the task runner and both
-  book executors answer to it. Previously there were four different `run`
-  signatures against one `__call__` passthrough. The shape is
-  `node(input)` — a node parses its input, rejects it, or continues with it —
-  which is what lets a node sit at any position in a plan.
-- **The plan reaches `TaskRunnerWorkflow` as an artifact**, not a named
-  `planner_result` parameter. Artifacts are **selected by type**
-  (`require_artifact(artifacts, PlannerOutput)`), never by key, generalizing the
-  rule `ParsedDependents.from_results` already followed — it iterates
-  `dependent_results` and dispatches on the value's shape, ignoring the key.
-  Keys stay provenance. `require_artifact` raising `StepFailure` *is* the reject
-  arm, written once instead of per node.
-- **Services stopped being constructor arguments.** `AppWorkflow.__init__(ctx,
-  messages)` is the only `__init__` in the app layer; `sse_stream`,
-  `llm_client`, `app_env`, `session_id`, `user_message` and `BookWorkflow.store`
-  are properties off the `RequestContext`. Four bespoke `__init__`s went away —
-  they existed only to unpack a context the caller already had and forward its
-  pieces down by hand. Properties rather than assignments meant ~50 existing
-  `self.<service>` reads needed no edit.
-- **`BookWorkflow.execute()` is gone**; slices implement `run()` directly. The
-  hook existed only to stop a slice from overriding the `run()` that bound
-  `self.store`. With `store` a property there is nothing to lose. The comment
-  justifying late binding ("an executor is constructed before that session is
-  handed to it") was already false — the task runner constructs each executor
-  *inside* its own `run()`, where the context has been in scope the whole time.
-- **The `Base`-marks-a-reusable-base-class rule is retired.** It was written when
-  the ladder was four deep; at three, the file a class lives in already says
-  whether it is a base, and `AppBaseWorkflow`/`BookBaseWorkflow` read worse than
-  what they name. `Executor` still marks the subset the planner can dispatch.
-- Two bugs fell out of the merge. `_generic_output_type` had been *called but
-  undefined* since `AppBaseWorkflow` was deleted, so **no book executor could be
-  constructed at all** — nothing outside a live request ever built one.
-  `NodeWorkflowOutput.id`/`.args` were non-Optional with `None` defaults, so any
-  output rejected its own `model_dump_json` on reload — the same defect
-  `PlanJaneOutput.out_of_scope` already carried a note about, and it would
-  have bitten replaying `chat_runs` rows. `tests/unit/app/domains/test_app_workflow.py`
-  now parameterizes over the live registry so a new slice is covered the day it
-  is registered.
 
 **Still open (roadmap Phase 1):**
 

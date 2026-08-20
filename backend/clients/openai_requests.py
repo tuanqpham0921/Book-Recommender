@@ -4,7 +4,7 @@ from typing import Any
 from .base import BaseLLMRequest
 
 from config import settings
-from clients.messages import AssistantMessage, SystemMessage, ToolMessage
+from app.common.messages import AssistantMessage, SystemMessage, ToolMessage
 from openai import pydantic_function_tool
 from openai.types.chat import ChatCompletionFunctionToolParam
 from pydantic import model_validator, Field
@@ -20,10 +20,10 @@ SEED = 42
 
 class OpenAIBaseRequest(BaseLLMRequest):
     model: str = settings.openai.BASE_MODEL
-    temperature: float | None = TEMPERATURE
-    top_p: float | None = TOP_P
-    seed: int | None = SEED
-    reasoning_effort: str | None = 'low'
+    temperature: float = TEMPERATURE
+    top_p: float = TOP_P
+    seed: int = SEED
+    reasoning_effort: str = 'low'
 
     max_completion_tokens: int = 1000
 
@@ -48,30 +48,6 @@ class OpenAIBaseRequest(BaseLLMRequest):
             raise ValueError(f"Assistant tool_call has no ToolMessage reply: {unanswered}")
 
         return self
-    
-    def model_post_init(self, __context: Any) -> None:
-        if self.model.startswith("gpt-5"):
-            self.temperature = None
-            self.top_p = None
-            self.seed = None
-        else:
-            self.reasoning_effort = None
-            
-    def to_summary(self) -> dict[str, Any]:
-        """Adds the two OpenAI-specific things a trace is read for: the
-        reasoning effort a cost line is explained by, and *which* schema a
-        parser call was filling in.
-
-        `tool_models` is reached by `getattr` because only the parser and tool
-        subclasses declare it — one override covering every request beats three
-        that differ by a line.
-        """
-        summary = super().to_summary()
-        summary["reasoning_effort"] = self.reasoning_effort
-        tool_models = getattr(self, "tool_models", None)
-        if tool_models:
-            summary["tools"] = [model.__name__ for model in tool_models]
-        return summary
 
     def to_messages_payload(self) -> list[dict[str, Any]]:
         messages = []
@@ -155,4 +131,33 @@ class OpenAIChatRequest(OpenAIBaseRequest):
     def to_payload(self) -> dict[str, Any]:
         payload = self.base_payload()
         payload["max_completion_tokens"] = self.max_complete_chat_tokens
+        return payload
+
+
+class OpenAIToolRequest(OpenAIBaseRequest):
+    """Support both sse stream and tool choice"""
+
+    tool_models: list[type]
+
+    @model_validator(mode="after")
+    def check_tool_models(self) -> "OpenAIToolRequest":
+        if not self.tool_models:
+            raise ValueError("Usage error: tool_models must be a list of tool models")
+        return self
+
+    def to_function_tools(self) -> list[dict]:
+        tools = []
+        for tool_model in self.tool_models:
+            tool_name = tool_model.__name__
+            tool = pydantic_function_tool(
+                tool_model,
+                name=tool_name,
+            )
+            tools.append(tool)
+        return tools
+
+    def to_payload(self) -> dict[str, Any]:
+        payload = self.base_payload()
+        payload["tools"] = self.to_function_tools()
+        payload["tool_choice"] = "auto"
         return payload

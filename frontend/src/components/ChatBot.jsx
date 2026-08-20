@@ -7,21 +7,6 @@ import { parseSSEStream } from '@/utils';
 
 const DEFAULT_TIMEOUT_MS = 120000; // 2 minutes
 
-/**
- * Where the next streamed section belongs.
- *
- * Sections are flat except for one case: while a task is open (a task.start
- * with no matching task.end), text and book cards nest inside that task so the
- * accordion can fold them away. Everything else lands at the top level, which
- * is why the plan diagram — sent before any task opens — stays outside.
- */
-function openContainer(response) {
-    const last = response.sections.at(-1);
-    return last && last.type === 'task' && !last.closed
-        ? last.sections
-        : response.sections;
-}
-
 function ChatBot() {
     const messagesEndRef = useRef(null)
     const activeAbortControllerRef = useRef(null)
@@ -67,10 +52,6 @@ function ChatBot() {
                 // { id: ..., type: 'text', content: 'Analyzing Dune...' }
                 // { id: ..., type: 'books', books: [...] }
                 // { id: ..., type: 'diagram', mermaid: 'graph TD; ...' }
-                // { id: ..., type: 'task', title: 'Found books by title',
-                //   count: 4, open: true, closed: false, sections: [...] }
-                //   ^ the one nesting section: text/books streamed between a
-                //     task.start and its task.end land in its own list
             ],
         };
 
@@ -186,17 +167,16 @@ function ChatBot() {
                         last.response.isStreaming = true;
 
                         // Find or create the current text section
-                        const container = openContainer(last.response);
-                        const lastSection = container.at(-1);
+                        const lastSection = last.response.sections.at(-1);
                         if (!lastSection || lastSection.type !== 'text') {
-                            const sectionId = `${last.response.id}-section-${container.length + 1}`;
-                            container.push({
+                            const sectionId = `${last.response.id}-section-${last.response.sections.length + 1}`;
+                            last.response.sections.push({
                                 id: sectionId,
                                 type: 'text',
                                 content: ''
                             });
                         }
-                        container.at(-1).content += event.data || '';
+                        last.response.sections.at(-1).content += event.data || '';
                     });
                     continue;
                 }
@@ -208,11 +188,10 @@ function ChatBot() {
                         last.response.isStreaming = true;
 
                         // Check if a books section already exists
-                        const container = openContainer(last.response);
-                        const lastSection = container.at(-1);
+                        const lastSection = last.response.sections.at(-1);
                         if (!lastSection || lastSection.type !== 'books') {
-                            const sectionId = `${last.response.id}-section-${container.length + 1}`;
-                            container.push({
+                            const sectionId = `${last.response.id}-section-${last.response.sections.length + 1}`;
+                            last.response.sections.push({
                                 id: sectionId,
                                 type: 'books',
                                 books: []
@@ -220,47 +199,7 @@ function ChatBot() {
                         }
 
                         // Append book data
-                        container.at(-1).books.push(event.data);
-                    });
-                    continue;
-                }
-
-                // 🗂️ TASK SECTIONS — one per executed node. Opens expanded so
-                // the user watches the step happen, then folds itself away on
-                // task.end, leaving the final answer as what's still visible.
-                if (event.type === 'task.start') {
-                    setTurn(draft => {
-                        const last = draft[draft.length - 1];
-                        last.response.isStreaming = true;
-                        last.response.sections.push({
-                            id: `${last.response.id}-task-${event.data.task_id}`,
-                            type: 'task',
-                            taskId: event.data.task_id,
-                            title: event.data.title,
-                            collapsible: event.data.collapsible !== false,
-                            count: null,
-                            open: true,
-                            closed: false,
-                            ok: true,
-                            sections: []
-                        });
-                    });
-                    continue;
-                }
-
-                if (event.type === 'task.end') {
-                    setTurn(draft => {
-                        const last = draft[draft.length - 1];
-                        const task = last.response.sections.at(-1);
-                        // a stray end with no open task leaves nothing to close
-                        if (task && task.type === 'task') {
-                            task.closed = true;
-                            task.count = event.data.count ?? null;
-                            task.ok = event.data.ok !== false;
-                            // stay open when there's nothing to fold away, or
-                            // when this node owns the answer
-                            task.open = !task.collapsible || task.sections.length === 0;
-                        }
+                        last.response.sections.at(-1).books.push(event.data);
                     });
                     continue;
                 }

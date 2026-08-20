@@ -1,6 +1,6 @@
 import pytest
 from typing import Any
-from clients.messages import UserMessage
+from app.common.messages import UserMessage
 from clients.base import BaseLLMClient, BaseLLMRequest
 
 

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from openai.lib._parsing._completions import is_parseable_tool
 from pydantic import BaseModel
 
-from clients.messages import AssistantMessage, ToolMessage, UserMessage
+from app.common.messages import AssistantMessage, ToolMessage, UserMessage
 from app.common.sse_stream import SSEStream
 from clients.openai_requests import (
     MAX_COMPLETION_TOKENS,
@@ -13,6 +13,7 @@ from clients.openai_requests import (
     OpenAIBaseRequest,
     OpenAIChatRequest,
     OpenAIParserRequest,
+    OpenAIToolRequest,
 )
 
 
@@ -156,3 +157,21 @@ class TestOpenAIChatRequest:
         assert req.to_payload()["max_completion_tokens"] == 50
 
 
+class TestOpenAIToolRequest:
+    def test_accepts_multiple_tool_models(self):
+        req = OpenAIToolRequest(prompt="p", messages=[USER_MSG], tool_models=[ToolA, ToolB])
+        assert len(req.tool_models) == 2
+
+    def test_rejects_empty_tool_models(self):
+        with pytest.raises(ValueError, match="tool_models"):
+            OpenAIToolRequest(prompt="p", messages=[USER_MSG], tool_models=[])
+
+    def test_to_payload_has_tools(self):
+        req = OpenAIToolRequest(prompt="p", messages=[USER_MSG], tool_models=[ToolA])
+        payload = req.to_payload()
+        assert "tools" in payload
+        assert len(payload["tools"]) == 1
+
+    def test_tool_choice_auto_with_models(self):
+        req = OpenAIToolRequest(prompt="p", messages=[USER_MSG], tool_models=[ToolA])
+        assert req.to_payload()["tool_choice"] == "auto"

@@ -1,15 +1,18 @@
 """Send a suite of queries to the backend one after another.
 
-Queries load from evals/suites/query_suite.json (override with --suite). Each is
-POSTed to /session/{id}/message and its SSE stream consumed to completion before
-the next. The runner sleeps 45s between queries (--sleep, 0 to disable) to stay
-under the OpenAI TPM rate limit (docs/backlog.md Reliability).
+Queries are loaded from evals/suites/query_suite.json (override with --suite).
+Each query is POSTed to /session/{id}/message and its SSE stream is
+consumed to completion before the next query is sent. By default the runner
+sleeps 45s between queries (override with --sleep, 0 to disable) to stay
+under the OpenAI TPM rate limit (see docs/backlog.md Reliability).
 
-A test_runs row is written right after each completed query rather than batched
-at the end, so an interrupted run keeps everything it completed. It links the
-chat_id (captured from the chat.id SSE event) back to its suite entry, which is
-what evals/report.py joins on. --no-record skips the DB write, e.g. when the
-target backend's database is unreachable from this machine.
+A test_runs row is written right after each completed query (linking the
+chat_runs row — chat_id, captured from the chat.id SSE event — back to its
+suite entry: suite_name, suite_case_id), not batched until the end — so a
+run that's interrupted partway still has everything it completed recorded.
+evals/report.py joins on that to build the regression report. Skip the DB
+write with --no-record, e.g. when the target backend's database isn't
+reachable from this machine.
 
 Usage (from backend/, or via the make targets in evals/makefile):
     poetry run python evals/run_suites.py
@@ -37,8 +40,9 @@ DEFAULT_SLEEP_SECONDS = 45.0
 DEFAULT_RUN_LIMIT = None
 
 def should_sleep(index: int, total: int, sleep_seconds: float) -> bool:
-    """Whether to pause after the query at `index` (1-based) of `total` — never
-    after the last, never when sleeping is disabled."""
+    """Whether to pause after the query at `index` (1-based) of `total` —
+    never after the last one (nothing follows it), never when sleeping is
+    disabled (sleep_seconds <= 0)."""
     return sleep_seconds > 0 and index < total
 
 def positive_int(value: str) -> int:
@@ -75,7 +79,7 @@ def load_suite(
 def create_session() -> str:
     # minted locally instead of via /session/new: the server would prefix
     # with its own env (dev_ on a local server), but suite runs must always
-    # test_ prefix so these can be filtered out of eval queries
+    # be identifiable as test_ so they can be filtered out of eval queries
     session_id = f"test_{str(uuid.uuid4())[:8]}"
     print(f"session: {session_id}")
     return session_id
@@ -87,8 +91,8 @@ def send_query(
     message: str,
 ) -> str | None:
     """POST one query and consume its SSE stream to completion. Returns the
-    run's chat_id (from the chat.id event) so the caller can link the
-    chat_runs row to its suite entry."""
+    run's chat_id (from the chat.id event, sent first and unconditionally)
+    so the caller can link the chat_runs row to its suite entry."""
     started = time.monotonic()
     event_count = 0
     content_parts: list[str] = []
@@ -131,17 +135,21 @@ def send_query(
 
 
 def record_test_runs(links: list[dict]) -> None:
-    """Insert one test_runs row per completed query, linking its chat_runs row
-    to the suite entry that produced it. Each link dict already matches
-    TestRunModel's columns. Called per query rather than once at the end, so a
-    row can only be missing by the margin between the SSE stream closing and
-    the backend's own record_chat_run() commit.
+    """Insert one test_runs row per completed query, linking its chat_runs
+    row to the suite entry that produced it. Each link dict already matches
+    TestRunModel columns: chat_id, suite_name, suite_case_id. Called with a
+    single-item list right after each query (see main()) rather than once
+    for the whole run, so a row is only ever missing from chat_runs by the
+    small margin between the SSE stream closing and the backend's own
+    record_chat_run() commit finishing — not by an entire suite's worth of
+    subsequent queries.
 
-    chat_id is a real FK and the backend commits just *after* the stream closes,
-    so only chat_ids already in chat_runs are inserted, with one short retry.
-    """
-    # imported here, not at module top: --no-record runs against a remote
-    # backend should not require DB config
+    test_runs.chat_id is a real FK, and the backend commits a run's
+    chat_runs row just *after* its SSE stream closes — so only chat_ids
+    already present in chat_runs are inserted, with one short retry for
+    stragglers."""
+    # imported here, not at module top: plain runs against a remote backend
+    # (--no-record) shouldn't require DB config or the backend's dependencies
     import asyncio
 
     from sqlalchemy import select

@@ -111,27 +111,6 @@ class SSEStream:
     async def send_mermaid(self, data: str):
         """Send mermaid diagram."""
         await self.send(event_type="mermaid.diagram", data=data)
-
-    async def send_task_start(
-        self, task_id: str, title: str, collapsible: bool = True
-    ):
-        """Open a task section. Everything streamed until the matching
-        `send_task_end` nests inside it in the UI, so these must be paired —
-        `TaskRunnerWorkflow` owns both ends and closes in a `finally`."""
-        await self.send(
-            event_type="task.start",
-            data={"task_id": task_id, "title": title, "collapsible": collapsible},
-        )
-
-    async def send_task_end(
-        self, task_id: str, count: int | None = None, ok: bool = True
-    ):
-        """Close a task section. `count` stamps the header after the fact —
-        the section opens before the node knows how many books it matched."""
-        await self.send(
-            event_type="task.end",
-            data={"task_id": task_id, "count": count, "ok": ok},
-        )
     
     async def close(self):
         """Close the stream."""

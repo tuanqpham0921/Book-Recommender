@@ -1,16 +1,19 @@
 """Check what the planner *decided* against what each suite case expects.
 
-Joins each test_runs row with its chat_runs row, pulls the accepted goal types
-(planner.response.result.parse_result.accepted_goals[].target_node_type), and
-diffs them against the case's expected_nodes: matched / missing / extra,
-duplicates counted. Cases with no expected_nodes are flagged, not judged.
+For every test_runs row (written by evals/run_suites.py) this joins the
+chat_runs row it points at, pulls the goal types the run actually accepted
+(planner.output.parse_result.accepted_goals[].target_node_type), and diffs
+them against the case's expected_nodes in evals/suites/<suite_name>.json:
+matched / missing / extra, duplicates counted. Cases whose suite entry
+defines no expected_nodes are flagged rather than judged.
 
-The project's golden test — correctness only. Cost, tokens and latency are
-deliberately not reported here; that is report.py's job.
+This is the project's golden test — correctness only. Cost, tokens and
+latency are deliberately *not* reported here; that is report.py's job.
 
-Only the most recent run of each (suite_name, case_id) is evaluated; --all
-includes every recorded run. The report saves to
-evals/results/system_goals_<timestamp>.md unless --output says otherwise.
+By default only the most recent run of each (suite_name, case_id) is
+evaluated — pass --all to include every recorded run. The markdown report is
+saved to evals/results/system_goals_<timestamp>.md (override with --output);
+the console just gets the summary line and the file path.
 
 Usage (from backend/, or `make suite-goals`):
     poetry run python evals/report_system_goals.py
@@ -41,13 +44,13 @@ _STATUS_ICON = {"match": "✅", "mismatch": "❌", "no_expectations": "⚠️"}
 
 
 def accepted_goal_types(planner: Any) -> list[str]:
-    """target_node_type of each accepted goal in a recorded planner envelope.
-    [] when the run has no parse result, e.g. it errored before parsing."""
+    """target_node_type of each accepted goal in a recorded planner envelope
+    (the chat_runs.planner JSONB dict). [] when the run has no parse result,
+    e.g. it errored before parsing finished."""
     if not isinstance(planner, dict):
         return []
-    response = planner.get("response")
-    result = response.get("result") if isinstance(response, dict) else None
-    parse_result = result.get("parse_result") if isinstance(result, dict) else None
+    output = planner.get("output")
+    parse_result = output.get("parse_result") if isinstance(output, dict) else None
     goals = parse_result.get("accepted_goals") if isinstance(parse_result, dict) else None
     if not isinstance(goals, list):
         return []
@@ -61,9 +64,10 @@ def accepted_goal_types(planner: Any) -> list[str]:
 def diff_node_types(
     expected: list[str] | None, actual: list[str]
 ) -> dict[str, list[str]] | None:
-    """Multiset diff of expected_nodes against the goal types a run accepted —
-    duplicates count, so expecting a node twice and producing it once leaves one
-    missing. None, not an empty diff, when the case defines no expectations."""
+    """Multiset diff of a case's expected_nodes against the goal types a run
+    actually accepted — duplicates count, so expecting Retrieve_by_Title
+    twice and producing it once leaves one missing. None (not an empty diff)
+    when the case defines no expectations."""
     if expected is None:
         return None
     expected_counts = Counter(expected)
@@ -76,8 +80,9 @@ def diff_node_types(
 
 
 def evaluate_row(row: dict, entry: dict) -> dict:
-    """One case's verdict: the diff plus a status — 'match' (everything
-    expected, nothing extra), 'mismatch', or 'no_expectations'."""
+    """One case's verdict: the diff plus a status —
+    'match' (all expected nodes accepted, nothing extra), 'mismatch',
+    or 'no_expectations' (the suite entry defines no expected_nodes)."""
     expected = entry.get("expected_nodes")
     if not isinstance(expected, list):
         expected = None
@@ -113,8 +118,8 @@ def _summary_line(stats: dict) -> str:
 def build_goals_report(
     rows: list[dict], git_sha: str, generated_at: datetime
 ) -> tuple[str, dict]:
-    """Markdown report over the joined rows, plus the overall stats dict for
-    the console summary."""
+    """Markdown report over the given (already latest-filtered, if desired)
+    joined rows, plus the overall stats dict for the console summary."""
     suites = group_by_suite(rows)
     lines = report_header(
         "Eval suite system-goals report", suites, git_sha, generated_at

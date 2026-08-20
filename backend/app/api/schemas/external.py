@@ -38,37 +38,6 @@ class ReviewIn(BaseModel):
             )
         return self
 
-class BookOut(BaseModel):
-    """One book as the chat client receives it, in a `book_card` SSE event.
-
-    The wire contract for a book, and the only place the frontend's field
-    names are pinned on this side. `Book` (app/domains/books/schemas.py) is the
-    internal model and carries every catalog column; this is the subset the UI
-    renders — `BookCard`, `BookCardDetailed`, `BookCover` and `BookDetailModal`
-    between them read exactly these fields and nothing else.
-
-    Unlike the prompt-facing renderers, which pick their fields inline, the
-    narrowing here is a *type* on purpose: serialization is the boundary, so a
-    field added to `Book` reaches the browser unless something stops it, and
-    this class is that something. `similarity_score` is the standing example —
-    internal ranking evidence, kept in the run log, never shipped to a client.
-
-    Adding or renaming a field here is a frontend change: the components read
-    these names straight off the event payload, so a rename breaks rendering
-    silently, with no error raised on either side.
-    """
-
-    isbn13: str
-    title: str
-    authors: str | None = None
-    categories: str | None = None
-    published_year: int | None = None
-    num_pages: int | None = None
-    average_rating: float | None = None
-    description: str | None = None
-    thumbnail: str | None = None
-
-
 class HealthStatus(BaseModel):
     """Health check response model."""
 
