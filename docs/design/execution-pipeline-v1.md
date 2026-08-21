@@ -56,6 +56,18 @@ for rows.
    are not exposed to the planner. The filter node is where they become reachable, in one
    node instead of six.
 
+> **Amended 2026-08-20.** Points 2 and 3 hold for bounds as a *narrowing*, which is all the
+> filter node can do — it requires an anchor. They do not cover a request that is *only*
+> bounds ("books under 200 pages"), which has no anchor to narrow and so reached nothing.
+> `Retrieve_by_Numeric_Traits` is where the four numeric columns became reachable as a
+> **subject**: `BookStore.numeric_traits_query()` is `filter_query()` with the catalog as
+> its base, sharing `metadata_predicates` so the two readings of a bound cannot diverge in
+> SQL. The split is only whether the request has another subject in it — with one, point 2
+> still applies unchanged. `categories` remains undimensioned, and the planner-facing schema
+> still carries no filter object: under rule 1a the request is fieldless and the
+> `BookMetadataFilter` sits on an internal `*Args` model. See
+> [node-taxonomy-v1.md](node-taxonomy-v1.md).
+
 **Accepted cost:** many more database round trips per request (one per retrieval count,
 plus the analyze execution). Fine for V1 — the demo is the planner, not throughput.
 

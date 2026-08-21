@@ -38,6 +38,10 @@ def _filtered(base: DeferredBookQuery | None = None, **bounds) -> DeferredBookQu
     )
 
 
+def _traits(**bounds) -> DeferredBookQuery:
+    return BookStore(MagicMock()).numeric_traits_query(BookMetadataFilter(**bounds))
+
+
 class TestTitleQuery:
     def test_injection_payload_is_bound_not_spliced(self):
         compiled = _compiled_sql(_title(INJECTION_PAYLOAD).stmt)
@@ -56,6 +60,50 @@ class TestTitleQuery:
         compiled = _compiled_sql(_title().stmt).upper()
         assert "LIMIT" not in compiled
         assert "ORDER BY" not in compiled
+
+
+class TestNumericTraitsQuery:
+    """The same predicates as `filter_query`, with nothing to AND them onto —
+    which is what makes bounds a search rather than a narrowing."""
+
+    def test_bounds_become_the_whole_where_clause(self):
+        compiled = _compiled_sql(_traits(min_pages=400, max_year=2000).stmt)
+        assert "books.num_pages >=" in compiled
+        assert "books.published_year <=" in compiled
+        assert " AND " in compiled
+        # no upstream query to narrow: the catalog is the base
+        assert "similarity(" not in compiled
+
+    def test_keeps_the_deferred_invariants(self):
+        compiled = _compiled_sql(_traits(min_rating=4.0).stmt)
+        assert "books.isbn13" in compiled
+        assert "books.description" not in compiled
+        assert "LIMIT" not in compiled.upper()
+        assert "ORDER BY" not in compiled.upper()
+
+    def test_carries_no_score_so_rows_rank_by_rating(self):
+        # a bound is not a degree of match, so there is nothing to rank by and
+        # `materialize_stmt` falls back — which is the right order for the asks
+        # that reach this node ("well rated", "most popular")
+        assert "AS score" not in _compiled_sql(_traits(min_rating=4.0).stmt)
+        compiled = _compiled_sql(
+            _traits(min_rating=4.0).materialize_stmt(BookModel, limit=3)
+        )
+        assert "ORDER BY books.average_rating DESC NULLS LAST" in compiled
+
+    def test_empty_filter_is_refused(self):
+        # harder than in filter_query: with no base, no predicates means
+        # selecting the entire catalog and reporting it as a search result
+        with pytest.raises(ValueError):
+            _traits()
+
+    def test_composes_with_a_dimension_query(self):
+        # it is an ordinary deferred query, so an intersect against a title or
+        # author search is available to the combine tier
+        pooled = DeferredBookQuery.compose(
+            [_title("Dune"), _traits(min_pages=400)], op="and"
+        )
+        assert "INTERSECT" in _compiled_sql(pooled.stmt).upper()
 
 
 class TestFilterQuery:

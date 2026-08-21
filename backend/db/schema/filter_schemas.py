@@ -1,5 +1,5 @@
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from config import BookConstraints
 from enum import Enum
 
@@ -33,60 +33,154 @@ class ExclusionBookFilter(BaseModel):
             self.categories = list(set(self.categories))
 
 
-class BookMetadataFilter(BaseModel):
-    """Book metadata a search can be narrowed BY — never what a search is about.
+# The min/max field pairs, as (low, high) — read by the inverted-range check
+# below so it reads as the four ranges it guards rather than four if-statements.
+_BOUNDED_RANGES = (
+    ("min_pages", "max_pages"),
+    ("min_rating", "max_rating"),
+    ("min_ratings_count", "max_ratings_count"),
+    ("min_year", "max_year"),
+)
 
-    Every field here is a constraint: it can only shrink a result set that some
-    anchor (title, author, genre, semantic description) already defined. A request
-    made of these alone has no subject and should be sent back for clarification
-    rather than given an invented anchor.
+
+class BookMetadataFilter(BaseModel):
+    """Book metadata expressed as measurable bounds.
 
     Ranges are inclusive on both ends, and each bound is independent — supply one,
     the other, or both.
+
+    **The field descriptions carry the calibration for vague language**, and that
+    is the reason they are so wordy. "Well rated", "popular", "a quick read",
+    "the classical period" are all real asks that have to become a number
+    somewhere, and this one model is shipped inside every tool schema that takes
+    bounds — `FindByNumericTraitsArgs.traits`, `FilterRetrievalArgs.filters` and
+    `RecommendationArgs.bounds`. Written here, the mapping reaches all three and
+    they cannot disagree; written in any one slice's docstring, it would be
+    copied into the others and drift.
+
+    Each description leads with the value to use and mentions the corpus range
+    only where it stops a mistake. That order is load-bearing: an earlier draft
+    opened with "Corpus range is 1876-2019" and `gpt-5-nano` answered "the
+    classical period" with `max_year: 1876` — it took the nearest number in the
+    sentence rather than the calibrated one.
+
+    The thresholds are prompt text tuned against this corpus, not application
+    limits — nothing in code reads them back, so they stay literal here rather
+    than moving to `config/constants.py`. Only the corpus *ranges* come from
+    `BookConstraints`. Retune them against the real distribution, not intuition:
+    the counts quoted below are from the 5,197-book catalog as of 2026-08-20.
+
+    Whether bounds may be the *subject* of a search or only a narrowing of one is
+    a question about nodes, not about this model — see
+    `FindByNumericTraitsRetrieval` (subject) and `FilterRetrieval` (narrowing).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     min_pages: Optional[int] = Field(
         default=None,
-        description=f"Minimum page count, inclusive. Corpus range is {BookConstraints.MIN_PAGE_COUNT}-{BookConstraints.MAX_PAGE_COUNT}.",
+        ge=1,
+        description=(
+            f"Minimum page count, inclusive. Corpus range is "
+            f"{BookConstraints.MIN_PAGE_COUNT}-{BookConstraints.MAX_PAGE_COUNT}, "
+            f"median 312. Use 500 for 'long', 'epic' or 'a chunky read'."
+        ),
     )
     max_pages: Optional[int] = Field(
         default=None,
-        description=f"Maximum page count, inclusive. Corpus range is {BookConstraints.MIN_PAGE_COUNT}-{BookConstraints.MAX_PAGE_COUNT}.",
+        ge=1,
+        description=(
+            f"Maximum page count, inclusive. Corpus range is "
+            f"{BookConstraints.MIN_PAGE_COUNT}-{BookConstraints.MAX_PAGE_COUNT}, "
+            f"median 312. Use 200 for 'short', 'a quick read' or 'a novella'."
+        ),
     )
 
     is_children: Optional[bool] = Field(
         default=None,
-        description="True keeps only child-friendly books, False excludes them. Omit when the user did not say.",
+        description=(
+            "True keeps only child-friendly books, False excludes them. Use True "
+            "for 'for kids' or \"children's books\". Omit when the user did not say."
+        ),
     )
 
     min_rating: Optional[float] = Field(
         default=None,
-        description=f"Minimum average rating, inclusive, on a {BookConstraints.MIN_RATING}-{BookConstraints.MAX_RATING} scale.",
+        ge=BookConstraints.MIN_RATING,
+        le=BookConstraints.MAX_RATING,
+        description=(
+            f"Minimum average rating, inclusive, on a {BookConstraints.MIN_RATING}-"
+            f"{BookConstraints.MAX_RATING} scale. Ratings cluster high — the corpus "
+            f"median is 3.9 — so a low bound excludes almost nothing. Use 4.0 for "
+            f"'well rated' or 'good ratings', and 4.3 for 'highly rated', "
+            f"'the best' or 'highest rated'."
+        ),
     )
     max_rating: Optional[float] = Field(
         default=None,
-        description=f"Maximum average rating, inclusive, on a {BookConstraints.MIN_RATING}-{BookConstraints.MAX_RATING} scale.",
+        ge=BookConstraints.MIN_RATING,
+        le=BookConstraints.MAX_RATING,
+        description=(
+            f"Maximum average rating, inclusive, on a {BookConstraints.MIN_RATING}-"
+            f"{BookConstraints.MAX_RATING} scale. Rarely what a user means: "
+            f"'badly rated' is an ask, 'well rated' is not — that is min_rating."
+        ),
     )
 
     min_ratings_count: Optional[int] = Field(
         default=None,
-        description="Minimum number of ratings, inclusive — how many people rated it, not how highly. Use for 'popular' or 'well-reviewed'.",
+        ge=0,
+        description=(
+            "Minimum number of ratings, inclusive — how many people rated it, not "
+            "how highly. Corpus median is about 1,100. Use 10000 for 'popular', "
+            "'widely read', 'well-reviewed', 'most people love' or 'lots of reviews'."
+        ),
     )
     max_ratings_count: Optional[int] = Field(
         default=None,
-        description="Maximum number of ratings, inclusive. Use for 'obscure' or 'underrated'.",
+        ge=0,
+        description=(
+            "Maximum number of ratings, inclusive. Use 1000 for 'obscure', "
+            "'underrated', 'a hidden gem' or 'nobody has heard of'."
+        ),
     )
 
     min_year: Optional[int] = Field(
         default=None,
-        description=f"Earliest publication year, inclusive. Corpus range is {BookConstraints.MIN_PUBLISHED_YEAR}-{BookConstraints.MAX_PUBLISHED_YEAR}.",
+        ge=0,
+        description=(
+            f"Earliest publication year, inclusive. Use 2010 for 'recent', 'new' "
+            f"or 'modern'. Nothing in the catalog was published after "
+            f"{BookConstraints.MAX_PUBLISHED_YEAR}, so never use the current year."
+        ),
     )
     max_year: Optional[int] = Field(
         default=None,
-        description=f"Latest publication year, inclusive. Corpus range is {BookConstraints.MIN_PUBLISHED_YEAR}-{BookConstraints.MAX_PUBLISHED_YEAR}.",
+        ge=0,
+        description=(
+            "Latest publication year, inclusive. Use 1970 for 'classic', 'the "
+            "classical period', 'old' or 'from an earlier era' — 1970 is the "
+            "cutoff to use, not the oldest book in the catalog."
+        ),
     )
+
+    @model_validator(mode="after")
+    def _reject_inverted_ranges(self) -> "BookMetadataFilter":
+        """An inverted range is unanswerable, so it fails here rather than in SQL.
+
+        `metadata_predicates` ANDs the two bounds independently, so min > max
+        compiles to a WHERE that can never hold: zero rows, indistinguishable
+        from an ordinary miss. Raising instead makes the runner skip the one goal
+        and say which field pair was wrong.
+        """
+        for low_name, high_name in _BOUNDED_RANGES:
+            low, high = getattr(self, low_name), getattr(self, high_name)
+            if low is not None and high is not None and low > high:
+                raise ValueError(
+                    f"{low_name} ({low}) is above {high_name} ({high}) — no book "
+                    "can satisfy both"
+                )
+        return self
 
 
 class BooksFilter(BookMetadataFilter):

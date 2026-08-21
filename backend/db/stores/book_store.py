@@ -178,6 +178,32 @@ class BookStore(BaseStore[BookModel]):
         )
         return DeferredBookQuery(stmt, label="author")
 
+    def numeric_traits_query(self, filters: BookMetadataFilter) -> DeferredBookQuery:
+        """Build the metadata search over the whole catalog, without running it.
+
+        The same predicates `filter_query` ANDs onto an upstream query, applied
+        with no upstream query to AND them onto — which is what makes bounds a
+        search of their own ("books under 200 pages") rather than only a
+        narrowing of someone else's ("Murakami books after 2005"). Sharing
+        `metadata_predicates` is what keeps the two readings of a bound from
+        diverging in SQL.
+
+        No `score` column, unlike `title_query`/`author_query`: a bound is not a
+        degree of match, so there is nothing to rank by. `materialize_stmt`
+        therefore falls back to `average_rating DESC`, which is the right order
+        for the asks that reach here — "well rated", "most popular".
+
+        An empty filter is refused for the same reason as in `filter_query`, and
+        harder: with no base to fall back to, no predicates means selecting the
+        entire catalog and reporting it as a search result.
+        """
+        predicates = metadata_predicates(self.model, filters)
+        if not predicates:
+            raise ValueError("Cannot search on an empty metadata filter")
+
+        stmt = select(self.model.isbn13).where(*predicates)
+        return DeferredBookQuery(stmt, label="numeric_traits")
+
     def filter_query(
         self, base: DeferredBookQuery, filters: BookMetadataFilter
     ) -> DeferredBookQuery:

@@ -25,10 +25,12 @@ class FilterRetrieval(BaseRequest):
     subject — "by Sanderson, over 400 pages", "fantasy published after 2015",
     "highly rated with lots of reviews".
 
-    Do not use: when the limits are all the request has. Page count, year and
-    rating can narrow a search but cannot BE one, so a request made only of them
-    has no subject and should be sent back for clarification rather than given
-    an invented anchor. Do not use for genre, author, title or theme either —
+    Do not use: when the limits are all the request has. "Books under 200
+    pages", "show me some well rated books" — there is nothing here to narrow,
+    and a bound with no subject is Retrieve_by_Numeric_Traits, which searches the
+    whole catalog by the same bounds. The split is only about whether the request
+    has another subject in it: with one, the bounds come here; without one, they
+    are the search. Do not use for genre, author, title or theme either —
     those are search subjects with their own retrieval nodes. And do not use to
     bound a recommendation: Analyze_Recommend reads the bounds out of its own
     goal text and applies them *inside* its search, so every book it considers

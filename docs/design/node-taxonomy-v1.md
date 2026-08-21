@@ -79,6 +79,13 @@ has no node that can serve it — until the clarification node exists, it silent
 route to anything meaningful. Worth a dedicated eval case once the clarification node
 lands (roadmap Phase 1, still open).
 
+> **Superseded for the four numeric columns (2026-08-20).** `average_rating`,
+> `ratings_count`, `num_pages` and `published_year` now have a retrieval node —
+> `Retrieve_by_Numeric_Traits`, below. `categories` is still undimensioned and is the
+> next node planned. The cross-column shape named here ("sci-fi books over 300 pages")
+> is deliberately *not* what that node serves: it has a subject, so it stays
+> `Retrieve_by_Genre` + `Filter_Retrieval`.
+
 **Removed from V1:** `Analyze_Compare` (`CompareStrategy`) is unregistered as of
 2026-07-17 — pulled from `BOOK_ANALYZE_CLASSES`, `BOOK_NODE_TYPE_TO_CLS`, and
 `AnyStrategyRequest`. The class and its mock executor (`CompareBooksExecutor`) stay
@@ -225,6 +232,95 @@ lands, a plan can wire a report into a node expecting books and nothing will obj
 > Phase 1 checklist and deferred-features table say the same "removed" thing and are
 > stale in the same way. Reconcile both whenever Compare's fate is finally settled — see
 > the open question below, surfaced by re-enabling it for eval testing.
+
+### `Retrieve_by_Numeric_Traits` — bounds as a subject (2026-08-20)
+
+`Retrieve_by_Numeric_Traits` (`FindByNumericTraitsRetrieval`, slice
+`books/find_by_numeric_traits/`) is registered: a RETRIEVAL-tier node carrying a whole
+`BookMetadataFilter`, which searches the catalog by measurable traits alone.
+
+**What it fixes.** A request made only of numbers had nowhere to go. `Filter_Retrieval`
+is COMBINE-tier and requires an anchor (`FilterRetrievalInput.anchors` is
+`Field(..., min_length=1)`), so "find books with fewer than 200 pages" could only be sent
+to a clarification node that was never built. Base cases 12 and 58 baselined to *no nodes*
+for exactly this reason, and 15, 27 and 34 expected `Retrieve_Popular`, a node that only
+ever existed in `playground/app_mock/`. All five are re-baselined.
+
+**Why this is not `Retrieve_by_Traits` coming back.** The deleted node (see above) blurred
+with `Analyze_Recommend` because both carried filter fields and nothing structural chose
+between them. Three things are different now:
+
+- **The request schema is fieldless.** Under the rule-1a split the planner sees only a
+  docstring and a `node_type`; the `BookMetadataFilter` lives on `FindByNumericTraitsArgs`,
+  an internal tool the node's own parse ships. No `BooksFilter` is on a planner-facing
+  schema, which is the thing the original decision removed.
+- **`Analyze_Recommend` no longer competes.** It lost `filters` in 2026-07-17 and since
+  2026-08-19 parses its own bounds out of its goal text and applies them *inside* the
+  vector search. Bounds on a recommendation were already settled as staying with the
+  recommendation.
+- **The separation from `Filter_Retrieval` is `depends_on`.** This node takes an empty
+  `NodeInput`; that one requires ≥1 anchor. A mis-emitted `Filter_Retrieval` with no anchor
+  fails `build_input` and is skipped by the runner naming the field, rather than running.
+
+**The numbers-only rule.** This node fires only when the numbers are the *entire* request.
+Any other subject and the bounds narrow that subject instead. Both docstrings carry the
+rule, and it is prose — the schemas do not enforce it, since a plan with a genre node and a
+numeric node in it is structurally legal. Base cases 76/77 are the same query one word
+apart and are what actually hold it, the role cases 53/54 play for the author/co-author
+split.
+
+**Superlatives are bounds, not ordering.** "Highest rated" becomes `min_rating: 4.3`.
+Deferred queries carry no `ORDER BY` and no `LIMIT` by invariant, and the node emits no
+`score` column, so `materialize_stmt` falls back to `average_rating DESC` — right for
+"well rated" and "most popular", wrong for "the longest books", which ranks by rating.
+Accepted; emitting the named trait as `score` is the one-line fix if evals ask for it.
+
+**Vague language is inferred, and that cost two things.** "Well rated", "obscure",
+"the classical period" have to become numbers. The calibration lives on
+`BookMetadataFilter`'s **field descriptions**, not in the slice, because the same model is
+shipped inside `FilterRetrievalArgs` and `RecommendationArgs.bounds` and the three must not
+calibrate "well rated" differently. Two findings from measuring it against the live model
+rather than assuming:
+
+- **The shared `basic_fill_schema_prompt` is wrong for this node.** It says "do not use
+  prior knowledge" and "do not infer arguments that do not match the query" — correct for
+  the parses that lift a title or author out of a sentence, and a direct instruction against
+  this node's job. Under it, "obscure books nobody has heard of" and "something really long"
+  both parsed to an *empty* filter while literal numbers worked, which made the failure look
+  like a schema problem. The slice has its own prompt, the way `analyze_recommend/` does.
+- **`reasoning_effort="minimal"` cannot do this parse.** On an eight-phrase calibration set,
+  `gpt-5-nano`/minimal scored 2/8 and also corrupted output ("fewer than 200 pages" →
+  `min_pages: 200, max_ratings_count: 1000`); `gpt-5-nano`/low scored 8/8. `gpt-5-mini`
+  bought nothing over nano at either effort, so the model stays the cheap one and only the
+  effort changed. This is the first node to diverge from the template's model settings, and
+  it is the reason each slice builds its own `build_arg_parser_request`.
+- **"Infer from a vague word" and "invent from nothing" had to be separated explicitly.** A
+  first draft of the prompt said *never return an empty filter*, reasoning that every goal
+  reaching this node has something measurable in it. Handed a mis-routed goal ("find me a
+  book about dragons") the parser duly invented `max_pages: 1000, min_rating: 4.0,
+  min_year: 2000` and the node answered with 1,380 books — a confident answer to a question
+  nobody asked, and worse than the empty filter it was written to prevent. It also defeated
+  the executor's own `if not bounds: raise` guard, which is the node's backstop against
+  being handed the wrong goal. The rule now names both halves separately: infer freely from
+  a vague word, never invent from nothing, and let an empty filter fail the goal.
+
+**Cost:** ~550 catalog tokens on every request, and `Filter_Retrieval` grew to ~578 after
+its docstring took on the numbers-only rule — together 53% of a five-tool catalog. That is
+the strongest argument for the merge considered and declined below.
+
+**Considered and declined: optional anchors.** `numeric_traits_query(filters)` and
+`filter_query(base, filters)` are the same predicates with and without a base, so one node
+with `anchors: list[BookRetrievalOutput] = []` would have absorbed `Filter_Retrieval`
+outright and removed the discrimination problem structurally instead of by prose. Declined
+by the owner (2026-08-20) pending a clearer read on how `Filter_Retrieval` is actually
+being used; it is the obvious shape to revisit when that node is removed, and it would take
+the 53% catalog share back down with it.
+
+**Also landed with it:** `BookMetadataFilter` gained `ge`/`le` bounds and an inverted-range
+validator, closing adversarial cases 301–303 (negative pages, "year 300 BC", "rated above
+9999 stars") for all three consumers at once. `min_year`/`max_year` deliberately take no
+upper bound — the catalog ending at 2019 is a fact about the dataset, not about reality, so
+"published after 2020" stays a legitimate question whose honest answer is zero.
 
 ## V1 conversation contract: clarify-only, single-turn
 

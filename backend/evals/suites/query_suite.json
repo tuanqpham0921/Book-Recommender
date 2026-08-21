@@ -80,8 +80,8 @@
     "id": 12,
     "difficulty": "easy",
     "query": "Find books with fewer than 200 pages.",
-    "note": "Single FindByTraits with max_pages=200 only. Tests numeric filter mapping.",
-    "expected_nodes": []
+    "note": "BOUNDS AS THE SUBJECT (re-baselined 2026-08-20, when Retrieve_by_Numeric_Traits landed). Page count is the whole request, so there is nothing for Filter_Retrieval to narrow — the bound itself is the search. Previously expected no nodes, on the since-reversed premise that a measurable limit can never be what a search is about.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
   },
   {
     "id": 13,
@@ -101,8 +101,8 @@
     "id": 15,
     "difficulty": "easy",
     "query": "Show me the highest rated books you have.",
-    "note": "Single FindByTraits with sort_by=rating, sort_order=desc. Tests sort filter with no content filter.",
-    "expected_nodes": ["Retrieve_Popular"]
+    "note": "SUPERLATIVE AS A BOUND (re-baselined 2026-08-20). 'Highest rated' becomes a tighter rating floor (min_rating 4.3), not a sort: deferred queries carry no ORDER BY, and materialize_stmt already ranks by rating. Previously expected Retrieve_Popular, a node that only ever existed in playground/app_mock/. The failure to catch is an empty filter — the parse must infer a number from a word with no figure in the query.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
   },
   {
     "id": 16,
@@ -185,8 +185,8 @@
     "id": 27,
     "difficulty": "medium",
     "query": "Find me books about artificial intelligence that are non-fiction and highly rated.",
-    "note": "Single FindByTraits with keywords=[AI], genre=non-fiction, min_rating. Three filters on a trait-based search.",
-    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_Popular"]
+    "note": "NEGATIVE HALF OF THE NUMBERS-ONLY RULE (re-baselined 2026-08-20). This request HAS a subject (artificial intelligence, non-fiction), so the rating bound can only narrow that search — Retrieve_by_Numeric_Traits would be wrong here, and mis-routing to it is exactly the blur the V1 taxonomy deleted Retrieve_by_Traits over. Previously expected Retrieve_Popular. Stays red until Retrieve_by_Genre is registered.",
+    "expected_nodes": ["Retrieve_by_Genre", "Filter_Retrieval"]
   },
   {
     "id": 28,
@@ -234,8 +234,8 @@
     "id": 34,
     "difficulty": "medium",
     "query": "Find me the top 5 most popular children's books with over 1000 ratings.",
-    "note": "Single FindByTraits with is_children=True, sort_by=rating, limit=5, and a ratings_count proxy via keywords. Tests limit + sort + child filter combination.",
-    "expected_nodes": ["Retrieve_Popular"]
+    "note": "TWO BOUNDS AND A FLAG (re-baselined 2026-08-20): is_children plus min_ratings_count, no subject. 'Top 5' is a count this node cannot express — it reports how many matched and previews a few, which is the accepted cost of superlatives-as-bounds. Previously expected Retrieve_Popular.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
   },
   {
     "id": 35,
@@ -402,8 +402,8 @@
     "id": 58,
     "difficulty": "medium",
     "query": "Find books between 300 and 500 pages published after 2015.",
-    "note": "ANCHORLESS CONSTRAINTS (design-intent expectation, added 2026-07-24). Page count and publication year can narrow a search but cannot be what a search is ABOUT — there is no subject here. Expected behavior is a clarification/rejection rather than an invented anchor, so the expectation is no nodes; it will stay red until the clarification node lands, like the other known-failing cases. Mirrors case 12 ('books with fewer than 200 pages'), which baselines to no nodes for the same reason. The failure to catch is fabricating a Retrieve_by_Genre or Analyze_Recommend to have somewhere to put the filters.",
-    "expected_nodes": []
+    "note": "ANCHORLESS CONSTRAINTS (was a design-intent no-node expectation, 2026-07-24; re-baselined 2026-08-20). The premise changed rather than the plan being fixed: page count and year can now BE what a search is about, via Retrieve_by_Numeric_Traits. Mirrors case 12.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
   },
   {
     "id": 59,
@@ -495,5 +495,47 @@
     "query": "Find the Dune books that are over 500 pages.",
     "note": "TITLE + FILTER (added 2026-08-17, when Filter_Retrieval was registered). Case 61's shape drawn on the retrieval node that is actually live: the title is the subject, the page bound can only narrow it, so the plan is Retrieve_by_Title then Filter_Retrieval depending on it. Every other Filter_Retrieval case in this suite (61, 63, 65) anchors on a parked node, which makes this the only one whose plan runs end to end — so it exercises the executor and the narrowed-query hand-off, not just the routing. Two failures to catch: folding the page bound into Retrieve_by_Title, which carries no filters and would drop it silently; and routing to Analyze_Recommend because a metadata bound appeared, when nothing here asks for anything *like* anything.",
     "expected_nodes": ["Retrieve_by_Title", "Filter_Retrieval"]
+  },
+  {
+    "id": 72,
+    "difficulty": "easy",
+    "query": "Show me some well rated books.",
+    "note": "INFERRED BOUND, NO FIGURE (added 2026-08-20). 'Well rated' has to become min_rating 4.0 from the calibration on BookMetadataFilter's field descriptions — this is the core of what Retrieve_by_Numeric_Traits adds over a literal numeric filter, and it is why the slice has its own parser prompt: the shared basic_fill_schema_prompt says 'do not use prior knowledge', which returns an empty filter here.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
+  },
+  {
+    "id": 73,
+    "difficulty": "easy",
+    "query": "What books do you have from the classical period?",
+    "note": "INFERRED YEAR BOUND (added 2026-08-20): 'classical period' -> max_year 1970. Regression guard — an earlier field description that opened with the corpus range made the parser answer 1876, the oldest book in the catalog, rather than the calibrated cutoff.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
+  },
+  {
+    "id": 74,
+    "difficulty": "easy",
+    "query": "Find me obscure books nobody has heard of.",
+    "note": "RATINGS COUNT, NOT RATING (added 2026-08-20). 'Obscure' is max_ratings_count 1000 and says nothing about quality; the two rating columns are the pair most easily swapped. This case stayed empty under the shared no-inference parser prompt and at reasoning_effort=minimal.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
+  },
+  {
+    "id": 75,
+    "difficulty": "easy",
+    "query": "I want something really long.",
+    "note": "INFERRED PAGE BOUND (added 2026-08-20): 'really long' -> min_pages 500. At reasoning_effort=minimal the parser invented min_pages 1000 instead of using the calibrated value, so this pins the calibration being read rather than a plausible number being guessed.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
+  },
+  {
+    "id": 76,
+    "difficulty": "medium",
+    "query": "Find me books over 400 pages.",
+    "note": "POSITIVE HALF of the discrimination pair with case 77 (added 2026-08-20). No other subject, so the bound IS the search. The failure to catch is Filter_Retrieval, which requires an anchor and would be skipped by the runner for missing one.",
+    "expected_nodes": ["Retrieve_by_Numeric_Traits"]
+  },
+  {
+    "id": 77,
+    "difficulty": "medium",
+    "query": "Find me fantasy books over 400 pages.",
+    "note": "NEGATIVE HALF of the pair with case 76 (added 2026-08-20) — same bound, one added subject. Genre is the search and the page bound narrows it, so this must NOT route to Retrieve_by_Numeric_Traits. With both nodes registered and only prose separating them, this pair is what holds the numbers-only rule, the way cases 53/54 hold the author/co-author split. Stays red until Retrieve_by_Genre is registered.",
+    "expected_nodes": ["Retrieve_by_Genre", "Filter_Retrieval"]
   }
 ]

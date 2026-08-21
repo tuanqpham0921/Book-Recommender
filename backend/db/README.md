@@ -18,12 +18,17 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `chat_run_store.py` (review queue, ordered least-reviewed-first),
   `feedback_store.py` (review upsert).
 - **Deferred queries** (`deferred_query.py`). Retrieval nodes do not fetch rows:
-  `BookStore.title_query()` / `author_query()` build a statement, `count()` runs only a `COUNT`
+  `BookStore.title_query()` / `author_query()` / `numeric_traits_query()` build a
+  statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
   the store** (they need the model and the session — `filter_query()` is on that
   side too: narrowing an existing query by `BookMetadataFilter` bounds needs the
-  model's columns, and it hands back another deferred query rather than rows);
+  model's columns, and it hands back another deferred query rather than rows.
+  `numeric_traits_query()` is `filter_query()` with no base to narrow: the same
+  `metadata_predicates`, applied to the whole catalog, which is what lets bounds
+  *be* a search rather than only a narrowing of one. It is also the one builder
+  that emits no `score` column, so its rows fall back to ranking by rating);
   **everything derivable from
   an already-built query lives on `DeferredBookQuery` itself** — `count_stmt()`,
   `materialize_stmt()`, and `DeferredBookQuery.compose()`, which folds several
