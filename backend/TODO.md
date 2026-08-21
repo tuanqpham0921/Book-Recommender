@@ -18,6 +18,33 @@ debugging" → `docs/design/node-refusal-v1.md` (+ two backlog bullets under "No
 
 -----
 
+                    ERROR    | sqlalchemy.pool.impl.AsyncAdaptedQueuePool |     
+                             _finalize_fairy:1030 | The garbage collector is    
+                             trying to clean up non-checked-in connection       
+                             <AdaptedConnection <asyncpg.connection.Connection  
+                             object at 0xf43d27cea8a0>>, which will be          
+                             terminated.  Please ensure that SQLAlchemy pooled  
+                             connections are returned to the pool explicitly,   
+                             either by calling ``close()`` or by using          
+                             appropriate context managers to manage their       
+                             lifecycle.                                         
+/home/tuani/Book-Recommender/backend/airglider/src/utils.py:182: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0xf43d27cea8a0>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+  def strip_zero_token_usage(value: Any) -> Any:
+                    ERROR    | sqlalchemy.pool.impl.AsyncAdaptedQueuePool |     
+                             _finalize_fairy:1030 | The garbage collector is    
+                             trying to clean up non-checked-in connection       
+                             <AdaptedConnection <asyncpg.connection.Connection  
+                             object at 0xf43d251c3890>>, which will be          
+                             terminated.  Please ensure that SQLAlchemy pooled  
+                             connections are returned to the pool explicitly,   
+                             either by calling ``close()`` or by using          
+                             appropriate context managers to manage their       
+                             lifecycle.                                         
+/home/tuani/Book-Recommender/backend/airglider/src/utils.py:182: SAWarning: The garbage collector is trying to clean up non-checked-in connection <AdaptedConnection <asyncpg.connection.Connection object at 0xf43d251c3890>>, which will be terminated.  Please ensure that SQLAlchemy pooled connections are returned to the pool explicitly, either by calling ``close()`` or by using appropriate context managers to manage their lifecycle.
+  def strip_zero_token_usage(value: Any) -> Any:
+
+---------------------
+
 imagine the shape of recommend if you make anchorless..
 you are welcoming the planner to basically dump all recommendations to here...
 
