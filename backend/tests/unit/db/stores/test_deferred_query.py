@@ -38,6 +38,10 @@ def _filtered(base: DeferredBookQuery | None = None, **bounds) -> DeferredBookQu
     )
 
 
+def _category(*keywords: str) -> DeferredBookQuery:
+    return BookStore(MagicMock()).category_query(keywords=list(keywords) or ["ninja"])
+
+
 def _traits(**bounds) -> DeferredBookQuery:
     return BookStore(MagicMock()).numeric_traits_query(BookMetadataFilter(**bounds))
 
@@ -149,6 +153,51 @@ class TestFilterQuery:
         # a no-op narrowing step would report a count the user reads as filtered
         with pytest.raises(ValueError):
             _filtered()
+
+
+class TestCategoryComposition:
+    """A category search is only worth building deferred if it composes like the
+    rest — that is the whole reason it counts instead of fetching rows."""
+
+    def test_bounds_and_onto_a_category_search(self):
+        # "fantasy books over 400 pages": the subject node, then Filter_Retrieval
+        compiled = _compiled_sql(_filtered(_category(), min_pages=400).stmt)
+        assert "books.num_pages >=" in compiled
+        assert "@@" in compiled  # the subject search is still in there
+
+    def test_relevance_ranking_survives_being_filtered(self):
+        # dropping the score would silently re-rank a subject search by rating
+        compiled = _compiled_sql(
+            _filtered(_category(), min_pages=400).materialize_stmt(BookModel, limit=3)
+        )
+        assert "ORDER BY final.score DESC" in compiled
+
+    def test_intersects_with_another_dimension(self):
+        # "horror books Stephen King wrote" — the plan shape a single-dimension
+        # retrieval node cannot express on its own
+        pooled = DeferredBookQuery.compose(
+            [_category(), _title("IT")], op="and", label="both"
+        )
+        compiled = _compiled_sql(pooled.count_stmt()).upper()
+        assert "INTERSECT" in compiled
+        assert "COUNT(*)" in compiled
+
+    def test_composition_drops_the_score(self):
+        # a per-dimension score means nothing once two dimensions combine
+        pooled = DeferredBookQuery.compose([_category(), _title("IT")], op="and")
+        compiled = _compiled_sql(pooled.materialize_stmt(BookModel, limit=3))
+        assert "ORDER BY books.average_rating DESC NULLS LAST" in compiled
+
+    def test_single_query_compose_keeps_the_score(self):
+        pooled = DeferredBookQuery.compose([_category()])
+        compiled = _compiled_sql(pooled.materialize_stmt(BookModel, limit=3))
+        assert "ORDER BY final.score DESC" in compiled
+
+    def test_compile_sql_renders_it_for_the_trace(self):
+        # the recorded SQL is what a reader debugs a wrong count from
+        rendered = compile_sql(_category().stmt)
+        assert "to_tsvector('english'" in rendered
+        assert "ninja" in rendered
 
 
 class TestCountStmt:

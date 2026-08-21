@@ -14,9 +14,11 @@ class RecommendationStrategy(BaseRequest):
 
     Args:
         semantic_input: What the books should be LIKE — theme, tone, mood or
-            premise, in the user's own words. Never a title, author, or shelf
-            label; shelf words go to Retrieve_by_Genre. Omit when the ask is
-            purely "more like X" with no twist — the anchor alone carries it.
+            premise, in the user's own words. This node searches by *meaning*;
+            Retrieve_by_Category searches by *word*. A subject you could look up
+            in the catalog's text ("ninjas", "space", "mystery") belongs there,
+            and never a title or an author. Omit when the ask is purely "more
+            like X" with no twist — the anchor alone carries it.
 
     Returns: BookRetrievalOutput — the recommended books, chosen by this node.
 
@@ -28,8 +30,9 @@ class RecommendationStrategy(BaseRequest):
         - Similarity: "books like X", "more like X or Y" → retrieve X (and Y)
           first; no semantic_input needed
         - Thematic / mood: "something cozy and hopeful" → semantic_input. A
-          shelf word riding along ("cozy mysteries") splits: "mystery" to
-          Retrieve_by_Genre, "cozy" stays here
+          subject word riding along ("cozy mysteries") splits: "mystery" is a
+          word the catalog's text contains, so it goes to Retrieve_by_Category;
+          "cozy" is a feel no word search can find, so it stays here
         - Mixed: named anchor book(s) plus a twist ("like X but darker") →
           a supporting retrieval plus semantic_input
 

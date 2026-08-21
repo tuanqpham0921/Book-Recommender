@@ -1,11 +1,11 @@
 from typing import List, Any, Dict
 
-from sqlalchemy import Select, func, or_, select, text
+from sqlalchemy import Select, func, literal_column, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from config import BookConstraints
-from db.schema import BookMetadataFilter, BookModel
+from db.schema import AudienceEnum, BookMetadataFilter, BookModel, GenreEnum
 from .base_store import BaseStore
 from .deferred_query import DeferredBookQuery
 
@@ -35,6 +35,96 @@ def metadata_predicates(model: type[BookModel], filters: BookMetadataFilter) -> 
     if filters.is_children is not None:
         predicates.append(model.is_children.is_(filters.is_children))
     return predicates
+
+
+# Rendered inline rather than passed as Python strings, which SQLAlchemy binds
+# as parameters: `func.to_tsvector("english", func.coalesce(title, ""))` compiles
+# to `to_tsvector(%(to_tsvector_1)s, coalesce(books.title, %(coalesce_1)s))`.
+# A bind parameter inside the document expression is what stops Postgres matching
+# it against `books_search_idx` — matching happens on constant-folded nodes, and
+# a Param is not a Const, so a generic plan can never use the index.
+_TS_CONFIG = literal_column("'english'")
+_EMPTY = literal_column("''")
+_SPACE = literal_column("' '")
+
+
+def search_document(model: type[BookModel]):
+    """The text one book is searched as: title, shelf label and blurb, as one tsvector.
+
+    `categories` cannot answer a topic on its own — one Google-Books shelf label
+    per book, 480 distinct over 5,197 rows — so "ninja", "space" and "artificial
+    intelligence" all match nothing there. The blurb carries the subject. One
+    document rather than three separately searched columns, so one index serves
+    the whole thing.
+
+    Pinned to the two-argument `to_tsvector(regconfig, text)`: the one-argument
+    form reads `default_text_search_config` at run time and is only STABLE, so it
+    cannot be indexed. `concat_ws(' ', ...)` is the obvious cleanup for the
+    coalesce chain and is STABLE for the same class of reason — do not take it.
+
+    Every `books.description` is prefixed with its own isbn13. The `english`
+    parser reads that as a single `uint` lexeme rather than as digits, so no
+    keyword can match it, and it only shifts positions by one, which `ts_rank`'s
+    default normalization does not read. Left in rather than stripped: a
+    `regexp_replace` here would double the expression that has to stay identical
+    to the DDL, and the prefix belongs to ingestion anyway.
+
+    **Duplicated as DDL in `db/schema/02_indexes.sql` and the two must stay
+    character-identical** — Postgres matches an expression index structurally, so
+    a changed separator here silently turns a single-digit-ms bitmap scan back
+    into the 520ms sequential scan measured before the index existed.
+    `tests/unit/db/stores/test_category_query.py` compares them.
+    """
+    return func.to_tsvector(
+        _TS_CONFIG,
+        func.coalesce(model.title, _EMPTY)
+        + _SPACE
+        + func.coalesce(model.categories, _EMPTY)
+        + _SPACE
+        + func.coalesce(model.description, _EMPTY),
+    )
+
+
+# The four values `books.genre` holds, indexed by the two facets that cut them.
+# Set membership, never LIKE: "Nonfiction" ends in "fiction", so
+# `genre ILIKE '%fiction'` matches all 5,197 rows and reports the whole catalog
+# as a genre search.
+_BY_GENRE = {
+    GenreEnum.FICTION: ("Fiction", "Children's Fiction"),
+    GenreEnum.NONFICTION: ("Nonfiction", "Children's Nonfiction"),
+}
+_BY_AUDIENCE = {
+    AudienceEnum.CHILDREN: ("Children's Fiction", "Children's Nonfiction"),
+    AudienceEnum.ADULT: ("Fiction", "Nonfiction"),
+}
+
+
+def genre_values(
+    genre: GenreEnum | None, audience: AudienceEnum | None
+) -> tuple[str, ...] | None:
+    """The `books.genre` values the two facets select together, or None for neither.
+
+    One intersected set and one `IN`, rather than two ANDed predicates: the facets
+    cut the same four values on different axes, so their conjunction is an
+    intersection that can be taken here — "children's fiction" is one value, not
+    two predicates that happen to overlap. Every combination is non-empty, so this
+    never hands back a predicate nothing can satisfy.
+
+    `books.genre` misses two of the 449 children's books that
+    `categories ILIKE 'Juvenile%'` finds (447 vs 449). Not worth a second arm.
+    """
+    sets = []
+    if genre is not None:
+        sets.append(_BY_GENRE[genre])
+    if audience is not None:
+        sets.append(_BY_AUDIENCE[audience])
+    if not sets:
+        return None
+
+    chosen = set(sets[0])
+    for other in sets[1:]:
+        chosen &= set(other)
+    return tuple(sorted(chosen))
 
 
 def embedding_search_stmt(
@@ -204,6 +294,58 @@ class BookStore(BaseStore[BookModel]):
         stmt = select(self.model.isbn13).where(*predicates)
         return DeferredBookQuery(stmt, label="numeric_traits")
 
+    def category_query(
+        self,
+        keywords: List[str] | None = None,
+        genre: GenreEnum | None = None,
+        audience: AudienceEnum | None = None,
+    ) -> DeferredBookQuery:
+        """Build the subject search over the whole catalog, without running it.
+
+        Three facets, ANDed: what the book is about (full text over title, shelf
+        label and blurb), whether it is fiction, and who it is for. All three in
+        one node because they cut one question — "non-fiction about history" is a
+        single search, not two to intersect — which is the same exception
+        `numeric_traits_query` takes for bounds.
+
+        Keywords are joined into one `plainto_tsquery`, which already ANDs the
+        words it is handed: two keywords are the same query as one two-word
+        keyword, and one tsquery is one index probe rather than N bitmap scans to
+        AND together. Precision over recall is deliberate — "cozy mystery"
+        finding one book is a better answer than "cozy OR mystery" finding two
+        hundred. `plainto_tsquery` rather than `to_tsquery` for a second reason:
+        it ignores punctuation in a parsed keyword instead of raising a syntax
+        error on it.
+
+        A `score` column only when there are keywords. `ts_rank` is a degree of
+        match; shelf membership is not, so a genre-only search leaves
+        `materialize_stmt` to fall back to `average_rating DESC` exactly as
+        `numeric_traits_query` does.
+
+        Empty args are refused for `numeric_traits_query`'s reason, and as hard:
+        with no predicates this selects the entire catalog and reports it as a
+        search result.
+        """
+        predicates = []
+        columns: list = [self.model.isbn13]
+
+        terms = " ".join(word for kw in (keywords or []) if (word := kw.strip()))
+        if terms:
+            document = search_document(self.model)
+            tsquery = func.plainto_tsquery(_TS_CONFIG, terms)
+            predicates.append(document.op("@@")(tsquery))
+            columns.append(func.ts_rank(document, tsquery).label("score"))
+
+        values = genre_values(genre, audience)
+        if values:
+            predicates.append(self.model.genre.in_(values))
+
+        if not predicates:
+            raise ValueError("Cannot search on an empty category filter")
+
+        stmt = select(*columns).where(*predicates)
+        return DeferredBookQuery(stmt, label="category")
+
     def filter_query(
         self, base: DeferredBookQuery, filters: BookMetadataFilter
     ) -> DeferredBookQuery:
@@ -228,7 +370,9 @@ class BookStore(BaseStore[BookModel]):
         # can end up composed into one statement, and two CTEs sharing a name
         # there is a compile error. The alias is generated per compile instead.
         src = base.stmt.subquery()
-        columns = [self.model.isbn13]
+        # annotated because the list is heterogeneous: an ORM column, then the
+        # subquery's `score`, which pyright sees as a KeyedColumnElement
+        columns: list = [self.model.isbn13]
         # a single-dimension base still carries its own score; dropping it here
         # would silently re-rank whatever materializes this by rating
         if "score" in src.c.keys():

@@ -13,7 +13,7 @@ The planner's first stage has to turn a sentence into something structured. Two 
 were on the table, and the repo has now tried both:
 
 - **Capability nodes (current).** One request schema per thing the system can do —
-  `Retrieve_by_Title`, `Retrieve_by_Author`, `Retrieve_by_Genre`, `Analyze_Recommend`, …
+  `Retrieve_by_Title`, `Retrieve_by_Author`, `Retrieve_by_Category`, `Analyze_Recommend`, …
   The LLM picks a node type and fills that node's small argument set.
 - **Entity + intent.** One generic `BookEntity` extraction (title, authors, genre, page
   range, year, rating …) plus a separate intent identifier (compare / recommend /

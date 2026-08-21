@@ -17,8 +17,8 @@
     "id": 3,
     "difficulty": "easy",
     "query": "Recommend me a mystery book.",
-    "note": "Single Recommend with semantic input only. One genre keyword, no reference book, no filters.",
-    "expected_nodes": ["Retrieve_by_Genre", "Analyze_Recommend"]
+    "note": "SUBJECT-ANCHORED RECOMMEND (note rewritten 2026-08-21). \"Mystery\" is a word the catalog's text contains, so it is keywords=[\"mystery\"] on Retrieve_by_Category, not a genre — genre is only fiction/non-fiction. That retrieval is the anchor Analyze_Recommend picks from. The failure to catch is Analyze_Recommend alone with semantic_input=\"mystery\": it has no anchor to depend on, and it sends a lexical subject through a similarity search that another node answers exactly.",
+    "expected_nodes": ["Retrieve_by_Category", "Analyze_Recommend"]
   },
   {
     "id": 4,
@@ -52,8 +52,8 @@
     "id": 8,
     "difficulty": "easy",
     "query": "Show me children's books.",
-    "note": "Single FindByTraits with is_children=True. The only filter that needs setting.",
-    "expected_nodes": ["Retrieve_by_Genre"]
+    "note": "AUDIENCE-ONLY RETRIEVAL (re-baselined 2026-08-21). One Retrieve_by_Category with audience=children and no keyword at all — a shelf-only search is complete without a subject. The old note claimed is_children=True on the numeric filter; that was never going to work, because books.is_children is NULL on all 5,197 rows and the bound matches nothing. Audience is answered against books.genre (447 books) and that is why this node owns it. The failure to catch is a Retrieve_by_Numeric_Traits with is_children set, which returns zero books and reads as an empty catalog.",
+    "expected_nodes": ["Retrieve_by_Category"]
   },
   {
     "id": 9,
@@ -74,7 +74,7 @@
     "difficulty": "easy",
     "query": "Recommend me a sci-fi novel with at least 4 stars.",
     "note": "Single Recommend with semantic input and a min_rating filter. One step up from pure semantic.",
-    "expected_nodes": ["Retrieve_by_Genre", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_by_Category", "Analyze_Recommend"]
   },
   {
     "id": 12,
@@ -88,7 +88,7 @@
     "difficulty": "easy",
     "query": "What non-fiction books about history do you have?",
     "note": "Single FindByTraits with genre=non-fiction and keywords=[history]. Two filters, still one node.",
-    "expected_nodes": ["Retrieve_by_Genre"]
+    "expected_nodes": ["Retrieve_by_Category"]
   },
   {
     "id": 14,
@@ -130,7 +130,7 @@
     "difficulty": "medium",
     "query": "Find fantasy books published between 2010 and 2020 sorted by rating.",
     "note": "Single FindByTraits with keyword, year range, and sort. Multiple filters on one node; tests compound filter composition.",
-    "expected_nodes": ["Retrieve_by_Genre"]
+    "expected_nodes": ["Retrieve_by_Category"]
   },
   {
     "id": 20,
@@ -144,7 +144,7 @@
     "difficulty": "medium",
     "query": "Find me a thriller from the 1990s with more than 300 pages and a rating above 4.",
     "note": "Single FindByTraits with keyword + year range + min_pages + min_rating. Four simultaneous filters; tests all numeric constraints together.",
-    "expected_nodes": ["Retrieve_by_Genre"]
+    "expected_nodes": ["Retrieve_by_Category"]
   },
   {
     "id": 22,
@@ -185,8 +185,8 @@
     "id": 27,
     "difficulty": "medium",
     "query": "Find me books about artificial intelligence that are non-fiction and highly rated.",
-    "note": "NEGATIVE HALF OF THE NUMBERS-ONLY RULE (re-baselined 2026-08-20). This request HAS a subject (artificial intelligence, non-fiction), so the rating bound can only narrow that search — Retrieve_by_Numeric_Traits would be wrong here, and mis-routing to it is exactly the blur the V1 taxonomy deleted Retrieve_by_Traits over. Previously expected Retrieve_Popular. Stays red until Retrieve_by_Genre is registered.",
-    "expected_nodes": ["Retrieve_by_Genre", "Filter_Retrieval"]
+    "note": "NEGATIVE HALF OF THE NUMBERS-ONLY RULE (re-baselined 2026-08-20). This request HAS a subject (artificial intelligence, non-fiction), so the rating bound can only narrow that search — Retrieve_by_Numeric_Traits would be wrong here, and mis-routing to it is exactly the blur the V1 taxonomy deleted Retrieve_by_Traits over. Previously expected Retrieve_Popular. Registered 2026-08-21, so this should now go green: keywords=[\"artificial intelligence\"] with genre=non-fiction on the category node, then Filter_Retrieval for the rating bound.",
+    "expected_nodes": ["Retrieve_by_Category", "Filter_Retrieval"]
   },
   {
     "id": 28,
@@ -207,7 +207,7 @@
     "difficulty": "medium",
     "query": "Find me a cozy mystery under 300 pages with a high rating, not too old.",
     "note": "Single Recommend with semantic_input (cozy mystery) plus max_pages, min_rating, min_year. Four constraints wrapped in one natural sentence.",
-    "expected_nodes": ["Retrieve_by_Genre"]
+    "expected_nodes": ["Retrieve_by_Category"]
   },
   {
     "id": 31,
@@ -312,7 +312,7 @@
     "difficulty": "hard",
     "query": "Hello! What's your name? Also tell me about this project and recommend me a sci-fi book.",
     "note": "Small talk + ProjectInfo + Recommend. Tests that the planner correctly separates small_talk from two real goals without over-routing.",
-    "expected_nodes": ["Retrieve_Project_Info", "Retrieve_by_Genre", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_Project_Info", "Retrieve_by_Category", "Analyze_Recommend"]
   },
   {
     "id": 46,
@@ -326,7 +326,7 @@
     "difficulty": "hard",
     "query": "I'm a developer who uses this app. Show me my token usage, tell me about the project's tech stack, and recommend sci-fi books about distributed systems.",
     "note": "UserInfo + ProjectInfo + Recommend across all three domains simultaneously. Three parallel nodes before Recommend — tests multi-domain fan-in.",
-    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Retrieve_by_Genre", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Retrieve_by_Category", "Analyze_Recommend"]
   },
   {
     "id": 48,
@@ -388,7 +388,7 @@
     "id": 56,
     "difficulty": "medium",
     "query": "Show me fantasy books by Brandon Sanderson.",
-    "note": "MULTI-ANCHOR CONTROL (design-intent expectation, not yet a recorded baseline — added 2026-07-24). Two anchor dimensions in one request: author AND genre. Single-dimension retrieval nodes cannot express the intersection, so the intended plan picks the more selective anchor (author) and treats genre as a constraint. The failure to catch is emitting Retrieve_by_Author AND Retrieve_by_Genre as siblings: with no combine operator between them that is a UNION — every Sanderson book plus every fantasy book — which is not what was asked. Genre is near-redundant here (Sanderson writes almost only fantasy), which is what makes this the control for case 57.",
+    "note": "MULTI-ANCHOR CONTROL (design-intent expectation, not yet a recorded baseline — added 2026-07-24). Two anchor dimensions in one request: author AND genre. Single-dimension retrieval nodes cannot express the intersection, so the intended plan picks the more selective anchor (author) and treats genre as a constraint. The failure to catch is emitting Retrieve_by_Author AND Retrieve_by_Category as siblings: with no combine operator between them that is a UNION — every Sanderson book plus every fantasy book — which is not what was asked. Genre is near-redundant here (Sanderson writes almost only fantasy), which is what makes this the control for case 57.",
     "expected_nodes": ["Retrieve_by_Author"]
   },
   {
@@ -416,7 +416,7 @@
     "id": 60,
     "difficulty": "hard",
     "query": "Find me some books by Jane Austen and Neil Gaiman with 200 pages or more, in thriller, before 2020. And recommend me some books like them with rating 4.0+ and at least 1000 ratings.",
-    "note": "CONSTRAINT-DENSE TWO-STAGE (design-intent expectation, added 2026-07-24). The heaviest case in the suite: two authors and five constraints split across two stages. Stage 1 is case 53's shape (two separate bibliographies, one Retrieve_by_Author each) with three constraints hung on each node — pages >= 200, thriller, before 2020 — none of which is an anchor. Stage 2 is 'like them' plus two more constraints (rating >= 4.0, ratings_count >= 1000), which is Analyze_Recommend depending on both retrievals. So three nodes, not five: no Retrieve_by_Genre for thriller, no separate node for the page or year filters. Two distinct failures to catch: (a) promoting a constraint to an anchor node, which unions instead of narrowing, and (b) losing the dependency link so the recommendation runs off the raw query rather than the retrieved books. Also a live example of the argument-level blind spot — the goals report can confirm the three node types and still miss every one of the five constraints.",
+    "note": "CONSTRAINT-DENSE TWO-STAGE (design-intent expectation, added 2026-07-24). The heaviest case in the suite: two authors and five constraints split across two stages. Stage 1 is case 53's shape (two separate bibliographies, one Retrieve_by_Author each) with three constraints hung on each node — pages >= 200, thriller, before 2020 — none of which is an anchor. Stage 2 is 'like them' plus two more constraints (rating >= 4.0, ratings_count >= 1000), which is Analyze_Recommend depending on both retrievals. So three nodes, not five: no Retrieve_by_Category for thriller, no separate node for the page or year filters. Two distinct failures to catch: (a) promoting a constraint to an anchor node, which unions instead of narrowing, and (b) losing the dependency link so the recommendation runs off the raw query rather than the retrieved books. Also a live example of the argument-level blind spot — the goals report can confirm the three node types and still miss every one of the five constraints.",
     "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author", "Analyze_Recommend"]
   },
   {
@@ -452,7 +452,7 @@
     "difficulty": "hard",
     "query": "What horror books has Stephen King written that are over 500 pages?",
     "note": "FULL COMBINE TIER (design-intent expectation, added 2026-07-24). The longest correct plan in the suite: two anchors that must hold on the same book (author AND genre) plus a metadata bound, which is four nodes — retrieve each anchor, Combine_Intersect them, then Filter_Retrieval the result. Exercises the whole tier and the anchor-vs-constraint line in one query: horror is a search subject and gets a retrieval node, 500 pages is a constraint and cannot. Two failures to catch: emitting the two retrievals as bare siblings, which pools them (every King book OR every horror book) instead of intersecting; and promoting the page bound to its own retrieval node. COLLIDES WITH CASES 56/57/59: those expect a single Retrieve_by_Author with the genre silently dropped, an expectation written before Combine_Intersect existed. This case encodes the post-combine-tier answer; they still encode the pre-combine-tier one. They need re-deciding together — see docs/design/execution-pipeline-v1.md open questions.",
-    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Author", "Combine_Intersect", "Filter_Retrieval"]
+    "expected_nodes": ["Retrieve_by_Category", "Retrieve_by_Author", "Combine_Intersect", "Filter_Retrieval"]
   },
   {
     "id": 66,
@@ -472,7 +472,7 @@
     "id": 68,
     "difficulty": "easy",
     "query": "Recommend me a J.K. Rowling book.",
-    "note": "AUTHOR-ANCHORED RECOMMEND (design-intent expectation, added 2026-07-28). The author-shaped twin of case 3 ('recommend me a mystery book' → Retrieve_by_Genre + Analyze_Recommend); the suite had title anchors (16, 20, 22) and genre anchors (3, 11) but no author anchor, so this fills the last corner of the recommend triangle. The author is the taste signal: retrieve her catalog, then pick from it. TWO failures to catch, one on each side. (a) Retrieve_by_Author alone, which answers case 52's question instead — the user asked for ONE book chosen for them, not the bibliography. (b) Retrieve_Random: this query is case 66's 'Recommend me a book' with four words inserted, and 'recommend me a book' is a literal Example query in Retrieve_Random's docstring, so 66 and 68 together are the actual test of whether the planner reads the anchor or pattern-matches the phrasing. The named author is exactly the 'taste, mood or anchor' that Retrieve_Random's Do-not-use clause routes away.",
+    "note": "AUTHOR-ANCHORED RECOMMEND (design-intent expectation, added 2026-07-28). The author-shaped twin of case 3 ('recommend me a mystery book' → Retrieve_by_Category + Analyze_Recommend); the suite had title anchors (16, 20, 22) and genre anchors (3, 11) but no author anchor, so this fills the last corner of the recommend triangle. The author is the taste signal: retrieve her catalog, then pick from it. TWO failures to catch, one on each side. (a) Retrieve_by_Author alone, which answers case 52's question instead — the user asked for ONE book chosen for them, not the bibliography. (b) Retrieve_Random: this query is case 66's 'Recommend me a book' with four words inserted, and 'recommend me a book' is a literal Example query in Retrieve_Random's docstring, so 66 and 68 together are the actual test of whether the planner reads the anchor or pattern-matches the phrasing. The named author is exactly the 'taste, mood or anchor' that Retrieve_Random's Do-not-use clause routes away.",
     "expected_nodes": ["Retrieve_Random"]
   },
   {
@@ -535,7 +535,7 @@
     "id": 77,
     "difficulty": "medium",
     "query": "Find me fantasy books over 400 pages.",
-    "note": "NEGATIVE HALF of the pair with case 76 (added 2026-08-20) — same bound, one added subject. Genre is the search and the page bound narrows it, so this must NOT route to Retrieve_by_Numeric_Traits. With both nodes registered and only prose separating them, this pair is what holds the numbers-only rule, the way cases 53/54 hold the author/co-author split. Stays red until Retrieve_by_Genre is registered.",
-    "expected_nodes": ["Retrieve_by_Genre", "Filter_Retrieval"]
+    "note": "NEGATIVE HALF of the pair with case 76 (added 2026-08-20) — same bound, one added subject. Genre is the search and the page bound narrows it, so this must NOT route to Retrieve_by_Numeric_Traits. With both nodes registered and only prose separating them, this pair is what holds the numbers-only rule, the way cases 53/54 hold the author/co-author split. Registered 2026-08-21, so this should now go green: keywords=[\"fantasy\"] on the category node, then Filter_Retrieval for the page bound.",
+    "expected_nodes": ["Retrieve_by_Category", "Filter_Retrieval"]
   }
 ]

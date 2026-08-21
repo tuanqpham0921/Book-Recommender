@@ -10,6 +10,17 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   indexes. `models.py` holds the SQLAlchemy ORM models, but
   `Base.metadata.create_all` is *not* how tables come to exist — which is why
   `index=True` flags on models do nothing (docs/backlog.md, Performance).
+  These files run **only when the container initializes an empty data
+  directory**, so an index added to `02_indexes.sql` never reaches an existing
+  database — pair it with a dated file in `schema/migrations/` and apply that
+  with `make postgres-query FILE=...`.
+  **`books_search_idx` duplicates a Python expression.** It is a GIN index over
+  the `to_tsvector(...)` document that `search_document()` in
+  `stores/book_store.py` builds, and Postgres matches expression indexes
+  *structurally* — so the DDL and the Python must stay character-identical, and
+  the expression must compile with no bind parameters in it (a Python `"english"`
+  becomes one, and the index silently stops being used: ~5ms back to ~520ms).
+  `tests/unit/db/stores/test_category_query.py` guards both halves.
 - `stores/` — repository pattern; routes/workflows never touch sessions directly.
   `base_store.py` (shared execute helpers), `book_store.py` (primary store: the
   deferred-query API below, plus the module-level `embedding_search_stmt` — a
@@ -18,8 +29,8 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `chat_run_store.py` (review queue, ordered least-reviewed-first),
   `feedback_store.py` (review upsert).
 - **Deferred queries** (`deferred_query.py`). Retrieval nodes do not fetch rows:
-  `BookStore.title_query()` / `author_query()` / `numeric_traits_query()` build a
-  statement, `count()` runs only a `COUNT`
+  `BookStore.title_query()` / `author_query()` / `category_query()` /
+  `numeric_traits_query()` build a statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
   the store** (they need the model and the session — `filter_query()` is on that
@@ -28,7 +39,11 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `numeric_traits_query()` is `filter_query()` with no base to narrow: the same
   `metadata_predicates`, applied to the whole catalog, which is what lets bounds
   *be* a search rather than only a narrowing of one. It is also the one builder
-  that emits no `score` column, so its rows fall back to ranking by rating);
+  that emits no `score` column, so its rows fall back to ranking by rating.
+  `category_query()` is the text one: a full-text match over title + shelf label
+  + blurb, ANDed with exact set membership on `books.genre`. It emits a
+  `ts_rank` score only when there are keywords, so a shelf-only search falls back
+  to rating the same way);
   **everything derivable from
   an already-built query lives on `DeferredBookQuery` itself** — `count_stmt()`,
   `materialize_stmt()`, and `DeferredBookQuery.compose()`, which folds several

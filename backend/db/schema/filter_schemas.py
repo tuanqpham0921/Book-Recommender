@@ -7,6 +7,24 @@ class GenreEnum(str, Enum):
     FICTION    = "fiction"
     NONFICTION = "non-fiction"
 
+
+class AudienceEnum(str, Enum):
+    """Who a book is for, as the catalog can actually answer it.
+
+    Resolved against `books.genre`, whose four values encode audience and
+    fiction-ness together ("Children's Fiction"), never against
+    `books.is_children` — that column is NULL on all 5,197 rows and matches
+    nothing. See the note on `BookMetadataFilter.is_children`.
+
+    Db-owned rather than slice-owned, beside `GenreEnum`, because both are
+    value vocabularies over a `books` column that `BookStore.category_query`
+    switches on. That keeps every parameter in its signature a db type, so the
+    store never has to import a node's args model.
+    """
+
+    CHILDREN = "children"
+    ADULT = "adult"
+
 class ExclusionBookFilter(BaseModel):
     """What a search rules OUT by name — never what it is about.
 
@@ -96,6 +114,12 @@ class BookMetadataFilter(BaseModel):
         ),
     )
 
+    # KNOWN DEAD: `books.is_children` is NULL on all 5,197 rows, so this bound
+    # matches nothing and any goal that sets it answers zero books silently.
+    # Audience is served by `AudienceEnum` on `FindByCategoryArgs`, which
+    # resolves against `books.genre` (447 rows). Kept rather than removed by
+    # owner decision; removing it means deleting the field and its two lines in
+    # `metadata_predicates`.
     is_children: Optional[bool] = Field(
         default=None,
         description=(

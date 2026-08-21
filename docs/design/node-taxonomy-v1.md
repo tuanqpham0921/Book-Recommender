@@ -48,7 +48,7 @@ response generation that always gets attached when the intent is to find books")
 | `Retrieve_by_ISBN13` | `FindByISBN13Retrieval` | Core retrieval — exact `isbn13` |
 | `Retrieve_by_Author` | `FindByAuthorRetrieval` | Core retrieval — `author: str` (was `authors: list[str]`; see the 2026-07-21 split below), promoted out of `playground/app_mock/extended_request_schemas.py` |
 | `Retrieve_by_CoAuthors` | `FindByCoAuthorsRetrieval` | Core retrieval — `authors: list[str]` (min 2), joint works only. Added 2026-07-21 |
-| `Retrieve_by_Genre` | `FindByGenreRetrieval` | Core retrieval — `genre: str`, new |
+| `Retrieve_by_Category` | `FindByCategoryRetrieval` | Core retrieval — subject, shelf and audience. Registered 2026-08-21; was sketched as `Retrieve_by_Genre` / `FindByGenreRetrieval` with a single `genre: str`. See the record below |
 | `Retrieve_Random` | `RandomBookRetrieval` | Core retrieval — optional `filters: BooksFilter`, one arbitrary pick. Promoted out of `playground/app_mock/extended_request_schemas.py` 2026-07-28; see below |
 | `Analyze_Recommend` | `RecommendationStrategy` | LLM ranking/response step, **no filters field** |
 | *(new)* clarification/rejection | not yet built | Turns refused or ambiguous goals into a helpful reply — still open |
@@ -81,10 +81,13 @@ lands (roadmap Phase 1, still open).
 
 > **Superseded for the four numeric columns (2026-08-20).** `average_rating`,
 > `ratings_count`, `num_pages` and `published_year` now have a retrieval node —
-> `Retrieve_by_Numeric_Traits`, below. `categories` is still undimensioned and is the
-> next node planned. The cross-column shape named here ("sci-fi books over 300 pages")
-> is deliberately *not* what that node serves: it has a subject, so it stays
-> `Retrieve_by_Genre` + `Filter_Retrieval`.
+> `Retrieve_by_Numeric_Traits`, below. The cross-column shape named here ("sci-fi books
+> over 300 pages") is deliberately *not* what that node serves: it has a subject, so it
+> is `Retrieve_by_Category` + `Filter_Retrieval`.
+>
+> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Category` — see the record at
+> the end of this file. Every `books` column now has a retrieval node except `isbn10`,
+> `thumbnail` and `title_and_subtiles`, none of which is a search dimension.
 
 **Removed from V1:** `Analyze_Compare` (`CompareStrategy`) is unregistered as of
 2026-07-17 — pulled from `BOOK_ANALYZE_CLASSES`, `BOOK_NODE_TYPE_TO_CLS`, and
@@ -321,6 +324,97 @@ validator, closing adversarial cases 301–303 (negative pages, "year 300 BC", "
 9999 stars") for all three consumers at once. `min_year`/`max_year` deliberately take no
 upper bound — the catalog ending at 2019 is a fact about the dataset, not about reality, so
 "published after 2020" stays a legitimate question whose honest answer is zero.
+
+### `Retrieve_by_Category` — subject as a search (2026-08-21)
+
+`Retrieve_by_Category` (`FindByCategoryRetrieval`, slice `books/find_by_category/`) is
+registered: a RETRIEVAL-tier node carrying three facets — subject keywords, fiction-ness
+and audience — ANDed into one deferred query. It replaces the sketched
+`Retrieve_by_Genre`/`FindByGenreRetrieval`, which never got past a schema fragment.
+
+**What it fixes.** A request that named no title had no legal plan at all — see
+[node-refusal-v1.md](node-refusal-v1.md), which opens on exactly this. "Give me a book
+about war" routed to `Retrieve_by_Title` and parsed `title="war"`. Twelve base cases sat
+red waiting for this node, two of them noted as such in the suite.
+
+**Why it is not one dimension.** This is the **second documented exception** to the
+single-valued rule, after `Retrieve_by_Numeric_Traits`. The reason is the same in shape and
+different in kind: bounds have no single dimension to be single about, and neither does a
+subject, because "non-fiction about history" is one question and not two to intersect. The
+facets cut the same rows on different axes rather than naming different columns.
+
+**Why the name changed from `Retrieve_by_Genre`.** The old name is what the planner LLM
+reads first, and it biases toward shelf labels — but `books.categories` holds one
+Google-Books shelf label per book (480 distinct over 5,197 rows) and cannot answer a topic
+at all: `%ninja%`, `%space%` and `%artificial intelligence%` each match **zero** rows there.
+The subject lives in `books.description`. A node named for genre would have been named for
+the one column that cannot do the job.
+
+**Lexical, not semantic — the line against `Analyze_Recommend`.** Both nodes can be handed
+"books about ninjas", so something has to choose. The old fragment tried "what a book is
+FILED UNDER, not what it is LIKE", which "cozy mysteries" defeats — *cozy* is neither. The
+line that holds is the mechanism: **this node asks whether the catalog's text contains
+these words** (`to_tsvector` over title + shelf + blurb) and hands on a composable query
+over the whole match; **`Analyze_Recommend` asks which books are near an embedding** and
+hands back a ranked terminal choice. "Cozy mysteries" splits cleanly — *mystery* is a word
+the text contains, *cozy* is a feel no word search can find. Both docstrings now state it
+from their own side. This is the passage in
+[execution-pipeline-v1.md](execution-pipeline-v1.md) that had closed the door on a
+`keywords` field, reopened deliberately and on a narrower basis.
+
+**Measured, not assumed.** Full-text search rather than ILIKE or trigram, because it stems
+("ninjas" finds the one ninja book without a second keyword) and respects word boundaries:
+`description ILIKE '%war%'` matches 985 books including "toward" and "warm", while the
+tsquery matches 442. `plainto_tsquery` already ANDs the words it is handed, so N keywords
+are joined into one probe rather than N ANDed ones.
+
+**The genre trap.** `books.genre` holds exactly four values — `Fiction`, `Nonfiction`,
+`Children's Fiction`, `Children's Nonfiction` — and `genre ILIKE '%Fiction'` matches **all
+5,197 rows**, because "Nonfiction" ends in "fiction". Genre and audience are therefore
+exact set membership over an intersected value set, never a pattern match.
+
+**Audience, and the `is_children` split.** `books.is_children` is NULL on all 5,197 rows,
+so `BookMetadataFilter.is_children` has always matched nothing — a silent zero wherever it
+is set. This node resolves audience against `books.genre` instead (447 books). It
+deliberately did **not** claim the field: `BookMetadataFilter.is_children` stays where it
+is by owner decision (2026-08-21), so audience is now reachable by one working path and one
+dead one. Both sites carry a comment saying so. The fix, when it is picked up, is deleting
+the field and its two lines in `metadata_predicates`.
+
+**The index is load-bearing and fragile.** Unindexed, the document expression is a 520ms
+sequential scan. `books_search_idx` (GIN, `db/schema/02_indexes.sql` plus a dated migration,
+since that file only runs at container init) takes it to ~5ms. Two things silently disable
+it, both of which look like cleanups: passing `'english'` or `''` as Python strings, which
+SQLAlchemy binds as parameters that a generic plan cannot match against a constant-folded
+index expression; and `concat_ws(' ', ...)`, which is STABLE rather than IMMUTABLE. The
+expression is written twice — once in `search_document()`, once as DDL — and
+`tests/unit/db/stores/test_category_query.py` asserts both the absence of bind parameters
+and that the two copies match.
+
+**Cost:** ~522 catalog tokens on every request; the catalog is now six tools at 2,690.
+
+**Known broken downstream: `Retrieve_by_Category` → `Analyze_Recommend`.** The pairing eval
+cases 3, 11, 45 and 47 expect fails, and it is not this node's bug.
+`BookWorkflow.fetch_anchor_books` raises `NotImplementedError` when the pooled anchor holds
+more than `MAX_ANCHOR_BOOKS` (5), carrying its own TODO — *"for now, re-query and only get
+the top rated"*. That cap was survivable while every anchor was a title search returning
+one or two books; a subject search returns 358 for "mystery", so the pairing fails every
+time. Verified end-to-end 2026-08-21: "Recommend me a cozy mystery" plans correctly
+(`keywords=["mystery"]` here, *cozy* left to `semantic_input`), the category node finds 358
+and finalizes ok, and the recommend node then dies on the cap.
+
+The fix is the TODO's own sentence and lives in `fetch_anchor_books`, not here:
+`materialize()` already takes a `limit` and already orders by the query's `score` (or by
+rating once a composition has dropped it), so taking the top `MAX_ANCHOR_BOOKS` instead of
+raising is a few lines. It is deliberately **not** part of this change — the owner scoped
+this round to the category node and left `Analyze_Recommend` untouched — but it is the
+first thing to do next, because it is what makes a subject a usable anchor rather than only
+a usable answer.
+
+**Deliberately deferred: the embedding arm.** A threshold-only vector query with no
+`ORDER BY`/`LIMIT` is a legal `DeferredBookQuery` (verified: ~450ms on this catalog, since
+ivfflat only helps an ordered, limited scan), so this node can grow a semantic arm that
+still composes. v1 is lexical only, and the slice is shaped as the template for that.
 
 ## V1 conversation contract: clarify-only, single-turn
 

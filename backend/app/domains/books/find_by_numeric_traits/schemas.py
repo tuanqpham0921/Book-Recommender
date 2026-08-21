@@ -28,7 +28,7 @@ class FindByNumericTraitsRetrieval(BaseRequest):
     Do not use: when the request has any other subject. A measurable bound
     riding alongside a genre, an author, a title or a taste belongs to that
     search, not to this one:
-        - "fantasy books over 400 pages" → Retrieve_by_Genre, then
+        - "fantasy books over 400 pages" → Retrieve_by_Category, then
           Filter_Retrieval carries the page bound
         - "Stephen King books over 400 pages" → Retrieve_by_Author, then
           Filter_Retrieval
@@ -95,7 +95,11 @@ class FindByNumericTraitsArgs(BaseModel):
     # them, gpt-5-nano returned an empty filter for "obscure" and "really long".
     #
     # `BookMetadataFilter` also carries `is_children`, a flag rather than a
-    # measurement; it rides along until the categorical node exists to claim it.
+    # measurement. Retrieve_by_Category now owns audience, and did *not* take
+    # this field with it: it resolves audience against `books.genre`, while this
+    # one still targets `books.is_children`, which is NULL on all 5,197 rows and
+    # matches nothing. Setting it here is a silent zero — known and accepted;
+    # see the note on `BookMetadataFilter.is_children`.
     traits: BookMetadataFilter = Field(
         ...,
         description="Measurable bounds to search the whole catalog by.",

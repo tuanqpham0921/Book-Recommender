@@ -32,7 +32,7 @@ Four tiers, each with one job:
 | **Analyze** | Execute the composed query with its own step; interpret the result | Structured output data |
 | **Generation** *(new)* | Turn the collected outputs into the user-facing answer | Prose / frontend sections |
 
-The load-bearing idea is that **retrieval does not materialize rows**. `Retrieve_by_Genre`
+The load-bearing idea is that **retrieval does not materialize rows**. `Retrieve_by_Category`
 for horror runs a `COUNT` and hands the query downstream; a `WITH` clause (CTE) composes
 it with whatever comes next; the analyze step is the first thing that actually executes
 for rows.
@@ -63,10 +63,13 @@ for rows.
 > **subject**: `BookStore.numeric_traits_query()` is `filter_query()` with the catalog as
 > its base, sharing `metadata_predicates` so the two readings of a bound cannot diverge in
 > SQL. The split is only whether the request has another subject in it — with one, point 2
-> still applies unchanged. `categories` remains undimensioned, and the planner-facing schema
-> still carries no filter object: under rule 1a the request is fieldless and the
-> `BookMetadataFilter` sits on an internal `*Args` model. See
-> [node-taxonomy-v1.md](node-taxonomy-v1.md).
+> still applies unchanged. The planner-facing schema still carries no filter object: under
+> rule 1a the request is fieldless and the `BookMetadataFilter` sits on an internal `*Args`
+> model. See [node-taxonomy-v1.md](node-taxonomy-v1.md).
+>
+> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Category`, on the same reasoning:
+> point 3's last unexposed column became reachable as a *subject*, not as a narrowing. Its
+> args model is internal too, so the planner still sees no filter object anywhere.
 
 **Accepted cost:** many more database round trips per request (one per retrieval count,
 plus the analyze execution). Fine for V1 — the demo is the planner, not throughput.
@@ -186,6 +189,20 @@ categories, and critically **no `keywords` free-text field**: that field is what
 the old `Retrieve_by_Traits` into `Analyze_Recommend`, and leaving it out is what keeps
 this node a narrowing operator instead of a second recommender.
 
+> **Amended 2026-08-21.** `Retrieve_by_Category` has a `keywords` field, so the sentence
+> above needs saying more precisely: what it rules out is keywords **on a narrowing
+> operator**, which is still true — `Filter_Retrieval` has none and will not get one.
+> Keywords blurred `Retrieve_by_Traits` because nothing structural chose between it and
+> `Analyze_Recommend`; both took free text and both searched. The category node is
+> separated from `Analyze_Recommend` by *mechanism*, not by prose about subject matter:
+> it asks whether the catalog's **text contains these words** (a tsquery over title, shelf
+> and blurb) and hands on a composable query over the whole match, where
+> `Analyze_Recommend` asks which books are **near an embedding** and hands back a ranked
+> terminal choice. That is checkable from the outside — "cozy mysteries" splits into
+> *mystery* (a word the text contains) and *cozy* (a feel no word search can find), where
+> the "shelf vs. mood" wording the original genre sketch used could not place either.
+> See [node-taxonomy-v1.md](node-taxonomy-v1.md).
+
 **One operation per node.** `Combine_Intersect` carries no filters — an earlier cut gave
 the set operators an optional `BookMetadataFilter` applied after the set operation, and
 that was removed. Two reasons: every constraint then had two legal homes (inline on the
@@ -270,7 +287,7 @@ exactly one sink, so the two agree except on compound messages.
 - **Do the base suite's multi-anchor expectations still hold?** Cases 56, 57 and 59 were
   written on 2026-07-24 expecting a *single* `Retrieve_by_Author` with the genre silently
   dropped, because no combine operator existed. `Combine_Intersect` now gives that shape a
-  correct plan (`Retrieve_by_Author` + `Retrieve_by_Genre` + `Combine_Intersect`), so those
+  correct plan (`Retrieve_by_Author` + `Retrieve_by_Category` + `Combine_Intersect`), so those
   expectations describe the old world. They need re-deciding, not just re-running.
 - ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
   stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.

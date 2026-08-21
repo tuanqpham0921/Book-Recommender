@@ -15,7 +15,7 @@
     "category": "buffer_mixed_current",
     "query": "Recommend me a mystery book, recommend a sci-fi book, recommend a romance, recommend a horror, find Dune, find 1984, find Neuromancer, find books under 200 pages, find books rated above 4, tell me the developer's info, tell me the project info, tell me my token usage, and finally give feedback that the app is great.",
     "note": "Thirteen goals spanning every current node type (Analyze_Recommend, Retrieve_by_Title, Retrieve_by_Traits, Retrieve_Developer_Info, Retrieve_Project_Info, Retrieve_User_Info, Provide_Feedback) in one shot. Overflows MAX_SYSTEM_GOALS=10 while also exercising routing across all live domains simultaneously — tests that the buffer trims goals without corrupting the type distribution of the ones that survive.",
-    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_Popular", "Retrieve_Popular", "Retrieve_Developer_Info"]
+    "expected_nodes": ["Retrieve_by_Category", "Retrieve_by_Category", "Retrieve_by_Category", "Retrieve_by_Category", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_Popular", "Retrieve_Popular", "Retrieve_Developer_Info"]
   },
   {
     "id": 403,
@@ -60,7 +60,7 @@
     "category": "cross_domain_kitchen_sink",
     "query": "Find a mystery book, a sci-fi book, and a romance book; compare the first two; recommend a fourth like the third; who wrote the Mistborn series; mark the mystery as read with 4 stars; save the sci-fi to my want-to-read list; show my reading stats; tell me about the developer; and how many tokens have I used?",
     "note": "Ten+ goals deliberately mixing current retrieval/analyze/user nodes with extended series-lookup and library writes, several with cross-references ('the first two', 'the third', 'the mystery', 'the sci-fi') that must be resolved to earlier goals. Simultaneously stresses buffer limits, cross-domain routing, and anaphora resolution across a long goal list.",
-    "expected_nodes": ["Retrieve_by_Genre", "Retrieve_by_Genre", "Retrieve_by_Genre", "Analyze_Compare", "Analyze_Recommend", "Retrieve_Series", "Mark_Book_As_Read", "Save_To_Reading_List", "Retrieve_Reading_Stats", "Retrieve_Developer_Info"]
+    "expected_nodes": ["Retrieve_by_Category", "Retrieve_by_Category", "Retrieve_by_Category", "Analyze_Compare", "Analyze_Recommend", "Retrieve_Series", "Mark_Book_As_Read", "Save_To_Reading_List", "Retrieve_Reading_Stats", "Retrieve_Developer_Info"]
   },
   {
     "id": 423,

@@ -11,6 +11,7 @@ from app.domains.books import (
     analyze_recommend,
     filter_books,
     find_by_author,
+    find_by_category,
     find_by_numeric_traits,
     find_by_title,
 )
@@ -19,6 +20,7 @@ from app.domains.node_spec import NodeSpec
 BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_title.SPEC,
     find_by_author.SPEC,
+    find_by_category.SPEC,
     find_by_numeric_traits.SPEC,
     filter_books.SPEC,
     analyze_recommend.SPEC,

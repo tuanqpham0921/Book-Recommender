@@ -24,6 +24,20 @@ actually live rather than trusting this paragraph.
 "recommend me a book" with no anchor — is parked. So a request that names no title has no
 legal plan at all.
 
+> **Amended 2026-08-21 — the menu gap is mostly closed.** Six nodes are registered now:
+> `Retrieve_by_Title`, `Retrieve_by_Author`, **`Retrieve_by_Category`**,
+> `Retrieve_by_Numeric_Traits`, `Filter_Retrieval`, `Analyze_Recommend`.
+> `Retrieve_by_Category` is what the paragraph above calls `Retrieve_by_Genre`, built wider
+> and renamed ([node-taxonomy-v1.md](node-taxonomy-v1.md)), and it answers thematic asks
+> directly — "give me a book about war" now has a legal plan. `Retrieve_Random` is still
+> parked, so the bare "recommend me a book" with no anchor at all still does not.
+>
+> **This makes the doc's own trigger live** (see "What would say it's time" below): the
+> catalog is no longer the obvious explanation for a mis-route, so mis-routing observed
+> from here is evidence about routing quality rather than about a gap in the menu. The
+> second problem — a node with no way to say "I ran fine, and this was the wrong node" —
+> is untouched and still the reason this record exists.
+
 ## Symptom: "give me a book about war"
 
 The planner sometimes emits `Retrieve_by_Title` → `Analyze_Recommend` for it. The title
@@ -34,7 +48,7 @@ as if it were an anchor.
 **This is out of capability right now, not a node-level bug.** The planner is doing what
 the catalog told it to: `RecommendationStrategy`'s docstring says *"needs a supporting
 retrieval step, so a retrieval is still required even for purely thematic requests with no
-named book"* — and with `Retrieve_by_Genre` and `Retrieve_Random` parked, the only
+named book"* — and with `Retrieve_by_Genre` and `Retrieve_Random` parked at the time, the only
 supporting retrieval on the menu is the title node. Given the catalog it was shown, the
 plan is the best available one; it is the catalog that is wrong.
 
@@ -160,8 +174,10 @@ survives it.
 
 ## What would say it's time
 
-- `Retrieve_by_Genre` and `Retrieve_Random` are registered, and "give me a book about war"
-  still mis-routes. That would mean the problem is real routing quality rather than a gap
-  in the menu.
+- ~~`Retrieve_by_Genre` and `Retrieve_Random` are registered~~ — **half met 2026-08-21.**
+  `Retrieve_by_Category` (the wider node that replaced the genre sketch) is registered, so
+  "give me a book about war" has a legal plan. If it still mis-routes, that is real routing
+  quality rather than a gap in the menu. `Retrieve_Random` is still parked, so the bare
+  anchorless "recommend me a book" remains a menu gap rather than evidence.
 - `make suite-goals` shows mis-routing that is not explained by a parked node.
 - A generation node exists, so option 3 above has somewhere to put its explanation.
