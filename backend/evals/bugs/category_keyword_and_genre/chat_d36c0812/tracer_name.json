@@ -1,0 +1,34 @@
+{
+  "name": "orchestrator_chat_d36c0812",
+  "steps": [
+    {
+      "name": "app.orchestration.triage.TriageWorkflow",
+      "steps": [
+        {
+          "name": "app.domains.planjane.executor.PlanJaneExecutor",
+          "steps": [
+            {
+              "name": "app.domains.base_workflow.AppWorkflow.llm_execute"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "app.orchestration.task_runner.TaskRunnerWorkflow",
+      "steps": [
+        {
+          "name": "app.domains.books.find_by_category.executor.FindByCategoryExecutor",
+          "steps": [
+            {
+              "name": "app.domains.base_workflow.AppWorkflow.llm_execute"
+            },
+            {
+              "name": "app.domains.books.base_workflow.BookWorkflow.count_books"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

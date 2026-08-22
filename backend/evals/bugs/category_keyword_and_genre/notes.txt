@@ -1,0 +1,8 @@
+chat_a3553652 is Find fantasy books about grief. -> 12
+while the other is Recommend
+
+The problem is genre is only fiction/nonfiction
+should have more
+
+chat_d36c0812 has fanstasy as a keyword, which is probably why
+it doesn't have any results. Tho maybe it should have?
