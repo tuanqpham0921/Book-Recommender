@@ -465,6 +465,75 @@ re-baselined: the same precedent as `Retrieve_by_Genre` while it was parked — 
 names the target taxonomy and the golden diff reports the gap. Expect a large red block in
 `make suite-goals` that reflects the parking rather than a regression.
 
+### Anchors vs candidates — the retrieval output split (2026-08-22)
+
+`BookRetrievalOutput` gained two subclasses in `books/external.py`, and the four registered
+nodes were reparented onto them:
+
+- **`BookAnchorOutput`** — the user *named* these books. `Retrieve_by_Title` today,
+  `Retrieve_by_ISBN13` when it exists.
+- **`BookCandidateOutput`** — these books match a *description* the user gave.
+  `Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`.
+
+Neither adds a field. `build_input` fills by `isinstance`, so **the type is the payload**: a
+node declaring `list[BookAnchorOutput]` structurally cannot be handed a subject search.
+
+**What it is for.** The distinction is real today and enforced in the worst possible place —
+at run time, inside the consumer, after two round trips.
+`BookWorkflow.fetch_anchor_books` raises `NotImplementedError` past `MAX_ANCHOR_BOOKS` (5),
+which is the "Known broken downstream" entry above: "mystery" matches 358 books, so
+`Retrieve_by_Category` → `Analyze_Recommend` dies every time. On the type, the same refusal
+happens at dispatch, and `_prepare` turns it into one skipped goal **naming `anchors`** —
+the same move `NodeInput` made over `(query, artifacts: dict[str, Any])`.
+
+**The criterion is *named*, not *small*.** A trigram title search still matches six editions
+of the same book, so the type narrows intent, not cardinality: a consumer that folds anchors
+into one description still needs `MAX_ANCHOR_BOOKS`. What changes is that the cap becomes the
+rare case instead of the usual one.
+
+**Why `Retrieve_by_Author` is a candidate.** It is the closest call: a name is specific, and
+twelve Herberts would fold into an anchor perfectly well. It sits on the candidate side
+because the node cannot tell whether it returned twelve or eight hundred. The cost is that
+**"books like Frank Herbert's" can no longer anchor on the bibliography** — its answer is to
+describe the taste semantically instead. That is the one plan this split closes, and it is
+the deliberate half of the trade.
+
+**The base stays concrete, and that is load-bearing.** It is what a node declares when it
+takes *either* (`Filter_Retrieval` narrows both kinds), and it is what a future
+`Combine_Union` can subclass — anchor-shaped over two titles, candidate-shaped over two
+subject searches, so a class cannot pick a side at definition time. Landing on the base means
+"not anchorable", which is the safe half. A node wanting both explicitly writes
+`list[BookAnchorOutput | BookCandidateOutput]`, which is *stricter* than the base: verified,
+that union takes both subclasses and rejects a bare `BookRetrievalOutput`.
+
+**Considered and rejected: a pydantic discriminated union.** `_resolve` calls
+`isinstance(a, get_args(annotation)[0])`, and for
+`list[Annotated[A | B, Field(discriminator="role")]]` that raises `TypeError: Subscripted
+generics cannot be used with class and instance checks`. A discriminator fires when *parsing
+untyped data into* a model; artifacts arrive as already-constructed instances, so the class is
+the discriminator already and a `role` field would restate it while requiring `_resolve` to be
+rewritten to read it.
+
+**Vocabulary note.** "Candidate" already meant the ~50-row embedding pool inside
+`analyze_recommend` (`rank_candidates`, `apply_exclusions`, `candidates_found`) and — inverted
+— the title node's `Returns:` line called its matches "the candidate matches". That line is
+fixed. The twelve inside `analyze_recommend` are not: renaming them to `pool` belongs to the
+redo of that slice.
+
+**Scope.** Types only, per owner decision. `analyze_recommend/` and `filter_books/` are
+untouched and stay on the base — both are parked and are being redone, and both keep working
+because `ParsedDependents.from_anchors` gates on `BookRetrievalOutput`, which still matches.
+`fetch_anchor_books`' cap and `RecommendationStrategy`'s *"needs a supporting retrieval step"*
+constraint are the other half of closing "Known broken downstream", and belong to that redo —
+**the entry above stays open.** Catalog cost: +24 tokens (1,644 → 1,668), all of it the title
+node's expanded `Returns:`.
+
+**One wart to settle in the redo.** When a plan sends both an anchor and a candidate to a
+`list[BookAnchorOutput]` field, `build_input` drops the candidate to a `logger.debug` "has no
+field for" line and the node never learns its anchor was narrowed. A second
+`list[BookCandidateOutput]` field does *not* fix it — `_resolve` does not skip already-claimed
+items, so the anchor would be counted twice. The cheap fix is raising that log level.
+
 ## V1 conversation contract: clarify-only, single-turn
 
 - Every query stands alone. No history is loaded

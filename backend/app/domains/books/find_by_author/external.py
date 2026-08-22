@@ -1,4 +1,4 @@
-from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.external import BookCandidateOutput
 from app.domains.node_input import NodeInput
 
 from .schemas import FindByAuthorArgs
@@ -15,9 +15,15 @@ class FindByAuthorInput(NodeInput):
     """
 
 
-class FindByAuthorOutput(BookRetrievalOutput):
+class FindByAuthorOutput(BookCandidateOutput):
     """`num_books` is how many books that author has here, `query` is how to
     reach them.
+
+    A **candidate** set, and the closest call of the three: a name is specific,
+    so a short bibliography would fold into an anchor perfectly well. The node
+    is on this side because it cannot tell which it returned — twelve Herberts
+    fold, eight hundred Kings do not — so "books like Frank Herbert's" is served
+    by describing the taste, not by anchoring on the shelf.
 
     The node keeps no rows: it streams a few cards so the section has something
     in it, and what it hands downstream is the query. `num_books == 0` means the

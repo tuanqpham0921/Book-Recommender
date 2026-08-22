@@ -33,8 +33,24 @@ class _Report(NodeWorkflowOutput):
         return {}
 
 
+class _Anchors(_Books):
+    pass
+
+
+class _Candidates(_Books):
+    pass
+
+
 class _TakesNothing(NodeInput):
     pass
+
+
+class _TakesOneSubclass(NodeInput):
+    anchors: list[_Anchors] = []
+
+
+class _TakesEitherSubclass(NodeInput):
+    anchors: list[_Anchors | _Candidates] = []
 
 
 class _TakesMany(NodeInput):
@@ -82,6 +98,35 @@ class TestSelectionByType:
         dropped rather than quietly shaping the node's work."""
         built = build_input(_TakesNothing, "q", {"1": _Books()})
         assert built.model_dump() == {"query": "q"}
+
+
+class TestSelectionNarrowedBySubclass:
+    """A subclass is how a field narrows what it will accept, since matching is
+    `isinstance`. This is the whole mechanism behind
+    `BookAnchorOutput`/`BookCandidateOutput`, which add no fields at all."""
+
+    def test_a_subclass_field_rejects_a_sibling_subclass(self):
+        anchor = _Anchors()
+        built = build_input(
+            _TakesOneSubclass, "q", {"1": anchor, "2": _Candidates()}
+        )
+        assert built.anchors == [anchor]
+
+    def test_a_subclass_field_rejects_the_bare_parent(self):
+        built = build_input(_TakesOneSubclass, "q", {"1": _Books()})
+        assert built.anchors == []
+
+    def test_a_union_takes_both_subclasses_and_not_their_parent(self):
+        """`list[A | B]` is the annotation for a node that accepts either — and
+        it is *stricter* than declaring the parent, which would also swallow
+        anything else deriving from it."""
+        anchor, candidate = _Anchors(), _Candidates()
+        built = build_input(
+            _TakesEitherSubclass,
+            "q",
+            {"1": anchor, "2": _Books(), "3": candidate},
+        )
+        assert built.anchors == [anchor, candidate]
 
 
 class TestEmptyIsNotAnError:

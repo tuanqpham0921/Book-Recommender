@@ -16,7 +16,7 @@ class FindByCategoryRetrieval(BaseRequest):
             keep. Subject keywords, fiction-ness and audience are ANDed together,
             so one node serves "non-fiction about artificial intelligence".
 
-    Returns: BookRetrievalOutput — how many books match, and the query that
+    Returns: BookCandidateOutput — how many books match, and the query that
     reaches them.
 
     depends_on: None — this node queries the database directly.

@@ -14,7 +14,7 @@ class FindByNumericTraitsRetrieval(BaseRequest):
         traits: The measurable bounds to search on. Every bound is inclusive and
             independent — supply only the ones the request actually states.
 
-    Returns: BookRetrievalOutput — the books inside those bounds.
+    Returns: BookCandidateOutput — the books inside those bounds.
 
     depends_on: None — this node queries the database directly.
 

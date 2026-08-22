@@ -11,7 +11,7 @@ class FindByAuthorRetrieval(BaseRequest):
     Args:
         author: The single author whose books to retrieve.
 
-    Returns: BookRetrievalOutput — that author's catalog.
+    Returns: BookCandidateOutput — that author's catalog.
 
     depends_on: None — this node queries the database directly.
 

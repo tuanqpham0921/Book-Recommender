@@ -114,6 +114,21 @@ matches nothing raises `ValidationError` **naming the field**, which the runner
 turns into a skipped goal (`_prepare`) — that error text is the payload an
 agentic runner would hand back to the planner.
 
+**A subclass is how you narrow what a field accepts**, because that matching is
+`isinstance`. `BookAnchorOutput` and `BookCandidateOutput` (`books/external.py`)
+add no fields at all — the type *is* the payload — and a node declaring
+`list[BookAnchorOutput]` structurally cannot be handed a subject search. To
+accept several shapes but not their base, write the union: `list[A | B]` selects
+both subclasses and rejects a bare instance of their parent.
+
+**Don't reach for a pydantic discriminated union here.** `_resolve` calls
+`isinstance(a, get_args(annotation)[0])`, and for
+`list[Annotated[A | B, Field(discriminator=...)]]` that raises `TypeError:
+Subscripted generics cannot be used with class and instance checks`. A
+discriminator fires when *parsing untyped data into* a model; artifacts arrive
+as already-constructed instances, so the class is the discriminator already and
+a `role` field would only restate it.
+
 `FilterRetrievalInput.anchors` is the first required dependency field, and it
 shows what "required" costs for a list: `build_input` fills a `list[X]` with
 every match, and an empty list is still a *filled* field, so the requirement has

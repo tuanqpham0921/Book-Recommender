@@ -1,4 +1,4 @@
-from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.external import BookCandidateOutput
 from app.domains.node_input import NodeInput
 
 from .schemas import FindByNumericTraitsArgs
@@ -16,9 +16,13 @@ class FindByNumericTraitsInput(NodeInput):
     """
 
 
-class FindByNumericTraitsOutput(BookRetrievalOutput):
+class FindByNumericTraitsOutput(BookCandidateOutput):
     """`num_books` is how many books sit inside the bounds, `query` is how to
     reach them.
+
+    A **candidate** set: bounds describe a shelf, never a book. "Well rated" is
+    2,190 books with nothing in common but a number, so there is no ideal book
+    to fold them into.
 
     The node keeps no rows: it streams a few cards so the section has something
     in it, and what it hands downstream is the query. The count carries more

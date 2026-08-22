@@ -10,7 +10,9 @@ class FindByTitleRetrieval(BaseRequest):
     Args:
         title: Book title to search for.
 
-    Returns: BookRetrievalOutput — the candidate matches, best first.
+    Returns: BookAnchorOutput — the named book, and the query that reaches it.
+    An anchor: the user pointed at this book, so a later step can search for
+    others like it.
 
     depends_on: None — this node queries the database directly.
 

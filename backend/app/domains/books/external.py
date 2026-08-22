@@ -39,6 +39,21 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     elsewhere on this model would break the JSONB insert in `record_chat_run`.
     `query_sql` is the persisted, readable stand-in.
 
+    **Two subclasses split what a retrieval found by whether it can be anchored
+    on** — `BookAnchorOutput` (the user named these books) and
+    `BookCandidateOutput` (these books match a description). This base stays
+    concrete rather than becoming an ABC, and that is load-bearing twice over:
+    it is what a node declares when it takes *either* (`Filter_Retrieval`
+    narrows both kinds), and it is what a future `Combine_Union` — anchor-shaped
+    over two titles, candidate-shaped over two subject searches — can subclass
+    instead of being forced to pick a side at class-definition time. Landing on
+    the base means "not anchorable", which is the safe half.
+
+    A node wanting both *explicitly* writes `list[BookAnchorOutput |
+    BookCandidateOutput]`, which is stricter than the base: `build_input` fills
+    by `isinstance`, so that union takes both subclasses and rejects a bare
+    `BookRetrievalOutput`.
+
     Every field here and on subclasses needs a default: `Workflow.__init__`
     calls `output_type()` with no arguments.
     """
@@ -53,6 +68,40 @@ class BookRetrievalOutput(NodeWorkflowOutput):
         # `has_query` rather than the SQL: `query_sql` is already persisted in
         # full on the record, and a summary is read at a glance
         return {"num_books": self.num_books, "has_query": self.query is not None}
+
+
+class BookAnchorOutput(BookRetrievalOutput):
+    """Books the user *named* — a reference they already had in mind.
+
+    `Retrieve_by_Title` today, `Retrieve_by_ISBN13` when it exists. The
+    criterion is **named, not small**: what earns this class is that the user
+    pointed at a specific book, which is what makes folding the match into one
+    "ideal book" description mean something. A node consuming
+    `list[BookAnchorOutput]` structurally cannot be handed a subject search, so
+    a plan that tries is refused by `build_input` at dispatch — naming the
+    field — rather than deep inside the node.
+
+    **It narrows intent, not cardinality.** A trigram title search still
+    matches every edition of `The Lord of the Rings`, so a consumer that can
+    only fold a handful of books still needs its own cap
+    (`BookWorkflow.MAX_ANCHOR_BOOKS`); this type is what stops that cap being
+    the *usual* outcome instead of the rare one.
+
+    `Retrieve_by_Author` is deliberately not here. Twelve Herberts would fold
+    fine and eight hundred Kings would not, and the node cannot know which it
+    returned — so "books like Frank Herbert's" is a semantic ask, not an
+    anchored one.
+    """
+
+
+class BookCandidateOutput(BookRetrievalOutput):
+    """Books matching a *description* the user gave — a set, not a reference.
+
+    `Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`.
+    Composable like any retrieval — this is the shape `Filter_Retrieval` narrows
+    and `Combine_Intersect` folds — but not foldable into an anchor: averaging
+    358 mystery blurbs describes no book in particular.
+    """
 
 
 class BookRequestContext(RequestContext):

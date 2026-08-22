@@ -1,4 +1,4 @@
-from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.external import BookCandidateOutput
 from app.domains.node_input import NodeInput
 
 from .schemas import FindByCategoryArgs
@@ -15,8 +15,13 @@ class FindByCategoryInput(NodeInput):
     """
 
 
-class FindByCategoryOutput(BookRetrievalOutput):
+class FindByCategoryOutput(BookCandidateOutput):
     """`num_books` is how many books match the subject, `query` is how to reach them.
+
+    A **candidate** set, and the clearest case for the split: "mystery" matches
+    358 books, and folding 358 blurbs into one description of an ideal book
+    describes nothing at all. A thematic ask is served by embedding the words
+    themselves, not by anchoring on what those words happened to match.
 
     The node keeps no rows: it streams a few cards so the section has something
     in it, and what it hands downstream is the query. That query is the point of

@@ -1,4 +1,4 @@
-from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.external import BookAnchorOutput
 from app.domains.node_input import NodeInput
 
 from .schemas import FindByTitleArgs
@@ -15,8 +15,15 @@ class FindByTitleInput(NodeInput):
     """
 
 
-class FindByTitleOutput(BookRetrievalOutput):
+class FindByTitleOutput(BookAnchorOutput):
     """`num_books` is how many titles matched and `query` is how to reach them.
+
+    An **anchor** rather than a candidate set, and this is the node the
+    distinction is drawn around: the user named a book, so the match can be
+    folded into a description of what to look for next. That is what
+    `BookAnchorOutput` claims, and it is a claim about the *ask* — a title
+    search can still return six editions of the same book, so a consumer that
+    folds them keeps its own cap.
 
     The node keeps no rows: it streams a few cards so the section has something
     in it, and what it hands downstream is the query. `num_books == 0` means the
