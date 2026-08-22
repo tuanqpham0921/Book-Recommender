@@ -26,16 +26,14 @@ class FindByNumericTraitsRetrieval(BaseRequest):
     description in the user's own words is enough.
 
     Do not use: when the request has any other subject. A measurable bound
-    riding alongside a genre, an author, a title or a taste belongs to that
-    search, not to this one:
-        - "fantasy books over 400 pages" → Retrieve_by_Category, then
-          Filter_Retrieval carries the page bound
-        - "Stephen King books over 400 pages" → Retrieve_by_Author, then
-          Filter_Retrieval
-        - "books like Dune but shorter" → Retrieve_by_Title then
-          Analyze_Recommend, with the bound left in the recommend goal's own
-          description — it searches inside its bounds rather than deleting
-          afterwards
+    riding alongside a genre, an author or a title belongs to that search, not
+    to this one:
+        - "fantasy books over 400 pages" → Retrieve_by_Category on the subject
+        - "Stephen King books over 400 pages" → Retrieve_by_Author on the author
+    Send only the subject goal in those cases and leave the bound in that goal's
+    description. Do not add this node alongside the subject one: two goals with
+    no dependency between them are pooled, so the plan would answer with more
+    books rather than fewer — the opposite of the bound.
     Also not for a superlative that asks for an ordering this node cannot give:
     "the single longest book" is not a bound. Ask for "very long books" instead.
 

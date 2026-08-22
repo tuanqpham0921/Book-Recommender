@@ -27,14 +27,14 @@ class FindByCategoryRetrieval(BaseRequest):
     books whose title, shelf label or description actually contains these words.
 
     Do not use: for a known title (Retrieve_by_Title) or a named author
-    (Retrieve_by_Author). And not for what a book is LIKE rather than what it is
-    about — mood, tone and premise ("cozy", "hopeful", "slow-burn", "spooky")
-    are Analyze_Recommend's semantic_input, which searches by meaning rather than
-    by word. A request holding both splits across the two nodes: "cozy
-    mysteries" is keywords=["mystery"] here plus semantic_input="cozy" there. A
-    measurable bound riding alongside stays out of this node too — "fantasy books
-    over 400 pages" is this node for the subject, then Filter_Retrieval for the
-    page bound.
+    (Retrieve_by_Author). Mood, tone and premise ("cozy", "hopeful",
+    "slow-burn", "spooky") are not keywords — this node matches words the
+    catalog's text actually contains, and a feel is not one, so using it as a
+    keyword finds nothing. Keep the part of the request that is a real subject
+    word and leave the rest out: "cozy mysteries" is keywords=["mystery"]. A
+    measurable bound riding alongside is likewise not this node's to apply —
+    "fantasy books over 400 pages" searches the subject here and leaves the page
+    bound in the goal's description.
 
     Constraints: at least one of keywords, genre or audience — an empty search is
     refused rather than answered with the whole catalog. Keywords are ANDed, not
@@ -72,7 +72,7 @@ class FindByCategoryArgs(BaseModel):
             keywords: ["artificial intelligence"], genre: non-fiction
         "Any good mysteries?"
             keywords: ["mystery"] — "good" is a rating bound, not a subject, and
-            belongs to another node
+            nothing here can apply it
         "Books about ninjas."
             keywords: ["ninja"]
         "Children's books about space."

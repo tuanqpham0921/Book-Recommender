@@ -416,6 +416,55 @@ a usable answer.
 ivfflat only helps an ordered, limited scan), so this node can grow a semantic arm that
 still composes. v1 is lexical only, and the slice is shaped as the template for that.
 
+### `Filter_Retrieval` and `Analyze_Recommend` parked (2026-08-22)
+
+Both dropped from `books/guide.py` at the owner's request. **Parked, not deleted** — the
+slices stay importable, typechecked and unit-tested, and `describe_bounds` still comes from
+`filter_books` (`find_by_numeric_traits` imports it and is still registered). Unparking is
+re-adding one import and one `SPEC` line each.
+
+The catalog is now **retrieval-only**: 4 tools, all `NodeTier.RETRIEVAL`, 1,644 catalog
+tokens against 2,690 before (−39%). `catalog_entries()` drops empty tiers, so the
+"Combine —" and "Analyze —" headings no longer render at all, and `NodeTypeEnum` is down to
+the four node names plus `unknown`.
+
+**What became unexpressible.** These are consequences of the decision, recorded so they are
+not rediscovered as bugs:
+
+- **A bound riding alongside a subject has nowhere to go.** "Fantasy books over 400 pages"
+  was `Retrieve_by_Category` → `Filter_Retrieval`; the second half no longer exists. The
+  numbers-only rule still holds — `Retrieve_by_Numeric_Traits` is for numeric-only asks —
+  so both docstrings now say to send the subject goal alone and leave the bound in its
+  description. They say so explicitly because the tempting alternative is worse: two goals
+  with no dependency between them are **pooled (OR)**, so emitting the subject node *and*
+  the numeric node would answer with more books rather than fewer.
+- **Taste, mood and similarity have no node.** "Books like Dune", "something spooky",
+  "cozy" — the semantic half of the lexical/semantic split recorded above. The planner will
+  refuse these as out of scope, or reach for `Retrieve_by_Category` and match the words
+  literally. `FindByCategoryRetrieval`'s `Do not use:` now tells it to keep the real subject
+  word and drop the feel, which is the honest description of what the node can do.
+- **No plan has a second stage.** Every plan is a set of independent retrievals. The
+  `depends_on` machinery, `TaskRunnerWorkflow`'s dependency resolution and
+  `DeferredBookQuery.compose()` are all still live and tested, but nothing registered
+  produces a goal that uses them.
+
+**Coverage cost.** `tests/unit/app/domains/test_app_workflow.py` parametrizes three
+executor smoke tests over `RUNNABLE_SPECS`, so parking two nodes silently drops six tests
+(608 → 602 collected). The parked executors keep their own unit tests
+(`test_rank_candidates.py`, `test_parsed_dependents.py`, `test_describe_bounds.py`) but are
+no longer checked for constructing against a narrowed context.
+
+**Test coupling worth knowing.** `SystemGoal.target_node_type` is a `NodeTypeEnum`, so any
+test naming a node type in a `SystemGoal` breaks the moment that node is parked.
+`test_mermaid.py` used `"Analyze_Recommend"` purely as "a second node type" and was moved to
+`"Retrieve_by_Category"`, with a docstring note that the names there are arbitrary.
+
+**Eval suites left as they are.** `Analyze_Recommend` appears 81 times across the four
+suites and `Filter_Retrieval` 24, which is most of `query_suite.json`. They were not
+re-baselined: the same precedent as `Retrieve_by_Genre` while it was parked — the suite
+names the target taxonomy and the golden diff reports the gap. Expect a large red block in
+`make suite-goals` that reflects the parking rather than a regression.
+
 ## V1 conversation contract: clarify-only, single-turn
 
 - Every query stands alone. No history is loaded

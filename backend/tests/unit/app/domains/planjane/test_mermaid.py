@@ -3,6 +3,11 @@
 Scoped to what this layer decides: which field heads a box, which fields earn
 a row, and the `depends_on` → `sent_to` inversion. Markup, orientation and
 emission belong to dial/format.py and are tested in test_mermaid_format.py.
+
+The node types below are arbitrary — any *registered* one works, and the
+renderer never asks what a node does. They have to be registered only because
+`SystemGoal.target_node_type` is a `NodeTypeEnum`, so parking a node breaks
+every test naming it.
 """
 
 from app.domains.planjane.dial import get_goals_mermaid_diagram
@@ -55,7 +60,7 @@ class TestGoalsDiagram:
         goals = [
             _make_goal("1", "Retrieve_by_Title"),
             _make_goal("2", "Retrieve_by_Title"),
-            _make_goal("3", "Analyze_Recommend", depends_on=["1", "2"]),
+            _make_goal("3", "Retrieve_by_Category", depends_on=["1", "2"]),
         ]
         diagram = get_goals_mermaid_diagram(goals)
 
@@ -69,7 +74,7 @@ class TestGoalsDiagram:
         # it; drawing that edge would conjure an empty box for a goal that was
         # never planned
         diagram = get_goals_mermaid_diagram(
-            [_make_goal("2", "Analyze_Recommend", depends_on=["refused_1"])]
+            [_make_goal("2", "Retrieve_by_Category", depends_on=["refused_1"])]
         )
 
         assert "-->" not in diagram
@@ -78,8 +83,8 @@ class TestGoalsDiagram:
     def test_deep_chain_orients_lr(self):
         goals = [
             _make_goal("1", "Retrieve_by_Title"),
-            _make_goal("2", "Analyze_Recommend", depends_on=["1"]),
-            _make_goal("3", "Analyze_Recommend", depends_on=["2"]),
+            _make_goal("2", "Retrieve_by_Category", depends_on=["1"]),
+            _make_goal("3", "Retrieve_by_Category", depends_on=["2"]),
         ]
 
         assert get_goals_mermaid_diagram(goals).startswith("flowchart LR")
