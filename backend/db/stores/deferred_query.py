@@ -33,7 +33,7 @@ def compile_sql(stmt, embedding_as: str = "embedding") -> str:
     Any vector literal collapses to `embedding_as`, because only the caller
     knows what the vector was made from: the recommend node labels it
     `embed(search_text)`, naming a value its own record already holds twice
-    (the task's `input.search_text`, and `RecommendationOutput.search_text`),
+    (the task's `input.search_text`, and `SimilarBooksOutput.search_text`),
     so the statement stays reproducible without carrying a third copy.
 
     The default fires on no statement built today — no deferred query carries a

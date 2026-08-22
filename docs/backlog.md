@@ -61,10 +61,23 @@ Shape-level planner questions live in
   own tests *before* more nodes are added, and it matters more inside nodes than in the
   planner — a node's arguments are where an injected string actually lands. (A pre-check
   node was tried and reverted in commit `ed34d95`.)
-- **`Analyze_Recommend` needs to handle quantitative constraints.** "Recommend something
-  under 300 pages" is a different shape from a reference-book query with min/max bounds,
-  and neither is served well today. Related to the filter/combine node in
-  [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md).
+- **A similarity ask with a quantitative constraint has nowhere to put it.** "Books like
+  Dune but under 300 pages" — `Analyze_Similar_Books` parses nothing as of 2026-08-22, so
+  the bound is silently dropped, and it cannot move to `Filter_Retrieval` because narrowing
+  a ranked pool after the fact throws the ranking away. The bound has to go *inside* the
+  vector search; `embedding_search_stmt` keeps an unused `filters` parameter for exactly
+  that. Belongs to the node that re-ranks and picks from the pool, which does not exist yet.
+  See [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md) (the 2026-08-19
+  entry and its reversal).
+- **`Retrieve_by_Title` should prefer exact matches when there are any.** `title_query`
+  keeps every row where `title ILIKE '<t>'` **or** trigram similarity > 0.7, so a catalog
+  holding several editions of one book returns all of them. That is fine for a lookup and
+  expensive for an anchor: `Analyze_Similar_Books` refuses past `MAX_ANCHOR_BOOKS` (5), so
+  six editions of one title fail "books like X" — a failure that looks like the node's and
+  is the query's. Fix in `title_query` (exact arm first, trigram only when it finds
+  nothing), which fixes every consumer at once. The cap stays regardless: a plan naming six
+  *different* books is still six books. `check_anchors` logs the pooled total every run, so
+  the traces say how often this actually fires.
 - **Embedding experiments** (`book_store.search_by_embedding` already exists): how closely
   do single-word genre and author embeddings score against near misses, and can a composed
   record embedding ("title, page count, description …") answer "find books with 100 pages"
@@ -91,9 +104,9 @@ code broke).
   consumer.** An empty match is a real answer the reply should state — but a 0-count query
   composed into a downstream anchor is an OR branch that scans and returns nothing while
   making the anchor look populated. **Partly fixed 2026-08-18**: `ParsedDependents`
-  (`app/domains/books/analyze_recommend/dependents.py`) sorts 0-count anchors into a
-  separate `empty` pile instead of pooling them, and the recommend executor raises when all
-  are empty. Remaining options — answer in the producing node, withhold empties in
+  (`app/domains/books/find_similar_books/dependents.py`) sorts 0-count anchors into a
+  separate `empty` pile instead of pooling them, and `FindSimilarBooksExecutor.check_anchors`
+  raises when all are empty. Remaining options — answer in the producing node, withhold empties in
   `TaskRunnerWorkflow._dependency_outputs`, or skip a node whose dependencies are all
   empty — interact with the missing generation node, so the last one is the one that
   survives it.

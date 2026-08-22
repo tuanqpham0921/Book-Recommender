@@ -20,7 +20,7 @@ Those four files *are* the single-call template — `find_by_title/` is the
 worked example (parse args → build the query → count → preview → finalize),
 and a new node starts as a copy of it, not as a blank folder. A slice with
 several LLM calls grows past those four files by one rule
-(`analyze_recommend/` is the worked example): **executor.py stays the flow** —
+(`find_similar_books/` is the worked example): **executor.py stays the flow** —
 `run()` plus every step, methods in the order `run` calls them, pure helpers
 module-level beside them — and each **satellite module is one LLM call's pure
 half** (the rendering, the tool model, the request builder — nothing that
@@ -51,14 +51,18 @@ that is the point.
   use instead (see `Book`'s docstring).
 - `<domain>/base_workflow.py` — the domain's base, holding what every node in it
   repeats. `books/base_workflow.py` is `BookWorkflow`: it exposes `self.store`
-  (a property off the request context), and adds three `@task`s —
+  (a property off the request context), and adds two `@task`s —
   `count_books()` (stamp a deferred query on the output and record the match
-  size — no rows), `preview_books()` (a few rows off a query, handed back
-  rather than written anywhere) and `fetch_anchor_books()` (pool upstream
-  deferred queries into one anchor and fetch its rows) — plus `stream_books()`
-  (cards to the browser, validated through `BookOut`). Counting and fetching
-  are separate calls on purpose — `BookRetrievalOutput` has no `books` field,
-  so rows a node only *showed* have nowhere to masquerade as rows it produced.
+  size — no rows) and `fetch_books()` (rows off a query, handed back rather
+  than written anywhere) — plus `stream_books()` (cards to the browser,
+  validated through `BookOut`). Counting and fetching are separate calls on
+  purpose — `BookRetrievalOutput` has no `books` field, so rows a node only
+  *showed* have nowhere to masquerade as rows it produced. **What they share is
+  deliberately small**: a node needing more than "count this" or "fetch rows off
+  this" composes it in its own flow rather than adding a third method here.
+  `find_similar_books/` pools its anchors, checks its own cap and calls
+  `fetch_books` once — which is what a `fetch_anchor_books()` on this class did
+  for its one caller until 2026-08-22.
 - `base_request.py` — `BaseRequest`, shared fields + validation.
 - `node_input.py` — `WorkflowInput` / `NodeInput` / `ParsedInput`, and
   `build_input`, which fills a node's declared input from the goal text and its
@@ -98,12 +102,13 @@ job is always the same: parse what it was given, or continue with it.
 
 **The declaration is the point.** It replaced `(query, artifacts:
 dict[str, Any])`, which could tell a node that something was missing but never
-*what* — so a node short of a dependency could only raise. `RecommendInput`
-declares `anchors: list[BookRetrievalOutput] = []`, and an empty list is a
-named, visibly unfilled slot: enough for the node to fall back on the goal text
-today, and enough to ask the planner for a goal that fills it later. Default a
-field whenever the node has a real fallback; make it required only when the
-node genuinely cannot proceed.
+*what* — so a node short of a dependency could only raise. A named, visibly
+unfilled slot says which one is empty and what shape would fill it, which is the
+seam an agentic node needs to ask the planner for one. Default a field whenever
+the node has a real fallback; make it required only when the node genuinely
+cannot proceed. `SimilarBooksInput.anchors` is required because there is no
+fallback to fall back to: a similarity search with nothing to be similar to is a
+different question, not a thinner version of this one.
 
 **Fields are filled by type, never by key.** `build_input` walks the input's
 annotations and matches each against the dependency outputs — `X` takes the
@@ -129,10 +134,11 @@ discriminator fires when *parsing untyped data into* a model; artifacts arrive
 as already-constructed instances, so the class is the discriminator already and
 a `role` field would only restate it.
 
-`FilterRetrievalInput.anchors` is the first required dependency field, and it
-shows what "required" costs for a list: `build_input` fills a `list[X]` with
-every match, and an empty list is still a *filled* field, so the requirement has
-to be `Field(..., min_length=1)`. A bare `...` would never fire. Only reach for
+`FilterRetrievalInput.anchors` and `SimilarBooksInput.anchors` are the two
+required dependency fields, and they show what "required" costs for a list:
+`build_input` fills a `list[X]` with every match, and an empty list is still a
+*filled* field, so the requirement has to be `Field(..., min_length=1)`. A bare
+`...` would never fire. Only reach for
 it when the node has no fallback at all — bounds with nothing to bound cannot
 be run against the whole catalog and mean something else entirely.
 
@@ -259,21 +265,23 @@ assumed, not restated, here.
    *Parse*: fill the node's own `*Args` schema from the goal text
    (`build_arg_parser_request(query)` → `run_llm_args_parse`) and stamp it on
    the slice's `args` field — the record of what this node thought it was
-   asked, even when it only restates the goal. *Work*: whatever the node is
-   for; artifact prep may precede the parse (the recommend node materializes
-   its anchor first). *Finalize*: `self.finalize_result()` last. Each slice
-   overrides it to compute the node's **claim** — "did I fill in what I
-   promised": find_by_title claims args-parsed-and-query-built (zero matches
-   is still ok), recommend claims args-parsed-and-answered. Raise when the
+   asked, even when it only restates the goal. **Not every node has a parse**:
+   `Analyze_Similar_Books` reads nothing out of its goal text — what it searches
+   for is built from its anchors — so it has no `*Args` schema and no `args`
+   field at all. *Work*: whatever the node is for; artifact prep may precede the
+   parse (the similarity node materializes its anchor first). *Finalize*:
+   `self.finalize_result()` last. Each slice overrides it to compute the node's
+   **claim** — "did I fill in what I promised": find_by_title claims
+   args-parsed-and-query-built (zero matches is still ok),
+   `Analyze_Similar_Books` claims anchors-folded-and-searched. Raise when the
    node cannot proceed; never hand-set `ok=False` and return.
 
    **An empty result is not a failure to claim.** Zero matches, zero survivors
-   and zero recommendations are all answers the node reports — the claim is
+   and an empty candidate pool are all answers the node reports — the claim is
    about the node doing its job, not about the catalog containing something.
-   For an analyze node that owns the turn's reply, the claim therefore ends at
-   *answered*: `Analyze_Recommend` writes "nothing that short sits near those
-   books" and finalizes ok, because raising would surface as the generic
-   failure message and tell the user nothing about what was too tight.
+   `Analyze_Similar_Books` finalizes ok on a pool of zero: nothing in the
+   catalog sits near what was named is the answer, and raising would surface as
+   the generic failure message and say nothing about what was too far away.
 3. **`@task` or `Workflow` everything async** — every DB round trip, LLM call
    and embedding is a step with its own duration, failure and spend. The
    ladder, smallest rung that fits:
@@ -285,7 +293,7 @@ assumed, not restated, here.
      returns its payload, and never grows a `@task` — the app decides what is
      a step;
    - a **`@task` method** for an async unit that returns a payload
-     (`count_books`, `preview_books`, `similarity_search`);
+     (`count_books`, `fetch_books`, `similarity_search`);
    - a **`Workflow`** only when the sub-work needs its own declared output
      type and envelope — the Triage → PlanJane shape. A node that runs another
      node starts it as a workflow and `.unwrap()`s (or reads the envelope,
@@ -297,9 +305,12 @@ assumed, not restated, here.
    (`getattr`) only shapes that are still reserved names — the moment a shape
    has a class, read the typed field.
 5. **Book nodes open counts-first**: parse args → build the deferred query →
-   `count_books()` → `preview_books()` for the section's sample cards →
-   hand the *query* downstream on the output. Rows are fetched once, at the
-   end of the plan (`fetch_anchor_books`, or the terminal node's answer).
+   `count_books()` → `fetch_books()` for the section's sample cards →
+   hand the *query* downstream on the output. Rows are fetched where they are
+   actually needed — a preview, a capped anchor, or the terminal node's
+   answer — and a node that needs a count it did not compute reads it off the
+   upstream output rather than running a second `COUNT` (see
+   `ParsedDependents.total`).
 6. **Two traps with no compiler behind them**: every output field needs a
    default (the workflow constructs its output empty, before `run`), and a
    workflow instance is single-use — construct a new one per execution,
@@ -319,7 +330,7 @@ branches on `runtime_error.type`.
 ## Adding a node (the standard path)
 
 1. Create the folder `<domain>/<node>/` by **copying the matching template** —
-   `find_by_title/` for a single-call node, `analyze_recommend/` for a
+   `find_by_title/` for a single-call node, `find_similar_books/` for a
    multi-step one — rather than writing the four files from scratch. A book
    node's executor subclasses `BookWorkflow[TheOutput]` and implements
    **`run(node_input)`** — the one call shape, same as everything else.
@@ -345,7 +356,8 @@ branches on `runtime_error.type`.
    `Purpose: / Args: / Returns: / depends_on: / Use when: / Do not use: /
    Constraints:` plus an examples section (`Example queries:`, or example values
    like `Example genres:`). `Returns:` and `depends_on:` must name **output
-   shapes**, not prose — `BookRetrievalOutput`, `BookRecommendationOutput`,
+   shapes**, not prose — `BookRetrievalOutput`, `BookAnchorOutput`,
+   `BookCandidateOutput`,
    `AnalyzeBooksOutput`, `ActionConfirmationOutput`, or a node-specific name for
    anything outside that vocabulary. That pairing is how the planner knows which
    nodes can legally feed which; the vocabulary is defined in

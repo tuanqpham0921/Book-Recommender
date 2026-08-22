@@ -7,9 +7,8 @@ so an impossible one compiles to a WHERE that can never hold — zero rows,
 indistinguishable from an ordinary miss. These are the cases where failing
 loudly beats answering with nothing.
 
-The model is shipped inside three tool schemas (`FindByNumericTraitsArgs`,
-`FilterRetrievalArgs`, `RecommendationArgs.bounds`), so every rule here applies
-to all three at once.
+The model is shipped inside two tool schemas (`FindByNumericTraitsArgs` and
+`FilterRetrievalArgs`), so every rule here applies to both at once.
 """
 
 import pytest

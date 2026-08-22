@@ -6,13 +6,13 @@ to test *on* them — the type is the payload, and what these assert is that
 anchors cannot be handed a subject search: the refusal happens at dispatch,
 naming the field, instead of inside the node after two round trips.
 
-The parenting assertions are the ones that fail loudly if a slice is reparented
-by accident, since nothing else in the app reads these classes yet — both
-consumers (`Filter_Retrieval`, `Analyze_Recommend`) are parked.
+`SimilarBooksInput` is the shipped consumer, so the selection tests drive the
+real class rather than a stand-in. The parenting assertions are the ones that
+fail loudly if a slice is reparented by accident.
 """
 
 import pytest
-from pydantic import Field, ValidationError
+from pydantic import ValidationError
 
 from app.domains.books.external import (
     BookAnchorOutput,
@@ -25,6 +25,10 @@ from app.domains.books.find_by_numeric_traits.external import (
     FindByNumericTraitsOutput,
 )
 from app.domains.books.find_by_title.external import FindByTitleOutput
+from app.domains.books.find_similar_books.external import (
+    SimilarBooksInput,
+    SimilarBooksOutput,
+)
 from app.domains.node_input import NodeInput, build_input
 
 CANDIDATE_OUTPUTS = (
@@ -32,12 +36,6 @@ CANDIDATE_OUTPUTS = (
     FindByCategoryOutput,
     FindByNumericTraitsOutput,
 )
-
-
-class _NeedsAnAnchor(NodeInput):
-    """What the similarity search will declare: anchors, and no fallback."""
-
-    anchors: list[BookAnchorOutput] = Field(..., min_length=1)
 
 
 class _TakesEither(NodeInput):
@@ -54,12 +52,19 @@ class TestWhichHalfEachNodeProduces:
     def test_the_described_searches_are_candidates(self, output_cls):
         assert issubclass(output_cls, BookCandidateOutput)
 
+    def test_the_similarity_pool_is_a_candidate_not_an_anchor(self):
+        """The books this node *chose* match a description the system wrote, so
+        they are a set and not a reference — which is what stops one similarity
+        search anchoring the next one."""
+        assert issubclass(SimilarBooksOutput, BookCandidateOutput)
+        assert not issubclass(SimilarBooksOutput, BookAnchorOutput)
+
     @pytest.mark.parametrize(
-        "output_cls", (FindByTitleOutput, *CANDIDATE_OUTPUTS)
+        "output_cls", (FindByTitleOutput, SimilarBooksOutput, *CANDIDATE_OUTPUTS)
     )
     def test_both_halves_are_still_retrieval_outputs(self, output_cls):
-        """`ParsedDependents.from_anchors` and `filter_books.anchor_queries`
-        both gate on the base, and neither slice was touched by the split."""
+        """`filter_books.anchor_queries` gates on the base, and that slice was
+        not touched by the split."""
         assert issubclass(output_cls, BookRetrievalOutput)
 
     def test_the_base_is_still_concrete(self):
@@ -73,8 +78,8 @@ class TestAnchorSelection:
     def test_a_candidate_is_not_collected_as_an_anchor(self):
         anchor = FindByTitleOutput(num_books=1)
         built = build_input(
-            _NeedsAnAnchor,
-            "recommend books like Dune",
+            SimilarBooksInput,
+            "find books like Dune",
             {"1": anchor, "2": FindByCategoryOutput(num_books=358)},
         )
         assert built.anchors == [anchor]
@@ -85,9 +90,19 @@ class TestAnchorSelection:
         turns into one skipped goal — rather than inside the node."""
         with pytest.raises(ValidationError) as excinfo:
             build_input(
-                _NeedsAnAnchor,
-                "recommend me a cozy mystery",
+                SimilarBooksInput,
+                "find books like a cozy mystery",
                 {"1": FindByCategoryOutput(num_books=358)},
+            )
+
+        assert [err["loc"] for err in excinfo.value.errors()] == [("anchors",)]
+
+    def test_a_similarity_pool_cannot_anchor_another_one(self):
+        with pytest.raises(ValidationError) as excinfo:
+            build_input(
+                SimilarBooksInput,
+                "more like those",
+                {"1": SimilarBooksOutput(num_books=50)},
             )
 
         assert [err["loc"] for err in excinfo.value.errors()] == [("anchors",)]

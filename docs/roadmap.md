@@ -138,8 +138,10 @@ already match; the clarification node and Compare's final status are pending.)
 
 ### Phase 3 — Execution end-to-end ← **recommended next**
 - Real executors for the V1 nodes: retrievals via `db/stores/book_store.py`,
-  `Analyze_Recommend` as the LLM response/ranking step, info nodes, feedback node;
-  the clarification node responds directly.
+  `Analyze_Similar_Books` as the semantic search step, info nodes, feedback node;
+  the clarification node responds directly. *(2026-08-22: the ranking and the
+  written reply split out of the similarity node into a picker node that is not
+  written yet — so nothing answers a book turn in prose today.)*
 - Repoint `EXECUTORS_CLS_MAPPING` from the mocks to the real executors
   (`app/registry.py` — the NOTE there marks this).
 - Re-enable `TaskRunnerWorkflow` in `Orchestrator.run`

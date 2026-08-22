@@ -85,11 +85,11 @@ class FindByNumericTraitsArgs(BaseModel):
     """
 
     # The per-field mapping lives on `BookMetadataFilter`, because that model is
-    # shipped by Filter_Retrieval and Analyze_Recommend too and the three must not
+    # shipped by Filter_Retrieval too and the two must not
     # calibrate "well rated" differently. The examples above are here rather than
     # there because they show *combinations*, which no single field description
     # can — and because this is the one node whose whole job is the inference, so
-    # it is worth the tokens here and not in the other two. Measured: without
+    # it is worth the tokens here and not in the other one. Measured: without
     # them, gpt-5-nano returned an empty filter for "obscure" and "really long".
     #
     # `BookMetadataFilter` also carries `is_children`, a flag rather than a

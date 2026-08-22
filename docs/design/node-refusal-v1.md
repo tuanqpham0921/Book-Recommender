@@ -52,6 +52,14 @@ named book"* — and with `Retrieve_by_Genre` and `Retrieve_Random` parked at th
 supporting retrieval on the menu is the title node. Given the catalog it was shown, the
 plan is the best available one; it is the catalog that is wrong.
 
+> **Updated 2026-08-22.** The catalog stopped being wrong in the only way available without
+> a new node: `Analyze_Similar_Books` (renamed from `Analyze_Recommend`) now says it needs a
+> *named book*, not a supporting retrieval of any kind, and its input takes
+> `list[BookAnchorOutput]` — so the fabricated `title="war"` anchor is still emittable but a
+> subject-search anchor is not, and a thematic ask with no title has no plan at all rather
+> than a bad one. The refusal this document argues for is still what turns "no plan" into
+> something the user can read.
+
 There is precedent for reading it that way. The 2026-07-17 eval review recorded the same
 class of finding — expected `Analyze_Recommend`, got `Retrieve_by_Traits` — and concluded
 *"the planner isn't wrong so much as the schemas are … prompt tuning alone would have
@@ -131,9 +139,9 @@ downstream a perfectly valid `ok=True` output whose query reaches no rows. Compo
 nothing — while making the anchor *look* populated.
 
 **Partly addressed 2026-08-18.** `ParsedDependents.from_anchors`
-(`app/domains/books/analyze_recommend/dependents.py`) now sorts a 0-count anchor into a
-separate `empty` pile instead of pooling its query, and the executor raises when every
-anchor is empty. That is option 2b below, plus a raise. It is also the raise-shaped
+(`app/domains/books/find_similar_books/dependents.py`, renamed from `analyze_recommend/`
+2026-08-22) now sorts a 0-count anchor into a separate `empty` pile instead of pooling its
+query, and `FindSimilarBooksExecutor.check_anchors` raises when every anchor is empty. That is option 2b below, plus a raise. It is also the raise-shaped
 version of Problem 1 — if refusal existed, that raise would be an `ok=False` refusal
 instead.
 

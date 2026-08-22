@@ -45,10 +45,10 @@ def anchor_queries(anchors: list[BookRetrievalOutput]) -> list[DeferredBookQuery
     """The queries this node can narrow, out of what its dependencies produced.
 
     An anchor with rows and no query is a node that *chose* its books
-    (`RecommendationOutput`), and narrowing a ranked choice after the fact is
-    what this node's docstring sends to `Analyze_Recommend.filters` instead. So
-    it is dropped here rather than half-honored, and a goal left with nothing
-    to narrow says so in `run`.
+    (`SimilarBooksOutput`), and narrowing a ranked choice after the fact throws
+    the ranking away — the bounds would have to go inside that node's own
+    search. So it is dropped here rather than half-honored, and a goal left
+    with nothing to narrow says so in `run`.
     """
     return [anchor.query for anchor in anchors if anchor.query is not None]
 
@@ -172,7 +172,7 @@ class FilterRetrievalExecutor(BookWorkflow[FilterRetrievalOutput]):
         # downstream is the narrowed query on `self.result`. Skipped entirely
         # when the bounds left nothing.
         if total:
-            preview = await self.preview_books(deferred)
+            preview = await self.fetch_books(deferred)
             await self.stream_books(preview.unwrap())
 
         # 5. last: ok is read off the output

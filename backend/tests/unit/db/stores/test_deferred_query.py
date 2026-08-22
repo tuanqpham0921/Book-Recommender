@@ -286,7 +286,7 @@ class TestCompileSqlVectorElision:
         assert "embedding" in sql
 
     def test_a_statement_with_no_vector_is_unaffected(self):
-        # the guard must not fire on ordinary SQL — count_books/fetch_anchor_books
+        # the guard must not fire on ordinary SQL — count_books/fetch_books
         # never carry a vector and must render exactly as before
         stmt = _title().count_stmt()
         plain = str(

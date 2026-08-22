@@ -3,7 +3,7 @@
 `AppWorkflow` pins the call signature for any unit of work; this adds what only
 a book node needs: `store` (the request-scoped book store, already resolved when
 the runner narrowed the context), the two halves of the counts-first opening
-move — `count_books()` and `preview_books()`, see
+move — `count_books()` and `fetch_books()`, see
 docs/design/execution-pipeline-v1.md — and `stream_books()`.
 
 **Counting and fetching are separate calls, and only one of them writes to the
@@ -12,6 +12,12 @@ from one `BookStore.preview` round trip, which made the sample look like part of
 the node's result no matter where it was assigned. Split, the default is a node
 that counts and hands on a query; fetching rows is a second, visible decision at
 the call site, and costs a second round trip when a node really wants both.
+
+**What the two share is deliberately small.** A node that needs something more
+than "count this" or "fetch rows off this" composes it out of them in its own
+flow rather than growing a third method here — `find_similar_books/` pools its
+anchors, checks its own cap and calls `fetch_books` once, which is what a
+`fetch_anchor_books()` on this class used to do for its single caller.
 
 Living below `AppWorkflow` is what puts `Book` and `BookOut` in normal import
 reach here.
@@ -35,11 +41,6 @@ import asyncio
 from airglider import task
 
 BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
-
-# What `fetch_anchor_books` will pool into one anchor before it gives up. The
-# ceiling is the fetch size too, so below it the anchor is fetched whole rather
-# than sampled — the count and the rows describe the same set.
-MAX_ANCHOR_BOOKS = 5
 
 
 class BookWorkflow(AppWorkflow[BookOutputT], ABC):
@@ -81,51 +82,23 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         return total
 
     @task
-    async def preview_books(
+    async def fetch_books(
         self, query: DeferredBookQuery, limit: int = BookConstraints.default_limit
     ) -> List[Book]:
-        """A few rows off a query, for something to look at.
+        """Rows off a deferred query — the one place a book node materializes.
 
-        Deliberately returns them rather than writing them anywhere: the rows a
-        node shows are not the set it produced, and `BookRetrievalOutput` no
-        longer has a field that blurs the two. The caller streams them and lets
-        them go.
+        Deliberately returns them rather than writing them anywhere: what a
+        node does with rows differs per node, and `BookRetrievalOutput` has no
+        field they could default into. A retrieval streams a few as a preview
+        and lets them go; `find_similar_books` keeps its capped anchor as
+        `references`.
 
-        Ranked for recognizability, not correctness (see `materialize_stmt`) —
-        this is evidence under a count, so a caller that needs the real set
-        materializes `query` instead.
+        `limit` is what decides which of those it is, and the default is a
+        preview's worth. Ranked by the query's own `score` where it still has
+        one, by rating otherwise (see `materialize_stmt`), so a caller taking
+        fewer rows than the query matches is taking the best of them.
         """
         rows = await self.store.materialize(query, limit=limit)
-        return [Book.model_validate(row) for row in rows]
-
-    @task
-    async def fetch_anchor_books(
-        self, upstream: list[DeferredBookQuery]
-    ) -> List[Book]:
-        """Pool the upstream queries into one anchor and fetch its books.
-
-        Nothing is stamped on `self.result`: the anchor is what this node
-        *depended on*, not what it produced, and a node calling this one owns
-        its own `query`/`num_books`. The anchor SQL goes to `add_details`
-        instead, which is what the old TODO here was asking for — it is
-        readable in the record without a `DeferredBookQuery` having to survive
-        serialization.
-        """
-        anchor = DeferredBookQuery.compose(upstream, op="or", label="anchor")
-        self.add_details(f"Anchor query: {compile_sql(anchor.stmt)}")
-
-        num_books = await self.store.count(anchor)
-        self.add_details(f"Dependent results has {num_books} books in total")
-        if num_books > MAX_ANCHOR_BOOKS:
-            # TODO: for now, re-query and only get the top rated
-            # or give the users pre-defined options (random, ...)
-            raise NotImplementedError(
-                f"need to handle when there are more than {MAX_ANCHOR_BOOKS} books"
-            )
-
-        # the whole anchor, not a sample of it: the cap above is what makes
-        # that the same thing, so these rows *are* the references
-        rows = await self.store.materialize(anchor, limit=MAX_ANCHOR_BOOKS)
         return [Book.model_validate(row) for row in rows]
 
     async def stream_books(

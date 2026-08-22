@@ -19,8 +19,9 @@ SPEC = NodeSpec(
 __all__ = [
     "SPEC",
     "FilterRetrievalExecutor",
-    # a pure renderer over `BookMetadataFilter`, not part of the node: the
-    # recommend slice parses its own bounds and needs the same sentence.
+    # a pure renderer over `BookMetadataFilter`, not part of the node:
+    # `find_by_numeric_traits` parses its own bounds and needs the same
+    # sentence. Its only caller since the similarity slice stopped parsing any.
     "describe_bounds",
     "FilterRetrievalNodeTypeEnum",
     "FilterRetrievalInput",

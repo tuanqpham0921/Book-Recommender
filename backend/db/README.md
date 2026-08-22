@@ -50,7 +50,7 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   queries into one `WITH` clause (`"or"` pools, `"and"` intersects, both deduped
   by isbn13 in SQL). `materialize()` is the single place rows are fetched — at
   the end of the plan (the UI's sample cards are a small `materialize()` call
-  too, streamed and dropped — see `BookWorkflow.preview_books`). A
+  too, streamed and dropped — see `BookWorkflow.fetch_books`). A
   `DeferredBookQuery` selects isbn13 (plus an optional `score`) and carries
   **no LIMIT and no ORDER BY**; that is what makes two of them composable, so
   don't add either when building one. See docs/design/execution-pipeline-v1.md.

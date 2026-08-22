@@ -66,11 +66,11 @@ def make_row(
 
 class TestAcceptedGoalTypes:
     def test_extracts_types_in_order(self):
-        planner = make_planner("Retrieve_by_Title", "Analyze_Recommend")
+        planner = make_planner("Retrieve_by_Title", "Analyze_Similar_Books")
 
         assert accepted_goal_types(planner) == [
             "Retrieve_by_Title",
-            "Analyze_Recommend",
+            "Analyze_Similar_Books",
         ]
 
     def test_missing_parse_result_is_empty(self):
@@ -225,7 +225,7 @@ class TestBuildGoalsReport:
     def test_match_mismatch_and_no_expectations_reported(self, suites_dir):
         rows = [
             make_row(1, goal_types=("Retrieve_by_Title", "Analyze_Summarize")),
-            make_row(2, goal_types=("Analyze_Recommend",)),
+            make_row(2, goal_types=("Analyze_Similar_Books",)),
         ]
 
         report, overall = self._build(rows)

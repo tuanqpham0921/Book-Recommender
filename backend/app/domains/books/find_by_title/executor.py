@@ -3,7 +3,7 @@
 The 1-1 shape: one request schema, one executor, one LLM call (the arg parse),
 then the counts-first opening move — nothing to interpret from upstream, so no
 satellite modules. A slice that grows past this (several LLM calls, artifacts
-to interpret) graduates to the layout `analyze_recommend/` demonstrates; the
+to interpret) graduates to the layout `find_similar_books/` demonstrates; the
 reading rule for both is in domains/README.md.
 """
 
@@ -74,7 +74,7 @@ class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
         # query on `self.result`, which reaches the whole match rather than
         # these few rows. Skipped entirely when nothing matched.
         if total:
-            preview = await self.preview_books(deferred)
+            preview = await self.fetch_books(deferred)
             await self.stream_books(preview.unwrap())
 
         # 4. last: ok is read off the output

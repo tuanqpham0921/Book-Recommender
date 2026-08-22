@@ -178,8 +178,8 @@
     "id": 126,
     "difficulty": "medium",
     "query": "I'm in the mood for something melancholic and atmospheric.",
-    "note": "DISCRIMINATION: mirror of 125 — mood carries taste signal → Analyze_Recommend, not Random.",
-    "expected_nodes": ["Analyze_Recommend"]
+    "note": "DISCRIMINATION: mirror of 125 — mood carries taste signal → Analyze_Similar_Books, not Random.",
+    "expected_nodes": ["Analyze_Similar_Books"]
   },
   {
     "id": 127,
@@ -249,7 +249,7 @@
     "difficulty": "medium",
     "query": "Put together a plan to get me into Russian classics over the next three months.",
     "note": "Retrieval for candidate classics then ReadingPlan with timeframe. Plan needs candidates first.",
-    "expected_nodes": ["Analyze_Recommend", "Analyze_Reading_Plan"]
+    "expected_nodes": ["Analyze_Similar_Books", "Analyze_Reading_Plan"]
   },
   {
     "id": 137,
@@ -263,28 +263,28 @@
     "difficulty": "hard",
     "query": "Compare the themes of 1984 and Brave New World, then recommend a modern dystopia based on the darker one, and add your recommendation to my reading list.",
     "note": "Two FindByTitle + Compare + Recommend + SaveToReadingList. Five nodes; the save depends conceptually on the recommend output.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Recommend", "Save_To_Reading_List"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Save_To_Reading_List"]
   },
   {
     "id": 139,
     "difficulty": "hard",
     "query": "Based on my reading history, what genres do I favor? Then recommend 3 books outside my comfort zone.",
     "note": "ReadingStats then Recommend. The recommendation inverts the stats output — cross-tier dependency from library data.",
-    "expected_nodes": ["Retrieve_Reading_Stats", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_Reading_Stats", "Analyze_Similar_Books"]
   },
   {
     "id": 140,
     "difficulty": "hard",
     "query": "Who is Ursula K. Le Guin, what are her most well-known books, and which one should I start with?",
     "note": "AuthorInfo + FindByAuthor + ReadingOrder. Three asks about one author spanning info, bibliography, and entry point.",
-    "expected_nodes": ["Retrieve_Author_Info", "Retrieve_by_Author", "Analyze_Recommend"]
+    "expected_nodes": ["Retrieve_Author_Info", "Retrieve_by_Author", "Analyze_Similar_Books"]
   },
   {
     "id": 141,
     "difficulty": "hard",
     "query": "I just finished Project Hail Mary — 5 stars. Take it off my reading list and recommend something similar that came out in the last few years.",
     "note": "MarkBookAsRead + RemoveFromReadingList + FindByTitle + Recommend with recency filter. Two library writes plus a recommend chain in one message.",
-    "expected_nodes": ["Mark_Book_As_Read", "Remove_From_Reading_List", "Retrieve_by_Title", "Retrieve_New_Releases", "Analyze_Recommend"]
+    "expected_nodes": ["Mark_Book_As_Read", "Remove_From_Reading_List", "Retrieve_by_Title", "Retrieve_New_Releases", "Analyze_Similar_Books"]
   },
   {
     "id": 142,
@@ -319,7 +319,7 @@
     "difficulty": "hard",
     "query": "Rate Dune 5 stars and Dune Messiah 3 stars, then based on those ratings tell me whether I should continue the saga or jump ship to something else.",
     "note": "Two RateBook + Series/Recommend reasoning. Two library writes with different values feeding a recommendation.",
-    "expected_nodes": ["Rate_Book", "Rate_Book", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_Series", "Analyze_Recommend"]
+    "expected_nodes": ["Rate_Book", "Rate_Book", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_Series", "Analyze_Similar_Books"]
   },
   {
     "id": 147,
@@ -333,6 +333,6 @@
     "difficulty": "hard",
     "query": "Check my reading stats, recommend 3 books like my top genre but from authors I've never read, put them in reading order, estimate total time at 30 minutes a day, add all three to my list, and tell the developer the stats feature is brilliant.",
     "note": "ReadingStats + Recommend + ReadingOrder + ReadingTime + SaveToReadingList + Feedback. Six-plus nodes spanning library, analyze, and project tiers — the extended-catalog kitchen sink.",
-    "expected_nodes": ["Retrieve_Reading_Stats", "Analyze_Recommend", "Analyze_Reading_Order", "Analyze_Reading_Time", "Save_To_Reading_List", "Provide_Feedback"]
+    "expected_nodes": ["Retrieve_Reading_Stats", "Analyze_Similar_Books", "Analyze_Reading_Order", "Analyze_Reading_Time", "Save_To_Reading_List", "Provide_Feedback"]
   }
 ]

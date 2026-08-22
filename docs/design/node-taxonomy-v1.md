@@ -393,23 +393,31 @@ and that the two copies match.
 
 **Cost:** ~522 catalog tokens on every request; the catalog is now six tools at 2,690.
 
-**Known broken downstream: `Retrieve_by_Category` → `Analyze_Recommend`.** The pairing eval
-cases 3, 11, 45 and 47 expect fails, and it is not this node's bug.
-`BookWorkflow.fetch_anchor_books` raises `NotImplementedError` when the pooled anchor holds
-more than `MAX_ANCHOR_BOOKS` (5), carrying its own TODO — *"for now, re-query and only get
-the top rated"*. That cap was survivable while every anchor was a title search returning
-one or two books; a subject search returns 358 for "mystery", so the pairing fails every
-time. Verified end-to-end 2026-08-21: "Recommend me a cozy mystery" plans correctly
-(`keywords=["mystery"]` here, *cozy* left to `semantic_input`), the category node finds 358
-and finalizes ok, and the recommend node then dies on the cap.
+**~~Known broken downstream: `Retrieve_by_Category` → `Analyze_Recommend`.~~ CLOSED
+2026-08-22 — the pairing is now illegal rather than broken.** The original entry, kept
+because the resolution inverts it:
 
-The fix is the TODO's own sentence and lives in `fetch_anchor_books`, not here:
-`materialize()` already takes a `limit` and already orders by the query's `score` (or by
-rating once a composition has dropped it), so taking the top `MAX_ANCHOR_BOOKS` instead of
-raising is a few lines. It is deliberately **not** part of this change — the owner scoped
-this round to the category node and left `Analyze_Recommend` untouched — but it is the
-first thing to do next, because it is what makes a subject a usable anchor rather than only
-a usable answer.
+> The pairing eval cases 3, 11, 45 and 47 expect fails, and it is not this node's bug.
+> `BookWorkflow.fetch_anchor_books` raises `NotImplementedError` when the pooled anchor holds
+> more than `MAX_ANCHOR_BOOKS` (5), carrying its own TODO — *"for now, re-query and only get
+> the top rated"*. That cap was survivable while every anchor was a title search returning
+> one or two books; a subject search returns 358 for "mystery", so the pairing fails every
+> time. Verified end-to-end 2026-08-21: "Recommend me a cozy mystery" plans correctly
+> (`keywords=["mystery"]` here, *cozy* left to `semantic_input`), the category node finds 358
+> and finalizes ok, and the recommend node then dies on the cap.
+>
+> The fix is the TODO's own sentence and lives in `fetch_anchor_books`, not here.
+
+The expected fix — take the top 5 instead of raising — was **not** taken. Folding the five
+best-rated of 358 mysteries into one "ideal book" would answer confidently from a sample
+nobody chose, which is a worse failure than the crash because it looks like an answer. The
+resolution instead is the anchors/candidates split below: `Retrieve_by_Category` returns a
+`BookCandidateOutput`, `Analyze_Similar_Books` declares `list[BookAnchorOutput]`, and the
+plan is refused at dispatch naming the field. `fetch_anchor_books` no longer exists.
+
+Eval cases 3, 11, 45 and 47 stay red, and now mean something different: they assert a plan
+the taxonomy has decided against, and what "recommend me a cozy mystery" *should* plan to
+(the category retrieval alone, or a semantic node that needs no anchor) is undecided.
 
 **Deliberately deferred: the embedding arm.** A threshold-only vector query with no
 `ORDER BY`/`LIMIT` is a legal `DeferredBookQuery` (verified: ~450ms on this catalog, since
@@ -524,15 +532,98 @@ redo of that slice.
 untouched and stay on the base — both are parked and are being redone, and both keep working
 because `ParsedDependents.from_anchors` gates on `BookRetrievalOutput`, which still matches.
 `fetch_anchor_books`' cap and `RecommendationStrategy`'s *"needs a supporting retrieval step"*
-constraint are the other half of closing "Known broken downstream", and belong to that redo —
-**the entry above stays open.** Catalog cost: +24 tokens (1,644 → 1,668), all of it the title
-node's expanded `Returns:`.
+constraint are the other half of closing "Known broken downstream", and belong to that redo.
+**Resolved the same day by the section below** — the recommend redo landed immediately after
+this one. Catalog cost: +24 tokens (1,644 → 1,668), all of it the title node's expanded
+`Returns:`.
 
 **One wart to settle in the redo.** When a plan sends both an anchor and a candidate to a
 `list[BookAnchorOutput]` field, `build_input` drops the candidate to a `logger.debug` "has no
 field for" line and the node never learns its anchor was narrowed. A second
 `list[BookCandidateOutput]` field does *not* fix it — `_resolve` does not skip already-claimed
-items, so the anchor would be counted twice. The cheap fix is raising that log level.
+items, so the anchor would be counted twice. The cheap fix is raising that log level. *Still
+open after the redo below: it is now less reachable (a candidate beside an anchor is a plan
+the planner should not emit at all) but no less silent. It moves with `filter_books`.*
+
+### `Analyze_Recommend` → `Analyze_Similar_Books`, narrowed to one job (2026-08-22)
+
+The node was renamed, cut down to a semantic search, and **unparked**. It is registered
+again; the catalog is 5 tools at **2,199 tokens** (1,668 before, +531 — the whole of it this
+node's docstring). The slice is `books/find_similar_books/`.
+
+**What it does now, and only this**: pool the anchor books → fold them into one ideal-book
+description (one LLM call) → embed and search → hand back the 50 nearest, nearest first.
+Three LLM calls became one.
+
+**What it stopped doing.** Deleted, not parked — git holds them until the node that wants
+them is written:
+
+| gone | it belonged to |
+|---|---|
+| `RecommendationArgs`, its parser and prompt | the picker: keywords, bounds, exclusions, `num_requested` |
+| `rank_candidates` (the same-author cap), `apply_exclusions` | the picker |
+| `generate_response.py` and the response prompt | the picker |
+
+**Nothing writes a chat reply for a book turn any more.** That is a real, accepted gap, not
+an oversight: the section's cards are the whole answer until a picker node exists. It is why
+`ui_section_collapsible` stays `False`.
+
+**Anchors only, enforced by type.** `SimilarBooksInput.anchors` is
+`list[BookAnchorOutput] = Field(..., min_length=1)`, so only `Retrieve_by_Title` (and
+`Retrieve_by_ISBN13` when built) can feed it. A bibliography, a subject search or a numeric
+search is a `BookCandidateOutput` and is refused by `build_input` at dispatch, naming the
+field — which is what closes "Known broken downstream" above.
+
+Two capabilities left with it, and both were already fictions the docstring maintained:
+
+- **Anchorless thematic asks.** "Something cozy and hopeful" claimed to work via
+  `semantic_input`; `check_artifacts` had always raised on an empty anchor. The claim is now
+  removed rather than the behaviour changed.
+- **Bounds alongside a similarity ask.** "Books like Dune but under 300 pages" used to route
+  the bound into this node's own parse and into the vector search's WHERE (recorded in
+  execution-pipeline-v1.md, 2026-08-19). With no parse, the bound is silently dropped. It
+  cannot move to `Filter_Retrieval`: filtering a ranked pool after the fact throws the
+  ranking away, which is what that node's own docstring forbids. `embedding_search_stmt`
+  keeps its `filters` parameter, unused, because inside the search is the only place a bound
+  on a similarity ask can ever go.
+
+**The blend-vs-separate rule.** The node pools *every* anchor it depends on into one
+description, so the number of goals the planner emits decides whether two named books blend
+or stay apart, and nothing downstream can undo the wrong choice. "Books like X **and** Y" is
+one goal with two `depends_on`; "books like X **or** like Y" is two goals with one each. The
+request docstring states it and demonstrates it in `Example queries:`, because it is prose,
+not schema — nothing enforces it.
+
+**`fetch_anchor_books` dissolved.** It sat on `BookWorkflow`, which every book node
+inherits, with one caller, bundling compose + count + cap + materialize. What is left on the
+base is `count_books` (unchanged) and `preview_books` **renamed to `fetch_books`** — the
+neutral materialize primitive, since "preview" is what a call site wants and not what the
+method does. The node composes the rest itself.
+
+The count round trip went away entirely: every anchor ran its own `COUNT` before handing on
+its query, so `ParsedDependents.total()` sums those and the cap is checked **before**
+anything is fetched. One round trip where there were two. `ParsedDependents` survives
+(dropping only the `reports` pile) and keeps its duck-typed `books` branch on purpose — no
+registered anchor carries rows, but it is what lets a test supply reference books with no
+database.
+
+**Known limit, deferred by owner decision.** Past `MAX_ANCHOR_BOOKS` (5) the node raises
+rather than folding the top 5 — see the closed entry above for why truncation was rejected.
+The type split stops a 358-book candidate reaching it, but *one title matching many rows*
+can still trip it: `title_query` keeps every row where `title ILIKE 'Dune'` or trigram
+similarity > 0.7, so a catalog with six editions of one book fails "books like Dune". **The
+fix belongs in `title_query`** — prefer exact matches when there are any, fall back to the
+trigram arm only when there are none — because that makes the anchor better rather than the
+consumer tolerant of a bad one, and it fixes every consumer at once. In `docs/backlog.md`.
+`check_anchors` reports the pooled total on every run, so the traces will show how often the
+cap actually fires before anyone spends time on it.
+
+**Eval suites: renamed, not re-baselined.** `Analyze_Recommend` → `Analyze_Similar_Books`
+across all four (43 / 12 / 9 / 6 occurrences), so cases fail for the right reason rather than
+on an unknown node name. The category- and author-anchored recommend cases (3, 11, 45, 47,
+68) still expect a plan the contract now refuses; they stay as written, the same precedent
+used while `Retrieve_by_Genre` was parked — the suite names the target taxonomy and the
+golden diff reports the gap.
 
 ## V1 conversation contract: clarify-only, single-turn
 

@@ -12,15 +12,14 @@ Node docstrings name what they return, and what they may depend on, using these
 shape names, so the planner can tell which nodes may feed which:
 
 - `BookRetrievalOutput` — a match: how many books, and the query reaching them.
-  Never the rows. Every retrieval and combine node, plus `Analyze_Recommend`'s
-  chosen set — books that were *chosen* are structurally a retrieval output.
-  The only shape "depends on books" consumes. It splits in two by whether the
-  match can be anchored on:
+  Never the rows. Every retrieval and combine node. The only shape "depends on
+  books" consumes. It splits in two by whether the match can be anchored on:
   - `BookAnchorOutput` — the user named these books (`Retrieve_by_Title`), so a
     later step can fold them into a description of what to look for next.
-  - `BookCandidateOutput` — these books match a description the user gave
-    (`Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`).
-    A set, not a reference; nothing may anchor on it.
+  - `BookCandidateOutput` — these books match a description
+    (`Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`,
+    and `Analyze_Similar_Books`' chosen pool, whose description the system wrote
+    rather than the user). A set, not a reference; nothing may anchor on it.
 - `AnalyzeBooksOutput` — a written report about books. Names books without
   being a book list, so nothing may treat it as a retrieval.
 - `ActionConfirmationOutput` — a record of a write (shelf actions, feedback).

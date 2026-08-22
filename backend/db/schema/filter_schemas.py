@@ -71,10 +71,9 @@ class BookMetadataFilter(BaseModel):
     is the reason they are so wordy. "Well rated", "popular", "a quick read",
     "the classical period" are all real asks that have to become a number
     somewhere, and this one model is shipped inside every tool schema that takes
-    bounds — `FindByNumericTraitsArgs.traits`, `FilterRetrievalArgs.filters` and
-    `RecommendationArgs.bounds`. Written here, the mapping reaches all three and
-    they cannot disagree; written in any one slice's docstring, it would be
-    copied into the others and drift.
+    bounds — `FindByNumericTraitsArgs.traits` and `FilterRetrievalArgs.filters`.
+    Written here, the mapping reaches both and they cannot disagree; written in
+    either slice's docstring, it would be copied into the other and drift.
 
     Each description leads with the value to use and mentions the corpus range
     only where it stops a mistake. That order is load-bearing: an earlier draft

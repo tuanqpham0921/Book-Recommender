@@ -1,11 +1,12 @@
 """The reference-analysis call's pure half: documents in, request out.
 
-Analyze_Recommend searches by vector, not keyword, so everything it depends on
-has to collapse into one block of prose reading like the description of the
+Analyze_Similar_Books searches by vector, not keyword, so everything it depends
+on has to collapse into one block of prose reading like the description of the
 book the user wants next. `render_documents` builds the document block, and
 `build_analysis_request` asks the LLM to fold it into `IdealBookDescription` —
-the one string that gets embedded. The step that *runs* the request is
-`RecommendBooksExecutor.analyze_references`, next door.
+the one string that gets embedded, and now the *only* thing that does. The step
+that *runs* the request is `FindSimilarBooksExecutor.analyze_references`, next
+door, and it is the slice's one remaining LLM call.
 
 Two things stay out of the prompt. The reference books are excluded from the
 search by isbn13 afterwards — a metadata filter, not something to ask prose to
@@ -22,7 +23,7 @@ from clients import OpenAIParserRequest
 from app.common.utils import truncate_str
 
 ANALYZE_REFERENCES_PROMPT_PATH = (
-    "domains/books/analyze_recommend/prompts/analyze_references.txt"
+    "domains/books/find_similar_books/prompts/analyze_references.txt"
 )
 
 # The executor caps the anchor at a handful of books, so these bounds are a
@@ -31,7 +32,7 @@ MAX_DOC_CHARS = 1500
 MAX_TOTAL_CHARS = 8000
 
 
-def render_documents(books: list[Book], reports: list[str]) -> str:
+def render_documents(books: list[Book]) -> str:
     """The document block the analyzer prompt reads.
 
     Only `title` and `description` are read off each book, which keeps
@@ -63,9 +64,6 @@ def render_documents(books: list[Book], reports: list[str]) -> str:
                 f"edition {n}: {desc}" for n, desc in enumerate(descriptions, start=1)
             )
         blocks.append("\n".join(lines))
-
-    for i, report in enumerate(reports, start=1):
-        blocks.append(f"[report {i}]\n{truncate_str(report, MAX_DOC_CHARS)}")
 
     return truncate_str("\n\n".join(blocks), MAX_TOTAL_CHARS, collapse=False)
 

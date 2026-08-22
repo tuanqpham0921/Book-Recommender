@@ -2,7 +2,7 @@
 where the flow reaches it.
 
 Same reading rule as the book slices (domains/README.md;
-`books/analyze_recommend/executor.py` is the worked example): this file is the
+`books/find_similar_books/executor.py` is the worked example): this file is the
 flow — `run()` plus every step, methods in the order `run` reaches them — with
 the request builder as a module-level pure function beside it. The satellites
 hold what outlives the run: `schemas.py` is what the LLM fills in,

@@ -12,17 +12,19 @@ from app.domains.books import (
     find_by_category,
     find_by_numeric_traits,
     find_by_title,
+    find_similar_books,
 )
 from app.domains.node_spec import NodeSpec
 
-# Parked 2026-08-22: `filter_books` (Filter_Retrieval) and `analyze_recommend`
-# (Analyze_Recommend). Both slices stay importable and tested — `describe_bounds`
-# still comes from `filter_books` — they are only absent from the catalog, so the
-# planner cannot target them. Unparking is re-adding the import and the SPEC line.
-# What that costs is recorded in docs/design/node-taxonomy-v1.md.
+# Parked 2026-08-22: `filter_books` (Filter_Retrieval). The slice stays
+# importable and tested — `describe_bounds` still comes from it, for
+# `find_by_numeric_traits` — it is only absent from the catalog, so the planner
+# cannot target it. Unparking is re-adding the import and the SPEC line. What
+# that costs is recorded in docs/design/node-taxonomy-v1.md.
 BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_title.SPEC,
     find_by_author.SPEC,
     find_by_category.SPEC,
     find_by_numeric_traits.SPEC,
+    find_similar_books.SPEC,
 )

@@ -140,7 +140,7 @@ def embedding_search_stmt(
     but returned rather than applied, so a caller can record it (`compile_sql`)
     before running it. That is the whole reason this is split out: the search
     returns rows in cosine order, and no `DeferredBookQuery` reproduces that
-    order (see `RecommendationOutput`), so it can never be a deferred query
+    order (see `SimilarBooksOutput`), so it can never be a deferred query
     whose statement rides downstream on its own — recording it has to happen
     here, at the one point something still holds it unexecuted.
 
@@ -152,10 +152,15 @@ def embedding_search_stmt(
     - `similarity_threshold` is the floor. Without it this returns the top
       `limit` rows however far away they are — the whole table, ordered and
       truncated — so an ask with no near match answers with strangers.
-    - `filters` are the metadata bounds the recommend node parsed. An all-None
-      filter contributes no predicates and is a harmless no-op, unlike
-      `filter_query()` which refuses one: there narrowing is the node's whole
-      job, so a no-op would report a count read as filtered.
+    - `filters` are metadata bounds, and this is the only place a bound can
+      reach a vector search — applied to the *result* it would cut an
+      already-capped 50. No caller passes them today (`Analyze_Similar_Books`
+      parses nothing), so the parameter is here for the node that re-ranks or
+      picks from the pool; it is kept rather than deleted because that node
+      cannot re-derive it anywhere else. An all-None filter contributes no
+      predicates and is a harmless no-op, unlike `filter_query()` which refuses
+      one: there narrowing is the node's whole job, so a no-op would report a
+      count read as filtered.
     - `exclude_isbns` drops the books the ask already named. In SQL rather than
       in the caller, so the excluded rows do not eat `limit` slots.
 

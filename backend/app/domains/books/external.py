@@ -23,10 +23,10 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     same set for a downstream node to reach for by accident — composing against
     `query` is the only thing it can do. Rows are fetched at exactly two points,
     both of them deliberate: a preview streamed straight to the browser
-    (`BookWorkflow.preview_books`, off the output), and whatever the terminal
+    (`BookWorkflow.fetch_books`, off the output), and whatever the terminal
     node materializes as its answer.
 
-    A node that *chooses* rows — the recommend node — declares its own `books`
+    A node that *chooses* rows — the similarity node — declares its own `books`
     field for them. That is a different claim than "here is a sample of my
     match", and it now looks different too. On such a node `query`/`query_sql`
     stay None — no query reproduces a ranked choice — so this base is the
@@ -84,8 +84,8 @@ class BookAnchorOutput(BookRetrievalOutput):
     **It narrows intent, not cardinality.** A trigram title search still
     matches every edition of `The Lord of the Rings`, so a consumer that can
     only fold a handful of books still needs its own cap
-    (`BookWorkflow.MAX_ANCHOR_BOOKS`); this type is what stops that cap being
-    the *usual* outcome instead of the rare one.
+    (`find_similar_books.MAX_ANCHOR_BOOKS`); this type is what stops that cap
+    being the *usual* outcome instead of the rare one.
 
     `Retrieve_by_Author` is deliberately not here. Twelve Herberts would fold
     fine and eight hundred Kings would not, and the node cannot know which it
@@ -101,6 +101,13 @@ class BookCandidateOutput(BookRetrievalOutput):
     Composable like any retrieval — this is the shape `Filter_Retrieval` narrows
     and `Combine_Intersect` folds — but not foldable into an anchor: averaging
     358 mystery blurbs describes no book in particular.
+
+    It is also what a node hands back when it *chose* the rows rather than
+    counted them (`SimilarBooksOutput`), which is the same claim from the other
+    side: a set matching a description the system synthesized is still a
+    description's worth of books, so it cannot anchor the next search either.
+    Such a node declares its own `books` field and leaves `query` None — see
+    `BookRetrievalOutput`.
     """
 
 

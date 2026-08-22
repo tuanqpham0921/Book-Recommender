@@ -119,7 +119,7 @@ class FindByCategoryExecutor(BookWorkflow[FindByCategoryOutput]):
         # 3. Cards for the section, and nothing more: streamed and let go,
         # never assigned to the output.
         if total:
-            preview = await self.preview_books(deferred)
+            preview = await self.fetch_books(deferred)
             await self.stream_books(preview.unwrap())
 
         # 4. last: ok is read off the output

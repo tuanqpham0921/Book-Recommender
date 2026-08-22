@@ -71,7 +71,7 @@ class FindByAuthorExecutor(BookWorkflow[FindByAuthorOutput]):
         # query on `self.result`, which reaches the whole bibliography rather
         # than these few rows. Skipped entirely when nothing matched.
         if total:
-            preview = await self.preview_books(deferred)
+            preview = await self.fetch_books(deferred)
             await self.stream_books(preview.unwrap())
 
         # 4. last: ok is read off the output

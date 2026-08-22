@@ -105,7 +105,11 @@ rather than passed through, because a no-op narrowing step reports a count the u
 as filtered.
 
 **`Analyze_Recommend` applies its own bounds, inside its own search
-(2026-08-19).** Case 62/64's expectation — bounds on a recommendation belong *in* the
+(2026-08-19).** ~~Implemented~~ **REVERSED 2026-08-22** — see the note at the end of this
+entry. The reasoning below is kept because it is still the argument for where a bound on a
+similarity ask has to go; what changed is that the node no longer parses one.
+
+Case 62/64's expectation — bounds on a recommendation belong *in* the
 recommend node — is implemented there rather than by delegating to `Filter_Retrieval`.
 The node's argument parse is a **decomposition** into three parts, split by where each
 one lands: `keywords` join the text that gets embedded, `bounds` (a `BookMetadataFilter`)
@@ -146,6 +150,17 @@ chosen* — the same way `num_books == 0` is a real answer for `Filter_Retrieval
 there would surface as the generic failure message and tell the user nothing about which
 constraint was too tight. The reply is given the bounds in words and the pre-exclusion pool
 size so it can say which.
+
+> **Reversed 2026-08-22, when `Analyze_Recommend` became `Analyze_Similar_Books`.** The node
+> was cut down to one job — anchors in, a ranked candidate pool out — so it parses nothing at
+> all: no `keywords`, no `bounds`, no `exclude`, and no reply. "Books like Dune but under 300
+> pages" now drops the bound silently. Everything above about *where* a bound has to go
+> survives intact and is the reason it cannot simply move to `Filter_Retrieval`: narrowing a
+> ranked pool after the fact throws the ranking away. `embedding_search_stmt` keeps its
+> `filters` parameter, unused, waiting for the node that re-ranks and picks. The `ok`
+> reversal survives in spirit — an empty pool still finalizes `ok` — but the claim narrowed
+> with the node, from *parsed and answered* to *anchors folded and search run*. See
+> [node-taxonomy-v1.md](node-taxonomy-v1.md).
 
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
@@ -193,14 +208,18 @@ this node a narrowing operator instead of a second recommender.
 > above needs saying more precisely: what it rules out is keywords **on a narrowing
 > operator**, which is still true — `Filter_Retrieval` has none and will not get one.
 > Keywords blurred `Retrieve_by_Traits` because nothing structural chose between it and
-> `Analyze_Recommend`; both took free text and both searched. The category node is
-> separated from `Analyze_Recommend` by *mechanism*, not by prose about subject matter:
-> it asks whether the catalog's **text contains these words** (a tsquery over title, shelf
-> and blurb) and hands on a composable query over the whole match, where
-> `Analyze_Recommend` asks which books are **near an embedding** and hands back a ranked
-> terminal choice. That is checkable from the outside — "cozy mysteries" splits into
+> the recommend node; both took free text and both searched. The category node is
+> separated from `Analyze_Similar_Books` (renamed 2026-08-22) by *mechanism*, not by prose
+> about subject matter: it asks whether the catalog's **text contains these words** (a
+> tsquery over title, shelf and blurb) and hands on a composable query over the whole match,
+> where the similarity node asks which books are **near an embedding** and hands back a
+> ranked pool. That is checkable from the outside — "cozy mysteries" splits into
 > *mystery* (a word the text contains) and *cozy* (a feel no word search can find), where
 > the "shelf vs. mood" wording the original genre sketch used could not place either.
+>
+> **Amended again 2026-08-22**: the two no longer split one ask between them. The similarity
+> node takes only *named* books, so "cozy mysteries" is the category retrieval alone with the
+> feel dropped — the split above describes a plan the type system now refuses.
 > See [node-taxonomy-v1.md](node-taxonomy-v1.md).
 
 **One operation per node.** `Combine_Intersect` carries no filters — an earlier cut gave
@@ -320,11 +339,11 @@ exactly one sink, so the two agree except on compound messages.
     sample together, so every retrieval node had a few rows in hand and a field to put them
     in, and `num_books` vs `len(books)` was the only thing marking them as a preview rather
     than an answer. `preflight` is now split — `count_books()` stamps `query`/`query_sql`/
-    `num_books` and fetches nothing; `preview_books()` is a `@task` returning rows the caller
-    streams and drops — and the output shape carries no rows at all, so composing against
-    `query` is the only thing a downstream node *can* do. A node that genuinely chooses rows
-    declares its own field for them (`RecommendationOutput.books`), which reads as the
-    different claim it is. Cost: a node wanting both a count and cards pays two round trips
+    `num_books` and fetches nothing; `fetch_books()` (named `preview_books` until
+    2026-08-22) is a `@task` returning rows the caller uses as it likes — and the output shape
+    carries no rows at all, so composing against `query` is the only thing a downstream node
+    *can* do. A node that genuinely chooses rows declares its own field for them
+    (`SimilarBooksOutput.books`), which reads as the different claim it is. Cost: a node wanting both a count and cards pays two round trips
     instead of one. The store-level halves of the old move went with it (also 2026-08-17):
     `BookStore.preview()` / `build_preview` (the one-round-trip `(total, sample)`) and the
     row-fetching `search_by_title` are deleted, so `count()` and `materialize()` are the
