@@ -132,14 +132,17 @@ async def record_chat_run(
 
             user_dir = FilesLocationConstants.EXPORT_DIR / user_id
 
+            # a flattern view
             flat = to_serializable(record.flatten())
             flat = strip_zero_token_usage(remove_empty_values(flat))
             save_file(flat, file_name="record", path=user_dir)
 
-            tracer_name = to_tracer(record)
-            save_file(tracer_name, file_name="tracer_name", path=user_dir)
+            # just the name
+            # tracer_name = to_tracer(record)
+            # save_file(tracer_name, file_name="tracer_name", path=user_dir)
 
-            # save_file(messages, record.id, + "_record_messages")
+            # saving the convo history
+            save_file(messages, file_name="convo_history", path=user_dir)
 
         # async with request_context.session_factory() as session:
         #     await ChatRunStore(session).insert_run(row)
