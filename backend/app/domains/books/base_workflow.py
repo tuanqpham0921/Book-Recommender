@@ -108,8 +108,9 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
 
         Takes `Book` models or the raw row dicts the store returns; both are
         validated into `BookOut`, which pins the UI's field names and is what
-        keeps internal columns and `similarity_score` off the wire. A row with
-        no `isbn13` raises — it is the React key the card list is built on.
+        keeps internal columns (`ratings_count`, `is_children`, the ingestion
+        leftovers) off the wire. A row with no `isbn13` raises — it is the React
+        key the card list is built on.
 
         `delay` defaults to 0: a preview lands in a collapsed section nobody
         watches. Pass a delay for the final answer, where streaming is the point.

@@ -71,10 +71,11 @@ class Book(BaseModel):
     thumbnail: str | None = None
     title_and_subtiles: str | None = None
 
-    # Not a column: `BookStore.search_similar` attaches it, and it is the
-    # only record of how close a recommendation was — so "why these books" stays
-    # answerable from the run log. None on a book that arrived another way.
-    similarity_score: float | None = None
+    # `similarity_score` lived here until 2026-08-24, attached per row by
+    # `BookStore.search_similar`. Both are gone: the similarity node hands on a
+    # deferred query instead of rows, so nothing attaches a per-book score and
+    # `materialize()` returns plain columns like every other fetch. The record
+    # of how close a match was is `SimilarBooksOutput.score`, over the pool.
 
 
 

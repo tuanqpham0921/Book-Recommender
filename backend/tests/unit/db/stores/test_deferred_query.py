@@ -7,9 +7,11 @@ func.similarity() must receive the raw Python string and let SQLAlchemy bind it
 as a parameter.
 
 Second, the deferred family's invariants — the ones that make a query
-composable into a WITH clause instead of runnable on its own. The statements
-are derived on `DeferredBookQuery` itself (`count_stmt` / `materialize_stmt` /
-`compose`), so everything here compiles SQL with no session in sight.
+composable into a WITH clause instead of runnable on its own — and, since
+2026-08-24, the one query that trades them away (`TestCapped`). The statements
+are derived on `DeferredBookQuery` itself (`count_stmt` / `score_stats_stmt` /
+`materialize_stmt` / `compose`), so everything here compiles SQL with no session
+in sight.
 """
 
 from unittest.mock import MagicMock
@@ -18,7 +20,12 @@ import pytest
 from sqlalchemy import select
 
 from db.schema import BookMetadataFilter, BookModel
-from db.stores import BookStore, DeferredBookQuery, compile_sql
+from db.stores import (
+    BookStore,
+    DeferredBookQuery,
+    compile_sql,
+    embedding_search_stmt,
+)
 
 INJECTION_PAYLOAD = "x' OR 1=1 --"
 
@@ -207,6 +214,83 @@ class TestCountStmt:
         assert "WITH MATCHED AS" in compiled
 
 
+class TestScoreStatsStmt:
+    """The counting statement for a query whose count says nothing.
+
+    A capped vector search always counts its cap, so what describes that pool
+    is how far `score` falls across it — see `SimilarBooksOutput.score`.
+    """
+
+    def test_it_aggregates_the_score_column(self):
+        compiled = _compiled_sql(_title().score_stats_stmt()).upper()
+        assert "COUNT(*)" in compiled
+        assert "MIN(SCORED.SCORE)" in compiled
+        assert "MAX(SCORED.SCORE)" in compiled
+        assert "AVG(SCORED.SCORE)" in compiled
+
+    def test_it_aggregates_over_the_whole_query_as_a_cte(self):
+        # over the CTE, not over the books table — on a capped query that is
+        # the difference between the pool's spread and the catalog's
+        assert "WITH scored AS" in _compiled_sql(_title().score_stats_stmt())
+
+    def test_a_query_with_no_score_has_no_stats(self):
+        # None rather than a row of zeroes: "no degree of match" and "every
+        # match scored 0.0" are different facts. numeric_traits_query emits no
+        # score, so it falls back to rating and has nothing to summarize.
+        no_score = BookStore(MagicMock()).numeric_traits_query(
+            BookMetadataFilter(max_pages=300)
+        )
+        assert no_score.score_stats_stmt() is None
+
+
+class TestCapped:
+    """The one documented exception to no-LIMIT/no-ORDER-BY, and its blast radius."""
+
+    def _capped(self) -> DeferredBookQuery:
+        return embedding_search_stmt([0.01] * 1024, limit=250)
+
+    def test_an_ordinary_query_is_not_capped(self):
+        assert _title().capped is None
+
+    def test_compose_refuses_a_capped_query(self):
+        # composition drops `score`, so the ranking the cap was taken for is
+        # lost — and a truncated 250 unioned with an untruncated match weights
+        # the two branches differently, which the result cannot show
+        with pytest.raises(ValueError, match="capped"):
+            DeferredBookQuery.compose([self._capped(), _title()])
+
+    def test_the_error_names_which_query_was_capped(self):
+        with pytest.raises(ValueError, match="similar"):
+            DeferredBookQuery.compose([self._capped(), _title()])
+
+    def test_a_single_capped_input_passes_through_still_capped(self):
+        # nothing was combined, so nothing was lost — but the guard has to keep
+        # holding downstream, which means the flag has to survive the passthrough
+        passed = DeferredBookQuery.compose([self._capped()], label="x")
+        assert passed.capped == 250
+
+    def test_filtering_a_capped_query_keeps_the_cap(self):
+        # narrowing a capped pool is the one safe thing to do with one, but the
+        # result is still "of the 250 nearest, N pass" — so compose must go on
+        # refusing it one step later
+        assert _filtered(self._capped(), max_pages=300).capped == 250
+
+    def test_filtering_a_capped_query_keeps_cosine_order_reachable(self):
+        """The claim the whole 2026-08-24 change rests on.
+
+        `filter_query` propagates `score` and `materialize_stmt` orders by it,
+        so a metadata bound narrows a similarity pool *without* flattening its
+        ranking. This is what replaced parsing bounds inside the vector search.
+        """
+        narrowed = _filtered(self._capped(), max_pages=300)
+        compiled = _compiled_sql(narrowed.materialize_stmt(BookModel))
+        assert "ORDER BY final.score DESC" in compiled
+        # not the scoreless fallback. `average_rating` is in the select list
+        # either way — it is a column of the model — so the ordering is where
+        # the difference shows.
+        assert "ORDER BY books.average_rating" not in compiled
+
+
 class TestCompose:
     def test_single_query_passes_through_with_its_score(self):
         compiled = _compiled_sql(DeferredBookQuery.compose([_title()]).stmt)
@@ -260,8 +344,13 @@ class TestMaterializeStmt:
 
 class TestCompileSqlVectorElision:
     """`compile_sql` renders every literal except a pgvector one, which would
-    otherwise be 1024 floats (~20KB) of a string nothing reads. See
-    `BookStore.embedding_search_stmt` for the real caller."""
+    otherwise be 1024 floats (~20KB) of a string nothing reads.
+
+    Built by hand rather than via `embedding_search_stmt` so the elision is
+    tested against the pattern rather than against one builder's current
+    output — but that builder is the live caller, and since 2026-08-24 its
+    statement rides on a `DeferredBookQuery`, so this guard is what keeps a
+    vector out of `chat_runs.query_sql`."""
 
     def _vector_stmt(self):
         embed_col = BookModel.embedding
@@ -269,6 +358,15 @@ class TestCompileSqlVectorElision:
         return select(BookModel.isbn13, similarity.label("similarity_score")).where(
             similarity >= 0.35
         )
+
+    def test_the_live_builders_statement_is_elided_too(self):
+        # the case that actually reaches the database record
+        sql = compile_sql(
+            embedding_search_stmt([0.01] * 1024, limit=250).stmt,
+            embedding_as="embed(search_text)",
+        )
+        assert "embed(search_text)" in sql
+        assert "0.01" not in sql
 
     def test_the_vector_literal_is_replaced_by_the_label(self):
         sql = compile_sql(self._vector_stmt(), embedding_as="embed(search_text)")

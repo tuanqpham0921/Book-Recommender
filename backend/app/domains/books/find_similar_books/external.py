@@ -1,7 +1,6 @@
-from pydantic import Field
+from pydantic import BaseModel, Field
 from typing import Any
 
-from app.common.utils import count_values
 from app.domains.books.external import BookAnchorOutput, BookCandidateOutput
 from app.domains.books.schemas import Book
 from app.domains.node_input import NodeInput
@@ -29,9 +28,28 @@ class SimilarBooksInput(NodeInput):
     anchors: list[BookAnchorOutput] = Field(..., min_length=1)
 
 
+class ScoreStats(BaseModel):
+    """How close the pool actually sits, as cosine similarity.
+
+    The pool is capped, so `num_books` reports the cap far more often than it
+    reports a match size — these are what say whether the cap found anything
+    worth capping. A `min` resting on `BookConstraints.MIN_SIMILARITY` means
+    the floor never bound and the cap chose the whole pool; a `min` well above
+    it means the floor did the cutting and the pool is smaller than its cap.
+
+    It is also the record `Book.similarity_score` used to keep. Per-book, that
+    field only survived as far as the browser, where `BookOut` dropped it; the
+    spread reaches `chat_runs` and is what "why these books" is answered from.
+    """
+
+    count: int
+    min: float
+    max: float
+    avg: float
+
+
 class SimilarBooksOutput(BookCandidateOutput):
-    """The books nearest the anchor, nearest first. An empty `books` means
-    nothing in the catalog sits close enough to what was named.
+    """How many books sit nearest the anchor, and the query that reaches them.
 
     A **candidate** set, and on the candidate side for the same reason every
     other one is: these books match a *description* — the one this node
@@ -39,14 +57,19 @@ class SimilarBooksOutput(BookCandidateOutput):
     be fed back in as an anchor to another similarity search, and a later node
     that re-ranks or picks from it declares `list[BookCandidateOutput]`.
 
-    `books` is declared *here* rather than inherited: the base output carries a
-    count and a query and no rows (see `BookRetrievalOutput`), because a
-    retrieval node's rows would only ever be a sample of its match. These are
-    not a sample — they came back ranked from a vector search and they are the
-    node's whole answer. `query` and `query_sql` stay None, and cannot be
-    otherwise: `embedding_search_stmt` carries an ORDER BY and a LIMIT, both of
-    which `DeferredBookQuery` forbids by invariant, so no composable query
-    reproduces cosine order.
+    Shaped like every other retrieval — a count and a query, no rows — which it
+    was not until 2026-08-24. `embedding_search_stmt` carries an ORDER BY and a
+    LIMIT, and this node used to hand on 50 fetched rows because
+    `DeferredBookQuery` forbids both by invariant. It now takes that invariant's
+    one documented exception (`DeferredBookQuery.capped`) instead, because the
+    rows cost more than the exception does: with a query, `Filter_Retrieval`
+    narrows the pool in SQL and `score` carries cosine order through the
+    narrowing, so a bound on a similarity ask is expressible without this node
+    parsing one.
+
+    `query` therefore **cannot be composed** — `compose()` refuses a capped
+    query — only counted, narrowed and materialized. `score` is what describes
+    it, since `num_books` on a capped pool mostly reports the cap.
 
     `references` and `search_text` are kept because "why these books" is only
     answerable against what was pointed at and what was embedded. `search_text`
@@ -54,26 +77,21 @@ class SimilarBooksOutput(BookCandidateOutput):
     — not anything the user typed.
     """
 
-    books: list[Book] = Field(
-        default_factory=list,
-        description="the pool this node found — nearest first, not a sample",
-    )
     references: list[Book] = Field(default_factory=list)
     search_text: str | None = None
+    score: ScoreStats | None = Field(
+        default=None,
+        description="the pool's cosine spread — None when nothing cleared the floor",
+    )
 
     def to_summary(self) -> dict[str, Any]:
-        """The *shape* of the pool, not the books in it.
+        """The *shape* of the pool, not the books in it — none are carried now.
 
-        Counts and ranges: a summary is read at a glance, and titles would only
-        restate what the cards on screen already show.
+        A summary is read at a glance, and the two numbers worth glancing at
+        are how big the pool is and how close it sits.
         """
-
-        pages = [book.num_pages for book in self.books if book.num_pages]
         return {
-            "num_books": len(self.books),
-            "authors": count_values(book.authors for book in self.books),
-            "genres": count_values(book.genre for book in self.books),
-            # None, not 0: a 0-0 range reads as "very short books" downstream
-            "min_pages": min(pages) if pages else None,
-            "max_pages": max(pages) if pages else None,
+            "num_books": self.num_books,
+            "num_references": len(self.references),
+            "score": self.score.model_dump() if self.score else None,
         }

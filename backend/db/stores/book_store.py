@@ -1,8 +1,7 @@
 from typing import List, Any, Dict
 
-from sqlalchemy import Select, func, literal_column, or_, select, text
+from sqlalchemy import func, literal_column, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
 
 from config import BookConstraints
 from db.schema import AudienceEnum, BookMetadataFilter, BookModel, GenreEnum
@@ -129,64 +128,56 @@ def genre_values(
 
 def embedding_search_stmt(
     query_embedding: List[float],
-    filters: BookMetadataFilter | None = None,
+    limit: int,
     exclude_isbns: List[str] | None = None,
     similarity_threshold: float = BookConstraints.MIN_SIMILARITY,
-    limit: int = 50,
-) -> Select:
-    """The books nearest an embedding, narrowed to those worth ranking.
+) -> DeferredBookQuery:
+    """The books nearest an embedding, as a deferred query capped at `limit`.
 
     Pure and model-bound rather than a store method — like `metadata_predicates`,
     but returned rather than applied, so a caller can record it (`compile_sql`)
-    before running it. That is the whole reason this is split out: the search
-    returns rows in cosine order, and no `DeferredBookQuery` reproduces that
-    order (see `SimilarBooksOutput`), so it can never be a deferred query
-    whose statement rides downstream on its own — recording it has to happen
-    here, at the one point something still holds it unexecuted.
+    before running it. Every other builder here is a method because a
+    `DeferredBookQuery` gets recorded by `count_books` after the fact; this one
+    carries a 1024-float vector, and the label that elides it
+    (`embed(search_text)`) is known only to the caller.
 
-    Three narrowings, all optional, and all of them have to land *inside* this
-    statement rather than on its result: the search orders the whole table and
-    truncates at `limit`, so anything applied afterwards is applied to an
-    already-capped set.
+    **The one capped deferred query** (see `DeferredBookQuery.capped`). The
+    search does not select a subset — it orders the whole table by cosine
+    distance and truncates — so the LIMIT is the set rather than a shrunk view
+    of one, and it has to live in the statement. What that buys is everything
+    else on the class: `score` is cosine similarity under the name
+    `filter_query` and `materialize_stmt` both key on, so a downstream bound
+    narrows this pool **and cosine order survives it**. That is what makes
+    "books like Dune under 300 pages" expressible as two nodes rather than
+    needing bounds parsed in here.
+
+    Two narrowings, both landing inside the statement because anything applied
+    to the result is applied to an already-capped set:
 
     - `similarity_threshold` is the floor. Without it this returns the top
       `limit` rows however far away they are — the whole table, ordered and
       truncated — so an ask with no near match answers with strangers.
-    - `filters` are metadata bounds, and this is the only place a bound can
-      reach a vector search — applied to the *result* it would cut an
-      already-capped 50. No caller passes them today (`Analyze_Similar_Books`
-      parses nothing), so the parameter is here for the node that re-ranks or
-      picks from the pool; it is kept rather than deleted because that node
-      cannot re-derive it anywhere else. An all-None filter contributes no
-      predicates and is a harmless no-op, unlike `filter_query()` which refuses
-      one: there narrowing is the node's whole job, so a no-op would report a
-      count read as filtered.
     - `exclude_isbns` drops the books the ask already named. In SQL rather than
       in the caller, so the excluded rows do not eat `limit` slots.
 
-    `embedding` is deferred with `raiseload=True`, matching `materialize_stmt`:
-    the vector is ~4KB per row and nothing downstream reads it (`to_dict()`
-    excludes it by default), so fetching it for 50 rows only to throw it away
-    is a wasted round trip.
+    `limit` is required rather than defaulted: there is one caller, it always
+    passes `CANDIDATE_POOL_SIZE`, and a second number here would be the one
+    read when the constant changed.
     """
     embed_col = BookModel.embedding
     # cosine similarity = 1 - cosine distance
     similarity = 1 - embed_col.cosine_distance(query_embedding)
     stmt = (
-        select(BookModel, similarity.label("similarity_score"))
-        # BookModel declares columns with plain Column(...), not Mapped[...],
-        # so pyright sees Column[Unknown] here instead of the QueryableAttribute
-        # `defer()`'s stub wants — same stub gap as `src.c.score` below.
-        .options(defer(embed_col, raiseload=True))  # type: ignore[reportArgumentType]
+        # isbn13 and the score, like every other deferred query — the vector
+        # column is never in the select list, so nothing here needs `defer()`
+        select(BookModel.isbn13, similarity.label("score"))
         .where(embed_col.is_not(None), similarity >= similarity_threshold)
-        .order_by(text("similarity_score DESC"))
+        .order_by(text("score DESC"))
         .limit(limit)
     )
-    if filters:
-        stmt = stmt.where(*metadata_predicates(BookModel, filters))
     if exclude_isbns:
         stmt = stmt.where(BookModel.isbn13.notin_(exclude_isbns))
-    return stmt
+    return DeferredBookQuery(stmt, label="similar", capped=limit)
 
 
 class BookStore(BaseStore[BookModel]):
@@ -200,31 +191,13 @@ class BookStore(BaseStore[BookModel]):
     One exception: the embedding search is built by the module-level
     `embedding_search_stmt` instead of a method here, so a caller can record
     its SQL (`compile_sql`) before executing it — a `@task` on the store would
-    mean airglider imported into `db/`, which stays free of it on purpose.
-    `search_similar` is the execute half, taking the built statement the same
-    way `count`/`materialize` take a `DeferredBookQuery`.
+    mean airglider imported into `db/`, which stays free of it on purpose. It
+    still hands back a `DeferredBookQuery`, so `count`/`score_stats`/
+    `materialize` are its execute half like any other.
     """
 
     def __init__(self, session: AsyncSession):
         super().__init__(session, BookModel)
-
-    async def search_similar(self, stmt: Select) -> List[Dict[str, Any]]:
-        """Run a statement built by `embedding_search_stmt` and shape the rows.
-
-        Row shaping — not just `.scalars()` — because the statement selects the
-        model plus a computed `similarity_score` column alongside it; that score
-        has no home on `BookModel` and is folded into the dict here instead.
-        """
-        result = await self.execute_statement(stmt)
-        rows = result.all()
-
-        books_with_scores = []
-        for row in rows:
-            book_dict = row[0].to_dict()  # The book object
-            book_dict["similarity_score"] = float(row[1])  # The similarity score
-            books_with_scores.append(book_dict)
-
-        return books_with_scores
 
     # --- deferred queries: build now, count now, fetch rows once at the end ---
 
@@ -368,6 +341,14 @@ class BookStore(BaseStore[BookModel]):
         bounds to apply is the filter node's. An empty filter is refused here
         rather than silently returning the base query: a no-op narrowing step
         would report a count the user reads as filtered.
+
+        **A capped base narrows to a capped result**, and `capped` is carried
+        through so `compose()` still refuses it downstream. Narrowing a capped
+        pool is the one thing that *is* safe to do with one: `score` survives
+        below, `materialize_stmt` orders by it, so a bound on a similarity
+        search keeps cosine order. What the count then means changes with it —
+        "of the 250 nearest, N pass" rather than "N in the catalog" — and that
+        is the caller's to phrase.
         """
         predicates = metadata_predicates(self.model, filters)
         if not predicates:
@@ -390,12 +371,37 @@ class BookStore(BaseStore[BookModel]):
             .join(src, self.model.isbn13 == src.c.isbn13)
             .where(*predicates)
         )
-        return DeferredBookQuery(stmt, label="filtered")
+        return DeferredBookQuery(stmt, label="filtered", capped=base.capped)
 
     async def count(self, query: DeferredBookQuery) -> int:
         """How many books the query matches. Zero is an answer, not a failure."""
         result = await self.execute_statement(query.count_stmt())
         return int(result.scalar_one())
+
+    async def score_stats(self, query: DeferredBookQuery) -> Dict[str, Any] | None:
+        """Count and score spread in one round trip, or None with no score column.
+
+        The counting call for a query `count()` cannot describe — a capped
+        vector search always counts its cap. Returns a plain dict for the
+        caller to validate into whatever shape its output declares, the same
+        way `materialize()` hands back rows rather than models: the score
+        belongs to the node that asked for it, not to `db/`.
+
+        None on an empty pool too, not a row of NULLs: `min`/`max`/`avg` over
+        no rows are NULL in SQL, and a caller reading those as 0.0 would report
+        a pool of nothing as a pool of very distant books.
+        """
+        stmt = query.score_stats_stmt()
+        if stmt is None:
+            return None
+
+        row = (await self.execute_statement(stmt)).one()
+        stats = row._mapping
+        if not stats["count"]:
+            return None
+        return {key: float(value) for key, value in stats.items() if key != "count"} | {
+            "count": int(stats["count"])
+        }
 
     async def materialize(
         self, query: DeferredBookQuery, limit: int = 10

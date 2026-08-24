@@ -50,8 +50,11 @@ class BookOut(BaseModel):
     Unlike the prompt-facing renderers, which pick their fields inline, the
     narrowing here is a *type* on purpose: serialization is the boundary, so a
     field added to `Book` reaches the browser unless something stops it, and
-    this class is that something. `similarity_score` is the standing example —
-    internal ranking evidence, kept in the run log, never shipped to a client.
+    this class is that something. `ratings_count` is the standing example — the
+    bounds behind "obscure" and "most popular" are read off it and it is worth
+    keeping in the run log, but no card renders it. (`similarity_score` used to
+    be the example; it was deleted 2026-08-24, when the similarity node stopped
+    carrying rows to attach it to.)
 
     Adding or renaming a field here is a frontend change: the components read
     these names straight off the event payload, so a rename breaks rendering

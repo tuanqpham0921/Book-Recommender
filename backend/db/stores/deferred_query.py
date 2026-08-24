@@ -31,14 +31,15 @@ def compile_sql(stmt, embedding_as: str = "embedding") -> str:
     """Compile a SQLAlchemy statement to a readable SQL string.
 
     Any vector literal collapses to `embedding_as`, because only the caller
-    knows what the vector was made from: the recommend node labels it
+    knows what the vector was made from: the similarity node labels it
     `embed(search_text)`, naming a value its own record already holds twice
     (the task's `input.search_text`, and `SimilarBooksOutput.search_text`),
     so the statement stays reproducible without carrying a third copy.
 
-    The default fires on no statement built today — no deferred query carries a
-    vector — and is here so one that starts to cannot silently write 43KB into
-    `chat_runs`.
+    One deferred query does carry a vector — `embedding_search_stmt`'s — so the
+    default is a live fallback rather than a guard against a hypothetical: a
+    caller that forgets the label still gets `embedding` rather than 43KB of
+    floats in `chat_runs`. It only loses the label, not the elision.
     """
     try:
         compiled = stmt.compile(
@@ -59,15 +60,30 @@ class DeferredBookQuery:
     because a limit applied per-dimension would silently shrink whatever a
     later composition can find.
 
+    **One query takes a documented exception, and says so in `capped`**: the
+    vector search (`embedding_search_stmt`). It does not select a subset — it
+    orders the whole table by cosine distance and truncates — so its LIMIT is
+    not a shrunk view of a set, it *is* the set. `materialize_stmt` can
+    reproduce a ranking (it orders by `score`), but not a ranking-truncation,
+    so the truncation has to happen where the ranking does. Everything else
+    still holds for it: isbn13 plus a `score`, so `filter_query` narrows it and
+    keeps cosine order, and `count_stmt`/`materialize_stmt` work unchanged.
+    What it cannot do is compose — `compose()` refuses it, because unioning a
+    capped branch with an uncapped one is lopsided in a way the result cannot
+    show.
+
     Deliberately not a Pydantic model or a dataclass: it rides on a Pydantic
     output field, and nothing should try to walk into `stmt`.
     """
 
-    __slots__ = ("stmt", "label")
+    __slots__ = ("stmt", "label", "capped")
 
-    def __init__(self, stmt: Select, label: str = "q"):
+    def __init__(self, stmt: Select, label: str = "q", capped: int | None = None):
         self.stmt = stmt
         self.label = label
+        # the LIMIT itself rather than a bool: a repr that says `capped=250`
+        # tells you which invariant was traded and for how much
+        self.capped = capped
 
     def cte(self, name: str | None = None):
         """CTE names must be unique across a composed tree — `compose()` names
@@ -84,11 +100,27 @@ class DeferredBookQuery:
         dedups by isbn13 either way. Only isbn13 survives — a per-dimension
         `score` means nothing once two dimensions combine — so a single input
         passes through untouched and keeps its score.
+
+        **A capped query cannot be composed.** Dropping `score` costs a ranked
+        pool its ranking, and unioning a truncated 250 with an untruncated 358
+        weights the two branches differently — neither of which the composed
+        query can show. Raised rather than allowed, so "books like Dune, and
+        mysteries, under 300 pages" fails saying why instead of answering with
+        a set nobody can account for. The single-input passthrough keeps the
+        cap for the same reason it keeps the score: nothing was combined.
         """
         if not queries:
             raise ValueError("compose() needs at least one query")
         if len(queries) == 1:
-            return cls(queries[0].stmt, label=label)
+            return cls(queries[0].stmt, label=label, capped=queries[0].capped)
+
+        capped = [q.label for q in queries if q.capped is not None]
+        if capped:
+            raise ValueError(
+                f"Cannot compose a capped query ({', '.join(capped)}): composition "
+                f"drops `score`, so the ranking the cap was taken for is lost, and "
+                f"a truncated branch is weighted against untruncated ones"
+            )
 
         # positional names, because two nodes can legitimately carry the same label
         parts = [select(q.cte(f"q{i}").c.isbn13) for i, q in enumerate(queries)]
@@ -96,8 +128,39 @@ class DeferredBookQuery:
         return cls(select(combined.c.isbn13), label=label)
 
     def count_stmt(self):
-        """COUNT over this query without materializing its rows."""
+        """COUNT over this query without materializing its rows.
+
+        On a capped query this returns `min(capped, matches)` and so says
+        little on its own — `score_stats_stmt()` is what describes that pool.
+        """
         return select(func.count()).select_from(self.cte("matched"))
+
+    def score_stats_stmt(self):
+        """Count plus the spread of `score`, in one row — or None with no score.
+
+        The counting statement for a query whose count is degenerate. A capped
+        vector search always reports its cap, so what tells you whether the
+        pool is any good is how far the scores fall across it: a `min` sitting
+        on the similarity floor means the cap is doing the work and the floor
+        is not, which is the measurement `BookConstraints.MIN_SIMILARITY` has
+        never had.
+
+        Derived from the built query rather than executed here, like every
+        other statement on this class. None rather than zeroes when there is no
+        `score` column, because "these books have no degree of match" and
+        "their scores are all 0.0" are different facts and a caller must not
+        read the second for the first.
+        """
+        src = self.cte("scored")
+        if "score" not in src.c.keys():
+            return None
+
+        return select(
+            func.count().label("count"),
+            func.min(src.c.score).label("min"),
+            func.max(src.c.score).label("max"),
+            func.avg(src.c.score).label("avg"),
+        ).select_from(src)
 
     def materialize_stmt(self, model, limit: int = 10):
         """The one statement that returns books: join this query's isbn13s back
@@ -117,4 +180,5 @@ class DeferredBookQuery:
         return stmt.limit(limit)
 
     def __repr__(self) -> str:
-        return f"<DeferredBookQuery {self.label}>"
+        cap = f" capped={self.capped}" if self.capped is not None else ""
+        return f"<DeferredBookQuery {self.label}{cap}>"

@@ -24,13 +24,16 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
 - `stores/` — repository pattern; routes/workflows never touch sessions directly.
   `base_store.py` (shared execute helpers), `book_store.py` (primary store: the
   deferred-query API below, plus the module-level `embedding_search_stmt` — a
-  pure builder rather than a store method, so a caller can record its SQL
-  before running it; `BookStore.search_similar(stmt)` is the execute half),
+  pure builder rather than a store method, because only the caller knows the
+  label that elides its 1024-float vector from the recorded SQL; it returns a
+  `DeferredBookQuery` like every other builder, so `count`/`score_stats`/
+  `materialize` are its execute half),
   `chat_run_store.py` (review queue, ordered least-reviewed-first),
   `feedback_store.py` (review upsert).
 - **Deferred queries** (`deferred_query.py`). Retrieval nodes do not fetch rows:
   `BookStore.title_query()` / `author_query()` / `lexical_query()` /
-  `numeric_traits_query()` build a statement, `count()` runs only a `COUNT`
+  `numeric_traits_query()` and the module-level `embedding_search_stmt()` build a
+  statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
   the store** (they need the model and the session — `filter_query()` is on that
@@ -53,7 +56,16 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   too, streamed and dropped — see `BookWorkflow.fetch_books`). A
   `DeferredBookQuery` selects isbn13 (plus an optional `score`) and carries
   **no LIMIT and no ORDER BY**; that is what makes two of them composable, so
-  don't add either when building one. See docs/design/execution-pipeline-v1.md.
+  don't add either when building one.
+  **One documented exception, `capped`** (2026-08-24): `embedding_search_stmt`
+  keeps its ORDER BY and LIMIT, because a vector search does not select a subset
+  — it orders the whole table and truncates, so the cap *is* the pool.
+  `compose()` refuses such a query; everything else works on it, and because its
+  `score` is cosine similarity, `filter_query()` narrows it **with the ranking
+  intact** (the score is propagated, and `materialize_stmt` orders by it). That
+  is what makes a bound on a similarity ask expressible as two nodes.
+  `score_stats()` is the counting call for it, since a capped query's `count()`
+  only ever reports the cap. See docs/design/execution-pipeline-v1.md.
 - `bootstrap.py`, `readiness.py` — startup schema checks backing `GET /ready`.
 - `ingestion/` — populates `books` from `data/books.csv`. **Legacy, ignore**: old
   Workflow/@task patterns; don't refactor it or model new code on it.

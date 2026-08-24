@@ -161,6 +161,55 @@ size so it can say which.
 > reversal survives in spirit — an empty pool still finalizes `ok` — but the claim narrowed
 > with the node, from *parsed and answered* to *anchors folded and search run*. See
 > [node-taxonomy-v1.md](node-taxonomy-v1.md).
+>
+> **Amended 2026-08-24.** "Everything above about *where* a bound has to go survives intact"
+> did not survive. It holds for a bound applied to *rows*; it does not hold for one ANDed
+> onto a scored query, because `score` is propagated through `filter_query` and
+> `materialize_stmt` orders by it. `embedding_search_stmt` no longer keeps its `filters`
+> parameter — it was deleted, because the node it was waiting for does not need it. See the
+> counts-first entry below.
+
+**The similarity pool became a deferred query (2026-08-24).** `Analyze_Similar_Books` was the
+last node handing on rows: it ran `embedding_search_stmt`, materialized 50 books into
+`SimilarBooksOutput.books`, and left `query` None. It now stamps a `DeferredBookQuery` like
+every other retrieval, and `books` / `BookStore.search_similar` / `Book.similarity_score` are
+deleted. Counts-first is now taken by every registered node without exception.
+
+**What made it possible was a mistake in the record, not new machinery.** Three places said
+a bound could not move to `Filter_Retrieval` because *filtering a ranked pool after the fact
+throws the ranking away*. That is true of a materialized list and false of a scored query:
+`BookStore.filter_query` already copies the `score` column through a narrowing, and
+`DeferredBookQuery.materialize_stmt` already orders by it. Compiled and checked — a capped
+vector search narrowed by `max_pages` materializes as `ORDER BY final.score DESC`. So cosine
+order survives a metadata bound end to end, and the bound belongs in a second node after all.
+
+**What it cost: one invariant, deliberately.** `DeferredBookQuery` promised *no LIMIT and no
+ORDER BY*, and the vector search needs both — it does not select a subset, it orders the
+whole table and truncates, so the cap **is** the pool rather than a shrunk view of one. The
+exception is declared on the object (`capped`, holding the limit) rather than left implicit:
+
+- `compose()` **raises** on a capped query. Composition drops `score`, so the ranking the cap
+  was taken for would be lost, and a truncated 250 unioned with an untruncated 358 weights
+  the branches differently — neither visible in the result. `filter_query()` propagates
+  `capped` so the guard still holds one step later.
+- `count_stmt()` is degenerate on a capped query: it reports `min(cap, matches)`. The new
+  `score_stats_stmt()` is its replacement here — count plus min/max/avg of `score` in one
+  aggregate, which is what actually describes a pool whose size is mostly its own cap.
+- `CANDIDATE_POOL_SIZE` went 50 → **250**, ~5% of the 5,197-row catalog. 50 was sized for a
+  node that would re-rank it; a node that will *filter* it needs more, because a bound over
+  50 near-neighbours can leave two (the 2026-08-19 entry above measured exactly this with
+  "like Dune, under 300 pages"). At 250 the accepted reading is that nothing passing the
+  bound is a fact about the request rather than an artifact of the cap.
+
+**Cost paid.** Two round trips where there was one: the stats aggregate, then the preview
+`materialize` — two ivfflat scans of 5,197 rows instead of one query returning rows. That is
+the same two-trip shape every other retrieval node already has, and the 2026-08-17 entry
+below already accepted it as the price of counts-first.
+
+**Still open.** `MIN_SIMILARITY = 0.35` has never been tuned against the real distribution
+(`config/constants.py` says so). `SimilarBooksOutput.score` is the instrument for it: a `min`
+resting on 0.35 means the floor never binds and the cap is choosing the pool. If a tuned
+threshold turns out to bound below 250, the LIMIT can go and the invariant returns outright.
 
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
@@ -343,11 +392,16 @@ exactly one sink, so the two agree except on compound messages.
     2026-08-22) is a `@task` returning rows the caller uses as it likes — and the output shape
     carries no rows at all, so composing against `query` is the only thing a downstream node
     *can* do. A node that genuinely chooses rows declares its own field for them
-    (`SimilarBooksOutput.books`), which reads as the different claim it is. Cost: a node wanting both a count and cards pays two round trips
+    (`SimilarBooksOutput.books` — **removed 2026-08-24**; no node does this now), which reads as the different claim it is. Cost: a node wanting both a count and cards pays two round trips
     instead of one. The store-level halves of the old move went with it (also 2026-08-17):
     `BookStore.preview()` / `build_preview` (the one-round-trip `(total, sample)`) and the
     row-fetching `search_by_title` are deleted, so `count()` and `materialize()` are the
     only ways a deferred query meets the database.
+  - **Revised 2026-08-24 — no node declares its own rows any more.**
+    `SimilarBooksOutput.books` is gone with the similarity node's move to a deferred query,
+    and `score_stats()` joins `count()`/`materialize()` as a third way one meets the
+    database. The 2026-08-17 shape now has no exception: every registered output is a count
+    and a query.
 - How does a mock executor represent "a query I have not run yet" so this can be tested
   before real executors exist? **Still open** — a mock leaves `query` as `None` today, and
   the terminal node then materializes nothing rather than falling back to `books`.
@@ -355,7 +409,11 @@ exactly one sink, so the two agree except on compound messages.
   score means nothing across dimensions. So a pooled query ranks by rating, and a small
   `limit` on the pool can rank the actual anchor below its own sequels — "Dune" comes third
   behind two better-rated books in the Dune+Neuromancer pool. Carrying `max(score)` through
-  the union would fix it; not built.
+  the union would fix it; not built. **Sharpened 2026-08-24**: this is now half of why
+  `compose()` refuses a capped query outright — for a similarity pool the dropped `score` is
+  the entire reason the cap was taken, so the degradation is not a worse ranking but no
+  ranking at all. Building `max(score)` would remove that half of the objection; the
+  lopsided-branch half would remain.
 
 ## Before building this
 

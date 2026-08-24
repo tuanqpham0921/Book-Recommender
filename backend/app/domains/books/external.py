@@ -26,13 +26,14 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     (`BookWorkflow.fetch_books`, off the output), and whatever the terminal
     node materializes as its answer.
 
-    A node that *chooses* rows — the similarity node — declares its own `books`
-    field for them. That is a different claim than "here is a sample of my
-    match", and it now looks different too. On such a node `query`/`query_sql`
-    stay None — no query reproduces a ranked choice — so this base is the
-    *selection* shape ("produces books" is what a `depends_on: books` contract
-    matches on), not a promise that `query` is filled; a consumer reads
-    whichever of the two the anchor actually has (see `ParsedDependents`).
+    **Every registered node fills `query`** (since 2026-08-24). The similarity
+    node used to be the exception, declaring its own `books` field for a pool it
+    had already fetched, because no composable query reproduces cosine order.
+    It now hands on a capped, `score`-carrying query instead — see
+    `DeferredBookQuery.capped` — which is what lets `Filter_Retrieval` narrow a
+    similarity pool at all. A consumer still reads `num_books` before `query`:
+    a node stamps its query whether or not anything matched, so the count is
+    what separates "here is how to reach them" from "there were none".
 
     `query` is `exclude=True` on purpose: `to_serializable` skips excluded
     fields but does walk private attrs, so a SQLAlchemy statement stashed
@@ -102,12 +103,12 @@ class BookCandidateOutput(BookRetrievalOutput):
     and `Combine_Intersect` folds — but not foldable into an anchor: averaging
     358 mystery blurbs describes no book in particular.
 
-    It is also what a node hands back when it *chose* the rows rather than
-    counted them (`SimilarBooksOutput`), which is the same claim from the other
-    side: a set matching a description the system synthesized is still a
-    description's worth of books, so it cannot anchor the next search either.
-    Such a node declares its own `books` field and leaves `query` None — see
-    `BookRetrievalOutput`.
+    It is also what `Analyze_Similar_Books` hands back, which is the same claim
+    from the other side: a pool matching a description the *system* synthesized
+    is still a description's worth of books, so it cannot anchor the next search
+    either — one similarity search can never seed the next. That node's query is
+    capped where the others' are not (`DeferredBookQuery.capped`), so it can be
+    narrowed and materialized but not composed; the shape is otherwise identical.
     """
 
 

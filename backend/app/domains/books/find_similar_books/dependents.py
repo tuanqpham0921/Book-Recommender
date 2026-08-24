@@ -36,11 +36,12 @@ class ParsedDependents:
     to read below — a count only means something on an output that promises one.
 
     *Within* that branch `books` stays duck-typed, and deliberately. Declaring
-    rows is a shape claim, not a class, and no registered node makes it on an
-    anchor today — `SimilarBooksOutput` is a candidate, so it cannot arrive
-    here. Two things keep the pile: a test can hand this node reference books
-    with no database at all, and the next anchor that carries rows rather than a
-    query lands here without this file learning its name.
+    rows is a shape claim, not a class, and **no registered node makes it at
+    all** since 2026-08-24, when the similarity node stopped carrying rows —
+    every output that can reach here hands on a query now. The pile survives on
+    one justification rather than two: a test can hand this node reference books
+    with no database at all, which is what `test_parsed_dependents` does. Delete
+    it when that stops being true and the pile is dead.
     """
 
     # TODO: have a rejected or .ok = False

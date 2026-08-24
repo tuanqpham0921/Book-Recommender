@@ -44,11 +44,21 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
 def anchor_queries(anchors: list[BookRetrievalOutput]) -> list[DeferredBookQuery]:
     """The queries this node can narrow, out of what its dependencies produced.
 
-    An anchor with rows and no query is a node that *chose* its books
-    (`SimilarBooksOutput`), and narrowing a ranked choice after the fact throws
-    the ranking away — the bounds would have to go inside that node's own
-    search. So it is dropped here rather than half-honored, and a goal left
-    with nothing to narrow says so in `run`.
+    **No registered node lands in the dropped branch since 2026-08-24.** It
+    used to catch the similarity node, which handed on chosen rows and no
+    query, on the reasoning that narrowing a ranked choice throws the ranking
+    away. That reasoning was about *rows*: a scored `DeferredBookQuery` narrows
+    fine, because `BookStore.filter_query` carries the `score` column through
+    and `materialize_stmt` orders by it — so a bound on a similarity pool keeps
+    cosine order end to end. The similarity node hands on such a query now.
+
+    The guard stays because it is the honest reading of an optional field, and
+    a goal left with nothing to narrow still says so in `run`.
+
+    One thing a caller must know: a similarity pool is **capped**, so narrowing
+    it means "of the 250 nearest, N pass" rather than "N in the catalog", and
+    `DeferredBookQuery.compose` refuses to pool it with anything else. A goal
+    depending on a similarity search *and* another retrieval raises there.
     """
     return [anchor.query for anchor in anchors if anchor.query is not None]
 
@@ -147,8 +157,9 @@ class FilterRetrievalExecutor(BookWorkflow[FilterRetrievalOutput]):
         )
         if not upstream:
             raise ValueError(
-                "Nothing to narrow: the anchors carry chosen books rather than a "
-                "query, and bounds on a chosen set belong on the node that chose it"
+                "Nothing to narrow: no anchor carries a query. Every registered "
+                "retrieval hands one on, so this is a malformed upstream output "
+                "rather than a plan this node can be asked to fix"
             )
 
         # 2. parse the goal text into this node's own schema

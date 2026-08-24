@@ -605,6 +605,23 @@ Two capabilities left with it, and both were already fictions the docstring main
   keeps its `filters` parameter, unused, because inside the search is the only place a bound
   on a similarity ask can ever go.
 
+  > **Corrected 2026-08-24.** The last two sentences were wrong, and the error was scoping
+  > a property of *rows* to queries generally. Filtering a ranked pool throws the ranking
+  > away when the pool is a materialized list — but `BookStore.filter_query` propagates the
+  > `score` column through a narrowing, and `DeferredBookQuery.materialize_stmt` orders by
+  > it, so a **scored deferred query** comes out of `Filter_Retrieval` still in cosine
+  > order. The similarity node now hands on such a query
+  > (`DeferredBookQuery.capped`), so the bound *can* move there and
+  > `embedding_search_stmt.filters` was deleted rather than kept waiting.
+  >
+  > What survives of the original argument is a matter of degree, not of kind: the pool is
+  > capped, so a bound applied afterwards still cuts a truncated set rather than the
+  > catalog. The cap was raised 50 → 250 (~5% of the catalog) so that cut has something to
+  > work with, and "nothing in the 250 nearest passes" is accepted as a real answer — those
+  > are not good recommendations — rather than as an artifact. The narrowed count means "of
+  > the 250 nearest, N pass", which is a different claim from every other node's count and
+  > is the filter node's to phrase when it is unparked.
+
 **The blend-vs-separate rule.** The node pools *every* anchor it depends on into one
 description, so the number of goals the planner emits decides whether two named books blend
 or stay apart, and nothing downstream can undo the wrong choice. "Books like X **and** Y" is

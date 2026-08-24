@@ -13,9 +13,11 @@ How this slice is laid out (the reading rule):
   anchors its input contract selected.
 
 The node does one thing: fold the books the user named into a description of
-what to look for next, and hand back the pool nearest that description. It does
-not rank the pool, drop books from it, or write the reply — those are a later
-node's, and none of them exists yet.
+what to look for next, and hand back a query for the pool nearest that
+description. It does not rank the pool, drop books from it, or write the reply —
+those are a later node's, and none of them exists yet. Handing on the *query*
+rather than the rows is what leaves room for them: `Filter_Retrieval` can narrow
+the pool in SQL and cosine order survives the narrowing.
 """
 
 from app.domains.books.base_workflow import BookWorkflow
@@ -28,7 +30,7 @@ from .analyze_references import (
     build_analysis_request,
     render_documents,
 )
-from .external import SimilarBooksInput, SimilarBooksOutput
+from .external import ScoreStats, SimilarBooksInput, SimilarBooksOutput
 from airglider import task
 
 # How many named books get folded into one description. Past this the node
@@ -37,9 +39,14 @@ from airglider import task
 # whole rather than sampled — the count and the rows describe the same set.
 MAX_ANCHOR_BOOKS = 5
 
-# How many books come back from the vector search. A pool to choose from, sized
-# for a later node to re-rank rather than for a person to read.
-CANDIDATE_POOL_SIZE = 50
+# How many books the vector search keeps. A pool for a later node to narrow or
+# re-rank, not a list for a person to read — so it is sized against what comes
+# *after* it rather than against a screen. ~5% of the 5,197-row catalog: big
+# enough that a downstream bound ("under 300 pages") still has a real pool to
+# cut, which 50 was not — most books near any given anchor are long, so a bound
+# over 50 could leave two. Small enough that "nothing in the 250 nearest passes"
+# is an answer about the request rather than an artifact of the cap.
+CANDIDATE_POOL_SIZE = 250
 
 
 class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
@@ -83,22 +90,28 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
                 "Nothing to search on: the anchor books carry no descriptions"
             )
 
-        # 4. embed + search. The named books are excluded from their own
-        # results in SQL, so the excluded rows do not eat pool slots.
+        # 4. embed + build. The named books are excluded from their own results
+        # in SQL, so the excluded rows do not eat pool slots. Nothing is fetched
+        # here — what comes back is the query, like every other retrieval.
         pool = (
-            await self.similarity_search(
+            await self.build_pool(
                 analyzed, exclude_isbns=[book.isbn13 for book in references]
             )
         ).unwrap()
-        self.result.books = pool
-        self.result.num_books = len(pool)
 
-        # 5. cards for the section: a preview, the same handful every other
-        # node shows. The whole pool travels on the output for a later node to
-        # choose from — an empty one is a real answer, not a failure.
-        await self.stream_books(pool[: BookConstraints.default_limit])
+        # 5. size it. `pool_stats` rather than `count_books`: a capped query
+        # counts its cap, so the spread of `score` is what says whether the
+        # pool is any good, and one aggregate answers both.
+        total = (await self.pool_stats(pool)).unwrap()
 
-        # 6. last: ok is read off the output
+        # 6. cards for the section: a preview, the same handful every other node
+        # shows. The pool itself travels as `query` for a later node to narrow
+        # — an empty one is a real answer, not a failure.
+        if total:
+            preview = await self.fetch_books(pool, BookConstraints.default_limit)
+            await self.stream_books(preview.unwrap())
+
+        # 7. last: ok is read off the output
         self.finalize_result()
 
     def check_anchors(self, parsed: ParsedDependents) -> None:
@@ -165,28 +178,32 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         return analysis.semantic_input
 
     @task
-    async def similarity_search(
+    async def build_pool(
         self,
         search_text: str,
         exclude_isbns: list[str],
         limit: int = CANDIDATE_POOL_SIZE,
-    ) -> list[Book]:
-        """The pool: the books nearest the embedded description.
+    ) -> DeferredBookQuery:
+        """The pool: a query for the books nearest the embedded description.
 
-        Build, record, execute: `embedding_search_stmt` returns the statement
-        rather than running it, so it can be recorded before the store touches
-        it — the trace shows every narrowing that was actually applied. The
-        vector itself renders as `embed(search_text)` rather than 1024 floats;
-        `search_text` is not lost, it is this task's own `input` (see `@task`
-        in airglider) and `SimilarBooksOutput.search_text`, so the label points
-        at a value the record already holds twice.
+        Embed, then build — the round trip in here is the embedding's, not the
+        search's. `embedding_search_stmt` hands back a `DeferredBookQuery`
+        whose `score` column is cosine similarity, which is what lets a
+        downstream `Filter_Retrieval` narrow this pool without flattening its
+        ranking (`filter_query` carries `score` through; `materialize_stmt`
+        orders by it).
 
-        The search orders the whole table by distance and truncates at `limit`,
-        which is why anything that would narrow the pool has to go into this
-        statement rather than onto its result — a bound applied afterwards cuts
-        an already-capped 50. Nothing narrows it today except `exclude_isbns`;
-        a later node that wants bounds passes them to `embedding_search_stmt`,
-        it does not filter what comes back.
+        The one `DeferredBookQuery` that carries a LIMIT, because the search
+        does not select a subset — it orders the whole table and truncates, so
+        the cap *is* the pool. That is also why it cannot be composed with
+        another query; see `DeferredBookQuery.capped`.
+
+        Recorded here rather than by the count, and that is the reason this
+        builder is not a store method: the vector renders as
+        `embed(search_text)` rather than 1024 floats, and only this call site
+        knows that label. `search_text` is not lost — it is this task's own
+        `input` (see `@task` in airglider) and `SimilarBooksOutput.search_text`,
+        so the label points at a value the record already holds twice.
         """
         # a nested @task (the AppWorkflow wrapper — the client itself is
         # tracing-free): its envelope, with the embedding spend promoted onto
@@ -196,14 +213,42 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         embedded = await self.get_embeddings([search_text])
         embedding = embedded.unwrap().embeddings[0]
 
-        stmt = embedding_search_stmt(
-            embedding, exclude_isbns=exclude_isbns, limit=limit
+        return embedding_search_stmt(
+            embedding, limit=limit, exclude_isbns=exclude_isbns
         )
-        self.add_details(
-            f"Similarity search: {compile_sql(stmt, embedding_as='embed(search_text)')}"
+
+    @task
+    async def pool_stats(self, query: DeferredBookQuery) -> int:
+        """Stamp the pool on the output and size it, in one round trip.
+
+        What `count_books` does for every other node, except that node's count
+        means something on its own. This one's does not: the query is capped, so
+        a COUNT reports `min(250, matches)` and says nothing about whether the
+        250 are close. `score_stats` answers both — the count and the cosine
+        spread — for the same single aggregate.
+
+        Not a method on `BookWorkflow` for that reason and one more: the SQL
+        recorded here needs the `embed(search_text)` label, which `count_books`
+        has no way to know. Composing the pieces in the node's own flow is what
+        the base class says to do instead of growing a third helper on it.
+        """
+        self.result.query = query
+        self.result.query_sql = compile_sql(
+            query.stmt, embedding_as="embed(search_text)"
         )
-        rows = await self.store.search_similar(stmt)
-        return [Book.model_validate(row) for row in rows]
+
+        stats = await self.store.score_stats(query)
+        # None is an empty pool, not a missing measurement — nothing cleared
+        # the similarity floor, which is a real answer this node reports
+        self.result.score = ScoreStats.model_validate(stats) if stats else None
+        self.result.num_books = self.result.score.count if self.result.score else 0
+
+        if self.result.score:
+            self.add_details(
+                f"pool of {self.result.num_books}, similarity "
+                f"{self.result.score.min:.3f}–{self.result.score.max:.3f}"
+            )
+        return self.result.num_books
 
     def finalize_result(self):
         # ok means "the anchors were folded and the search ran", not "books
