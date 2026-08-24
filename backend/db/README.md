@@ -36,13 +36,13 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
-  the store** (they need the model and the session — `filter_query()` is on that
-  side too: narrowing an existing query by `BookMetadataFilter` bounds needs the
-  model's columns, and it hands back another deferred query rather than rows.
-  `numeric_traits_query()` is `filter_query()` with no base to narrow: the same
-  `metadata_predicates`, applied to the whole catalog, which is what lets bounds
-  *be* a search rather than only a narrowing of one. It is also the one builder
-  that emits no `score` column, so its rows fall back to ranking by rating.
+  the store** (they need the model and the session.
+  `numeric_traits_query()` applies `metadata_predicates` to the whole catalog,
+  which is what lets bounds *be* a search; since 2026-08-24 that is the only
+  reading of a bound there is, and `filter_query()` — which ANDed the same
+  predicates onto an upstream query for the deleted `Filter_Retrieval` node — is
+  gone with it. It is also the one builder that emits no `score` column, so its
+  rows fall back to ranking by rating.
   `lexical_query()` is the text one: a full-text match over title + shelf label
   + blurb, ANDed with exact set membership on `books.genre`. It emits a
   `ts_rank` score only when there are keywords, so a shelf-only search falls back
@@ -59,17 +59,19 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   don't add either when building one.
   **One documented exception** (2026-08-24): `embedding_search_stmt` keeps its
   ORDER BY and LIMIT, because a vector search does not select a subset — it
-  orders the whole table and truncates, so the cap *is* the pool. Because its
-  `score` is cosine similarity, `filter_query()` narrows it **with the ranking
-  intact** (the score is propagated, and `materialize_stmt` orders by it), which
-  is what makes a bound on a similarity ask expressible as two nodes.
+  orders the whole table and truncates, so the cap *is* the pool.
   `score_stats()` is its counting call, since `count()` on it only ever reports
-  the LIMIT. **`compose()` on it is lossy and nothing stops you** — the LIMIT
-  applies before the union, so it changes which books qualify, and `score` is
-  dropped after. A tracked `capped` attribute and a `compose()` guard were tried
-  and removed the same day: no registered plan composes a pool (the combine tier
-  is empty, `Filter_Retrieval` is parked and single-input), so they guarded a
-  caller that does not exist. See docs/design/execution-pipeline-v1.md.
+  the LIMIT. What that costs depends on `op`, and the two halves are not alike:
+  **`compose(op="and")` is safe** — the one `score` is carried through, so
+  `Combine_Intersect` bounds the pool *with cosine order intact*; the LIMIT is
+  still applied first, so the count means "of the 250 nearest, N also match"
+  rather than "N in the catalog", which is the caller's to phrase.
+  **`compose(op="or")` is lossy and nothing stops you** — the LIMIT applies
+  before the union, changing which books qualify, and `score` is dropped after
+  (a union contains rows the pool never matched, so there is nothing to carry).
+  A tracked `capped` attribute and a guard were tried and removed the same day;
+  nothing registered pools a query, since `Combine_Union` does not exist. See
+  docs/design/execution-pipeline-v1.md.
 - `bootstrap.py`, `readiness.py` — startup schema checks backing `GET /ready`.
 - `ingestion/` — populates `books` from `data/books.csv`. **Legacy, ignore**: old
   Workflow/@task patterns; don't refactor it or model new code on it.

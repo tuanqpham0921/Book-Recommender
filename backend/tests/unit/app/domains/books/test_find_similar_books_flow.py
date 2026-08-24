@@ -88,7 +88,7 @@ class TestTheHappyPath:
     @pytest.mark.asyncio
     async def test_it_hands_on_a_narrowable_query(self, node):
         """The 2026-08-24 change: the pool travels as a query, so a downstream
-        `Filter_Retrieval` can narrow it in SQL — and `score` carries cosine
+        `Combine_Intersect` can narrow it in SQL — and `score` carries cosine
         order through that narrowing."""
         out = (
             await node(SimilarBooksInput(query="books like Dune", anchors=[_anchor()]))

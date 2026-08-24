@@ -146,8 +146,8 @@ def embedding_search_stmt(
     does not select a subset — it orders the whole table by cosine distance and
     truncates — so the LIMIT is the set rather than a shrunk view of one, and it
     has to live in the statement. What that buys is everything else on the
-    class: `score` is cosine similarity under the name `filter_query` and
-    `materialize_stmt` both key on, so a downstream bound narrows this pool
+    class: `score` is cosine similarity under the name `compose()` and
+    `materialize_stmt` both key on, so `Combine_Intersect` narrows this pool
     **and cosine order survives it**. That is what makes "books like Dune under
     300 pages" expressible as two nodes rather than needing bounds parsed in
     here.
@@ -250,21 +250,21 @@ class BookStore(BaseStore[BookModel]):
     def numeric_traits_query(self, filters: BookMetadataFilter) -> DeferredBookQuery:
         """Build the metadata search over the whole catalog, without running it.
 
-        The same predicates `filter_query` ANDs onto an upstream query, applied
-        with no upstream query to AND them onto — which is what makes bounds a
-        search of their own ("books under 200 pages") rather than only a
-        narrowing of someone else's ("Murakami books after 2005"). Sharing
-        `metadata_predicates` is what keeps the two readings of a bound from
-        diverging in SQL.
+        **The only reading of a bound there is**, since 2026-08-24: a bound
+        that narrows someone else's search ("Murakami books after 2005") is this
+        same query composed with theirs by `Combine_Intersect`, rather than a
+        second parse of `BookMetadataFilter` inside a filter node. That is what
+        retired `filter_query` and the numbers-only rule together.
 
         No `score` column, unlike `title_query`/`author_query`: a bound is not a
         degree of match, so there is nothing to rank by. `materialize_stmt`
         therefore falls back to `average_rating DESC`, which is the right order
-        for the asks that reach here — "well rated", "most popular".
+        for the asks that reach here — "well rated", "most popular". It is also
+        what lets an intersect against this one keep the *other* input's
+        ranking: with no score of its own, a bound never competes for it.
 
-        An empty filter is refused for the same reason as in `filter_query`, and
-        harder: with no base to fall back to, no predicates means selecting the
-        entire catalog and reporting it as a search result.
+        An empty filter is refused rather than answered: no predicates means
+        selecting the entire catalog and reporting it as a search result.
         """
         predicates = metadata_predicates(self.model, filters)
         if not predicates:
@@ -326,52 +326,6 @@ class BookStore(BaseStore[BookModel]):
 
         stmt = select(*columns).where(*predicates)
         return DeferredBookQuery(stmt, label="lexical")
-
-    def filter_query(
-        self, base: DeferredBookQuery, filters: BookMetadataFilter
-    ) -> DeferredBookQuery:
-        """Narrow an already-built query by metadata bounds, without running it.
-
-        Joins the books table back onto the base query's isbn13s and ANDs the
-        bounds on, so the narrowing happens in SQL over the whole upstream
-        match — not over rows someone had to fetch first. Keeps the deferred
-        invariants (isbn13 only, no LIMIT, no ORDER BY), so the result composes
-        like any other.
-
-        Building a query is the store's job because it needs the model; which
-        bounds to apply is the filter node's. An empty filter is refused here
-        rather than silently returning the base query: a no-op narrowing step
-        would report a count the user reads as filtered.
-
-        **Narrowing the vector query is the one safe thing to do with it**:
-        `score` survives below, `materialize_stmt` orders by it, so a bound on
-        a similarity search keeps cosine order. The narrowing is still applied
-        to a truncated set, so the count means "of the 250 nearest, N pass"
-        rather than "N in the catalog" — the caller's to phrase, and nothing
-        here records the difference.
-        """
-        predicates = metadata_predicates(self.model, filters)
-        if not predicates:
-            raise ValueError("Cannot filter on an empty metadata filter")
-
-        # An anonymous subquery rather than a named CTE: two filtered queries
-        # can end up composed into one statement, and two CTEs sharing a name
-        # there is a compile error. The alias is generated per compile instead.
-        src = base.stmt.subquery()
-        # annotated because the list is heterogeneous: an ORM column, then the
-        # subquery's `score`, which pyright sees as a KeyedColumnElement
-        columns: list = [self.model.isbn13]
-        # a single-dimension base still carries its own score; dropping it here
-        # would silently re-rank whatever materializes this by rating
-        if "score" in src.c.keys():
-            columns.append(src.c.score)
-
-        stmt = (
-            select(*columns)
-            .join(src, self.model.isbn13 == src.c.isbn13)
-            .where(*predicates)
-        )
-        return DeferredBookQuery(stmt, label="filtered")
 
     async def count(self, query: DeferredBookQuery) -> int:
         """How many books the query matches. Zero is an answer, not a failure."""

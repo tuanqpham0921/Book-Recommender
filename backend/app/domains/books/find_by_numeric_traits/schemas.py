@@ -8,7 +8,7 @@ from .labels import FindNumericTraitsNodeTypeEnum
 
 
 class FindByNumericTraitsRetrieval(BaseRequest):
-    """Purpose: Retrieve books by their measurable traits alone — rating, number of ratings, page count, publication year.
+    """Purpose: Retrieve books by their measurable traits — rating, number of ratings, page count, publication year.
 
     Args:
         traits: The measurable bounds to search on. Every bound is inclusive and
@@ -18,24 +18,29 @@ class FindByNumericTraitsRetrieval(BaseRequest):
 
     depends_on: None — this node queries the database directly.
 
-    Use when: the numbers ARE the request, with no other subject in it. They can
-    be stated as figures or in words, and both belong here — "under 200 pages",
-    "published after 2015", "show me some well rated books", "what do you have
-    from the classical period", "your most popular books", "something really
-    long". The wording is turned into bounds by this node's own parse, so a goal
-    description in the user's own words is enough.
+    Use when: the request states any measurable bound — as figures or in words,
+    both belong here: "under 200 pages", "published after 2015", "show me some
+    well rated books", "what do you have from the classical period", "your most
+    popular books", "something really long". The wording is turned into bounds
+    by this node's own parse, so a goal description in the user's own words is
+    enough.
 
-    Do not use: when the request has any other subject. A measurable bound
-    riding alongside a genre, an author or a title belongs to that search, not
-    to this one:
-        - "fantasy books over 400 pages" → Retrieve_by_Lexical_Traits on the subject
-        - "Stephen King books over 400 pages" → Retrieve_by_Author on the author
-    Send only the subject goal in those cases and leave the bound in that goal's
-    description. Do not add this node alongside the subject one: two goals with
-    no dependency between them are pooled, so the plan would answer with more
-    books rather than fewer — the opposite of the bound.
-    Also not for a superlative that asks for an ordering this node cannot give:
-    "the single longest book" is not a bound. Ask for "very long books" instead.
+    That includes a bound riding alongside another subject. Emit this node for
+    the bound, a retrieval node for the subject, and ONE Combine_Intersect
+    depending on both:
+        - "fantasy books over 400 pages"
+            → Retrieve_by_Lexical_Traits + this node + Combine_Intersect
+        - "Stephen King books over 400 pages"
+            → Retrieve_by_Author + this node + Combine_Intersect
+    The intersect goal is not optional there: two goals with no dependency
+    between them are pooled (OR), so emitting this node beside the subject one
+    and stopping would answer with MORE books rather than fewer — the opposite
+    of the bound.
+
+    Do not use: for a superlative that asks for an ordering this node cannot
+    give. "The single longest book" is not a bound; ask for "very long books"
+    instead. Nor for a subject of any kind — a genre, theme, author or title is
+    someone else's retrieval, and this node only ever contributes the numbers.
 
     Constraints: at least one bound — a request with nothing measurable in it is
     not this node, and an empty filter is refused. Bounds are combined as AND,
@@ -46,10 +51,11 @@ class FindByNumericTraitsRetrieval(BaseRequest):
     rather than by the trait that was asked about.
 
     Example queries:
-        - "Find books with fewer than 200 pages."
-        - "Show me some well rated books."
+        - "Find books with fewer than 200 pages."          (this node alone)
+        - "Show me some well rated books."                 (this node alone)
         - "What books do you have from the classical period?"
         - "Find me obscure books nobody has heard of."
+        - "Find me fantasy books over 400 pages."          (+ subject + intersect)
     """
 
     node_type: Literal[FindNumericTraitsNodeTypeEnum.REQUEST] = (
@@ -84,13 +90,15 @@ class FindByNumericTraitsArgs(BaseModel):
             min_pages: 300, max_pages: 500, min_year: 2015
     """
 
-    # The per-field mapping lives on `BookMetadataFilter`, because that model is
-    # shipped by Filter_Retrieval too and the two must not
-    # calibrate "well rated" differently. The examples above are here rather than
-    # there because they show *combinations*, which no single field description
-    # can — and because this is the one node whose whole job is the inference, so
-    # it is worth the tokens here and not in the other one. Measured: without
-    # them, gpt-5-nano returned an empty filter for "obscure" and "really long".
+    # The per-field mapping lives on `BookMetadataFilter` rather than here. It
+    # was shared with Filter_Retrieval's args until 2026-08-24, so that the two
+    # could not calibrate "well rated" differently; that node is gone and this
+    # is now the only shipper, but the split still earns its keep — the field
+    # descriptions say what one bound means, and the examples above show
+    # *combinations*, which no single field description can. This is the one
+    # node whose whole job is the inference, so it is worth the tokens here.
+    # Measured: without them, gpt-5-nano returned an empty filter for "obscure"
+    # and "really long".
     #
     # `BookMetadataFilter` also carries `is_children`, a flag rather than a
     # measurement. Retrieve_by_Lexical_Traits now owns audience, and did *not* take

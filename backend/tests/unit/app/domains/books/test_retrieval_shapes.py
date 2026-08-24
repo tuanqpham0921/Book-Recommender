@@ -29,6 +29,7 @@ from app.domains.books.find_similar_books.external import (
     SimilarBooksInput,
     SimilarBooksOutput,
 )
+from app.domains.books.intersect_books.external import CombineIntersectOutput
 from app.domains.node_input import NodeInput, build_input
 
 CANDIDATE_OUTPUTS = (
@@ -63,9 +64,19 @@ class TestWhichHalfEachNodeProduces:
         "output_cls", (FindByTitleOutput, SimilarBooksOutput, *CANDIDATE_OUTPUTS)
     )
     def test_both_halves_are_still_retrieval_outputs(self, output_cls):
-        """`filter_books.anchor_queries` gates on the base, and that slice was
-        not touched by the split."""
+        """`CombineIntersectInput` declares the base, so every half reaches it —
+        which is the point of that node: how a set was found stops mattering
+        once it is a set."""
         assert issubclass(output_cls, BookRetrievalOutput)
+
+    def test_the_intersection_is_neither_half(self):
+        """An intersection of two titles is anchor-shaped and an intersection of
+        two subject searches is not, and the class cannot know which at
+        definition time — so it lands on the base, which means "not anchorable".
+        The cost is that `Analyze_Similar_Books` cannot depend on it."""
+        assert issubclass(CombineIntersectOutput, BookRetrievalOutput)
+        assert not issubclass(CombineIntersectOutput, BookAnchorOutput)
+        assert not issubclass(CombineIntersectOutput, BookCandidateOutput)
 
     def test_the_base_is_still_concrete(self):
         """It is what a node declares when it takes either, and what a combine

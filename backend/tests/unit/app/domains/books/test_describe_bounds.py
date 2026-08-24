@@ -1,12 +1,16 @@
-"""The filter node's pure half — the bounds as the sentence the user reads.
+"""The numeric node's pure half — the bounds as the sentence the user reads.
 
 No workflow, no store, no LLM: a parsed `BookMetadataFilter` goes in, the line
 that reaches the chat comes out. Worth pinning because it is the only place the
 node explains itself — a count with no phrase beside it is a number the user
 cannot check.
+
+It lived in `filter_books` until 2026-08-24 and was shared with this node;
+`Combine_Intersect` parses no bounds, so the numeric node is the only caller
+and now the owner.
 """
 
-from app.domains.books.filter_books.executor import describe_bounds
+from app.domains.books.find_by_numeric_traits.executor import describe_bounds
 from db.schema import BookMetadataFilter
 
 
@@ -55,6 +59,7 @@ class TestSeveralDimensions:
         assert describe_bounds(filters) == "500 pages or fewer, rated 3.5 or higher"
 
     def test_an_empty_filter_has_nothing_to_say(self):
-        # a no-op filter is refused by BookStore.filter_query, which is where
-        # that decision belongs — this function only declines to invent a phrase
+        # an empty line is what the executor reads to refuse the goal, and what
+        # BookStore.numeric_traits_query refuses again — this function only
+        # declines to invent a phrase
         assert describe_bounds(BookMetadataFilter()) == ""

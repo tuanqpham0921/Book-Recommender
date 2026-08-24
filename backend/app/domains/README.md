@@ -134,13 +134,14 @@ discriminator fires when *parsing untyped data into* a model; artifacts arrive
 as already-constructed instances, so the class is the discriminator already and
 a `role` field would only restate it.
 
-`FilterRetrievalInput.anchors` and `SimilarBooksInput.anchors` are the two
+`CombineIntersectInput.anchors` and `SimilarBooksInput.anchors` are the two
 required dependency fields, and they show what "required" costs for a list:
-`build_input` fills a `list[X]` with every match, and an empty list is still a
-*filled* field, so the requirement has to be `Field(..., min_length=1)`. A bare
-`...` would never fire. Only reach for
-it when the node has no fallback at all — bounds with nothing to bound cannot
-be run against the whole catalog and mean something else entirely.
+`build_input` fills a `list[X]` with every match, and a short list is still a
+*filled* field, so the requirement has to be `Field(..., min_length=N)`. A bare
+`...` would never fire. Only reach for it when the node has no fallback at all —
+a similarity search with nothing to be similar to is a different question, and
+an intersection of one is not an intersection (which is why that one is
+`min_length=2`, not 1).
 
 **Services are not constructor arguments, and are not on the input.**
 `AppWorkflow.__init__(ctx, messages)` is the only `__init__` in the app layer;
@@ -246,11 +247,12 @@ assumed, not restated, here.
    ways. Reworking how a node runs is a new spec too; park the old one.
 1a. **The request schema declares the capability; a separate `*Args` model
    carries the arguments.** `schemas.py` holds both, and they share nothing but
-   the file. `FilterRetrieval(BaseRequest)` is what `SPEC` points at and what
-   the planner reads — a docstring and the `node_type` Literal, no fields,
-   because the planner picks a capability and writes a goal *description*, so a
-   field on the request is a field it would be invited to guess at.
-   `FilterRetrievalArgs(BaseModel)` is an **internal tool**, in the same sense
+   the file. `FindByNumericTraitsRetrieval(BaseRequest)` is what `SPEC` points
+   at and what the planner reads — a docstring and the `node_type` Literal, no
+   fields, because the planner picks a capability and writes a goal
+   *description*, so a field on the request is a field it would be invited to
+   guess at.
+   `FindByNumericTraitsArgs(BaseModel)` is an **internal tool**, in the same sense
    as `IdealBookDescription`: it never reaches the planner, so it carries no
    `node_type`/`confidence`/`reasoning` — only the fields this node's own parse
    call fills. That model is what `tool_models=[...]` ships, what
@@ -268,7 +270,9 @@ assumed, not restated, here.
    asked, even when it only restates the goal. **Not every node has a parse**:
    `Analyze_Similar_Books` reads nothing out of its goal text — what it searches
    for is built from its anchors — so it has no `*Args` schema and no `args`
-   field at all. *Work*: whatever the node is for; artifact prep may precede the
+   field at all. `Combine_Intersect` goes further and makes **no LLM call at
+   all**: what it does is fully decided by which goals it depends on, so
+   `build_input` is its whole parse and its body is work → finalize. *Work*: whatever the node is for; artifact prep may precede the
    parse (the similarity node materializes its anchor first). *Finalize*:
    `self.finalize_result()` last. Each slice overrides it to compute the node's
    **claim** — "did I fill in what I promised": find_by_title claims

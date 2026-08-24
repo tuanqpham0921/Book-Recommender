@@ -17,10 +17,16 @@ session, so `BookStore(None)` is enough; only `count()` / `score_stats()` /
 
 Sections:
     1. the invariant, and the one query that breaks it
-    2. narrowing the pool keeps cosine order — the payoff
-    3. composing the pool loses it — the cost, unguarded
+    2. intersecting the pool keeps cosine order — the payoff
+    3. pooling it with "or" loses it — the cost, still unguarded
     4. count is degenerate on the pool; score stats are not
     5. why that cost is easy to miss (a simulation; SQL cannot show it)
+
+Updated 2026-08-24: `BookStore.filter_query` is gone with `Filter_Retrieval`, so the
+narrowing in section 2 is `compose(op="and")` against a bound's own deferred query
+— which is what `Combine_Intersect` builds. That branch carries the one `score`
+through, so the payoff below is now the *intersect's*, and section 3's loss is
+`"or"`-only.
 """
 
 import random
@@ -73,13 +79,13 @@ print(
 
 
 # ---------------------------------------------------------------------------
-rule(2, "Narrowing the pool keeps cosine order — the payoff")
+rule(2, "Intersecting the pool keeps cosine order — the payoff")
 
-# Filter_Retrieval pools its dependencies through compose() unconditionally,
-# and the common case is one, so this is the path "books like Dune under 300
-# pages" actually travels. Single input passes straight through.
-pooled = DeferredBookQuery.compose([pool], label="to_filter")
-narrowed = store.filter_query(pooled, BookMetadataFilter(max_pages=300))
+# What Combine_Intersect builds for "books like Dune under 300 pages": the bound
+# is its own retrieval, and the intersect ANDs the two queries. Exactly one input
+# carries a score, so compose() carries it through.
+bound = store.numeric_traits_query(BookMetadataFilter(max_pages=300))
+narrowed = DeferredBookQuery.compose([pool, bound], op="and", label="intersected")
 
 show("materialize_stmt over the narrowed pool:", narrowed.materialize_stmt(BookModel, limit=10))
 
@@ -87,18 +93,19 @@ final = sql(narrowed.materialize_stmt(BookModel, limit=10))
 print(f"\n  ranked by cosine, not by rating : {'ORDER BY final.score DESC' in final}")
 print(f"  the LIMIT 250 is still nested   : {'LIMIT 250' in final}")
 print(
-    "\n  `filter_query` copies `score` through the narrowing, `materialize_stmt`\n"
-    "  orders by it. A metadata bound on a similarity pool does NOT flatten the\n"
-    "  ranking — which is what makes 'books like Dune under 300 pages' two nodes\n"
-    "  instead of bounds parsed inside the similarity node.\n\n"
+    "\n  compose(op='and') carries the one `score` through — an intersect result\n"
+    "  is a subset of every input, so that column is defined on every output row\n"
+    "  — and `materialize_stmt` orders by it. A bound on a similarity pool does\n"
+    "  NOT flatten the ranking, which is what makes 'books like Dune under 300\n"
+    "  pages' three nodes instead of bounds parsed inside the similarity node.\n\n"
     "  The second line is the honest half: the bound is applied to the nearest\n"
-    "  250, so the count means 'of the 250 nearest, N pass'. Accepted, and\n"
+    "  250, so the count means 'of the 250 nearest, N also match'. Accepted, and\n"
     "  nothing records it."
 )
 
 
 # ---------------------------------------------------------------------------
-rule(3, "Composing the pool loses it — the cost, unguarded")
+rule(3, 'Pooling it with "or" loses it — the cost, still unguarded')
 
 lexical = store.lexical_query(keywords=["mystery"])
 
@@ -121,11 +128,11 @@ print(
     "  ran BEFORE the union, so it changed which books qualify rather than only\n"
     "  how many are shown. Then compose() dropped `score`, removing the ranking\n"
     "  that chose them.\n\n"
-    "  For ordinary queries dropping `score` is correct — a trigram score and a\n"
-    "  ts_rank are not commensurable. For the pool it is fatal: the score is\n"
-    "  *why those 250 rows are the rows*.\n\n"
+    "  Section 2 fixed the first of those for `and` and cannot fix it here: an\n"
+    "  intersect result is a subset of every input, so one input's score orders\n"
+    "  it honestly, while a union contains rows the pool never matched.\n\n"
     "  Truncation commutes with ORDERING (which is why materialize_stmt's own\n"
-    "  LIMIT 10 is safe) but not with SET OPERATIONS. That is the whole rule."
+    "  LIMIT 10 is safe) but not with a UNION. That is the whole rule."
 )
 
 
@@ -173,11 +180,9 @@ print(
     f"  all 358 lexical matches over-weights the lexical branch ~4.8:1, purely\n"
     f"  as an artifact of the cap.\n\n"
     f"  A wrong composition here produces a plausible number, never an error.\n"
-    f"  Nothing currently reaches it — the combine tier is unregistered and\n"
-    f"  Filter_Retrieval is parked and single-input — which is why the guard\n"
-    f"  that used to raise here was removed as machinery for a caller that does\n"
-    f"  not exist. Before unparking the combine tier: tune MIN_SIMILARITY so the\n"
-    f"  pool needs no LIMIT, or put the guard back."
+    f"  Combine_Intersect reaches the `and` path and is safe there (section 2).\n"
+    f"  Nothing reaches THIS path: Combine_Union does not exist. Before it does,\n"
+    f"  tune MIN_SIMILARITY so the pool needs no LIMIT, or put the guard back."
 )
 
 print()

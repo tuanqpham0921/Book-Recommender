@@ -444,6 +444,13 @@ still composes. v1 is lexical only, and the slice is shaped as the template for 
 
 ### `Filter_Retrieval` and `Analyze_Recommend` parked (2026-08-22)
 
+> **Neither came back as itself.** `Analyze_Recommend` was unparked the same day as
+> `Analyze_Similar_Books` (record below), and `Filter_Retrieval` was **deleted** on
+> 2026-08-24 and replaced by `Combine_Intersect` (record at the end of this file). So the
+> "unparking is one import and one SPEC line" note below never got used for either. What
+> the parking recorded as lost — a bound riding alongside a subject, and second-stage plans
+> — is what those two changes gave back.
+
 Both dropped from `books/guide.py` at the owner's request. **Parked, not deleted** — the
 slices stay importable, typechecked and unit-tested, and `describe_bounds` still comes from
 `filter_books` (`find_by_numeric_traits` imports it and is still registered). Unparking is
@@ -620,6 +627,14 @@ Two capabilities left with it, and both were already fictions the docstring main
   > are not good recommendations — rather than as an artifact. The narrowed count means "of
   > the 250 nearest, N pass", which is a different claim from every other node's count and
   > is the filter node's to phrase when it is unparked.
+  >
+  > **Resolved 2026-08-24** by `Combine_Intersect`. `Filter_Retrieval` was replaced rather
+  > than unparked, so the bound reaches the pool as `Retrieve_by_Numeric_Traits`' own query
+  > and `compose(op="and")` — which carries the pool's `score` through — instead of as a
+  > `BookMetadataFilter` a filter node parsed. `filter_query` went with that node. The
+  > phrasing caveat above is unresolved and now belongs to the intersect node: it cannot
+  > tell a truncated pool from any other input without importing the similarity slice, so
+  > "of the 250 nearest, N also match" stays documented rather than shown in the UI.
 
 **The blend-vs-separate rule.** The node pools *every* anchor it depends on into one
 description, so the number of goals the planner emits decides whether two named books blend
@@ -658,6 +673,75 @@ on an unknown node name. The category- and author-anchored recommend cases (3, 1
 68) still expect a plan the contract now refuses; they stay as written, the same precedent
 used while `Retrieve_by_Genre` was parked — the suite names the target taxonomy and the
 golden diff reports the gap.
+
+### `Filter_Retrieval` → `Combine_Intersect` (2026-08-24)
+
+`Filter_Retrieval` was **deleted**, not parked again, and `Combine_Intersect` registered in
+its place — so `NodeTier.COMBINE` has members for the first time and every plan can now have
+a second stage. The catalog is 6 tools at **2,814 tokens** (2,199 at 5).
+
+**The node.** `books/intersect_books/`, four files, no parse: it takes 2+ dependencies of any
+book-producing shape and ANDs their queries. It is the first node in the app that makes **no
+LLM call at all** — what it does is decided entirely by which goals it depends on, so
+`build_input` is its whole "parse" and its body is work → finalize.
+
+**Why replacement rather than unparking.** The old node parsed a `BookMetadataFilter` out of
+its own goal text and ANDed the bounds onto *one* upstream query. That made two ways to
+express a bound — its `filters` and `Retrieve_by_Numeric_Traits.traits` — separated by
+nothing but prose: the "numbers-only" rule, which lived in two docstrings and was held up by
+eval cases 76/77 alone. Under the new shape a bound is always a retrieval, and *narrowing by
+it* is that retrieval intersected with the subject's. One parse, one narrowing mechanism.
+
+Three things fall out of that:
+
+- **A bound riding alongside a subject has a home again**, which is what the 2026-08-22
+  parking recorded as lost. "Fantasy books over 400 pages" is `Retrieve_by_Lexical_Traits` +
+  `Retrieve_by_Numeric_Traits` + `Combine_Intersect`.
+- **Plans get shorter, not longer.** "What horror books has Stephen King written that are
+  over 500 pages?" was four nodes (two retrievals, an intersect, then a filter). It is now
+  four with a different shape — three retrievals feeding **one** intersect — because the
+  intersect is n-ary rather than the filter being single-input.
+- **`BookStore.filter_query` was deleted**, its only caller gone.
+
+**The technical decision: one score survives an intersect.** `compose(op="and")` selected
+isbn13 only, so it dropped `score` — which would have ranked "books like Dune under 300
+pages" by `average_rating` instead of by cosine similarity, discarding exactly what the
+2026-08-24 deferred-query change was built to preserve. It now carries the score through when
+**exactly one** input has one. The argument is that an intersect result is a subset of every
+input, so that column is defined on every output row and orders the result honestly; two
+scored inputs are incommensurable (a trigram score and a `ts_rank`) and both still go.
+`compose(op="or")` never carries one, because a union contains rows the scored input never
+matched. This is what closes the intersect half of the precondition recorded in
+execution-pipeline-v1.md for unparking the combine tier; the union half is unchanged, and
+`Combine_Union` still faces it.
+
+**What the node deliberately does not do.**
+
+- **Its output is `BookRetrievalOutput`, neither half of the split.** An intersection of two
+  titles is anchor-shaped and one of two subject searches is not, and the class cannot know
+  which at definition time — so it lands on the base, which means "not anchorable". This is
+  the case the 2026-08-22 split reserved the concrete base for. The cost: `Analyze_Similar_Books`
+  requires `list[BookAnchorOutput]` and so cannot depend on an intersection — "books like
+  Harry Potter by Rowling" anchors on the title retrieval directly.
+- **It cannot say "of the 250 nearest, N also match".** Detecting a truncated similarity pool
+  among its inputs would mean importing `find_similar_books` across a slice seam, so the
+  caveat stays in the docs rather than in the UI line — the same call `filter_query` made.
+- **A failed dependency silently widens the answer.** Three retrievals, one fails, and the
+  intersect still has two anchors and runs — answering a looser question than was asked. The
+  runner marks the failed goal and the node streams how many conditions it actually
+  intersected, so it is visible rather than hidden, but nothing refuses it.
+
+**`min_length=2`, not 1.** An intersection of one is a no-op that would report the upstream
+count as though something had narrowed it. `build_input` fills a `list[X]` with every match
+and a one-item list is still a *filled* field, so the length is rejected on the input model;
+the runner then skips that one goal naming `anchors`.
+
+**Eval suites re-baselined**, unlike the two previous taxonomy changes. `Filter_Retrieval`
+appeared in `expected_nodes` on six cases of `query_suite.json` (27, 61, 63, 65, 71, 77) —
+the "24 occurrences" quoted in the parking record above counts mentions in `note` prose too.
+The precedent for leaving suites alone was for *parked* nodes, where the name would come back;
+this one will not, so the cases were rewritten. Cases 56/57/59 were re-decided at the same
+time, as case 65's note had been asking for since the combine tier was designed.
 
 ## V1 conversation contract: clarify-only, single-turn
 

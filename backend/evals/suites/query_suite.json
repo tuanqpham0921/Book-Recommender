@@ -80,7 +80,7 @@
     "id": 12,
     "difficulty": "easy",
     "query": "Find books with fewer than 200 pages.",
-    "note": "BOUNDS AS THE SUBJECT (re-baselined 2026-08-20, when Retrieve_by_Numeric_Traits landed). Page count is the whole request, so there is nothing for Filter_Retrieval to narrow — the bound itself is the search. Previously expected no nodes, on the since-reversed premise that a measurable limit can never be what a search is about.",
+    "note": "BOUNDS AS THE SUBJECT (re-baselined 2026-08-20, when Retrieve_by_Numeric_Traits landed; note updated 2026-08-24). Page count is the whole request \u2014 one condition, so there is nothing to intersect it with and no combine node belongs here. Contrast case 77, the same bound with a subject beside it, which takes three nodes. Previously expected no nodes, on the since-reversed premise that a measurable limit can never be what a search is about.",
     "expected_nodes": ["Retrieve_by_Numeric_Traits"]
   },
   {
@@ -185,8 +185,8 @@
     "id": 27,
     "difficulty": "medium",
     "query": "Find me books about artificial intelligence that are non-fiction and highly rated.",
-    "note": "NEGATIVE HALF OF THE NUMBERS-ONLY RULE (re-baselined 2026-08-20). This request HAS a subject (artificial intelligence, non-fiction), so the rating bound can only narrow that search — Retrieve_by_Numeric_Traits would be wrong here, and mis-routing to it is exactly the blur the V1 taxonomy deleted Retrieve_by_Traits over. Previously expected Retrieve_Popular. Registered 2026-08-21, so this should now go green: keywords=[\"artificial intelligence\"] with genre=non-fiction on the category node, then Filter_Retrieval for the rating bound.",
-    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Filter_Retrieval"]
+    "note": "SUBJECT + BOUND, INTERSECTED (re-baselined 2026-08-24; previously Retrieve_by_Lexical_Traits + Filter_Retrieval, and Retrieve_Popular before that). The request has a subject (artificial intelligence, non-fiction) AND a rating bound, and since Filter_Retrieval was replaced by Combine_Intersect each gets its own retrieval goal: keywords=[\"artificial intelligence\"] with genre=non-fiction on the lexical node, min_rating on the numeric node, then one intersect over both. The failure to catch is now the opposite of what it used to be: emitting the two retrievals as bare siblings and stopping, which pools them (OR) and answers with more books than either condition alone.",
+    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 28,
@@ -388,15 +388,15 @@
     "id": 56,
     "difficulty": "medium",
     "query": "Show me fantasy books by Brandon Sanderson.",
-    "note": "MULTI-ANCHOR CONTROL (design-intent expectation, not yet a recorded baseline — added 2026-07-24). Two anchor dimensions in one request: author AND genre. Single-dimension retrieval nodes cannot express the intersection, so the intended plan picks the more selective anchor (author) and treats genre as a constraint. The failure to catch is emitting Retrieve_by_Author AND Retrieve_by_Lexical_Traits as siblings: with no combine operator between them that is a UNION — every Sanderson book plus every fantasy book — which is not what was asked. Genre is near-redundant here (Sanderson writes almost only fantasy), which is what makes this the control for case 57.",
-    "expected_nodes": ["Retrieve_by_Author"]
+    "note": "MULTI-ANCHOR CONTROL (re-baselined 2026-08-24; expected Retrieve_by_Author alone from 2026-07-24). Two anchor dimensions in one request: author AND genre. The original expectation picked the more selective anchor and dropped the genre, because no combine node was registered and emitting both as siblings would UNION them. Combine_Intersect makes the intersection expressible, so the honest plan is both retrievals plus the intersect. Case 65's note had been asking for this re-decision since the combine tier was designed. Genre is near-redundant here (Sanderson writes almost only fantasy), which is exactly what makes 56 the control and 57 the test.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Lexical_Traits", "Combine_Intersect"]
   },
   {
     "id": 57,
     "difficulty": "medium",
     "query": "What children's books has Neil Gaiman written?",
-    "note": "MULTI-ANCHOR, LOAD-BEARING GENRE (design-intent expectation, added 2026-07-24). Same shape as case 56, opposite stakes: Gaiman writes across adult and children's fiction, so dropping the genre returns a materially wrong bibliography rather than a slightly wide one. The pair 56/57 is the actual test — identical query shape, and only 57 makes the dropped constraint visible in the answer. NOTE: the goals report compares node TYPES only, so it cannot see whether the genre constraint was captured; this case is the argument for argument-level checking (or for the multi-anchor Traits node).",
-    "expected_nodes": ["Retrieve_by_Author"]
+    "note": "MULTI-ANCHOR, LOAD-BEARING GENRE (re-baselined 2026-08-24 alongside 56). Same shape as case 56, opposite stakes: Gaiman writes across adult and children's fiction, so dropping the genre returns a materially wrong bibliography rather than a slightly wide one. That is why the old pick-one-anchor expectation was always a compromise, and why this pair is the argument the combine tier settles. The audience half rides on the lexical node (audience=children), so the goals report still compares node TYPES only and cannot see whether it was captured \u2014 this case remains the argument for argument-level checking.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Lexical_Traits", "Combine_Intersect"]
   },
   {
     "id": 58,
@@ -409,8 +409,8 @@
     "id": 59,
     "difficulty": "hard",
     "query": "Show me romance books by Nora Roberts and mystery books by Agatha Christie.",
-    "note": "MULTI-ANCHOR × 2 (design-intent expectation, added 2026-07-24). Extends case 53's one-node-per-author rule into multi-anchor territory: two authors, each with their own genre, so the intended plan is two Retrieve_by_Author nodes — not four nodes (an author and a genre node per half), and not one collapsed node. Tests that added dimensions narrow the existing nodes instead of multiplying them.",
-    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author"]
+    "note": "MULTI-ANCHOR x2 (re-baselined 2026-08-24 alongside 56/57). Two authors, each with their own genre, and the two halves are ALTERNATIVES rather than one intersection \u2014 so it is two independent intersections, not one over all four retrievals. That is the distinction Combine_Intersect's `Do not use:` states: \"romance by Roberts and mystery by Christie\" is two answers, not one. The failure to catch is collapsing it into a single intersect, which asks for books that are romance AND mystery AND by Roberts AND by Christie, and correctly returns nothing.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Lexical_Traits", "Combine_Intersect", "Retrieve_by_Author", "Retrieve_by_Lexical_Traits", "Combine_Intersect"]
   },
   {
     "id": 60,
@@ -423,36 +423,36 @@
     "id": 61,
     "difficulty": "medium",
     "query": "Show me Haruki Murakami books published after 2005.",
-    "note": "RETRIEVAL CONSTRAINT (design-intent expectation, added 2026-07-24). The plain half of the recommend-vs-filter pair, and the control for case 62. A known subject narrowed by a metadata bound, with no similarity ask anywhere in the query: the bibliography is retrieved, then Filter_Retrieval deletes everything published in 2005 or earlier. Retrieval nodes carry no filters of their own, so the year has exactly one legal home. Two failures to catch: routing to Analyze_Similar_Books because a metadata bound appeared (nothing here asks for anything *like* anything), and dropping the year entirely and returning the whole bibliography — which the node-type diff DOES see here, since the missing Filter_Retrieval is a missing node rather than a missing argument.",
-    "expected_nodes": ["Retrieve_by_Author", "Filter_Retrieval"]
+    "note": "RETRIEVAL CONSTRAINT (re-baselined 2026-08-24; previously Retrieve_by_Author + Filter_Retrieval). A known subject narrowed by a metadata bound, with no similarity ask anywhere in the query. The year bound is now its own retrieval (min_year=2006 on Retrieve_by_Numeric_Traits) and the intersect is what makes it narrow rather than widen. Two failures to catch: routing to Analyze_Similar_Books because a metadata bound appeared (nothing here asks for anything *like* anything), and emitting the two retrievals without the intersect, which pools them.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 62,
     "difficulty": "medium",
     "query": "Recommend me something like Neuromancer but under 300 pages.",
-    "note": "RECOMMENDATION CONSTRAINT (design-intent expectation, added 2026-07-24). Case 61 mirrored: same kind of metadata bound, opposite home. The bound belongs in the Analyze_Similar_Books goal's own description, where the node's decomposition parse takes it as `bounds` and puts it into its own vector search's WHERE, so the pool it ranks is already under 300 pages (implemented 2026-08-19). The failure to catch is a trailing Filter_Retrieval, which is wrong for a reason worth stating: it would rank the nearest books to Neuromancer first — mostly long ones — and then delete nearly all of them, throwing away the ranking and often returning nothing. 61 and 62 are the actual test, and both are visible to the node-type diff: the discriminator is whether Filter_Retrieval appears, not what arguments it carries.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "note": "RECOMMENDATION CONSTRAINT (added 2026-07-24, re-baselined 2026-08-24 \u2014 the premise reversed twice). It expected Retrieve_by_Title + Analyze_Similar_Books alone, with the bound left in the similarity goal's description for that node's own parse to route into its vector search's WHERE. Both halves of that are now gone: Analyze_Similar_Books stopped parsing anything (2026-08-22), and the argument it rested on \u2014 that filtering a ranked pool afterwards throws the ranking away \u2014 was a property of materialized ROWS, not of a scored deferred query. Combine_Intersect carries the pool's cosine score through the narrowing (compose(op=\"and\")), so the bound is its own retrieval and the ranking survives. The count then means \"of the 250 nearest, N are also under 300 pages\". The failure to catch is now the old expectation: dropping the bound entirely because the similarity node has nowhere to put it.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 63,
     "difficulty": "hard",
     "query": "Show me Octavia Butler books over 300 pages, and recommend similar books rated 4.0 or higher.",
-    "note": "BOTH FILTERS, ONE QUERY (design-intent expectation, added 2026-07-24). Combines 61 and 62 so the two filter homes must be told apart within a single plan: the page bound narrows the retrieved bibliography (Filter_Retrieval), the rating bound rides in the recommend goal's description and narrows its own search (Analyze_Similar_Books's own `bounds`), and the recommend node depends on the filter node so it recommends from the narrowed list. Three failures to catch: collapsing both bounds into one node, hanging the recommendation off the raw Retrieve_by_Author so the page bound never reaches it, and adding a second Filter_Retrieval after the recommendation for the rating. Note the bounds are deliberately different fields — a plan that swaps them produces the right node types and the wrong answer, which this suite cannot see.",
-    "expected_nodes": ["Retrieve_by_Author", "Filter_Retrieval", "Analyze_Similar_Books"]
+    "note": "PARTIALLY UNSATISFIABLE \u2014 FLAGGED, NOT CLEANLY RE-BASELINED (2026-08-24). The first half is an ordinary bounded bibliography: Retrieve_by_Author + Retrieve_by_Numeric_Traits (min_pages=300) + Combine_Intersect. The second half (\"recommend similar books rated 4.0 or higher\") CANNOT be planned as written: Analyze_Similar_Books requires list[BookAnchorOutput], Retrieve_by_Author returns a candidate, and Combine_Intersect's output lands on the base \u2014 so nothing in this plan can anchor a similarity search. That is the deliberate cost of the 2026-08-22 anchors/candidates split (\"books like Frank Herbert's\" is a semantic ask, not an anchored one), not a regression this change introduced. The expectation covers only the half the taxonomy can serve; it needs re-deciding together with whether an author bibliography should ever be anchorable.",
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 64,
     "difficulty": "hard",
     "query": "Recommend books like The Road, then only keep the ones with at least 1000 ratings.",
-    "note": "POST-FILTER PHRASING TRAP (design-intent expectation, added 2026-07-24). The hardest of the filter-placement cases: the user's wording explicitly describes a post-filter — recommend first, THEN keep some — and the correct plan ignores that wording. Filtering a ranked similarity list after the fact is exactly what Filter_Retrieval's docstring forbids, so the ratings_count bound stays in the Analyze_Similar_Books goal's description — its decomposition parse routes it to `bounds` — and no filter node is emitted. Tests whether the planner routes on semantics or on surface syntax; 'then only keep' is close to an instruction to emit the wrong node. The failure to catch is the literal reading, Retrieve_by_Title + Analyze_Similar_Books + Filter_Retrieval.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "note": "POST-FILTER PHRASING TRAP (added 2026-07-24, re-baselined 2026-08-24). The wording explicitly describes a post-filter \u2014 recommend first, THEN keep some \u2014 and the correct plan used to ignore it, because filtering a ranked list after the fact threw the ranking away. It no longer does: Combine_Intersect narrows the similarity pool in SQL and compose(op=\"and\") carries the cosine score through, so the literal reading is now the right one and the trap is defused rather than tested. What is still worth catching is the bound going nowhere \u2014 Analyze_Similar_Books parses nothing since 2026-08-22, so 'at least 1000 ratings' has no home except its own Retrieve_by_Numeric_Traits goal. Kept as a live case for that, not for the syntax-vs-semantics question it was written for.",
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 65,
     "difficulty": "hard",
     "query": "What horror books has Stephen King written that are over 500 pages?",
-    "note": "FULL COMBINE TIER (design-intent expectation, added 2026-07-24). The longest correct plan in the suite: two anchors that must hold on the same book (author AND genre) plus a metadata bound, which is four nodes — retrieve each anchor, Combine_Intersect them, then Filter_Retrieval the result. Exercises the whole tier and the anchor-vs-constraint line in one query: horror is a search subject and gets a retrieval node, 500 pages is a constraint and cannot. Two failures to catch: emitting the two retrievals as bare siblings, which pools them (every King book OR every horror book) instead of intersecting; and promoting the page bound to its own retrieval node. COLLIDES WITH CASES 56/57/59: those expect a single Retrieve_by_Author with the genre silently dropped, an expectation written before Combine_Intersect existed. This case encodes the post-combine-tier answer; they still encode the pre-combine-tier one. They need re-deciding together — see docs/design/execution-pipeline-v1.md open questions.",
-    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Retrieve_by_Author", "Combine_Intersect", "Filter_Retrieval"]
+    "note": "FULL COMBINE TIER (re-baselined 2026-08-24; was four nodes ending in Filter_Retrieval). Still the longest correct plan in the suite, but a different shape: three retrievals feeding ONE intersect, because Combine_Intersect is n-ary where Filter_Retrieval was single-input. The line this case used to draw \u2014 \"horror is a search subject and gets a retrieval node, 500 pages is a constraint and cannot\" \u2014 was the numbers-only rule, and it is retired: a bound is a retrieval like any other. Two failures to catch: emitting the retrievals as bare siblings, which pools them (every King book OR every horror book OR every long book) instead of intersecting; and chaining two intersects where one with three dependencies is correct. COLLISION WITH 56/57/59 RESOLVED \u2014 those were re-baselined to the same shape the same day.",
+    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Retrieve_by_Author", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 66,
@@ -465,7 +465,7 @@
     "id": 67,
     "difficulty": "medium",
     "query": "Surprise me with a book, but keep it under 200 pages and well rated.",
-    "note": "BOUNDED SURPRISE (design-intent expectation, added 2026-07-28). 'Surprise me' cedes the choice, so this is Retrieve_Random, and both bounds go in its own filters where the pick is drawn from inside them. Filter_Retrieval must NOT be emitted: it can only delete, and deleting from a single arbitrary pick discards it outright far more often than not, answering with nothing that looks identical to 'no matches'. Both docstrings state the ban. Same shape as case 64's filter-placement trap, on the retrieval side. The failure to catch is Retrieve_Random + Filter_Retrieval.",
+    "note": "BOUNDED SURPRISE (design-intent expectation, added 2026-07-28; note updated 2026-08-24). 'Surprise me' cedes the choice, so this is Retrieve_Random, and both bounds go in its own filters where the pick is drawn from inside them. No combine node may be emitted: intersecting a single arbitrary pick against anything discards it far more often than not, answering with nothing that looks identical to 'no matches'. The ban was Filter_Retrieval's until that node was replaced; it transferred to Combine_Intersect unchanged, and both docstrings state it. The failure to catch is Retrieve_Random + Retrieve_by_Numeric_Traits + Combine_Intersect.",
     "expected_nodes": ["Retrieve_Random"]
   },
   {
@@ -493,8 +493,8 @@
     "id": 71,
     "difficulty": "medium",
     "query": "Find the Dune books that are over 500 pages.",
-    "note": "TITLE + FILTER (added 2026-08-17, when Filter_Retrieval was registered). Case 61's shape drawn on the retrieval node that is actually live: the title is the subject, the page bound can only narrow it, so the plan is Retrieve_by_Title then Filter_Retrieval depending on it. Every other Filter_Retrieval case in this suite (61, 63, 65) anchors on a parked node, which makes this the only one whose plan runs end to end — so it exercises the executor and the narrowed-query hand-off, not just the routing. Two failures to catch: folding the page bound into Retrieve_by_Title, which carries no filters and would drop it silently; and routing to Analyze_Similar_Books because a metadata bound appeared, when nothing here asks for anything *like* anything.",
-    "expected_nodes": ["Retrieve_by_Title", "Filter_Retrieval"]
+    "note": "TITLE + BOUND (added 2026-08-17, re-baselined 2026-08-24). Case 61's shape drawn on a title anchor. Every node in this plan is registered and has an executor, which makes it the case that exercises the intersect executor and the composed-query hand-off end to end rather than routing alone. Two failures to catch: folding the page bound into Retrieve_by_Title, which carries no filters and would drop it; and omitting the intersect, which pools the title match with every long book in the catalog.",
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   },
   {
     "id": 72,
@@ -528,14 +528,14 @@
     "id": 76,
     "difficulty": "medium",
     "query": "Find me books over 400 pages.",
-    "note": "POSITIVE HALF of the discrimination pair with case 77 (added 2026-08-20). No other subject, so the bound IS the search. The failure to catch is Filter_Retrieval, which requires an anchor and would be skipped by the runner for missing one.",
+    "note": "POSITIVE HALF of the discrimination pair with case 77 (added 2026-08-20, note updated 2026-08-24). No other subject, so the bound IS the search and one node is the whole plan. What the pair tests changed with the numbers-only rule's retirement: both halves now use Retrieve_by_Numeric_Traits, and the discriminator is whether a second condition \u2014 and therefore Combine_Intersect \u2014 is present. The failure to catch is emitting a combine node over a single retrieval, which the input contract refuses for needing 2+ dependencies.",
     "expected_nodes": ["Retrieve_by_Numeric_Traits"]
   },
   {
     "id": 77,
     "difficulty": "medium",
     "query": "Find me fantasy books over 400 pages.",
-    "note": "NEGATIVE HALF of the pair with case 76 (added 2026-08-20) — same bound, one added subject. Genre is the search and the page bound narrows it, so this must NOT route to Retrieve_by_Numeric_Traits. With both nodes registered and only prose separating them, this pair is what holds the numbers-only rule, the way cases 53/54 hold the author/co-author split. Registered 2026-08-21, so this should now go green: keywords=[\"fantasy\"] on the category node, then Filter_Retrieval for the page bound.",
-    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Filter_Retrieval"]
+    "note": "PAIR WITH CASE 76 (added 2026-08-20, re-baselined 2026-08-24). Same bound, one added subject. This pair used to hold the numbers-only rule \u2014 76 routes to Retrieve_by_Numeric_Traits alone, 77 must NOT. That rule is retired: 77 now uses the numeric node TOO, and what the pair holds instead is the intersect. 76 has one condition and takes no combine node; 77 has two and requires one. The failure to catch is emitting both retrievals for 77 and stopping there, which pools them and answers with every fantasy book plus every long book.",
+    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
   }
 ]

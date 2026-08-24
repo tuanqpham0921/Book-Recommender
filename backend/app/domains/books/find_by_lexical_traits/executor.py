@@ -57,9 +57,9 @@ def describe_lexical_traits(args: FindByLexicalTraitsArgs) -> str:
 
     Only what the parse actually set; an all-empty args object returns "", which
     is what the executor reads to refuse the goal. The lexical counterpart of
-    `describe_bounds`, and private to this slice where that one is not:
-    `describe_bounds` is re-exported from `filter_books` only because the numeric
-    node parses the same bounds, and nothing else parses these args.
+    `describe_bounds`, which lives in `find_by_numeric_traits/executor.py` and is
+    private to that slice the same way this one is to this: each node renders the
+    args it parses, and no node parses another's.
     """
     subject = " and ".join(keyword for keyword in args.keywords if keyword.strip())
     readers = _READERS[args.audience] if args.audience else None

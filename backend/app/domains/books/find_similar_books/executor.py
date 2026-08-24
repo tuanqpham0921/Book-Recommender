@@ -16,7 +16,7 @@ The node does one thing: fold the books the user named into a description of
 what to look for next, and hand back a query for the pool nearest that
 description. It does not rank the pool, drop books from it, or write the reply —
 those are a later node's, and none of them exists yet. Handing on the *query*
-rather than the rows is what leaves room for them: `Filter_Retrieval` can narrow
+rather than the rows is what leaves room for them: `Combine_Intersect` can bound
 the pool in SQL and cosine order survives the narrowing.
 """
 
@@ -189,14 +189,15 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         Embed, then build — the round trip in here is the embedding's, not the
         search's. `embedding_search_stmt` hands back a `DeferredBookQuery`
         whose `score` column is cosine similarity, which is what lets a
-        downstream `Filter_Retrieval` narrow this pool without flattening its
-        ranking (`filter_query` carries `score` through; `materialize_stmt`
-        orders by it).
+        downstream `Combine_Intersect` bound this pool without flattening its
+        ranking (`compose(op="and")` carries the one `score` through;
+        `materialize_stmt` orders by it).
 
         The one `DeferredBookQuery` that carries a LIMIT, because the search
         does not select a subset — it orders the whole table and truncates, so
-        the cap *is* the pool. That is also why composing it with another query
-        is lossy; see `DeferredBookQuery`.
+        the cap *is* the pool. That is why an intersect against it reports "of
+        the 250 nearest, N also match", and why *pooling* it with `"or"` is
+        lossy; see `DeferredBookQuery`.
 
         Recorded here rather than by the count, and that is the reason this
         builder is not a store method: the vector renders as

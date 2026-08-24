@@ -10,8 +10,9 @@ class FindByLexicalTraitsInput(NodeInput):
     The traits are read out of this node's own goal, so it has no field for
     upstream output — it *structurally* cannot consume one, which is the contract
     the empty subclass states. That absence is what separates this node from
-    Filter_Retrieval, whose `anchors` is required: traits with something to
-    narrow are that node's job, traits with nothing to narrow are this one's.
+    Combine_Intersect, whose `anchors` is required: this node contributes a set,
+    that one combines sets, and neither can be handed the other's input by
+    accident.
     """
 
 
@@ -25,8 +26,8 @@ class FindByLexicalTraitsOutput(BookCandidateOutput):
 
     The node keeps no rows: it streams a few cards so the section has something
     in it, and what it hands downstream is the query. That query is the point of
-    this node — it is what lets Filter_Retrieval AND bounds onto a lexical search
-    and Combine_Intersect fold it together with an author's bibliography.
+    this node — it is what lets Combine_Intersect AND it together with an
+    author's bibliography or a page-count bound.
 
     The count is the honest report of a *lexical* match: these are books whose
     text contains the words, not books an embedding judged similar. `num_books ==

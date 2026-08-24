@@ -93,7 +93,13 @@ output only — none of them runs a lookup of its own.
 **`Filter_Retrieval` is built and registered (2026-08-17).** It is a vertical slice like
 every other node now — `app/domains/books/filter_books/`, on the single-call
 `find_by_title/` template — rather than a schema in a shared `request_schemas.py`; the two
-`Combine_*` nodes are still parked. One line of the original sketch did not survive
+`Combine_*` nodes are still parked.
+
+> **Superseded 2026-08-24.** This node and its slice were deleted, and `Combine_Intersect`
+> registered in their place — an n-ary AND over upstream queries, parsing nothing. The whole
+> record from here to the end of this section describes a node that no longer exists; what
+> replaced it, and why replacement rather than another unparking, is in
+> node-taxonomy-v1.md (2026-08-24). One line of the original sketch did not survive
 counts-first: "neither queries the database" was written when a filter would delete from a
 materialized list. The executor instead pools its anchors' deferred queries and hands them
 to `BookStore.filter_query()`, which ANDs the `BookMetadataFilter` bounds onto that query;
@@ -236,13 +242,42 @@ threshold turns out to bound below 250, the LIMIT can go and the invariant retur
 > above), or the guard comes back. Registering `Combine_Union` without doing one of those
 > ships the failure described here. `tests/unit/db/stores/test_deferred_query.py::TestTheVectorQueryException::test_composing_it_drops_the_ranking_that_chose_the_pool`
 > pins the behaviour so the reversal is visible in compiled SQL rather than only here.
+>
+> > **Half met, 2026-08-24, by `Combine_Intersect`.** The tier *was* unparked, and neither of
+> > the two options above is what made it safe — a third one was taken, and it only works for
+> > `"and"`. `compose(op="and")` now **carries one `score` through** when exactly one input
+> > has one, because an intersect result is a subset of every input, so that column is
+> > defined on every output row and orders the result honestly. A union result contains rows
+> > the scored input never matched, so the same move is unavailable there and nothing about
+> > `"or"` changed.
+> >
+> > That splits the paragraph above in two. **The intersect half is no longer "wrong twice"
+> > but once**: the LIMIT still applies before the membership test, so the count means "of the
+> > 250 nearest, N also match" — which is the *same* lossiness `filter_query` on a pool always
+> > had and which was already accepted — while the ranking that chose the pool now survives.
+> > The honest-asymmetry paragraph above was therefore pointing at the real answer: the line
+> > the guard drew was about the loss being statable in a sentence, and this makes the
+> > intersect's loss statable in exactly one.
+> >
+> > **The union half stands unchanged and is still unguarded.** `Combine_Union` does not
+> > exist; before it does, tune the floor or restore the guard. The test named above was
+> > narrowed to `"or"` and renamed
+> > (`test_pooling_it_still_drops_the_ranking_that_chose_the_pool`), with
+> > `TestScoredIntersect` and
+> > `TestTheVectorQueryException::test_intersecting_it_keeps_cosine_order_reachable` pinning
+> > the new behaviour. `filter_query` itself is gone — see node-taxonomy-v1.md, 2026-08-24.
 
-**`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
+**No combine node may depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
 than not, and the empty result is indistinguishable from "nothing matched". Bounds on a
 surprise belong in `Retrieve_Random`'s own `filters`, where the pick is drawn from inside
 them. Convention only — nothing in the schema rejects the edge, so it lives in both
 docstrings and in the golden expectations.
+
+> **Transferred 2026-08-24** from `Filter_Retrieval` to `Combine_Intersect`, unchanged in
+> substance: intersecting a one-book pick against anything discards it just as reliably as
+> filtering it did. Neither node is currently reachable from `Retrieve_Random`, which is
+> unregistered.
 
 **Union is both implicit and an explicit node.** `Combine_Union` / `UnionRetrieval` was
 registered, removed the same day, then re-added (2026-07-24). The removal argument still

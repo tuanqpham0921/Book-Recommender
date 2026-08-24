@@ -12,7 +12,7 @@ That is what most of this file now guards. The similarity floor and the
 exclusions still have to be *in* the statement, for the original reason: the
 search orders the whole table and truncates, so anything cut afterwards is cut
 from an already-truncated set. What is new is the shape of what comes back — isbn13
-plus a column named exactly `score`, which is what `filter_query` propagates and
+plus a column named exactly `score`, which is what `compose(op="and")` carries and
 `materialize_stmt` orders by, and therefore what lets a downstream bound narrow
 a similarity pool without flattening its ranking.
 
@@ -47,7 +47,7 @@ class TestItIsADeferredQuery:
         assert isinstance(_built(), DeferredBookQuery)
 
     def test_the_score_column_is_named_score(self):
-        # not `similarity_score`. `filter_query` propagates a column called
+        # not `similarity_score`. `compose(op="and")` carries a column called
         # `score` and `materialize_stmt` orders by one — the name is the whole
         # mechanism by which cosine order survives a downstream bound.
         select_list = str(_built().stmt.compile()).split("FROM")[0]

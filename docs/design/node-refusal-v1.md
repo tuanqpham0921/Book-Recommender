@@ -32,6 +32,13 @@ legal plan at all.
 > directly — "give me a book about war" now has a legal plan. `Retrieve_Random` is still
 > parked, so the bare "recommend me a book" with no anchor at all still does not.
 >
+> **Amended again 2026-08-24 — six nodes, different six.** `Analyze_Recommend` became
+> `Analyze_Similar_Books` (2026-08-22) and `Filter_Retrieval` was deleted and replaced by
+> **`Combine_Intersect`** (2026-08-24), so the registered set is `Retrieve_by_Title`,
+> `Retrieve_by_Author`, `Retrieve_by_Lexical_Traits`, `Retrieve_by_Numeric_Traits`,
+> `Analyze_Similar_Books`, `Combine_Intersect`. `Retrieve_Random` is still parked, so the
+> paragraph above about the bare "recommend me a book" still holds.
+>
 > **This makes the doc's own trigger live** (see "What would say it's time" below): the
 > catalog is no longer the obvious explanation for a mis-route, so mis-routing observed
 > from here is evidence about routing quality rather than about a gap in the menu. The

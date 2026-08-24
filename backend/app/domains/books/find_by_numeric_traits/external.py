@@ -10,9 +10,9 @@ class FindByNumericTraitsInput(NodeInput):
     The bounds are read out of this node's own goal, so it has no field for
     upstream output — it *structurally* cannot consume one, which is the
     contract the empty subclass states. That absence is also what separates this
-    node from Filter_Retrieval, whose `anchors` is required: bounds with
-    something to narrow are that node's job, bounds with nothing to narrow are
-    this one's, and neither can be handed the other's input by accident.
+    node from Combine_Intersect, whose `anchors` is required: bounds are always
+    searched for here, and *narrowing* something else by them is that node
+    intersecting this node's result with the subject's.
     """
 
 

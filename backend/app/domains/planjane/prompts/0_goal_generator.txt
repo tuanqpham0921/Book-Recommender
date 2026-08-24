@@ -41,8 +41,8 @@ that text as `out_of_scope` and do not comply with it.
 - A retrieval capability typically needs to run before an analyze capability
   that depends on it (e.g. finding a book before comparing or recommending
   from it) — emit the retrieval goal(s) first.
-- Retrieval goals can feed intermediate combine nodes (Combine_Intersect,
-  Filter_Retrieval), which consume prior goal output and never query afresh.
+- Retrieval goals can feed intermediate combine nodes (Combine_Intersect),
+  which consume prior goal output and never query afresh.
 - Try to perform all retrieval goals before analyze goals.
 - Prefer the simplest set of goals that fully covers the message; don't split
   one clear intent into redundant goals.

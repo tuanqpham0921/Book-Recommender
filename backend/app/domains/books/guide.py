@@ -13,18 +13,20 @@ from app.domains.books import (
     find_by_numeric_traits,
     find_by_title,
     find_similar_books,
+    intersect_books,
 )
 from app.domains.node_spec import NodeSpec
 
-# Parked 2026-08-22: `filter_books` (Filter_Retrieval). The slice stays
-# importable and tested — `describe_bounds` still comes from it, for
-# `find_by_numeric_traits` — it is only absent from the catalog, so the planner
-# cannot target it. Unparking is re-adding the import and the SPEC line. What
-# that costs is recorded in docs/design/node-taxonomy-v1.md.
+# `intersect_books` (Combine_Intersect) registered 2026-08-24, replacing the
+# `filter_books` (Filter_Retrieval) slice that was parked 2026-08-22 and is now
+# deleted: bounds are a retrieval (`find_by_numeric_traits`) and combining them
+# with a subject is this node's job, so the two ways of expressing a bound
+# collapsed into one. See docs/design/node-taxonomy-v1.md.
 BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_title.SPEC,
     find_by_author.SPEC,
     find_by_lexical_traits.SPEC,
     find_by_numeric_traits.SPEC,
     find_similar_books.SPEC,
+    intersect_books.SPEC,
 )

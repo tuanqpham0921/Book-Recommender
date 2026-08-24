@@ -66,19 +66,26 @@ class DeferredBookQuery:
     view of a set, it *is* the set. `materialize_stmt` can reproduce a ranking
     (it orders by `score`), but not a ranking-truncation, so the truncation has
     to happen where the ranking does. Everything else still holds for it:
-    isbn13 plus a `score`, so `filter_query` narrows it and keeps cosine order,
-    and `count_stmt`/`materialize_stmt` work unchanged.
+    isbn13 plus a `score`, so `compose(op="and")` narrows it and keeps cosine
+    order, and `count_stmt`/`materialize_stmt` work unchanged.
 
     **Nothing on this class marks that exception, and `compose()` does not
     refuse it.** A tracked `capped` attribute and a guard on composition were
-    both tried and removed on 2026-08-24: pooling the vector query with an
-    uncapped one *is* lossy in ways the composed result cannot show, but no
-    registered plan reaches it — the combine tier has no members, and
-    `Filter_Retrieval` is parked and single-input — so the machinery guarded a
-    caller that does not exist. The reasoning is kept in
-    docs/design/execution-pipeline-v1.md rather than in code. If such a caller
-    appears, the better fix is a similarity floor tuned to bound the pool
-    without a LIMIT, which removes the exception instead of policing it.
+    both tried and removed on 2026-08-24. What that left unprotected has since
+    split in two (2026-08-24, `Combine_Intersect`):
+
+    - **`"and"` is as safe as a narrowing ever was.** The LIMIT applies before
+      the membership test, so the count means "of the 250 nearest, N also
+      match" rather than "N in the catalog" — the same lossiness a metadata
+      bound on a pool always had, and the caller's to phrase. The ranking now
+      survives it, which is the whole point of the score column.
+    - **`"or"` is still wrong and still unguarded.** The LIMIT applies before
+      the union, so it changes which books qualify, and 250 of ~1,200 similar
+      books pooled with all 358 lexical matches over-weights the lexical branch.
+      Nothing registered reaches it: `Combine_Union` does not exist. Before it
+      does, tune the similarity floor so the pool needs no LIMIT — which
+      dissolves the exception rather than policing it — or restore the guard.
+      See docs/design/execution-pipeline-v1.md.
 
     Deliberately not a Pydantic model or a dataclass: it rides on a Pydantic
     output field, and nothing should try to walk into `stmt`.
@@ -95,6 +102,17 @@ class DeferredBookQuery:
         its inputs positionally rather than trusting `label` to be distinct."""
         return self.stmt.cte(name=name or self.label)
 
+    def has_score(self) -> bool:
+        """Whether this query carries the optional `score` column.
+
+        Read off the select list rather than tracked on the object: the column
+        is put there by whichever builder made the statement, so the statement
+        is the only thing that cannot be wrong about it. `numeric_traits_query`
+        is the one builder that emits none, and a `compose()` of several
+        dimensions drops it.
+        """
+        return "score" in self.stmt.selected_columns.keys()
+
     @classmethod
     def compose(
         cls, queries: List["DeferredBookQuery"], op: str = "or", label: str = "combined"
@@ -102,22 +120,46 @@ class DeferredBookQuery:
         """Pool deferred queries into one, via a WITH clause.
 
         `"or"` pools (the implicit-union rule), `"and"` intersects; Postgres
-        dedups by isbn13 either way. Only isbn13 survives — a per-dimension
-        `score` means nothing once two dimensions combine — so a single input
-        passes through untouched and keeps its score. That passthrough is what
-        `Filter_Retrieval` rides on: it pools its dependencies unconditionally,
-        and the common case is one.
+        dedups by isbn13 either way. A single input passes through untouched and
+        keeps its score.
 
-        **Composing the vector query is lossy and nothing here stops it.** Its
-        LIMIT is applied before the union or intersect, so it changes which
-        books qualify rather than only how many are shown, and dropping `score`
-        then removes the ranking that chose them. Left unguarded deliberately —
-        no registered plan composes one today. See the class docstring.
+        **One score survives an `"and"`, and only when exactly one input has
+        one.** An intersect result is a subset of *every* input, so that input's
+        `score` is defined on every output row and orders the result honestly —
+        which is what keeps "books like Dune, under 300 pages" in cosine order
+        rather than falling back to rating. Two scored inputs still drop both: a
+        trigram score and a `ts_rank` are not commensurable, which is the reason
+        composition drops scores at all.
+
+        **`"or"` never carries one**, on the same argument read backwards: a
+        union contains rows the scored input never matched, so the column would
+        be undefined for some of them. `Combine_Union`'s hazards are untouched
+        by this — see the class docstring and
+        docs/design/execution-pipeline-v1.md.
         """
         if not queries:
             raise ValueError("compose() needs at least one query")
         if len(queries) == 1:
             return cls(queries[0].stmt, label=label)
+
+        if op == "and":
+            scored = [q for q in queries if q.has_score()]
+            if len(scored) == 1:
+                # the scored query becomes the base and the rest become
+                # membership tests, so it is evaluated once and its select list
+                # (isbn13 *and* score) is what comes out
+                base = scored[0]
+                # anonymous subqueries throughout, never named CTEs: two of
+                # these can end up composed into one statement, and two CTEs
+                # sharing a name there is a compile error. The alias is
+                # generated per compile instead.
+                src = base.stmt.subquery()
+                stmt = select(src.c.isbn13, src.c.score).select_from(src)
+                for other in (q for q in queries if q is not base):
+                    stmt = stmt.where(
+                        src.c.isbn13.in_(select(other.stmt.subquery().c.isbn13))
+                    )
+                return cls(stmt, label=label)
 
         # positional names, because two nodes can legitimately carry the same label
         parts = [select(q.cte(f"q{i}").c.isbn13) for i, q in enumerate(queries)]

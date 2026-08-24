@@ -70,10 +70,12 @@ class BookMetadataFilter(BaseModel):
     **The field descriptions carry the calibration for vague language**, and that
     is the reason they are so wordy. "Well rated", "popular", "a quick read",
     "the classical period" are all real asks that have to become a number
-    somewhere, and this one model is shipped inside every tool schema that takes
-    bounds — `FindByNumericTraitsArgs.traits` and `FilterRetrievalArgs.filters`.
-    Written here, the mapping reaches both and they cannot disagree; written in
-    either slice's docstring, it would be copied into the other and drift.
+    somewhere, and this model is what every tool schema taking bounds ships.
+    Today that is one schema — `FindByNumericTraitsArgs.traits` — but it was two
+    until 2026-08-24 (`FilterRetrievalArgs.filters` went with its node), and the
+    calibration stays here rather than in that slice's docstring for the same
+    reason it was put here: a second parser of bounds must not be able to
+    calibrate "well rated" differently.
 
     Each description leads with the value to use and mentions the corpus range
     only where it stops a mistake. That order is load-bearing: an earlier draft
@@ -87,9 +89,11 @@ class BookMetadataFilter(BaseModel):
     `BookConstraints`. Retune them against the real distribution, not intuition:
     the counts quoted below are from the 5,197-book catalog as of 2026-08-20.
 
-    Whether bounds may be the *subject* of a search or only a narrowing of one is
-    a question about nodes, not about this model — see
-    `FindByNumericTraitsRetrieval` (subject) and `FilterRetrieval` (narrowing).
+    Whether bounds are the *subject* of a search or a narrowing of one is a
+    question about plans, not about this model. Since 2026-08-24 the answer is
+    "always the subject": `FindByNumericTraitsRetrieval` searches on them, and a
+    bound that narrows something else is that same search intersected with the
+    subject's by `Combine_Intersect`.
     """
 
     model_config = ConfigDict(extra="forbid")

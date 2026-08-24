@@ -2,7 +2,10 @@
 
 One request schema, one executor, one LLM call (the arg parse), then the
 counts-first opening move: nothing to interpret from upstream, so no satellite
-modules. The template and the reading rule are in domains/README.md.
+modules — `describe_bounds` and `range_phrase` are pure and sit module-level
+beside the flow, the same place `find_by_lexical_traits` keeps
+`describe_lexical_traits`. The template and the reading rule are in
+domains/README.md.
 
 The one thing this node does that the other retrievals don't is turn words into
 numbers — "well rated" into `min_rating: 4.0`. None of that lives here: the
@@ -10,10 +13,13 @@ mapping is on `BookMetadataFilter`'s field descriptions, which ship as part of
 this node's tool schema, so the parse call is the same shape as every other.
 """
 
+from collections.abc import Callable
+from typing import Any
+
 from clients.messages import AssistantMessage
 from app.domains.books.base_workflow import BookWorkflow
-from app.domains.books.filter_books import describe_bounds
 from clients import OpenAIParserRequest
+from db.schema import BookMetadataFilter
 
 from .schemas import FindByNumericTraitsArgs
 from .external import FindByNumericTraitsInput, FindByNumericTraitsOutput
@@ -23,6 +29,83 @@ from app.common.prompt_loader import load_prompt
 ARGS_PARSER_PROMPT_PATH = (
     "domains/books/find_by_numeric_traits/prompts/numeric_traits_args_parser.txt"
 )
+
+
+def range_phrase(
+    low: float | None,
+    high: float | None,
+    only_low: str,
+    only_high: str,
+    both: str,
+    fmt: Callable[[Any], str] = str,
+) -> str | None:
+    """One bounded dimension as words, or None when it was left unbounded.
+
+    Every numeric bound on `BookMetadataFilter` comes in a min/max pair with
+    the same three cases, so the phrasing is a template per case rather than a
+    branch per field — the four call sites below read as the four sentences
+    the user will see.
+    """
+    if low is not None and high is not None:
+        return both.format(low=fmt(low), high=fmt(high))
+    if low is not None:
+        return only_low.format(low=fmt(low))
+    if high is not None:
+        return only_high.format(high=fmt(high))
+    return None
+
+
+def describe_bounds(filters: BookMetadataFilter) -> str:
+    """The bounds as the user-facing line, e.g. `300 pages or more, published
+    between 2020 and 2022, not for children`.
+
+    Only what the parse actually set — every other field is None, and an
+    all-None filter is what `run` reads to refuse the goal. The words are the
+    point: this string is read twice by the user (the loading message and the
+    count line) and never by anything else, so it says what the bounds mean
+    rather than which fields carry them. Both ends are inclusive, which is why
+    every phrase is "or more"/"or fewer" rather than "over"/"under".
+
+    Private to this slice, like `describe_lexical_traits` is to its own. It was
+    shared with `filter_books` until 2026-08-24, when that slice was replaced by
+    `Combine_Intersect` and this became the only node that parses these bounds.
+    """
+    parts = [
+        range_phrase(
+            filters.min_pages,
+            filters.max_pages,
+            "{low} pages or more",
+            "{high} pages or fewer",
+            "between {low} and {high} pages",
+        ),
+        range_phrase(
+            filters.min_year,
+            filters.max_year,
+            "published in {low} or later",
+            "published in {high} or earlier",
+            "published between {low} and {high}",
+        ),
+        range_phrase(
+            filters.min_rating,
+            filters.max_rating,
+            "rated {low} or higher",
+            "rated {high} or lower",
+            "rated between {low} and {high}",
+            fmt=lambda value: f"{value:.1f}",
+        ),
+        range_phrase(
+            filters.min_ratings_count,
+            filters.max_ratings_count,
+            "with at least {low} ratings",
+            "with at most {high} ratings",
+            "with between {low} and {high} ratings",
+            fmt=lambda value: f"{value:,}",
+        ),
+    ]
+    if filters.is_children is not None:
+        parts.append("for children" if filters.is_children else "not for children")
+
+    return ", ".join(part for part in parts if part)
 
 
 def build_arg_parser_request(query: str) -> OpenAIParserRequest:

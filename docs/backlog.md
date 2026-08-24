@@ -61,14 +61,16 @@ Shape-level planner questions live in
   own tests *before* more nodes are added, and it matters more inside nodes than in the
   planner — a node's arguments are where an injected string actually lands. (A pre-check
   node was tried and reverted in commit `ed34d95`.)
-- **A similarity ask with a quantitative constraint has nowhere to put it.** "Books like
-  Dune but under 300 pages" — `Analyze_Similar_Books` parses nothing as of 2026-08-22, so
-  the bound is silently dropped, and it cannot move to `Filter_Retrieval` because narrowing
-  a ranked pool after the fact throws the ranking away. The bound has to go *inside* the
-  vector search; `embedding_search_stmt` keeps an unused `filters` parameter for exactly
-  that. Belongs to the node that re-ranks and picks from the pool, which does not exist yet.
-  See [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md) (the 2026-08-19
-  entry and its reversal).
+- ~~**A similarity ask with a quantitative constraint has nowhere to put it.**~~ **Fixed
+  2026-08-24.** "Books like Dune but under 300 pages" is now `Retrieve_by_Title` →
+  `Analyze_Similar_Books`, plus `Retrieve_by_Numeric_Traits`, joined by `Combine_Intersect`.
+  The premise of this item — that a bound cannot move to a narrowing node because filtering
+  a ranked pool throws the ranking away — was a property of materialized *rows*, not of a
+  scored deferred query: `compose(op="and")` carries the pool's cosine `score` through and
+  `materialize_stmt` orders by it. `embedding_search_stmt.filters` was deleted rather than
+  kept waiting. What remains is a phrasing gap, not a routing one: the count after such an
+  intersect means "of the 250 nearest, N also match", and no node says so out loud. See
+  [design/node-taxonomy-v1.md](design/node-taxonomy-v1.md) (2026-08-24).
 - **`Retrieve_by_Title` should prefer exact matches when there are any.** `title_query`
   keeps every row where `title ILIKE '<t>'` **or** trigram similarity > 0.7, so a catalog
   holding several editions of one book returns all of them. That is fine for a lookup and

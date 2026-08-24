@@ -63,12 +63,13 @@ class SimilarBooksOutput(BookCandidateOutput):
     LIMIT, and this node used to hand on 50 fetched rows because
     `DeferredBookQuery` forbids both by invariant. It now takes that invariant's
     one documented exception instead, because the rows cost more than the
-    exception does: with a query, `Filter_Retrieval` narrows the pool in SQL
+    exception does: with a query, `Combine_Intersect` bounds the pool in SQL
     and `score` carries cosine order through the narrowing, so a bound on a
     similarity ask is expressible without this node parsing one.
 
-    Counting, narrowing and materializing `query` are all safe. **Composing it
-    is not** — the LIMIT applies before the union or intersect, so it changes
+    Counting, intersecting and materializing `query` are all safe — the count
+    after an intersect means "of the 250 nearest, N also match". **Pooling it
+    with `"or"` is not** — the LIMIT applies before the union, so it changes
     which books qualify, and `compose()` then drops the `score` that chose
     them. Nothing enforces that; see `DeferredBookQuery`. `score` is what
     describes this output, since `num_books` mostly reports the pool size.
