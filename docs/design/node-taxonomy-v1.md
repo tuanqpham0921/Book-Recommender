@@ -610,12 +610,11 @@ Two capabilities left with it, and both were already fictions the docstring main
   > away when the pool is a materialized list — but `BookStore.filter_query` propagates the
   > `score` column through a narrowing, and `DeferredBookQuery.materialize_stmt` orders by
   > it, so a **scored deferred query** comes out of `Filter_Retrieval` still in cosine
-  > order. The similarity node now hands on such a query
-  > (`DeferredBookQuery.capped`), so the bound *can* move there and
+  > order. The similarity node now hands on such a query, so the bound *can* move there and
   > `embedding_search_stmt.filters` was deleted rather than kept waiting.
   >
   > What survives of the original argument is a matter of degree, not of kind: the pool is
-  > capped, so a bound applied afterwards still cuts a truncated set rather than the
+  > truncated, so a bound applied afterwards still cuts a shortened set rather than the
   > catalog. The cap was raised 50 → 250 (~5% of the catalog) so that cut has something to
   > work with, and "nothing in the 250 nearest passes" is accepted as a real answer — those
   > are not good recommendations — rather than as an artifact. The narrowed count means "of

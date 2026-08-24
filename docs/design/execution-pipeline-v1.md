@@ -186,13 +186,10 @@ order survives a metadata bound end to end, and the bound belongs in a second no
 **What it cost: one invariant, deliberately.** `DeferredBookQuery` promised *no LIMIT and no
 ORDER BY*, and the vector search needs both — it does not select a subset, it orders the
 whole table and truncates, so the cap **is** the pool rather than a shrunk view of one. The
-exception is declared on the object (`capped`, holding the limit) rather than left implicit:
+exception is carried by the SQL alone; nothing on the class marks it (see the reversal
+below):
 
-- `compose()` **raises** on a capped query. Composition drops `score`, so the ranking the cap
-  was taken for would be lost, and a truncated 250 unioned with an untruncated 358 weights
-  the branches differently — neither visible in the result. `filter_query()` propagates
-  `capped` so the guard still holds one step later.
-- `count_stmt()` is degenerate on a capped query: it reports `min(cap, matches)`. The new
+- `count_stmt()` is degenerate on this query: it reports `min(cap, matches)`. The new
   `score_stats_stmt()` is its replacement here — count plus min/max/avg of `score` in one
   aggregate, which is what actually describes a pool whose size is mostly its own cap.
 - `CANDIDATE_POOL_SIZE` went 50 → **250**, ~5% of the 5,197-row catalog. 50 was sized for a
@@ -210,6 +207,35 @@ below already accepted it as the price of counts-first.
 (`config/constants.py` says so). `SimilarBooksOutput.score` is the instrument for it: a `min`
 resting on 0.35 means the floor never binds and the cap is choosing the pool. If a tuned
 threshold turns out to bound below 250, the LIMIT can go and the invariant returns outright.
+
+> **Reversed the same day (2026-08-24): the `capped` attribute and the `compose()` guard are
+> gone; the LIMIT stays.** Owner's call, on the ground that the concept was not carrying its
+> weight. The two are separable and only the bookkeeping was removed — `embedding_search_stmt`
+> still truncates, `filter_query` still propagates `score`, and cosine order still survives a
+> narrowing, which was the point of the change.
+>
+> **What the guard was protecting is real and is now unprotected.** A pool composed with
+> another retrieval is wrong twice: the LIMIT applies *before* the union or intersect, so it
+> changes which books qualify rather than only how many are shown, and `compose()` then drops
+> the `score` that chose them. Union skews the branch proportions (250 of ~1200 similar
+> against all 358 lexical matches); intersect compounds, and can report 0 where the true
+> answer is substantial — indistinguishable from a real empty result. Truncation commutes with
+> *ordering*, which is why `materialize_stmt(limit=10)` is safe; it does not commute with
+> *set operations*, which is why this is not.
+>
+> **Why removing it is nonetheless defensible.** Nothing reaches it. `Combine_Union` and
+> `Combine_Intersect` are unregistered, `Filter_Retrieval` is parked, and its call is the
+> single-input passthrough, which was never the unsafe path. Under rule 3 the guard was
+> machinery for a caller that does not exist. The honest asymmetry is that `filter_query` on
+> a pool is lossy *too* — "of the 250 nearest, N pass" — and that was already accepted, so
+> the guard drew a line that correctness alone does not draw; it drew it at where the loss
+> stops being statable in a sentence.
+>
+> **What must be true before the combine tier is unparked**: either the floor is tuned so the
+> pool needs no LIMIT (which dissolves the problem rather than guarding it — the "still open"
+> above), or the guard comes back. Registering `Combine_Union` without doing one of those
+> ships the failure described here. `tests/unit/db/stores/test_deferred_query.py::TestTheVectorQueryException::test_composing_it_drops_the_ranking_that_chose_the_pool`
+> pins the behaviour so the reversal is visible in compiled SQL rather than only here.
 
 **`Filter_Retrieval` may not depend on `Retrieve_Random` (2026-07-28).** That node returns
 one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
@@ -409,10 +435,11 @@ exactly one sink, so the two agree except on compound messages.
   score means nothing across dimensions. So a pooled query ranks by rating, and a small
   `limit` on the pool can rank the actual anchor below its own sequels — "Dune" comes third
   behind two better-rated books in the Dune+Neuromancer pool. Carrying `max(score)` through
-  the union would fix it; not built. **Sharpened 2026-08-24**: this is now half of why
-  `compose()` refuses a capped query outright — for a similarity pool the dropped `score` is
-  the entire reason the cap was taken, so the degradation is not a worse ranking but no
-  ranking at all. Building `max(score)` would remove that half of the objection; the
+  the union would fix it; not built. **Sharpened 2026-08-24**: this bites hardest on a
+  similarity pool, where the dropped `score` is the entire reason the truncation was taken,
+  so the degradation is not a worse ranking but no ranking at all. A `compose()` guard on
+  exactly that case was built and then removed the same day (see the reversal above), so
+  nothing prevents it. Building `max(score)` would remove this half of the objection; the
   lopsided-branch half would remain.
 
 ## Before building this

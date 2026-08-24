@@ -5,12 +5,13 @@ started returning a `DeferredBookQuery` like the rest. The old premise — that 
 *could not* be one, because it returns rows in cosine order and no composable
 SELECT reproduces that order — was half right: `materialize_stmt` does reproduce
 an order (it sorts by `score`), just not a truncation. So the LIMIT stayed in the
-statement and became the class's one documented exception, `capped`.
+statement and became the class's one documented exception — an exception carried
+by the SQL alone, since nothing on `DeferredBookQuery` marks it.
 
 That is what most of this file now guards. The similarity floor and the
 exclusions still have to be *in* the statement, for the original reason: the
 search orders the whole table and truncates, so anything cut afterwards is cut
-from an already-capped set. What is new is the shape of what comes back — isbn13
+from an already-truncated set. What is new is the shape of what comes back — isbn13
 plus a column named exactly `score`, which is what `filter_query` propagates and
 `materialize_stmt` orders by, and therefore what lets a downstream bound narrow
 a similarity pool without flattening its ranking.
@@ -52,13 +53,13 @@ class TestItIsADeferredQuery:
         select_list = str(_built().stmt.compile()).split("FROM")[0]
         assert "AS score" in select_list
 
-    def test_it_declares_its_cap(self):
-        # the invariant it trades away, stated on the object rather than left
-        # for `compose()` to discover by compiling something lopsided
-        assert _built(limit=50).capped == 50
-
-    def test_the_cap_is_a_real_limit_not_just_a_label(self):
-        assert "LIMIT" in str(_built().stmt.compile()).upper()
+    def test_the_limit_is_the_one_passed_in(self):
+        # the invariant it trades away, and the SQL is the only record of it —
+        # nothing on `DeferredBookQuery` marks a query as truncating
+        sql = str(
+            _built(limit=50).stmt.compile(compile_kwargs={"literal_binds": True})
+        ).replace("\n", " ")
+        assert "LIMIT 50" in sql
 
     def test_it_is_ordered_so_the_cap_takes_the_nearest(self):
         # ORDER BY and LIMIT are one decision here: without the sort, the cap

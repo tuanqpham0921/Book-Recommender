@@ -60,30 +60,35 @@ class DeferredBookQuery:
     because a limit applied per-dimension would silently shrink whatever a
     later composition can find.
 
-    **One query takes a documented exception, and says so in `capped`**: the
-    vector search (`embedding_search_stmt`). It does not select a subset — it
-    orders the whole table by cosine distance and truncates — so its LIMIT is
-    not a shrunk view of a set, it *is* the set. `materialize_stmt` can
-    reproduce a ranking (it orders by `score`), but not a ranking-truncation,
-    so the truncation has to happen where the ranking does. Everything else
-    still holds for it: isbn13 plus a `score`, so `filter_query` narrows it and
-    keeps cosine order, and `count_stmt`/`materialize_stmt` work unchanged.
-    What it cannot do is compose — `compose()` refuses it, because unioning a
-    capped branch with an uncapped one is lopsided in a way the result cannot
-    show.
+    **One query takes a documented exception**: the vector search
+    (`embedding_search_stmt`). It does not select a subset — it orders the
+    whole table by cosine distance and truncates — so its LIMIT is not a shrunk
+    view of a set, it *is* the set. `materialize_stmt` can reproduce a ranking
+    (it orders by `score`), but not a ranking-truncation, so the truncation has
+    to happen where the ranking does. Everything else still holds for it:
+    isbn13 plus a `score`, so `filter_query` narrows it and keeps cosine order,
+    and `count_stmt`/`materialize_stmt` work unchanged.
+
+    **Nothing on this class marks that exception, and `compose()` does not
+    refuse it.** A tracked `capped` attribute and a guard on composition were
+    both tried and removed on 2026-08-24: pooling the vector query with an
+    uncapped one *is* lossy in ways the composed result cannot show, but no
+    registered plan reaches it — the combine tier has no members, and
+    `Filter_Retrieval` is parked and single-input — so the machinery guarded a
+    caller that does not exist. The reasoning is kept in
+    docs/design/execution-pipeline-v1.md rather than in code. If such a caller
+    appears, the better fix is a similarity floor tuned to bound the pool
+    without a LIMIT, which removes the exception instead of policing it.
 
     Deliberately not a Pydantic model or a dataclass: it rides on a Pydantic
     output field, and nothing should try to walk into `stmt`.
     """
 
-    __slots__ = ("stmt", "label", "capped")
+    __slots__ = ("stmt", "label")
 
-    def __init__(self, stmt: Select, label: str = "q", capped: int | None = None):
+    def __init__(self, stmt: Select, label: str = "q"):
         self.stmt = stmt
         self.label = label
-        # the LIMIT itself rather than a bool: a repr that says `capped=250`
-        # tells you which invariant was traded and for how much
-        self.capped = capped
 
     def cte(self, name: str | None = None):
         """CTE names must be unique across a composed tree — `compose()` names
@@ -99,28 +104,20 @@ class DeferredBookQuery:
         `"or"` pools (the implicit-union rule), `"and"` intersects; Postgres
         dedups by isbn13 either way. Only isbn13 survives — a per-dimension
         `score` means nothing once two dimensions combine — so a single input
-        passes through untouched and keeps its score.
+        passes through untouched and keeps its score. That passthrough is what
+        `Filter_Retrieval` rides on: it pools its dependencies unconditionally,
+        and the common case is one.
 
-        **A capped query cannot be composed.** Dropping `score` costs a ranked
-        pool its ranking, and unioning a truncated 250 with an untruncated 358
-        weights the two branches differently — neither of which the composed
-        query can show. Raised rather than allowed, so "books like Dune, and
-        mysteries, under 300 pages" fails saying why instead of answering with
-        a set nobody can account for. The single-input passthrough keeps the
-        cap for the same reason it keeps the score: nothing was combined.
+        **Composing the vector query is lossy and nothing here stops it.** Its
+        LIMIT is applied before the union or intersect, so it changes which
+        books qualify rather than only how many are shown, and dropping `score`
+        then removes the ranking that chose them. Left unguarded deliberately —
+        no registered plan composes one today. See the class docstring.
         """
         if not queries:
             raise ValueError("compose() needs at least one query")
         if len(queries) == 1:
-            return cls(queries[0].stmt, label=label, capped=queries[0].capped)
-
-        capped = [q.label for q in queries if q.capped is not None]
-        if capped:
-            raise ValueError(
-                f"Cannot compose a capped query ({', '.join(capped)}): composition "
-                f"drops `score`, so the ranking the cap was taken for is lost, and "
-                f"a truncated branch is weighted against untruncated ones"
-            )
+            return cls(queries[0].stmt, label=label)
 
         # positional names, because two nodes can legitimately carry the same label
         parts = [select(q.cte(f"q{i}").c.isbn13) for i, q in enumerate(queries)]
@@ -130,7 +127,7 @@ class DeferredBookQuery:
     def count_stmt(self):
         """COUNT over this query without materializing its rows.
 
-        On a capped query this returns `min(capped, matches)` and so says
+        On the vector query this returns `min(limit, matches)` and so says
         little on its own — `score_stats_stmt()` is what describes that pool.
         """
         return select(func.count()).select_from(self.cte("matched"))
@@ -138,8 +135,8 @@ class DeferredBookQuery:
     def score_stats_stmt(self):
         """Count plus the spread of `score`, in one row — or None with no score.
 
-        The counting statement for a query whose count is degenerate. A capped
-        vector search always reports its cap, so what tells you whether the
+        The counting statement for a query whose count is degenerate. The
+        vector search always reports its LIMIT, so what tells you whether the
         pool is any good is how far the scores fall across it: a `min` sitting
         on the similarity floor means the cap is doing the work and the floor
         is not, which is the measurement `BookConstraints.MIN_SIMILARITY` has
@@ -180,5 +177,4 @@ class DeferredBookQuery:
         return stmt.limit(limit)
 
     def __repr__(self) -> str:
-        cap = f" capped={self.capped}" if self.capped is not None else ""
-        return f"<DeferredBookQuery {self.label}{cap}>"
+        return f"<DeferredBookQuery {self.label}>"

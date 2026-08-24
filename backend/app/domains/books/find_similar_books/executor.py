@@ -99,9 +99,9 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
             )
         ).unwrap()
 
-        # 5. size it. `pool_stats` rather than `count_books`: a capped query
-        # counts its cap, so the spread of `score` is what says whether the
-        # pool is any good, and one aggregate answers both.
+        # 5. size it. `pool_stats` rather than `count_books`: this query counts
+        # its own LIMIT, so the spread of `score` is what says whether the pool
+        # is any good, and one aggregate answers both.
         total = (await self.pool_stats(pool)).unwrap()
 
         # 6. cards for the section: a preview, the same handful every other node
@@ -195,8 +195,8 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
 
         The one `DeferredBookQuery` that carries a LIMIT, because the search
         does not select a subset — it orders the whole table and truncates, so
-        the cap *is* the pool. That is also why it cannot be composed with
-        another query; see `DeferredBookQuery.capped`.
+        the cap *is* the pool. That is also why composing it with another query
+        is lossy; see `DeferredBookQuery`.
 
         Recorded here rather than by the count, and that is the reason this
         builder is not a store method: the vector renders as
@@ -222,10 +222,10 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         """Stamp the pool on the output and size it, in one round trip.
 
         What `count_books` does for every other node, except that node's count
-        means something on its own. This one's does not: the query is capped, so
-        a COUNT reports `min(250, matches)` and says nothing about whether the
-        250 are close. `score_stats` answers both — the count and the cosine
-        spread — for the same single aggregate.
+        means something on its own. This one's does not: the query carries a
+        LIMIT, so a COUNT reports `min(250, matches)` and says nothing about
+        whether the 250 are close. `score_stats` answers both — the count and
+        the cosine spread — for the same single aggregate.
 
         Not a method on `BookWorkflow` for that reason and one more: the SQL
         recorded here needs the `embed(search_text)` label, which `count_books`

@@ -29,9 +29,10 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     **Every registered node fills `query`** (since 2026-08-24). The similarity
     node used to be the exception, declaring its own `books` field for a pool it
     had already fetched, because no composable query reproduces cosine order.
-    It now hands on a capped, `score`-carrying query instead — see
-    `DeferredBookQuery.capped` — which is what lets `Filter_Retrieval` narrow a
-    similarity pool at all. A consumer still reads `num_books` before `query`:
+    It now hands on a `score`-carrying query instead — truncated to the pool
+    size, but `score` is cosine similarity and `materialize_stmt` orders by it,
+    so the ranking survives a narrowing — which is what lets `Filter_Retrieval`
+    narrow a similarity pool at all. A consumer still reads `num_books` before `query`:
     a node stamps its query whether or not anything matched, so the count is
     what separates "here is how to reach them" from "there were none".
 
@@ -106,9 +107,10 @@ class BookCandidateOutput(BookRetrievalOutput):
     It is also what `Analyze_Similar_Books` hands back, which is the same claim
     from the other side: a pool matching a description the *system* synthesized
     is still a description's worth of books, so it cannot anchor the next search
-    either — one similarity search can never seed the next. That node's query is
-    capped where the others' are not (`DeferredBookQuery.capped`), so it can be
-    narrowed and materialized but not composed; the shape is otherwise identical.
+    either — one similarity search can never seed the next. That node's query
+    carries a LIMIT where the others' do not, so composing it is lossy in a way
+    the composed result cannot show (see `DeferredBookQuery`); narrowing and
+    materializing are safe. The shape is otherwise identical.
     """
 
 

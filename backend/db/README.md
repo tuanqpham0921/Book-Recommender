@@ -57,15 +57,19 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `DeferredBookQuery` selects isbn13 (plus an optional `score`) and carries
   **no LIMIT and no ORDER BY**; that is what makes two of them composable, so
   don't add either when building one.
-  **One documented exception, `capped`** (2026-08-24): `embedding_search_stmt`
-  keeps its ORDER BY and LIMIT, because a vector search does not select a subset
-  — it orders the whole table and truncates, so the cap *is* the pool.
-  `compose()` refuses such a query; everything else works on it, and because its
+  **One documented exception** (2026-08-24): `embedding_search_stmt` keeps its
+  ORDER BY and LIMIT, because a vector search does not select a subset — it
+  orders the whole table and truncates, so the cap *is* the pool. Because its
   `score` is cosine similarity, `filter_query()` narrows it **with the ranking
-  intact** (the score is propagated, and `materialize_stmt` orders by it). That
+  intact** (the score is propagated, and `materialize_stmt` orders by it), which
   is what makes a bound on a similarity ask expressible as two nodes.
-  `score_stats()` is the counting call for it, since a capped query's `count()`
-  only ever reports the cap. See docs/design/execution-pipeline-v1.md.
+  `score_stats()` is its counting call, since `count()` on it only ever reports
+  the LIMIT. **`compose()` on it is lossy and nothing stops you** — the LIMIT
+  applies before the union, so it changes which books qualify, and `score` is
+  dropped after. A tracked `capped` attribute and a `compose()` guard were tried
+  and removed the same day: no registered plan composes a pool (the combine tier
+  is empty, `Filter_Retrieval` is parked and single-input), so they guarded a
+  caller that does not exist. See docs/design/execution-pipeline-v1.md.
 - `bootstrap.py`, `readiness.py` — startup schema checks backing `GET /ready`.
 - `ingestion/` — populates `books` from `data/books.csv`. **Legacy, ignore**: old
   Workflow/@task patterns; don't refactor it or model new code on it.

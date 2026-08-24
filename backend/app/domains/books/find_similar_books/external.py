@@ -31,11 +31,12 @@ class SimilarBooksInput(NodeInput):
 class ScoreStats(BaseModel):
     """How close the pool actually sits, as cosine similarity.
 
-    The pool is capped, so `num_books` reports the cap far more often than it
-    reports a match size — these are what say whether the cap found anything
-    worth capping. A `min` resting on `BookConstraints.MIN_SIMILARITY` means
-    the floor never bound and the cap chose the whole pool; a `min` well above
-    it means the floor did the cutting and the pool is smaller than its cap.
+    The pool is truncated to `CANDIDATE_POOL_SIZE`, so `num_books` reports that
+    number far more often than it reports a match size — these are what say
+    whether the pool found anything worth keeping. A `min` resting on
+    `BookConstraints.MIN_SIMILARITY` means the floor never bound and the LIMIT
+    chose the whole pool; a `min` well above it means the floor did the cutting
+    and the pool is smaller than its ceiling.
 
     It is also the record `Book.similarity_score` used to keep. Per-book, that
     field only survived as far as the browser, where `BookOut` dropped it; the
@@ -61,15 +62,16 @@ class SimilarBooksOutput(BookCandidateOutput):
     was not until 2026-08-24. `embedding_search_stmt` carries an ORDER BY and a
     LIMIT, and this node used to hand on 50 fetched rows because
     `DeferredBookQuery` forbids both by invariant. It now takes that invariant's
-    one documented exception (`DeferredBookQuery.capped`) instead, because the
-    rows cost more than the exception does: with a query, `Filter_Retrieval`
-    narrows the pool in SQL and `score` carries cosine order through the
-    narrowing, so a bound on a similarity ask is expressible without this node
-    parsing one.
+    one documented exception instead, because the rows cost more than the
+    exception does: with a query, `Filter_Retrieval` narrows the pool in SQL
+    and `score` carries cosine order through the narrowing, so a bound on a
+    similarity ask is expressible without this node parsing one.
 
-    `query` therefore **cannot be composed** — `compose()` refuses a capped
-    query — only counted, narrowed and materialized. `score` is what describes
-    it, since `num_books` on a capped pool mostly reports the cap.
+    Counting, narrowing and materializing `query` are all safe. **Composing it
+    is not** — the LIMIT applies before the union or intersect, so it changes
+    which books qualify, and `compose()` then drops the `score` that chose
+    them. Nothing enforces that; see `DeferredBookQuery`. `score` is what
+    describes this output, since `num_books` mostly reports the pool size.
 
     `references` and `search_text` are kept because "why these books" is only
     answerable against what was pointed at and what was embedded. `search_text`

@@ -141,18 +141,19 @@ def embedding_search_stmt(
     carries a 1024-float vector, and the label that elides it
     (`embed(search_text)`) is known only to the caller.
 
-    **The one capped deferred query** (see `DeferredBookQuery.capped`). The
-    search does not select a subset — it orders the whole table by cosine
-    distance and truncates — so the LIMIT is the set rather than a shrunk view
-    of one, and it has to live in the statement. What that buys is everything
-    else on the class: `score` is cosine similarity under the name
-    `filter_query` and `materialize_stmt` both key on, so a downstream bound
-    narrows this pool **and cosine order survives it**. That is what makes
-    "books like Dune under 300 pages" expressible as two nodes rather than
-    needing bounds parsed in here.
+    **The one deferred query carrying an ORDER BY and a LIMIT**, which is the
+    documented exception to the invariant on `DeferredBookQuery`. The search
+    does not select a subset — it orders the whole table by cosine distance and
+    truncates — so the LIMIT is the set rather than a shrunk view of one, and it
+    has to live in the statement. What that buys is everything else on the
+    class: `score` is cosine similarity under the name `filter_query` and
+    `materialize_stmt` both key on, so a downstream bound narrows this pool
+    **and cosine order survives it**. That is what makes "books like Dune under
+    300 pages" expressible as two nodes rather than needing bounds parsed in
+    here.
 
     Two narrowings, both landing inside the statement because anything applied
-    to the result is applied to an already-capped set:
+    to the result is applied to an already-truncated set:
 
     - `similarity_threshold` is the floor. Without it this returns the top
       `limit` rows however far away they are — the whole table, ordered and
@@ -177,7 +178,7 @@ def embedding_search_stmt(
     )
     if exclude_isbns:
         stmt = stmt.where(BookModel.isbn13.notin_(exclude_isbns))
-    return DeferredBookQuery(stmt, label="similar", capped=limit)
+    return DeferredBookQuery(stmt, label="similar")
 
 
 class BookStore(BaseStore[BookModel]):
@@ -342,13 +343,12 @@ class BookStore(BaseStore[BookModel]):
         rather than silently returning the base query: a no-op narrowing step
         would report a count the user reads as filtered.
 
-        **A capped base narrows to a capped result**, and `capped` is carried
-        through so `compose()` still refuses it downstream. Narrowing a capped
-        pool is the one thing that *is* safe to do with one: `score` survives
-        below, `materialize_stmt` orders by it, so a bound on a similarity
-        search keeps cosine order. What the count then means changes with it —
-        "of the 250 nearest, N pass" rather than "N in the catalog" — and that
-        is the caller's to phrase.
+        **Narrowing the vector query is the one safe thing to do with it**:
+        `score` survives below, `materialize_stmt` orders by it, so a bound on
+        a similarity search keeps cosine order. The narrowing is still applied
+        to a truncated set, so the count means "of the 250 nearest, N pass"
+        rather than "N in the catalog" — the caller's to phrase, and nothing
+        here records the difference.
         """
         predicates = metadata_predicates(self.model, filters)
         if not predicates:
@@ -371,7 +371,7 @@ class BookStore(BaseStore[BookModel]):
             .join(src, self.model.isbn13 == src.c.isbn13)
             .where(*predicates)
         )
-        return DeferredBookQuery(stmt, label="filtered", capped=base.capped)
+        return DeferredBookQuery(stmt, label="filtered")
 
     async def count(self, query: DeferredBookQuery) -> int:
         """How many books the query matches. Zero is an answer, not a failure."""
@@ -381,8 +381,8 @@ class BookStore(BaseStore[BookModel]):
     async def score_stats(self, query: DeferredBookQuery) -> Dict[str, Any] | None:
         """Count and score spread in one round trip, or None with no score column.
 
-        The counting call for a query `count()` cannot describe — a capped
-        vector search always counts its cap. Returns a plain dict for the
+        The counting call for a query `count()` cannot describe — the vector
+        search always counts its LIMIT. Returns a plain dict for the
         caller to validate into whatever shape its output declares, the same
         way `materialize()` hands back rows rather than models: the score
         belongs to the node that asked for it, not to `db/`.

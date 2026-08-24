@@ -55,10 +55,11 @@ def anchor_queries(anchors: list[BookRetrievalOutput]) -> list[DeferredBookQuery
     The guard stays because it is the honest reading of an optional field, and
     a goal left with nothing to narrow still says so in `run`.
 
-    One thing a caller must know: a similarity pool is **capped**, so narrowing
-    it means "of the 250 nearest, N pass" rather than "N in the catalog", and
-    `DeferredBookQuery.compose` refuses to pool it with anything else. A goal
-    depending on a similarity search *and* another retrieval raises there.
+    One thing a caller must know: a similarity pool is **truncated** to the
+    nearest 250, so narrowing it means "of the 250 nearest, N pass" rather than
+    "N in the catalog". Pooling one with another retrieval through `compose`
+    compounds that — the LIMIT applies before the union, and `score` is dropped
+    after — and nothing raises. See `DeferredBookQuery`.
     """
     return [anchor.query for anchor in anchors if anchor.query is not None]
 

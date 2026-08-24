@@ -8,7 +8,8 @@ as a parameter.
 
 Second, the deferred family's invariants — the ones that make a query
 composable into a WITH clause instead of runnable on its own — and, since
-2026-08-24, the one query that trades them away (`TestCapped`). The statements
+2026-08-24, the one query that trades them away
+(`TestTheVectorQueryException`). The statements
 are derived on `DeferredBookQuery` itself (`count_stmt` / `score_stats_stmt` /
 `materialize_stmt` / `compose`), so everything here compiles SQL with no session
 in sight.
@@ -243,52 +244,70 @@ class TestScoreStatsStmt:
         assert no_score.score_stats_stmt() is None
 
 
-class TestCapped:
-    """The one documented exception to no-LIMIT/no-ORDER-BY, and its blast radius."""
+class TestTheVectorQueryException:
+    """The one query carrying an ORDER BY and a LIMIT, and what still works on it.
 
-    def _capped(self) -> DeferredBookQuery:
+    Nothing on `DeferredBookQuery` marks it — a tracked `capped` attribute and
+    a `compose()` guard were tried and removed on 2026-08-24 (see the class
+    docstring). So the exception lives in the compiled SQL, and that is where
+    these check it.
+    """
+
+    def _pool(self) -> DeferredBookQuery:
         return embedding_search_stmt([0.01] * 1024, limit=250)
 
-    def test_an_ordinary_query_is_not_capped(self):
-        assert _title().capped is None
+    def _literal(self, stmt) -> str:
+        # `_compiled_sql` keeps bind params on purpose (the injection tests
+        # read them), but a LIMIT is only legible rendered
+        return compile_sql(stmt).replace("\n", " ")
 
-    def test_compose_refuses_a_capped_query(self):
-        # composition drops `score`, so the ranking the cap was taken for is
-        # lost — and a truncated 250 unioned with an untruncated match weights
-        # the two branches differently, which the result cannot show
-        with pytest.raises(ValueError, match="capped"):
-            DeferredBookQuery.compose([self._capped(), _title()])
+    def test_it_is_the_one_builder_that_truncates(self):
+        assert "LIMIT 250" in self._literal(self._pool().stmt)
+        assert "LIMIT" not in self._literal(_title().stmt)
 
-    def test_the_error_names_which_query_was_capped(self):
-        with pytest.raises(ValueError, match="similar"):
-            DeferredBookQuery.compose([self._capped(), _title()])
+    def test_a_single_input_passes_through_with_its_limit_intact(self):
+        # `Filter_Retrieval` pools its dependencies through compose()
+        # unconditionally, and the common case is one — so the passthrough is
+        # what "books like Dune under 300 pages" actually travels through
+        passed = DeferredBookQuery.compose([self._pool()], label="x")
+        assert "LIMIT 250" in self._literal(passed.stmt)
 
-    def test_a_single_capped_input_passes_through_still_capped(self):
-        # nothing was combined, so nothing was lost — but the guard has to keep
-        # holding downstream, which means the flag has to survive the passthrough
-        passed = DeferredBookQuery.compose([self._capped()], label="x")
-        assert passed.capped == 250
+    def test_narrowing_it_narrows_the_truncated_pool(self):
+        # the LIMIT stays nested inside the subquery the bound is applied over,
+        # so the count means "of the 250 nearest, N pass" — not "N in the
+        # catalog". Nothing records that difference; this is where it is visible.
+        compiled = self._literal(_filtered(self._pool(), max_pages=300).stmt)
+        assert "LIMIT 250" in compiled
+        assert "num_pages <= 300" in compiled
 
-    def test_filtering_a_capped_query_keeps_the_cap(self):
-        # narrowing a capped pool is the one safe thing to do with one, but the
-        # result is still "of the 250 nearest, N pass" — so compose must go on
-        # refusing it one step later
-        assert _filtered(self._capped(), max_pages=300).capped == 250
-
-    def test_filtering_a_capped_query_keeps_cosine_order_reachable(self):
+    def test_narrowing_it_keeps_cosine_order_reachable(self):
         """The claim the whole 2026-08-24 change rests on.
 
         `filter_query` propagates `score` and `materialize_stmt` orders by it,
         so a metadata bound narrows a similarity pool *without* flattening its
         ranking. This is what replaced parsing bounds inside the vector search.
         """
-        narrowed = _filtered(self._capped(), max_pages=300)
+        narrowed = _filtered(self._pool(), max_pages=300)
         compiled = _compiled_sql(narrowed.materialize_stmt(BookModel))
         assert "ORDER BY final.score DESC" in compiled
         # not the scoreless fallback. `average_rating` is in the select list
         # either way — it is a column of the model — so the ordering is where
         # the difference shows.
         assert "ORDER BY books.average_rating" not in compiled
+
+    def test_composing_it_drops_the_ranking_that_chose_the_pool(self):
+        """Why composing one is lossy, now that nothing refuses to.
+
+        The LIMIT survives into the CTE — so it applied *before* the union,
+        changing which books qualify — while `score` does not, so
+        `materialize_stmt` falls back to rating. The pool's membership was
+        decided by a ranking the result can no longer show.
+        """
+        composed = DeferredBookQuery.compose([self._pool(), _title()])
+        compiled = self._literal(composed.materialize_stmt(BookModel))
+        assert "LIMIT 250" in compiled
+        assert "ORDER BY final.score DESC" not in compiled
+        assert "ORDER BY books.average_rating" in compiled
 
 
 class TestCompose:

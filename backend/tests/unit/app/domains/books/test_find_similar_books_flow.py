@@ -95,8 +95,10 @@ class TestTheHappyPath:
         ).unwrap()
 
         assert out.query is not None
-        assert out.query.capped == CANDIDATE_POOL_SIZE
         assert "AS score" in str(out.query.stmt.compile())
+        assert f"LIMIT {CANDIDATE_POOL_SIZE}" in str(
+            out.query.stmt.compile(compile_kwargs={"literal_binds": True})
+        ).replace("\n", " ")
 
     @pytest.mark.asyncio
     async def test_the_recorded_sql_elides_the_vector(self, node):
