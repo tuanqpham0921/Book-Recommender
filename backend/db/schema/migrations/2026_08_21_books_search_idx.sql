@@ -1,4 +1,4 @@
--- Subject-search index (2026-08-21): backs Retrieve_by_Category.
+-- Lexical-search index (2026-08-21): backs Retrieve_by_Lexical_Traits.
 --
 -- `02_indexes.sql` is mounted into docker-entrypoint-initdb.d and only runs when
 -- the container initializes an empty data directory, so an existing database

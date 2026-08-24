@@ -17,7 +17,7 @@ shape names, so the planner can tell which nodes may feed which:
   - `BookAnchorOutput` — the user named these books (`Retrieve_by_Title`), so a
     later step can fold them into a description of what to look for next.
   - `BookCandidateOutput` — these books match a description
-    (`Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`,
+    (`Retrieve_by_Author`, `Retrieve_by_Lexical_Traits`, `Retrieve_by_Numeric_Traits`,
     and `Analyze_Similar_Books`' chosen pool, whose description the system wrote
     rather than the user). A set, not a reference; nothing may anchor on it.
 - `AnalyzeBooksOutput` — a written report about books. Names books without

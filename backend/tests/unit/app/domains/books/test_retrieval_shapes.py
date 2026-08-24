@@ -20,7 +20,7 @@ from app.domains.books.external import (
     BookRetrievalOutput,
 )
 from app.domains.books.find_by_author.external import FindByAuthorOutput
-from app.domains.books.find_by_category.external import FindByCategoryOutput
+from app.domains.books.find_by_lexical_traits.external import FindByLexicalTraitsOutput
 from app.domains.books.find_by_numeric_traits.external import (
     FindByNumericTraitsOutput,
 )
@@ -33,7 +33,7 @@ from app.domains.node_input import NodeInput, build_input
 
 CANDIDATE_OUTPUTS = (
     FindByAuthorOutput,
-    FindByCategoryOutput,
+    FindByLexicalTraitsOutput,
     FindByNumericTraitsOutput,
 )
 
@@ -80,7 +80,7 @@ class TestAnchorSelection:
         built = build_input(
             SimilarBooksInput,
             "find books like Dune",
-            {"1": anchor, "2": FindByCategoryOutput(num_books=358)},
+            {"1": anchor, "2": FindByLexicalTraitsOutput(num_books=358)},
         )
         assert built.anchors == [anchor]
 
@@ -92,7 +92,7 @@ class TestAnchorSelection:
             build_input(
                 SimilarBooksInput,
                 "find books like a cozy mystery",
-                {"1": FindByCategoryOutput(num_books=358)},
+                {"1": FindByLexicalTraitsOutput(num_books=358)},
             )
 
         assert [err["loc"] for err in excinfo.value.errors()] == [("anchors",)]

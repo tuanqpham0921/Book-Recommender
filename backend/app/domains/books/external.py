@@ -97,7 +97,7 @@ class BookAnchorOutput(BookRetrievalOutput):
 class BookCandidateOutput(BookRetrievalOutput):
     """Books matching a *description* the user gave — a set, not a reference.
 
-    `Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`.
+    `Retrieve_by_Author`, `Retrieve_by_Lexical_Traits`, `Retrieve_by_Numeric_Traits`.
     Composable like any retrieval — this is the shape `Filter_Retrieval` narrows
     and `Combine_Intersect` folds — but not foldable into an anchor: averaging
     358 mystery blurbs describes no book in particular.

@@ -53,7 +53,7 @@ planner_example: dict[str, Any] = {
                         "description": "Find sci-fi books",
                         "reasoning": "Single-dimension genre lookup",
                         "confidence": 1.0,
-                        "target_node_type": "Retrieve_by_Category",
+                        "target_node_type": "Retrieve_by_Lexical_Traits",
                         "depends_on": [],
                     }
                 ],
@@ -143,7 +143,7 @@ planner_example: dict[str, Any] = {
                         "description": "Find thriller books",
                         "reasoning": "Genre is one retrieval dimension",
                         "confidence": 1.0,
-                        "target_node_type": "Retrieve_by_Category",
+                        "target_node_type": "Retrieve_by_Lexical_Traits",
                         "depends_on": [],
                     },
                     {

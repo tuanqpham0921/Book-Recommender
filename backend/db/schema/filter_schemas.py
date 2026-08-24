@@ -17,7 +17,7 @@ class AudienceEnum(str, Enum):
     nothing. See the note on `BookMetadataFilter.is_children`.
 
     Db-owned rather than slice-owned, beside `GenreEnum`, because both are
-    value vocabularies over a `books` column that `BookStore.category_query`
+    value vocabularies over a `books` column that `BookStore.lexical_query`
     switches on. That keeps every parameter in its signature a db type, so the
     store never has to import a node's args model.
     """
@@ -115,7 +115,7 @@ class BookMetadataFilter(BaseModel):
 
     # KNOWN DEAD: `books.is_children` is NULL on all 5,197 rows, so this bound
     # matches nothing and any goal that sets it answers zero books silently.
-    # Audience is served by `AudienceEnum` on `FindByCategoryArgs`, which
+    # Audience is served by `AudienceEnum` on `FindByLexicalTraitsArgs`, which
     # resolves against `books.genre` (447 rows). Kept rather than removed by
     # owner decision; removing it means deleting the field and its two lines in
     # `metadata_predicates`.

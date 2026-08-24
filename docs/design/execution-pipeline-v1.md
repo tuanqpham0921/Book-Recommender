@@ -32,7 +32,7 @@ Four tiers, each with one job:
 | **Analyze** | Execute the composed query with its own step; interpret the result | Structured output data |
 | **Generation** *(new)* | Turn the collected outputs into the user-facing answer | Prose / frontend sections |
 
-The load-bearing idea is that **retrieval does not materialize rows**. `Retrieve_by_Category`
+The load-bearing idea is that **retrieval does not materialize rows**. `Retrieve_by_Lexical_Traits`
 for horror runs a `COUNT` and hands the query downstream; a `WITH` clause (CTE) composes
 it with whatever comes next; the analyze step is the first thing that actually executes
 for rows.
@@ -67,7 +67,7 @@ for rows.
 > rule 1a the request is fieldless and the `BookMetadataFilter` sits on an internal `*Args`
 > model. See [node-taxonomy-v1.md](node-taxonomy-v1.md).
 >
-> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Category`, on the same reasoning:
+> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Lexical_Traits`, on the same reasoning:
 > point 3's last unexposed column became reachable as a *subject*, not as a narrowing. Its
 > args model is internal too, so the planner still sees no filter object anywhere.
 
@@ -204,7 +204,7 @@ categories, and critically **no `keywords` free-text field**: that field is what
 the old `Retrieve_by_Traits` into `Analyze_Recommend`, and leaving it out is what keeps
 this node a narrowing operator instead of a second recommender.
 
-> **Amended 2026-08-21.** `Retrieve_by_Category` has a `keywords` field, so the sentence
+> **Amended 2026-08-21.** `Retrieve_by_Lexical_Traits` has a `keywords` field, so the sentence
 > above needs saying more precisely: what it rules out is keywords **on a narrowing
 > operator**, which is still true — `Filter_Retrieval` has none and will not get one.
 > Keywords blurred `Retrieve_by_Traits` because nothing structural chose between it and
@@ -306,7 +306,7 @@ exactly one sink, so the two agree except on compound messages.
 - **Do the base suite's multi-anchor expectations still hold?** Cases 56, 57 and 59 were
   written on 2026-07-24 expecting a *single* `Retrieve_by_Author` with the genre silently
   dropped, because no combine operator existed. `Combine_Intersect` now gives that shape a
-  correct plan (`Retrieve_by_Author` + `Retrieve_by_Category` + `Combine_Intersect`), so those
+  correct plan (`Retrieve_by_Author` + `Retrieve_by_Lexical_Traits` + `Combine_Intersect`), so those
   expectations describe the old world. They need re-deciding, not just re-running.
 - ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
   stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.

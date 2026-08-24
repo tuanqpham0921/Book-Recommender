@@ -20,7 +20,7 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   *structurally* — so the DDL and the Python must stay character-identical, and
   the expression must compile with no bind parameters in it (a Python `"english"`
   becomes one, and the index silently stops being used: ~5ms back to ~520ms).
-  `tests/unit/db/stores/test_category_query.py` guards both halves.
+  `tests/unit/db/stores/test_lexical_query.py` guards both halves.
 - `stores/` — repository pattern; routes/workflows never touch sessions directly.
   `base_store.py` (shared execute helpers), `book_store.py` (primary store: the
   deferred-query API below, plus the module-level `embedding_search_stmt` — a
@@ -29,7 +29,7 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `chat_run_store.py` (review queue, ordered least-reviewed-first),
   `feedback_store.py` (review upsert).
 - **Deferred queries** (`deferred_query.py`). Retrieval nodes do not fetch rows:
-  `BookStore.title_query()` / `author_query()` / `category_query()` /
+  `BookStore.title_query()` / `author_query()` / `lexical_query()` /
   `numeric_traits_query()` build a statement, `count()` runs only a `COUNT`
   over it, and the statement itself rides downstream on the node's output.
   The split is two questions: **building from a dimension and executing live on
@@ -40,7 +40,7 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
   `metadata_predicates`, applied to the whole catalog, which is what lets bounds
   *be* a search rather than only a narrowing of one. It is also the one builder
   that emits no `score` column, so its rows fall back to ranking by rating.
-  `category_query()` is the text one: a full-text match over title + shelf label
+  `lexical_query()` is the text one: a full-text match over title + shelf label
   + blurb, ANDed with exact set membership on `books.genre`. It emits a
   `ts_rank` score only when there are keywords, so a shelf-only search falls back
   to rating the same way);

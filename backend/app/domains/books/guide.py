@@ -9,7 +9,7 @@ docs/design/node-taxonomy-v1.md.
 
 from app.domains.books import (
     find_by_author,
-    find_by_category,
+    find_by_lexical_traits,
     find_by_numeric_traits,
     find_by_title,
     find_similar_books,
@@ -24,7 +24,7 @@ from app.domains.node_spec import NodeSpec
 BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_title.SPEC,
     find_by_author.SPEC,
-    find_by_category.SPEC,
+    find_by_lexical_traits.SPEC,
     find_by_numeric_traits.SPEC,
     find_similar_books.SPEC,
 )

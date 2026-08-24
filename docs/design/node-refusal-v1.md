@@ -25,9 +25,9 @@ actually live rather than trusting this paragraph.
 legal plan at all.
 
 > **Amended 2026-08-21 — the menu gap is mostly closed.** Six nodes are registered now:
-> `Retrieve_by_Title`, `Retrieve_by_Author`, **`Retrieve_by_Category`**,
+> `Retrieve_by_Title`, `Retrieve_by_Author`, **`Retrieve_by_Lexical_Traits`**,
 > `Retrieve_by_Numeric_Traits`, `Filter_Retrieval`, `Analyze_Recommend`.
-> `Retrieve_by_Category` is what the paragraph above calls `Retrieve_by_Genre`, built wider
+> `Retrieve_by_Lexical_Traits` is what the paragraph above calls `Retrieve_by_Genre`, built wider
 > and renamed ([node-taxonomy-v1.md](node-taxonomy-v1.md)), and it answers thematic asks
 > directly — "give me a book about war" now has a legal plan. `Retrieve_Random` is still
 > parked, so the bare "recommend me a book" with no anchor at all still does not.
@@ -183,7 +183,7 @@ survives it.
 ## What would say it's time
 
 - ~~`Retrieve_by_Genre` and `Retrieve_Random` are registered~~ — **half met 2026-08-21.**
-  `Retrieve_by_Category` (the wider node that replaced the genre sketch) is registered, so
+  `Retrieve_by_Lexical_Traits` (the wider node that replaced the genre sketch) is registered, so
   "give me a book about war" has a legal plan. If it still mis-routes, that is real routing
   quality rather than a gap in the menu. `Retrieve_Random` is still parked, so the bare
   anchorless "recommend me a book" remains a menu gap rather than evidence.

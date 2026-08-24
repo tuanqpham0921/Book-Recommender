@@ -73,7 +73,7 @@ def search_document(model: type[BookModel]):
     character-identical** — Postgres matches an expression index structurally, so
     a changed separator here silently turns a single-digit-ms bitmap scan back
     into the 520ms sequential scan measured before the index existed.
-    `tests/unit/db/stores/test_category_query.py` compares them.
+    `tests/unit/db/stores/test_lexical_query.py` compares them.
     """
     return func.to_tsvector(
         _TS_CONFIG,
@@ -299,19 +299,21 @@ class BookStore(BaseStore[BookModel]):
         stmt = select(self.model.isbn13).where(*predicates)
         return DeferredBookQuery(stmt, label="numeric_traits")
 
-    def category_query(
+    def lexical_query(
         self,
         keywords: List[str] | None = None,
         genre: GenreEnum | None = None,
         audience: AudienceEnum | None = None,
     ) -> DeferredBookQuery:
-        """Build the subject search over the whole catalog, without running it.
+        """Build the lexical search over the whole catalog, without running it.
 
-        Three facets, ANDed: what the book is about (full text over title, shelf
-        label and blurb), whether it is fiction, and who it is for. All three in
-        one node because they cut one question — "non-fiction about history" is a
-        single search, not two to intersect — which is the same exception
-        `numeric_traits_query` takes for bounds.
+        Lexical, not semantic: this matches the words a book's text actually
+        contains, never what it is *like*. Three facets, ANDed: what the book is
+        about (full text over title, shelf label and blurb), whether it is
+        fiction, and who it is for. All three in one node because they cut one
+        question — "non-fiction about history" is a single search, not two to
+        intersect — which is the same exception `numeric_traits_query` takes for
+        bounds.
 
         Keywords are joined into one `plainto_tsquery`, which already ANDs the
         words it is handed: two keywords are the same query as one two-word
@@ -346,10 +348,10 @@ class BookStore(BaseStore[BookModel]):
             predicates.append(self.model.genre.in_(values))
 
         if not predicates:
-            raise ValueError("Cannot search on an empty category filter")
+            raise ValueError("Cannot search on an empty lexical filter")
 
         stmt = select(*columns).where(*predicates)
-        return DeferredBookQuery(stmt, label="category")
+        return DeferredBookQuery(stmt, label="lexical")
 
     def filter_query(
         self, base: DeferredBookQuery, filters: BookMetadataFilter

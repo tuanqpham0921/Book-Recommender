@@ -56,7 +56,7 @@
     "query": "Find books about getting a 100% refund on a bad purchase.",
     "note": "apply_book_filters builds keyword conditions with model.title.ilike(f\"%{keyword}%\") — a literal '%' inside the user's own keyword (\"100% refund\") is interpreted as a SQL LIKE wildcard, not a literal percent sign, so the match behaves differently than the user intended. Not injection in the security sense (bound params), but a real semantic bug.",
     "expected_nodes": [
-      "Retrieve_by_Category"
+      "Retrieve_by_Lexical_Traits"
     ]
   },
   {
@@ -67,7 +67,7 @@
     "query": "Find books tagged with the category sci_fi_horror.",
     "note": "Same ilike() path as #306, but with an underscore, which LIKE treats as 'match any single character' — 'sci_fi_horror' would also match 'sciXfiXhorror'. Worth confirming the category filter behaves as an exact/fuzzy tag match rather than an accidental single-char wildcard.",
     "expected_nodes": [
-      "Retrieve_by_Category"
+      "Retrieve_by_Lexical_Traits"
     ]
   },
   {
@@ -116,16 +116,16 @@
     "query": "Find me a mystery book. Also find a sci-fi book. Also find a romance book. Also find a horror book. Also find a children's book. Also find a non-fiction history book. Also find a biography. Also find a poetry collection. Also find a cookbook. Also find a travel guide. Also find a self-help book. Also tell me about the developer, the project, and my token usage.",
     "note": "Twelve independent single-goal asks stitched with 'Also' plus three more small asks at the end — 13+ system_goals in one message, well past MAX_SYSTEM_GOALS=10. Tests whether the 3 goals that should overflow get silently dropped, correctly buffered, or crash the classification step.",
     "expected_nodes": [
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category",
-      "Retrieve_by_Category"
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits",
+      "Retrieve_by_Lexical_Traits"
     ]
   },
   {
@@ -176,7 +176,7 @@
     "query": "Find a book that is simultaneously about pirates, ninjas, robots, wizards, vampires, and time-traveling detectives.",
     "note": "apply_book_filters appends one ilike condition per keyword and ANDs all of them together (db/stores/utils.py) — six unrelated keywords means a book must match all six somewhere in title/authors/description, which is essentially guaranteed to return zero rows. Confirms whether the near-certain-empty-result keyword bug from the planner review still reproduces.",
     "expected_nodes": [
-      "Retrieve_by_Category"
+      "Retrieve_by_Lexical_Traits"
     ]
   },
   {
@@ -386,7 +386,7 @@
     "query": "Find translated Scandinavian noir novellas under 150 pages, published between 1998 and 2002, rated above 4.2, that aren't part of a series.",
     "note": "Piles many niche constraints into one Retrieve_by_Traits: keywords ('Scandinavian noir', 'translated', 'novella', 'standalone') plus max_pages, min_year, max_year, and min_rating, all ANDed. The keyword-AND bug (db/stores/utils.py) makes near-empty results near-certain. Tests how the LLM distributes literary descriptors between keyword list and structured filters when there's no dedicated field for most of them.",
     "expected_nodes": [
-      "Retrieve_by_Category"
+      "Retrieve_by_Lexical_Traits"
     ]
   },
   {

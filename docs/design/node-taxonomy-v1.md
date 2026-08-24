@@ -48,7 +48,7 @@ response generation that always gets attached when the intent is to find books")
 | `Retrieve_by_ISBN13` | `FindByISBN13Retrieval` | Core retrieval — exact `isbn13` |
 | `Retrieve_by_Author` | `FindByAuthorRetrieval` | Core retrieval — `author: str` (was `authors: list[str]`; see the 2026-07-21 split below), promoted out of `playground/app_mock/extended_request_schemas.py` |
 | `Retrieve_by_CoAuthors` | `FindByCoAuthorsRetrieval` | Core retrieval — `authors: list[str]` (min 2), joint works only. Added 2026-07-21 |
-| `Retrieve_by_Category` | `FindByCategoryRetrieval` | Core retrieval — subject, shelf and audience. Registered 2026-08-21; was sketched as `Retrieve_by_Genre` / `FindByGenreRetrieval` with a single `genre: str`. See the record below |
+| `Retrieve_by_Lexical_Traits` | `FindByLexicalTraitsRetrieval` | Core retrieval — keywords, shelf and audience. Registered 2026-08-21 as `Retrieve_by_Category` / `FindByCategoryRetrieval`, renamed 2026-08-24; was sketched before that as `Retrieve_by_Genre` / `FindByGenreRetrieval` with a single `genre: str`. See the records below |
 | `Retrieve_Random` | `RandomBookRetrieval` | Core retrieval — optional `filters: BooksFilter`, one arbitrary pick. Promoted out of `playground/app_mock/extended_request_schemas.py` 2026-07-28; see below |
 | `Analyze_Recommend` | `RecommendationStrategy` | LLM ranking/response step, **no filters field** |
 | *(new)* clarification/rejection | not yet built | Turns refused or ambiguous goals into a helpful reply — still open |
@@ -83,9 +83,9 @@ lands (roadmap Phase 1, still open).
 > `ratings_count`, `num_pages` and `published_year` now have a retrieval node —
 > `Retrieve_by_Numeric_Traits`, below. The cross-column shape named here ("sci-fi books
 > over 300 pages") is deliberately *not* what that node serves: it has a subject, so it
-> is `Retrieve_by_Category` + `Filter_Retrieval`.
+> is `Retrieve_by_Lexical_Traits` + `Filter_Retrieval`.
 >
-> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Category` — see the record at
+> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Lexical_Traits` — see the record at
 > the end of this file. Every `books` column now has a retrieval node except `isbn10`,
 > `thumbnail` and `title_and_subtiles`, none of which is a search dimension.
 
@@ -325,12 +325,30 @@ validator, closing adversarial cases 301–303 (negative pages, "year 300 BC", "
 upper bound — the catalog ending at 2019 is a fact about the dataset, not about reality, so
 "published after 2020" stays a legitimate question whose honest answer is zero.
 
-### `Retrieve_by_Category` — subject as a search (2026-08-21)
+### `Retrieve_by_Lexical_Traits` — words as a search (2026-08-21, renamed 2026-08-24)
 
-`Retrieve_by_Category` (`FindByCategoryRetrieval`, slice `books/find_by_category/`) is
+`Retrieve_by_Lexical_Traits` (`FindByLexicalTraitsRetrieval`, slice `books/find_by_lexical_traits/`) is
 registered: a RETRIEVAL-tier node carrying three facets — subject keywords, fiction-ness
 and audience — ANDed into one deferred query. It replaces the sketched
 `Retrieve_by_Genre`/`FindByGenreRetrieval`, which never got past a schema fragment.
+
+> **Renamed from `Retrieve_by_Category` on 2026-08-24.** "Category" named the narrowest of
+> the three facets and read as a lookup against `books.categories`, which is not what the
+> node does — it matches words across title, shelf label *and* blurb, and `categories`
+> alone answers almost nothing (480 distinct shelf labels over 5,197 rows). The node is
+> better described by its **mechanism**: it searches a book's *lexical* traits, the words
+> its text actually contains. That also pairs it with `Retrieve_by_Numeric_Traits`, and the
+> two now split the non-identifier half of retrieval on the only line that matters — words
+> vs. numbers. The store method renamed with it (`BookStore.category_query` →
+> `lexical_query`, `DeferredBookQuery(label="category")` → `"lexical"`), and the request
+> docstring and args-parser prompt were reframed from "subject" to "lexical trait" so the
+> planner and the parser read the same word. Nothing about the SQL, the facets or the
+> anchors/candidates classification changed. **Eval suites: renamed, not re-baselined** —
+> `Retrieve_by_Category` → `Retrieve_by_Lexical_Traits` across `query_suite.json` (17),
+> `query_suite_adversarial.json` (14) and `query_suite_stress.json` (7), counting both
+> `expected_nodes` entries and the notes that name the node, the same precedent
+> as the `Analyze_Recommend` rename below. Recorded runs under `evals/results/` and
+> `evals/bugs/` keep the old name: they are records of what ran.
 
 **What it fixes.** A request that named no title had no legal plan at all — see
 [node-refusal-v1.md](node-refusal-v1.md), which opens on exactly this. "Give me a book
@@ -388,12 +406,12 @@ it, both of which look like cleanups: passing `'english'` or `''` as Python stri
 SQLAlchemy binds as parameters that a generic plan cannot match against a constant-folded
 index expression; and `concat_ws(' ', ...)`, which is STABLE rather than IMMUTABLE. The
 expression is written twice — once in `search_document()`, once as DDL — and
-`tests/unit/db/stores/test_category_query.py` asserts both the absence of bind parameters
+`tests/unit/db/stores/test_lexical_query.py` asserts both the absence of bind parameters
 and that the two copies match.
 
 **Cost:** ~522 catalog tokens on every request; the catalog is now six tools at 2,690.
 
-**~~Known broken downstream: `Retrieve_by_Category` → `Analyze_Recommend`.~~ CLOSED
+**~~Known broken downstream: `Retrieve_by_Lexical_Traits` → `Analyze_Recommend`.~~ CLOSED
 2026-08-22 — the pairing is now illegal rather than broken.** The original entry, kept
 because the resolution inverts it:
 
@@ -411,13 +429,13 @@ because the resolution inverts it:
 The expected fix — take the top 5 instead of raising — was **not** taken. Folding the five
 best-rated of 358 mysteries into one "ideal book" would answer confidently from a sample
 nobody chose, which is a worse failure than the crash because it looks like an answer. The
-resolution instead is the anchors/candidates split below: `Retrieve_by_Category` returns a
+resolution instead is the anchors/candidates split below: `Retrieve_by_Lexical_Traits` returns a
 `BookCandidateOutput`, `Analyze_Similar_Books` declares `list[BookAnchorOutput]`, and the
 plan is refused at dispatch naming the field. `fetch_anchor_books` no longer exists.
 
 Eval cases 3, 11, 45 and 47 stay red, and now mean something different: they assert a plan
 the taxonomy has decided against, and what "recommend me a cozy mystery" *should* plan to
-(the category retrieval alone, or a semantic node that needs no anchor) is undecided.
+(the lexical retrieval alone, or a semantic node that needs no anchor) is undecided.
 
 **Deliberately deferred: the embedding arm.** A threshold-only vector query with no
 `ORDER BY`/`LIMIT` is a legal `DeferredBookQuery` (verified: ~450ms on this catalog, since
@@ -440,7 +458,7 @@ the four node names plus `unknown`.
 not rediscovered as bugs:
 
 - **A bound riding alongside a subject has nowhere to go.** "Fantasy books over 400 pages"
-  was `Retrieve_by_Category` → `Filter_Retrieval`; the second half no longer exists. The
+  was `Retrieve_by_Lexical_Traits` → `Filter_Retrieval`; the second half no longer exists. The
   numbers-only rule still holds — `Retrieve_by_Numeric_Traits` is for numeric-only asks —
   so both docstrings now say to send the subject goal alone and leave the bound in its
   description. They say so explicitly because the tempting alternative is worse: two goals
@@ -448,8 +466,8 @@ not rediscovered as bugs:
   the numeric node would answer with more books rather than fewer.
 - **Taste, mood and similarity have no node.** "Books like Dune", "something spooky",
   "cozy" — the semantic half of the lexical/semantic split recorded above. The planner will
-  refuse these as out of scope, or reach for `Retrieve_by_Category` and match the words
-  literally. `FindByCategoryRetrieval`'s `Do not use:` now tells it to keep the real subject
+  refuse these as out of scope, or reach for `Retrieve_by_Lexical_Traits` and match the words
+  literally. `FindByLexicalTraitsRetrieval`'s `Do not use:` now tells it to keep the real subject
   word and drop the feel, which is the honest description of what the node can do.
 - **No plan has a second stage.** Every plan is a set of independent retrievals. The
   `depends_on` machinery, `TaskRunnerWorkflow`'s dependency resolution and
@@ -465,7 +483,7 @@ no longer checked for constructing against a narrowed context.
 **Test coupling worth knowing.** `SystemGoal.target_node_type` is a `NodeTypeEnum`, so any
 test naming a node type in a `SystemGoal` breaks the moment that node is parked.
 `test_mermaid.py` used `"Analyze_Recommend"` purely as "a second node type" and was moved to
-`"Retrieve_by_Category"`, with a docstring note that the names there are arbitrary.
+`"Retrieve_by_Lexical_Traits"`, with a docstring note that the names there are arbitrary.
 
 **Eval suites left as they are.** `Analyze_Recommend` appears 81 times across the four
 suites and `Filter_Retrieval` 24, which is most of `query_suite.json`. They were not
@@ -481,7 +499,7 @@ nodes were reparented onto them:
 - **`BookAnchorOutput`** — the user *named* these books. `Retrieve_by_Title` today,
   `Retrieve_by_ISBN13` when it exists.
 - **`BookCandidateOutput`** — these books match a *description* the user gave.
-  `Retrieve_by_Author`, `Retrieve_by_Category`, `Retrieve_by_Numeric_Traits`.
+  `Retrieve_by_Author`, `Retrieve_by_Lexical_Traits`, `Retrieve_by_Numeric_Traits`.
 
 Neither adds a field. `build_input` fills by `isinstance`, so **the type is the payload**: a
 node declaring `list[BookAnchorOutput]` structurally cannot be handed a subject search.
@@ -490,7 +508,7 @@ node declaring `list[BookAnchorOutput]` structurally cannot be handed a subject 
 at run time, inside the consumer, after two round trips.
 `BookWorkflow.fetch_anchor_books` raises `NotImplementedError` past `MAX_ANCHOR_BOOKS` (5),
 which is the "Known broken downstream" entry above: "mystery" matches 358 books, so
-`Retrieve_by_Category` → `Analyze_Recommend` dies every time. On the type, the same refusal
+`Retrieve_by_Lexical_Traits` → `Analyze_Recommend` dies every time. On the type, the same refusal
 happens at dispatch, and `_prepare` turns it into one skipped goal **naming `anchors`** —
 the same move `NodeInput` made over `(query, artifacts: dict[str, Any])`.
 

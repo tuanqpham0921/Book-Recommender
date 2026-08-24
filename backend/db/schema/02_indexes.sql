@@ -7,11 +7,11 @@ CREATE INDEX IF NOT EXISTS books_embedding_idx
 CREATE INDEX IF NOT EXISTS chat_runs_session_idx
     ON chat_runs (session_id, created_at);
 
--- Subject search (Retrieve_by_Category): one document per book over title,
+-- Lexical search (Retrieve_by_Lexical_Traits): one document per book over title,
 -- shelf label and blurb. The expression is duplicated from `search_document()`
 -- in db/stores/book_store.py and matched *structurally* by the planner — change
 -- one and you must change the other, or the query silently falls back to the
--- 520ms sequential scan. tests/unit/db/stores/test_category_query.py compares
+-- 520ms sequential scan. tests/unit/db/stores/test_lexical_query.py compares
 -- the two. (Index expressions cannot qualify columns with the table name, which
 -- is the only difference from what SQLAlchemy emits.)
 --

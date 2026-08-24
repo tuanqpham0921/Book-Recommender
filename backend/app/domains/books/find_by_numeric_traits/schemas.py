@@ -28,7 +28,7 @@ class FindByNumericTraitsRetrieval(BaseRequest):
     Do not use: when the request has any other subject. A measurable bound
     riding alongside a genre, an author or a title belongs to that search, not
     to this one:
-        - "fantasy books over 400 pages" → Retrieve_by_Category on the subject
+        - "fantasy books over 400 pages" → Retrieve_by_Lexical_Traits on the subject
         - "Stephen King books over 400 pages" → Retrieve_by_Author on the author
     Send only the subject goal in those cases and leave the bound in that goal's
     description. Do not add this node alongside the subject one: two goals with
@@ -93,7 +93,7 @@ class FindByNumericTraitsArgs(BaseModel):
     # them, gpt-5-nano returned an empty filter for "obscure" and "really long".
     #
     # `BookMetadataFilter` also carries `is_children`, a flag rather than a
-    # measurement. Retrieve_by_Category now owns audience, and did *not* take
+    # measurement. Retrieve_by_Lexical_Traits now owns audience, and did *not* take
     # this field with it: it resolves audience against `books.genre`, while this
     # one still targets `books.is_children`, which is NULL on all 5,197 rows and
     # matches nothing. Setting it here is a silent zero — known and accepted;

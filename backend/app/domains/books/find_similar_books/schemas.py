@@ -34,7 +34,7 @@ class SimilarBooksSearch(BaseRequest):
     Do not use: when no book is named. Taste, mood and theme with nothing to
     anchor on ("something cozy and hopeful") are not this node's — it searches
     from the anchor books, not from the words in the goal. A subject word
-    ("mysteries", "books about space") is Retrieve_by_Category.
+    ("mysteries", "books about space") is Retrieve_by_Lexical_Traits.
 
     Constraints: every anchor a goal depends on is folded into one description
     and produces one pool — so AND is one goal with several depends_on, OR is
