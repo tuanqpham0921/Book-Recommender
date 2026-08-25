@@ -11,6 +11,20 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
+if you do it by slice then (steps)
+
+node1 -> node2 -> node3 -> answer
+           |
+           V 
+        answer
+
+then if a node failed
+then you have to go and find it
+
+with the sink appoarch it goes straight into the end
+
+---
+
 Migrated 2026-08-19: "make the node args parse choose the tool → ok=False message back to
 the planner", the `num_books == 0` propagation bug, and "add more nodes before over
 debugging" → `docs/design/node-refusal-v1.md` (+ two backlog bullets under "Node contracts
