@@ -149,6 +149,61 @@ resolves `depends_on`. The experiment is to have the goal stage emit dependencie
 - Was the planner's edge-linking separation optimized away too early? Recorded here so
   the question survives; the answer likely comes from executor work, not more planner
   tinkering.
+- **Duplicate goals.** The split planner occasionally emits two goals for one ask. Rare
+  enough that nothing has been built for it; noted so it is not mistaken for a new
+  regression when it shows up in a run. (Graduated from `backend/TODO.md` 2026-09-07.)
+- **Domain pre-filtering as a catalog shrink.** The goal stage has to link across the
+  whole catalog, where the old two-stage planner had already narrowed it. Filtering by
+  domain first (book / project / user), then by tier, would cut the choices the linker
+  weighs. Recorded with the owner's own verdict attached — *"I don't think it's the main
+  issue tho; linkage and goal setting seem okay"* — so it stays a cheap idea rather than
+  a planned change. `make tools-catalog` prints the per-request cost of shipping the
+  catalog, which is what would say whether this is worth anything.
+
+### 4. Routing inside a node vs. routing in the planner
+
+Graduated from `backend/TODO.md` 2026-09-07, where it ran to ~90 lines. The question:
+should a node like `Analyze_Similar_Books` do its **own** runtime routing — branch on what
+it was given, retrieve what it lacks, then search — instead of the planner deciding the
+whole shape up front?
+
+The sketch was a recommend node that owns the branches:
+
+```
+run(instruction, artifacts):
+    if the ask compares two books and then recommends → compare first, take the winner
+    if it names an author + a genre + a bound      → author, then narrow, then check
+                                                      enough books survive to embed
+    if it names reference books                    → retrieve them, check what came back
+    if it names none                               → metadata lookup only, no embedding
+    ── common tail ──
+    build the ideal-book description → embed → search → re-rank → show and tell
+```
+
+- **For:** those branches are decisions that want **runtime** facts — how many books came
+  back, whether the anchors resolved, whether anything survives a bound — and the planner
+  decides before any of that is known. Everything above the "common tail" is exactly what
+  the planner does today, so this is a relocation, not new behavior.
+- **Against, and why V1 does not do it:** *"if you don't [keep it flat], then you'll make
+  the recommend node the planner."* One node absorbing routing becomes a second planner
+  with no catalog, no diagram and no eval. The flat plan is legible — one query shows the
+  whole picture — and it is what `make suite-goals` scores; a nested node hides its
+  branches from the golden test entirely. Testing gets harder in kind, not just in degree:
+  a flat plan mocks one layer, a nested one mocks a tree (`b1 → b11, b12`).
+- **The middle options are already in play.** "Several versions of the recommend node,
+  each with a primary task" and "cache deterministic plans for common shapes" are both the
+  same idea as the if-branches, moved somewhere legible — the second is the *pre-made
+  graphs* item in [../backlog.md](../backlog.md) (`find title → recommend`, `recommend me
+  something`).
+- **Deferred for a stated reason:** *"this can be for later, since you don't have eval for
+  it"* — there is no measurement that would say the nested version routes better, so
+  building it would be a preference, not a finding. Revisit when a suite can score a
+  branch that only exists at runtime.
+
+Note the tension with experiment 1: that one moves *more* work into a single planner
+stage, this one moves work *out* of the planner into nodes. They are the two directions
+out of today's shape, and the evidence that would settle either is the same — eval cases
+whose correct plan depends on a count nobody has yet.
 
 ## Standing note
 

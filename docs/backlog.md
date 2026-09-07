@@ -1,7 +1,10 @@
 # Backlog
 
-**Updated:** 2026-07-24 · Migrated from `backend/TODO.md` and `frontend/TODO.md`
-(which are now short-lived scratchpads — durable items live here).
+**Updated:** 2026-09-07 · Migrated from `backend/TODO.md` and `frontend/TODO.md`
+(which are now short-lived scratchpads — durable items live here). The 2026-09-07 pass
+swept `backend/TODO.md` against the code: what was already built was deleted, what was
+decided the other way is under "Settled", and the rest landed in the sections below or in
+`design/`.
 
 **How to read this file:** items are tiered **P1** (before/with the V1 ship — most also
 appear in [roadmap.md](roadmap.md) phases), **P2** (post-V1 candidates), **P3**
@@ -47,6 +50,24 @@ line numbers may drift, the file and symbol names are the stable part.
   structurally but is an account-level fix, not a code fix, and doesn't help local/free-tier
   dev. Needs a decision before V1 production traffic.
 
+  **Capacity arithmetic** (owner's note, graduated from `backend/TODO.md` 2026-09-07):
+  each node parses its own arguments, so one plan is roughly 15 requests. At the 500 RPM
+  tier that is ~33 concurrent turns before throttling — and less in practice, since the
+  requests arrive in bursts per step rather than evenly. The next tier (5,000 RPM) takes
+  the pressure off entirely, which is what makes option (3) above the cheap answer.
+  Per-node parsing also *saves* calls when an upstream goal fails: the runner skips the
+  dependent goal, and its parse never happens.
+- **Pooled DB connections are being reclaimed by the garbage collector** — observed during
+  suite runs, logged repeatedly as `SAWarning: The garbage collector is trying to clean up
+  non-checked-in connection <AdaptedConnection …>, which will be terminated` from
+  `sqlalchemy.pool.impl.AsyncAdaptedQueuePool._finalize_fairy`. A session is being dropped
+  without `close()` or a context manager, so the connection is not returned to the pool and
+  is torn down instead of reused. Under load that silently shrinks the pool. The stores are
+  built on the FastAPI request-scoped session (`db/async_engine.py` `session_factory`,
+  `pool_size=MIN_CONNECTIONS`), so the leak is most likely a path that opens its own session
+  — check the eval runner and any `session_factory()` call outside the request scope.
+  Graduated from `backend/TODO.md` 2026-09-07, where it sat as a raw log paste.
+
 ## Planner quality (P2 — from the 2026-07-24 TODO sweep)
 
 Shape-level planner questions live in
@@ -84,6 +105,27 @@ Shape-level planner questions live in
   do single-word genre and author embeddings score against near misses, and can a composed
   record embedding ("title, page count, description …") answer "find books with 100 pages"
   without the structured filter path?
+
+The three below graduated from `backend/TODO.md` 2026-09-07.
+
+- **`confidence` comes back as 0.0 on some goals, unexplained.** `SystemGoal.confidence` is
+  a real gate — `planjane/executor.py` rejects a goal below the tuning threshold with
+  "confidence too low" — so a spurious 0.0 silently drops a goal that was otherwise fine.
+  Not yet known whether the model is genuinely unsure, is omitting the field and getting a
+  default, or is anchoring on an example. Worth a pass over recorded runs before tuning the
+  threshold, because the two causes want opposite fixes.
+- **No worked example of an analyze goal depending on another analyze goal.** The prompt's
+  examples are all retrieval → analyze. A chain like `Analyze_Compare(a, b)` depending on
+  `Analyze_Themes(a)` and `Analyze_Themes(b)` — or a similarity search seeded by a compare
+  — has no example to imitate, which is one reason the compare chaining question
+  ([design/node-taxonomy-v1.md](design/node-taxonomy-v1.md) Future considerations) is hard
+  to test. Add examples when the analyze tier grows past one node; best-effort linkage at
+  the node is the fallback the owner sketched, not a plan.
+- **P3 — reasoning in the first person.** `SystemGoal.reasoning` reads as a third-person
+  label; "I need to find this title first" is friendlier if it ever reaches the UI. Carries
+  a caveat the owner already flagged: if `reasoning` is ever fed back into a re-parse,
+  first-person text is a worse input than a neutral one, so this is only safe while the
+  field stays display-only.
 
 ## Node contracts & refusal (P2 — deferred 2026-08-19)
 
@@ -183,6 +225,34 @@ code broke).
 - **Dead `index=True` flags** (`db/schema/models.py` BookModel) — indexes are created by
   raw SQL, not `Base.metadata.create_all`, so the flags do nothing and filters on
   published_year/average_rating/genre run unindexed. Add real indexes or drop the flags.
+- **One round trip per count** (graduated from `backend/TODO.md` 2026-09-07) — a plan with
+  three retrieval goals runs three separate `COUNT`s. Since every retrieval already hands on
+  a composable `DeferredBookQuery`, several counts could be issued as one statement
+  (a union of counted CTEs) instead of one per goal. Only worth it once a plan routinely
+  carries several retrievals; `Combine_Intersect` made that shape normal, so it is closer to
+  worth measuring than it was.
+
+## Tracing, clients & tooling (P2)
+
+Graduated from `backend/TODO.md` 2026-09-07.
+
+- **A compact tracer mode.** The recorded tree is shaped for completeness, not for reading:
+  a run's JSONB carries every step's input and output. `to_summary()` and `save_payload`
+  already keep the worst of it out (see the airglider notes in `CLAUDE.md`), but there is no
+  mode that *flattens* the tree or keeps only identifying fields (isbn13 + title, no parsed
+  arguments). Wanted for eval review and for anything that reads runs back in bulk. Related:
+  the review page can't tell a workflow crash from a child `StepFailure` (Correctness, P2) —
+  both want the record to carry more shape, not more bytes.
+- **`add_details(msg, log=True)`** — `add_details(*messages)` (`airglider/src/base_glider.py`)
+  writes to the record only, so anything worth seeing live has to be logged separately, and
+  the two drift. A flag would make "record it and log it" one call. Open question the owner
+  attached: which details actually deserve a log line — the split today is that logging
+  covers start/fail/end and details cover the pipeline, and a flag should not erode that.
+- **Finish the migration to the Responses API** — `clients/openai_client.py` is currently
+  split: parser calls go through `client.responses.create`, while streaming chat still uses
+  `client.beta.chat.completions.stream`. Two request shapes and two response shapes to
+  maintain, and the `beta.` prefix is the one likeliest to move under us. The blocker is that
+  the streaming path is what pushes SSE deltas, so it is the more delicate half.
 
 ## Test coverage (P2)
 
@@ -228,6 +298,25 @@ From the owner's design notes — these need real design thought, not drive-by f
    overwrite" only ever destroyed text no consumer saw. Free-text now goes in `details`
    via `add_details`, and failure text is on `runtime_error.message`, which *is* read
    (review page, `report.py`).
+6. **Retries above the API layer** (graduated from `backend/TODO.md` 2026-09-07). Today
+   everything is one pass: verified 2026-09-07 that no retry or backoff exists anywhere in
+   `app/`, `clients/`, `airglider/` or `config/`, and that `AsyncOpenAI` is constructed with
+   nothing but an api_key (`clients/openai_client.py`) — so the only retrying in the system
+   is the OpenAI SDK's **own default** (`max_retries=2`, transport errors only), which this
+   repo neither sets nor tunes. Worth deciding deliberately rather than inheriting; the same
+   constructor also sets no client-level `timeout`, while the orchestrator enforces its own.
+   A *business* retry is a different shape: the unit that would
+   repeat is `llm_args_parse → post-process → store to output`, and repeating it means
+   wrapping that trio in its own `OperationResult` so each attempt is visible in the trace
+   rather than overwriting the last. The owner's framing: the workflow holds the retries,
+   and the **parent** decides the re-write — a node that failed to parse should not be the
+   thing that reworded the query. Pairs with the rate-limit decision under Reliability,
+   where option (2) is exactly this at the transport layer.
+7. **Is `@task` idempotent, and does re-entering one distort its timing?** An open question
+   from the owner's notes, unresolved: `@task` overrides the `OperationResult` returned to
+   the decorator, so a step that runs twice may report a duration measured from the wrong
+   start. Matters for retries (item 6) and for resume (`human-in-the-loop.md` blocker 2) —
+   both replay a step that already has a record. Worth a test before either is built.
 - Once resume/checkpoint exists: DAG processing may move into model validation so the
   orchestrator can pick up and continue; steps become config describing what runs next.
 
@@ -272,3 +361,71 @@ From the owner's design notes — these need real design thought, not drive-by f
 - Review page: align the preview; move praise/issue controls next to the submit button
   for a top-down flow; consolidate feedback/hints/colors into one area away from Send;
   better emojis/arrows.
+- Book cards: edge-triggered horizontal auto-scroll (the row scrolls while the pointer
+  rests near either end), and lift the card on hover. *(From `frontend/TODO.md`,
+  2026-09-07.)*
+
+## Ideas pool (P3 — not scheduled, kept so they aren't re-derived)
+
+Graduated from `backend/TODO.md` 2026-09-07. None of these are planned; each is here
+because the reasoning was worth more than the line it sat on.
+
+- **A "why?" button on a recommendation.** The cards already know their isbn13s, so a
+  per-book "why this one?" could call the compare/analyze node **directly**, skipping the
+  planner entirely — a fixed capability with a fixed input needs no plan. Costs one DB
+  round trip per press before any caching. This is the cheapest possible version of
+  multi-turn: an interaction that continues the turn without reopening the conversation.
+- **Analyze nodes that call the planner themselves.** Expose the action nodes (compare,
+  similar-books, single-book Q&A) as entry points, and let each ask the planner for the
+  retrieval it needs rather than depending on goals the planner wrote up front. Attractive
+  because a node knows its own gaps; expensive because *"recommend books like A and B, then
+  compare A and B"* becomes two independent planner calls over the same books, with
+  duplicated retrieval and a race to resolve the same entities. An entity classifier that
+  caches resolved books would be the prerequisite. Closely related to
+  [design/planner-shape.md](design/planner-shape.md) open experiment 4.
+- **A bounded multi-turn control loop.** Rather than one plan per turn: loop
+  `plan → run → reword`, feeding the reworded state back in, capped at ~10 goals per
+  iteration, with a final internal summary ("recommended isbn13 …, the user wanted to
+  pause"). Keeps the agentic shape without an unbounded loop. Wants the conversation work
+  in the roadmap's V1.1 flagship first — and note the guardrail in
+  [design/human-in-the-loop.md](design/human-in-the-loop.md): nothing may stay alive between
+  iterations.
+- **A narration field on operation records.** A short natural-language line per unit of
+  work — "searched similar books with {filters}, took 10s, N tokens" — as a first-class
+  field rather than reconstructed from the tree. Would feed both generation and the review
+  page. The owner's own hedge is worth keeping: it may just be a function over the record
+  written where it is needed, not a stored field.
+- **Pre-made plans for common shapes.** `find title → similar books → write`, and the bare
+  "recommend me something", are stable enough to cache as plans and skip the planner call.
+  Two caveats already noted: it is the same idea as branching inside a node (planner-shape
+  experiment 4), and it does nothing for the slow half — the analyze + embed step is where
+  the time goes, and it is not cacheable across queries.
+- **A unified reference/artifact renderer.** Mermaid is currently the only thing the app
+  renders *about* a run. The same treatment — a name, a description, and a body — would let
+  any node hand the UI a displayable artifact (a comparison table, an ideal-book
+  description) without each one inventing its own SSE event.
+
+## Settled — recorded so they aren't re-opened
+
+Each of these appeared in `backend/TODO.md` as an intention and was decided the **other**
+way. Kept short; the code and `CLAUDE.md` are the real record.
+
+- **Stores take a request-scoped session, not a session factory.** The TODO wanted
+  `BookStore` to hold a factory and open a session per query. It takes an `AsyncSession`
+  (`db/stores/base_store.py`), built once per HTTP request — rebuilding from
+  `ctx.session_factory` opens a second session and splits the transaction.
+- **Each node parses its own arguments in its own call**, rather than one combined parse in
+  the task runner. Separate parses cost more requests (see the capacity note under
+  Reliability) and buy per-node prompts, examples and model choice — plus a parse that never
+  happens when an upstream goal fails.
+- **Numeric bounds go inside the search, not after it.** The TODO's sketch was
+  embedding → filter by isbn13. `filter_books` and `BookStore.filter_query` were deleted
+  2026-08-24: a bound is `numeric_traits_query()` composed with the subject via
+  `Combine_Intersect`, and `compose(op="and")` carries the cosine `score` through so
+  ranking survives the narrowing.
+- **The similarity floor is `MIN_SIMILARITY = 0.35` with a 250-book pool cap**, not the 0.7
+  the TODO guessed. Both live in `config/constants.py` / `find_similar_books/executor.py`.
+- **Generation is a registered node the planner ends a chain with**, not a sink stage
+  attached after the runner. Written up in
+  [design/execution-pipeline-v1.md](design/execution-pipeline-v1.md) ("Generation node,
+  second attempt").

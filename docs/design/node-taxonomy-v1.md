@@ -770,6 +770,16 @@ time, as case 65's note had been asking for since the combine tier was designed.
   clearer follow-up query.
 - References to prior turns ("the previous one", "that book") are out of scope and
   should trigger the clarification node.
+- **The system can only answer what a `books` row holds** (graduated from
+  `backend/TODO.md`, 2026-09-07). The catalog is one row per book — author, published
+  year, page count, average rating, shelf/category, genre, and a marketing blurb — so
+  *"who wrote Dune"* and *"when was it published"* are answerable and *"who is the main
+  character of The Hunger Games"* or *"who's the one with the sword in Dune"* are not.
+  Nothing in the schema knows what happens **inside** a book. The `description` blurb is
+  the one partial exception and the only prose the system has: it is what the generation
+  node grounds a "why this book" in, and it is marketing copy, not a summary. Requests
+  that need knowledge from inside the text belong to the clarification/rejection node,
+  not to a retrieval node that will happily match the words and answer confidently.
 - Multi-turn conversation context is the flagship V1.1 feature (see roadmap deferred
   list). `chat_runs` already records every turn, so history loading can be added
   without schema changes.
@@ -970,6 +980,24 @@ else in the file needs to change when toggling. Two things follow:
   one per book being compared," not analyze-tier ids — plus a 3-hop example in
   `2_strategy_classification.txt` (today's only compare example is the 2-hop
   retrieve→compare shown in that prompt). Not yet decided.
+
+  **There are two kinds of compare, and only one of them chains** (graduated from
+  `backend/TODO.md`, 2026-09-07). (1) *Compare for information* — "between Dune and IT,
+  which is longer" — where the comparison **is** the answer and nothing runs after it.
+  (2) *Compare to pick a winner* — "recommend books like whichever of Dune and IT is
+  shorter" — where the comparison is an intermediate step whose output feeds a later
+  goal. Only (2) needs the dependency contract widened.
+
+  What makes (2) tractable is that the winner does not need to travel as a book: if the
+  compare node emits *"Dune is 100 pages longer than IT, so it wins the page
+  comparison"*, the downstream goal has a named title to anchor on and a bound to apply,
+  which the existing retrieval + intersect nodes already cover. **The comparison must be
+  on metadata, not on themes** — "which is better on dystopia" has nothing in the schema
+  to compare (see the conversation contract above), so a themed compare is a
+  clarification case, not a node. Two open sub-questions: whether the pruning is right in
+  `find[a] + find[b] → analyze[a,b] → recommend` (the direct `find → recommend` edges
+  look redundant once the analyze step has both, but nothing prunes them today), and
+  whether a node is ever more than one hop from what it needs.
 - **Book-clamped recommendations** — always attach a recommendation to a successful
   lookup ("do you have Dune? — yes, and I think you'll like these"). Feels consumer-like;
   a candidate once execution is real.
