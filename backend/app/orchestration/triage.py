@@ -103,7 +103,7 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
     async def run(self, node_input: NodeInput, *, use_caching=True) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        query = node_input.query
+        query = node_input.instruction
         self.result.session_id = self.session_id
 
         # 1. replay a recorded plan when one exists — no LLM, same output shape
@@ -119,7 +119,7 @@ class TriageWorkflow(AppWorkflow[TriageOutput]):
         # planner means (a specific message to the user), so it wants the
         # envelope
         planner = PlanJaneExecutor(self.ctx, messages=self.messages)
-        planner_record = await planner(NodeInput(query=query))
+        planner_record = await planner(NodeInput(instruction=query))
 
         # the workflow pre-initializes its output, so this is never None
         self.result.parse_result = planner.result

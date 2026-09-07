@@ -2,7 +2,8 @@
 
 `RequestContext` answers "what can I reach"; this answers "what am I working
 on". A node declares its input as a subclass and lists it on its `NodeSpec`;
-`build_input` assembles it from the goal text plus what ran before it.
+`build_input` assembles it from the planner's instruction plus what ran before
+it.
 
 The declaration is the point, not the typing. A `dict[str, Any]` can say
 something is missing but never *what*; a named, empty field says which slot is
@@ -27,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 class WorkflowInput(BaseModel):
     """Base for every call payload. Carries nothing: a step driven entirely by
-    one artifact (`TaskRunnerInput`) has no query, and handing it an unused one
-    would make the field a lie."""
+    one artifact (`TaskRunnerInput`) has no instruction, and handing it an
+    unused one would make the field a lie."""
 
     # a field may hold a DeferredBookQuery or another arbitrary payload that
     # travelled on an upstream output
@@ -36,11 +37,23 @@ class WorkflowInput(BaseModel):
 
 
 class NodeInput(WorkflowInput):
-    """What a dispatchable capability is invoked with. `query` is universal and
-    required — the user's text at the top of a turn, the planner's goal
-    description further down."""
+    """What a dispatchable capability is invoked with. `instruction` is
+    universal and required, and it means the same thing at both heights of the
+    turn: the text this unit of work is to act on. At the top it is the user's
+    own message (`Orchestrator` → `Triage` → `PlanJane`); below the planner it
+    is that goal's `SystemGoal.instruction`.
 
-    query: str
+    For a node it is the *only* thing it is told about the ask — no node reads
+    `ctx.user_message`, which is why the goal text is shipped to an argument
+    parser as an `AssistantMessage` rather than as a user turn. The one
+    exception is the generation node, which reads the user's message
+    deliberately, as the untrusted half of a trust split.
+
+    Named for what it is rather than `query`, which in this codebase already
+    means a `DeferredBookQuery` on every book-shaped output.
+    """
+
+    instruction: str
 
 ParsedT = TypeVar("ParsedT", bound=BaseModel)
 
@@ -86,10 +99,10 @@ def _resolve(annotation: Any, available: list[Any]) -> tuple[bool, Any]:
 
 def build_input(
     input_cls: type[WorkflowInput],
-    query: str,
+    instruction: str,
     artifacts: Mapping[str, Any],
 ) -> WorkflowInput:
-    """Assemble a node's declared input from the goal text and its
+    """Assemble a node's declared input from the planner's instruction and its
     dependencies' outputs.
 
     Raises `pydantic.ValidationError` when a required field cannot be filled;
@@ -100,8 +113,8 @@ def build_input(
     values: dict[str, Any] = {}
 
     for name, field in input_cls.model_fields.items():
-        if name == "query":
-            values["query"] = query
+        if name == "instruction":
+            values["instruction"] = instruction
             continue
 
         filled, value = _resolve(field.annotation, available)

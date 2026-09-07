@@ -74,8 +74,8 @@ that is the point.
   for its one caller until 2026-08-22.
 - `base_request.py` — `BaseRequest`, shared fields + validation.
 - `node_input.py` — `WorkflowInput` / `NodeInput` / `ParsedInput`, and
-  `build_input`, which fills a node's declared input from the goal text and its
-  dependencies' outputs by matching on type. Imports nothing else from
+  `build_input`, which fills a node's declared input from the planner's
+  instruction and its dependencies' outputs by matching on type. Imports nothing else from
   `app/domains/`; `base_workflow` imports *it*.
   `ParsedInput[SomeRequest]` is the *other* end of a node's entry: arguments
   someone already parsed, rather than text to parse. A node accepting both
@@ -311,8 +311,9 @@ assumed, not restated, here.
      type and envelope — the Triage → PlanJane shape. A node that runs another
      node starts it as a workflow and `.unwrap()`s (or reads the envelope,
      when a failure means something specific to this caller).
-4. **Nodes hear natural language and typed artifacts, nothing else.** The goal
-   text is `node_input.query`; upstream output arrives only through declared
+4. **Nodes hear natural language and typed artifacts, nothing else.** The
+   planner's brief for this goal is `node_input.instruction` — the *only* thing
+   the node is told about the ask, since no node reads `ctx.user_message`; upstream output arrives only through declared
    input fields, filled by type. The input contract does *selection*;
    interpretation is the executor's own job (`ParsedDependents`). Duck-type
    (`getattr`) only shapes that are still reserved names — the moment a shape
@@ -352,11 +353,11 @@ branches on `runtime_error.type`.
    property now, so there is nothing to lose.)
    If the node needs arguments filled in from the goal text, declare the
    `*Args` subclass (rule 1a) and add a
-   module-level `build_arg_parser_request(query) -> OpenAIParserRequest` beside
+   module-level `build_arg_parser_request(instruction) -> OpenAIParserRequest` beside
    the executor (copy one of the existing two — they are near-identical today,
    and that is on purpose: the duplication is what lets one node change model,
    prompt or message list without a flag on a shared base). Call it as
-   `await self.run_llm_args_parse(build_arg_parser_request(node_input.query))`
+   `await self.run_llm_args_parse(build_arg_parser_request(node_input.instruction))`
    and assign `self.output.args` yourself — nothing does that for you.
 1b. Declare the node's input in `external.py` as a `NodeInput` subclass. A node
    with no dependencies subclasses it and adds nothing — that empty class is a

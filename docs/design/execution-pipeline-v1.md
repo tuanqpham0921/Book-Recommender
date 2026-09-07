@@ -428,7 +428,7 @@ docstring is its catalog entry, a `SPEC`, one line in `books/guide.py`.
 | 160 goldens carrying a check that cannot fail | 47 carry it, not 160, and the check can fail in both directions. Scoping it to recommendation asks is the whole of the difference |
 | a plan could come back with no answer | It can, for a non-recommendation turn. **Accepted, and that gap predates this**: nothing has written prose for a plain lookup since `Analyze_Recommend` was cut down (2026-08-22) |
 
-**Why a goal is worth those costs**: the description carries *what to write* ("…and explain
+**Why a goal is worth those costs**: the instruction carries *what to write* ("…and explain
 why each fits"), which a structurally-attached stage cannot express, and the sibling
 generations the owner is heading for — book QA, compare, general — arrive as their own
 slices with their own prompts and their own goldens rather than as branches inside one
@@ -440,6 +440,17 @@ deterministic version: `TaskRunnerWorkflow` attaches an unregistered `AnswerWork
 change, no goldens and cannot be omitted; it cannot be *told* anything either. The two
 share their machinery — the `BookReaderWorkflow`/`BookWorkflow` split, the renderer, the
 prompt — so the branches differ only in who decides that an answer happens.
+
+**The node reads its instruction — since 2026-09-07.** For its first month it did not:
+`write_recommendations/executor.py` rendered from its sources and failures and passed the
+user's message through, never touching `node_input.query`. The argument above was
+therefore true on paper only — the plan *could* say "explain why each fits" and nothing
+downstream listened. The instruction now leads the rendered report as
+`What to write: …`, inside the same `AssistantMessage` as the evidence, because the
+planner wrote it and the trust split already puts planner work there. It is the one line
+in that block the prompt lets the model treat as a direction. The rename that made this
+legible (`SystemGoal.description` → `instruction`, end to end) is recorded in
+[planner-shape.md](planner-shape.md).
 
 **Attachment is by dependency, not by sink.** The planner points the goal at its chain's
 last book-producing goal; `build_input` fills `sources: list[BookRetrievalOutput]` by

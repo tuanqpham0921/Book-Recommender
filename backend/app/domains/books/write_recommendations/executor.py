@@ -129,7 +129,9 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         `finalize_result` as a failed claim — a chain that got as far as here
         and produced no words has not been answered.
         """
-        rendered = render_report(node_input.sources, rows, node_input.failures)
+        rendered = render_report(
+            node_input.instruction, node_input.sources, rows, node_input.failures
+        )
         self.add_details(
             f"writing from {len(node_input.sources)} source(s), "
             f"{len(node_input.failures)} failure(s)"

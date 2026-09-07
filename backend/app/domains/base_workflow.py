@@ -42,15 +42,15 @@ class NodeWorkflowOutput(BaseModel, ABC):
     """Domain payload stored on OperationResult.response.result, exposed via
     the `.result` property (OperationResult.result).
 
-    `goal_description` is stamped by the task runner when the output lands in
-    its results map — what the plan asked this step to do, in the planner's
+    `goal_instruction` is stamped by the task runner when the output lands in
+    its results map — what the plan told this step to do, in the planner's
     words. It lives here rather than on each shape because it is provenance,
     not payload: a generation node renders "what was asked → what came of it"
     from its typed sources alone, without knowing the planner's types. None on
     outputs that never travelled through the runner (triage, the planner's own).
     """
 
-    goal_description: str | None = None
+    goal_instruction: str | None = None
 
     @abstractmethod
     def to_summary(self) -> dict[str, Any]: ...
@@ -65,13 +65,13 @@ class FailedGoalOutput(NodeWorkflowOutput):
     generation node's `failures` field) hears about them, and every other
     node's typed fields simply never match it — the skip cascade is unchanged.
     `reason` is prose for a writer to relay, already composed with the failed
-    dependencies' descriptions where the cause sits upstream.
+    dependencies' instructions where the cause sits upstream.
     """
 
     reason: str = ""
 
     def to_summary(self) -> dict[str, Any]:
-        return {"goal_description": self.goal_description, "reason": self.reason}
+        return {"goal_instruction": self.goal_instruction, "reason": self.reason}
 
 
 OutputT = TypeVar("OutputT", bound=NodeWorkflowOutput)

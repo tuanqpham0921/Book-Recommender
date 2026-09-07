@@ -19,7 +19,7 @@ def _make_goal():
     _refusal_reasons) carry content to assert survives serialization."""
     goal = SystemGoal(
         id="1",
-        description="Find a book about machine learning topics",
+        instruction="Find a book about machine learning topics",
         reasoning="A sufficiently long reasoning for the test",
         confidence=0.9,
         target_node_type=FindTitleNodeTypeEnum.REQUEST,
@@ -84,7 +84,7 @@ class TestBuildChatRunRow:
         assert row["planner"]["ok"] is True
         assert (
             row["planner"]["response"]["result"]["parse_result"]["accepted_goals"][0][
-                "description"
+                "instruction"
             ]
             == "Find a book about machine learning topics"
         )

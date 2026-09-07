@@ -70,7 +70,7 @@ class TestTheHappyPath:
     @pytest.mark.asyncio
     async def test_it_ands_its_dependencies_and_counts_the_result(self, node):
         result = await node(
-            CombineIntersectInput(query="thrillers by Austen", anchors=[_lexical(), _title()])
+            CombineIntersectInput(instruction="thrillers by Austen", anchors=[_lexical(), _title()])
         )
 
         assert result.ok, result.runtime_error
@@ -86,7 +86,7 @@ class TestTheHappyPath:
         composes against the intersection rather than re-applying anything."""
         out = (
             await node(
-                CombineIntersectInput(query="short thrillers", anchors=[_lexical(), _bound()])
+                CombineIntersectInput(instruction="short thrillers", anchors=[_lexical(), _bound()])
             )
         ).unwrap()
 
@@ -103,7 +103,7 @@ class TestTheHappyPath:
         out = (
             await node(
                 CombineIntersectInput(
-                    query="horror by King over 500 pages",
+                    instruction="horror by King over 500 pages",
                     anchors=[_lexical(), _title(), _bound()],
                 )
             )
@@ -123,7 +123,7 @@ class TestTheHappyPath:
         out = (
             await node(
                 CombineIntersectInput(
-                    query="books like Dune under 300 pages", anchors=[_pool(), _bound()]
+                    instruction="books like Dune under 300 pages", anchors=[_pool(), _bound()]
                 )
             )
         ).unwrap()
@@ -142,7 +142,7 @@ class TestTheHappyPath:
         node.store.count = AsyncMock(return_value=0)
 
         result = await node(
-            CombineIntersectInput(query="thrillers by Austen", anchors=[_lexical(), _title()])
+            CombineIntersectInput(instruction="thrillers by Austen", anchors=[_lexical(), _title()])
         )
 
         assert result.ok
@@ -173,7 +173,7 @@ class TestWhatItRefuses:
 
         result = await node(
             CombineIntersectInput(
-                query="thrillers by Austen", anchors=[_lexical(), no_query]
+                instruction="thrillers by Austen", anchors=[_lexical(), no_query]
             )
         )
 

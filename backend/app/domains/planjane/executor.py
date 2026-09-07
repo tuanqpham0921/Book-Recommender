@@ -56,8 +56,9 @@ def build_goal_parse_request(query: str) -> OpenAIParserRequest:
         # NOTE: this should be a list of previous messages as well
         # but for now we can just do clear and direct instructions
         #
-        # `query`, not `self.user_message` — identical on the wire, but it
-        # means a rewritten or clarified query is what gets parsed.
+        # the input's `instruction`, not `self.user_message` — identical on
+        # the wire today, but it means a rewritten or clarified message is
+        # what gets parsed.
         messages=[UserMessage(content=query)],
         tool_models=[GoalParseRequest],
         max_completion_tokens=1000,
@@ -85,7 +86,7 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
         # 1. parse the message into goals — or take them already parsed
         if isinstance(node_input, NodeInput):
             parse_result: GoalParseRequest = await self.run_llm_args_parse(
-                build_goal_parse_request(node_input.query)
+                build_goal_parse_request(node_input.instruction)
             )
         else:
             # already validated as GoalParseRequest by the field's annotation

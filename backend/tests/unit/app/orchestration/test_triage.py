@@ -24,7 +24,7 @@ def orchestrator(make_request_context):
 def _make_goal():
     goal = SystemGoal(
         id="1",
-        description="Find a book about machine learning topics",
+        instruction="Find a book about machine learning topics",
         reasoning="A sufficiently long reasoning for the test",
         confidence=0.9,
         target_node_type=FindTitleNodeTypeEnum.REQUEST,
@@ -104,7 +104,7 @@ class TestTriageWorkflowRuntimeErrorPropagation:
             "app.orchestration.triage.PlanJaneExecutor",
             return_value=parse_workflow,
         ):
-            await orchestrator.run(NodeInput(query="test"))
+            await orchestrator.run(NodeInput(instruction="test"))
 
         assert orchestrator.record.runtime_error is parse_error
 
@@ -131,7 +131,7 @@ class TestTriageOutputJsonRoundTrip:
         restored = TriageOutput.model_validate_json(output.model_dump_json())
         restored_goal = restored.parse_result.accepted_goals[0]
 
-        assert restored_goal.description == original_goal.description
+        assert restored_goal.instruction == original_goal.instruction
         assert restored_goal.confidence == original_goal.confidence
         assert restored_goal.target_node_type == original_goal.target_node_type
 

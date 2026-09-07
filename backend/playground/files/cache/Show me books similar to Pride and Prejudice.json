@@ -36,7 +36,7 @@
                       {
                         "node_type": "system_goal",
                         "id": "1",
-                        "description": "Find the book Pride and Prejudice by title",
+                        "instruction": "Find the book Pride and Prejudice by title",
                         "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -45,7 +45,7 @@
                       {
                         "node_type": "system_goal",
                         "id": "2",
-                        "description": "Recommend books similar to Pride and Prejudice",
+                        "instruction": "Recommend books similar to Pride and Prejudice",
                         "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
                         "confidence": 1.0,
                         "target_node_type": "Analyze_Recommend",
@@ -97,7 +97,7 @@
           {
             "node_type": "system_goal",
             "id": "1",
-            "description": "Find the book Pride and Prejudice by title",
+            "instruction": "Find the book Pride and Prejudice by title",
             "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
             "confidence": 1.0,
             "target_node_type": "Retrieve_by_Title",
@@ -106,7 +106,7 @@
           {
             "node_type": "system_goal",
             "id": "2",
-            "description": "Recommend books similar to Pride and Prejudice",
+            "instruction": "Recommend books similar to Pride and Prejudice",
             "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
             "confidence": 1.0,
             "target_node_type": "Analyze_Recommend",
@@ -148,7 +148,7 @@
         {
           "node_type": "system_goal",
           "id": "1",
-          "description": "Find the book Pride and Prejudice by title",
+          "instruction": "Find the book Pride and Prejudice by title",
           "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
           "confidence": 1.0,
           "target_node_type": "Retrieve_by_Title",
@@ -157,7 +157,7 @@
         {
           "node_type": "system_goal",
           "id": "2",
-          "description": "Recommend books similar to Pride and Prejudice",
+          "instruction": "Recommend books similar to Pride and Prejudice",
           "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
           "confidence": 1.0,
           "target_node_type": "Analyze_Recommend",

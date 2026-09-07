@@ -23,8 +23,8 @@ ARGS_PARSER_PROMPT_PATH = (
 )
 
 
-def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to fill `FindByLexicalTraitsArgs` in from the goal text.
+def build_arg_parser_request(instruction: str) -> OpenAIParserRequest:
+    """Ask the LLM to fill `FindByLexicalTraitsArgs` in from the planner's instruction.
 
     Its own prompt rather than the shared `basic_fill_schema_prompt`, for the
     reason the numeric-traits slice measured: the shared prompt's "do not infer"
@@ -33,14 +33,14 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     word to a shelf, never a word to a bound — so the prompt spends most of its
     length on what *not* to put in `keywords`.
     """
-    if not query:
-        raise ValueError("No query to parse arguments from")
+    if not instruction:
+        raise ValueError("No instruction to parse arguments from")
 
     return OpenAIParserRequest(
         prompt=load_prompt(prompt_path=ARGS_PARSER_PROMPT_PATH),
         model="gpt-5-nano",
         reasoning_effort="low",
-        messages=[AssistantMessage(content=query)],
+        messages=[AssistantMessage(content=instruction)],
         tool_models=[FindByLexicalTraitsArgs],
         max_completion_tokens=2000,
     )
@@ -89,9 +89,9 @@ class FindByLexicalTraitsExecutor(BookWorkflow[FindByLexicalTraitsOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         # 1. parse the goal text into this node's own schema
-        query = node_input.query
+        instruction = node_input.instruction
         parsed_args: FindByLexicalTraitsArgs = await self.run_llm_args_parse(
-            build_arg_parser_request(query)
+            build_arg_parser_request(instruction)
         )
         self.result.args = parsed_args
 

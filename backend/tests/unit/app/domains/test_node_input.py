@@ -71,7 +71,7 @@ class _NoQuery(WorkflowInput):
 
 class TestQuery:
     def test_query_is_filled_from_the_goal_text(self):
-        assert build_input(_TakesNothing, "find dune", {}).query == "find dune"
+        assert build_input(_TakesNothing, "find dune", {}).instruction == "find dune"
 
     def test_a_workflow_input_without_query_does_not_get_one(self):
         """`WorkflowInput` carries nothing — TaskRunnerInput takes only a plan,
@@ -97,7 +97,7 @@ class TestSelectionByType:
         """Structurally cannot consume upstream output — the artifact is
         dropped rather than quietly shaping the node's work."""
         built = build_input(_TakesNothing, "q", {"1": _Books()})
-        assert built.model_dump() == {"query": "q"}
+        assert built.model_dump() == {"instruction": "q"}
 
 
 class TestSelectionNarrowedBySubclass:

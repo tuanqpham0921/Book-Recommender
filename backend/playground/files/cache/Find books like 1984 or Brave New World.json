@@ -36,7 +36,7 @@
                       {
                         "node_type": "system_goal",
                         "id": "1",
-                        "description": "Find the book 1984 by title",
+                        "instruction": "Find the book 1984 by title",
                         "reasoning": "First named anchor needs title retrieval.",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -45,7 +45,7 @@
                       {
                         "node_type": "system_goal",
                         "id": "2",
-                        "description": "Find the book Brave New World by title",
+                        "instruction": "Find the book Brave New World by title",
                         "reasoning": "Second named anchor needs title retrieval.",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -54,7 +54,7 @@
                       {
                         "node_type": "system_goal",
                         "id": "3",
-                        "description": "Recommend books similar to 1984 or Brave New World",
+                        "instruction": "Recommend books similar to 1984 or Brave New World",
                         "reasoning": "Similarity recommendations use both retrieved anchors.",
                         "confidence": 1.0,
                         "target_node_type": "Analyze_Recommend",
@@ -107,7 +107,7 @@
           {
             "node_type": "system_goal",
             "id": "1",
-            "description": "Find the book 1984 by title",
+            "instruction": "Find the book 1984 by title",
             "reasoning": "First named anchor needs title retrieval.",
             "confidence": 1.0,
             "target_node_type": "Retrieve_by_Title",
@@ -116,7 +116,7 @@
           {
             "node_type": "system_goal",
             "id": "2",
-            "description": "Find the book Brave New World by title",
+            "instruction": "Find the book Brave New World by title",
             "reasoning": "Second named anchor needs title retrieval.",
             "confidence": 1.0,
             "target_node_type": "Retrieve_by_Title",
@@ -125,7 +125,7 @@
           {
             "node_type": "system_goal",
             "id": "3",
-            "description": "Recommend books similar to 1984 or Brave New World",
+            "instruction": "Recommend books similar to 1984 or Brave New World",
             "reasoning": "Similarity recommendations use both retrieved anchors.",
             "confidence": 1.0,
             "target_node_type": "Analyze_Recommend",
@@ -168,7 +168,7 @@
         {
           "node_type": "system_goal",
           "id": "1",
-          "description": "Find the book 1984 by title",
+          "instruction": "Find the book 1984 by title",
           "reasoning": "First named anchor needs title retrieval.",
           "confidence": 1.0,
           "target_node_type": "Retrieve_by_Title",
@@ -177,7 +177,7 @@
         {
           "node_type": "system_goal",
           "id": "2",
-          "description": "Find the book Brave New World by title",
+          "instruction": "Find the book Brave New World by title",
           "reasoning": "Second named anchor needs title retrieval.",
           "confidence": 1.0,
           "target_node_type": "Retrieve_by_Title",
@@ -186,7 +186,7 @@
         {
           "node_type": "system_goal",
           "id": "3",
-          "description": "Recommend books similar to 1984 or Brave New World",
+          "instruction": "Recommend books similar to 1984 or Brave New World",
           "reasoning": "Similarity recommendations use both retrieved anchors.",
           "confidence": 1.0,
           "target_node_type": "Analyze_Recommend",

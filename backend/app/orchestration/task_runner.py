@@ -98,7 +98,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
                 # provenance for whoever consumes it downstream: the goal's own
                 # words, which is what a generation node's report is headed by
-                step_result.result.goal_description = goal.description
+                step_result.result.goal_instruction = goal.instruction
                 results[goal.id] = step_result.result
                 await self.sse_stream.send_divider()
 
@@ -146,7 +146,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
         try:
             node_input = build_input(
-                spec.input, goal.description, self._dependency_outputs(goal, results)
+                spec.input, goal.instruction, self._dependency_outputs(goal, results)
             )
         except ValidationError as e:
             missing = ", ".join(
@@ -180,7 +180,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         skip cascade is unchanged.
         """
         results[goal.id] = FailedGoalOutput(
-            goal_description=goal.description, reason=reason
+            goal_instruction=goal.instruction, reason=reason
         )
         self.result.failed_task.append(goal.id)
 
@@ -201,7 +201,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
             output = results.get(dep_id)
             if output is None:
                 continue
-            asked = output.goal_description or "an earlier step"
+            asked = output.goal_instruction or "an earlier step"
             if isinstance(output, FailedGoalOutput):
                 notes.append(f'it needed "{asked}", which could not be completed')
             elif getattr(output, "num_books", None) == 0:

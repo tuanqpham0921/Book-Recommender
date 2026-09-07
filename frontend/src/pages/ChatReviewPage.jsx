@@ -343,6 +343,10 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                                     <p className="text-xs text-[var(--text-inactive)] italic">{parseResult.reasoning}</p>
                                 )}
 
+                                {/* `goal.description` is the pre-2026-09-07 name for
+                                    `instruction`; runs recorded before that rename still
+                                    carry it, and this page is the only thing that reads
+                                    those rows back. */}
                                 {parseResult.accepted_goals?.length > 0 && (
                                     <div>
                                         <div className="text-xs font-semibold text-[var(--text-inactive)] uppercase mb-1">Accepted</div>
@@ -352,7 +356,7 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                                                     <Badge tone="positive" className="whitespace-nowrap">
                                                         {goal.target_node_type}
                                                     </Badge>
-                                                    <span className="flex-1 text-[var(--text-hover)]">{goal.description}</span>
+                                                    <span className="flex-1 text-[var(--text-hover)]">{goal.instruction ?? goal.description}</span>
                                                     <span className="text-[var(--text-muted)] whitespace-nowrap">{Math.round(goal.confidence * 100)}%</span>
                                                 </div>
                                             ))}
@@ -370,7 +374,7 @@ function ChatRunRow({ run, sessionId, onReviewSubmitted }) {
                                                         <Badge tone="negative" className="whitespace-nowrap">
                                                             {goal.target_node_type}
                                                         </Badge>
-                                                        <span className="flex-1 text-[var(--text-hover)]">{goal.description}</span>
+                                                        <span className="flex-1 text-[var(--text-hover)]">{goal.instruction ?? goal.description}</span>
                                                         <span className="text-[var(--text-muted)] whitespace-nowrap">{Math.round(goal.confidence * 100)}%</span>
                                                     </div>
                                                     {goal._refusal_reasons?.length > 0 && (

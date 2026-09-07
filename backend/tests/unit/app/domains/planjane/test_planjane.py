@@ -27,21 +27,25 @@ from app.domains.planjane import (
     MAX_SYSTEM_GOALS,
 )
 from app.domains.base_request import MAX_STRING_LENGTH, MIN_CONFIDENCE
-from app.common.field_types import REASONING_FALLBACK
+from app.common.field_types import (
+    INSTRUCTION_FALLBACK,
+    MAX_INSTRUCTION_LENGTH,
+    REASONING_FALLBACK,
+)
 
 # parse_wf fixture comes from tests/unit/app/orchestration/planner/conftest.py
 
 
 def _make_goal(
     goal_id="1",
-    description="Find a book about machine learning",
+    instruction="Find a book about machine learning",
     confidence=0.9,
     node_type=FindTitleNodeTypeEnum.REQUEST,
     depends_on=None,
 ):
     return SystemGoal(
         id=goal_id,
-        description=description,
+        instruction=instruction,
         reasoning="A sufficiently long reasoning for the test",
         confidence=confidence,
         target_node_type=node_type,
@@ -88,6 +92,45 @@ class TestGoalParseRequestValidators:
         )
         assert len(req.reasoning) <= MAX_STRING_LENGTH
         assert req.reasoning.endswith("...")
+
+
+class TestInstructionBound:
+    """The instruction gets a bound of its own, three times `reasoning`'s.
+
+    It is not a label: it is the whole brief the node runs on, and
+    `bounded_string` truncates *silently*. A clipped reasoning costs nothing;
+    a clipped instruction changes what the node does — "…and published before
+    2000" cut mid-bound still parses, into the wrong filter. So the cap is set
+    where a well-formed instruction never reaches it, and the planner prompt
+    states the budget rather than relying on this.
+    """
+
+    def test_a_realistic_instruction_survives_intact(self):
+        instruction = (
+            "Keep only the books that are both by Kazuo Ishiguro and published "
+            "before 2000"
+        )
+        assert _make_goal(instruction=instruction).instruction == instruction
+
+    def test_the_bound_is_larger_than_a_label_s(self):
+        # the two must not drift back together — `reasoning` is a label and
+        # this is not, which is the whole reason for the second constant
+        assert MAX_INSTRUCTION_LENGTH > MAX_STRING_LENGTH
+
+    def test_exactly_at_the_cap_is_untouched(self):
+        instruction = "x" * MAX_INSTRUCTION_LENGTH
+        assert _make_goal(instruction=instruction).instruction == instruction
+
+    def test_over_the_cap_is_truncated(self):
+        goal = _make_goal(instruction="x" * (MAX_INSTRUCTION_LENGTH + 50))
+        assert len(goal.instruction) <= MAX_INSTRUCTION_LENGTH
+        assert goal.instruction.endswith("...")
+
+    def test_a_blank_instruction_gets_the_fallback(self):
+        # a goal with no brief still runs — losing the whole plan to one
+        # malformed field would be worse — so the placeholder is what a node
+        # sees, and the generation node is the one that filters it
+        assert _make_goal(instruction="  ").instruction == INSTRUCTION_FALLBACK
 
 
 class TestProcessParseResult:
@@ -245,7 +288,7 @@ class TestRun:
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
         parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg())
 
-        await parse_wf.run(NodeInput(query="test message"))
+        await parse_wf.run(NodeInput(instruction="test message"))
 
         parse_wf.sse_stream.send_ui_loading.assert_called_once_with(
             parse_wf.ui_loading_message
@@ -259,7 +302,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run(NodeInput(query="test message"))
+        await parse_wf.run(NodeInput(instruction="test message"))
 
         assert len(parse_wf.result.accepted_goals) == 1
 
@@ -270,7 +313,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run(NodeInput(query="test message"))
+        await parse_wf.run(NodeInput(instruction="test message"))
 
         assert parse_wf.record.ok is True
 
@@ -288,7 +331,7 @@ class TestRun:
             return_value=_mock_assistant_msg(parse_result)
         )
 
-        await parse_wf.run(NodeInput(query="test message"))
+        await parse_wf.run(NodeInput(instruction="test message"))
 
         assert parse_wf.result.out_of_scope == ["Cooking recipe"]
         streamed = "".join(
@@ -338,7 +381,7 @@ class TestToolCallPairing:
         parse_wf.sse_stream.send_ui_loading = AsyncMock()
         parse_wf.run_llm_call = AsyncMock(return_value=_mock_assistant_msg())
 
-        await parse_wf.run(NodeInput(query="test message"))
+        await parse_wf.run(NodeInput(instruction="test message"))
 
         assert [getattr(m, "tool_call_id", None) for m in parse_wf.messages] == ["call_1"]
 
@@ -353,7 +396,7 @@ class TestToolCallPairing:
         )
 
         with pytest.raises(RuntimeError):
-            await parse_wf.run(NodeInput(query="test message"))
+            await parse_wf.run(NodeInput(instruction="test message"))
 
         assert [getattr(m, "tool_call_id", None) for m in parse_wf.messages] == ["call_1"]
 

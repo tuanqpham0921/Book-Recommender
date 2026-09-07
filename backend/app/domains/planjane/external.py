@@ -23,9 +23,10 @@ from app.domains.base_workflow import NodeWorkflowOutput
 from app.common.field_types import (
     MIN_CONFIDENCE,
     MAX_CONFIDENCE,
+    MAX_INSTRUCTION_LENGTH,
     MAX_STRING_LENGTH,
     ConfidenceFloat,
-    DescriptionStr,
+    InstructionStr,
     ReasoningStr,
 )
 from app.registry import NodeTypeEnum
@@ -43,7 +44,12 @@ class SystemGoal(BaseModel):
     Args:
         id: A short id for this goal, in the form '1', '2', ... — other
             goals reference it through their depends_on.
-        description: A short and instructive decription of this node.
+        instruction: What this node is to do, written to the node. It sees
+            only this line and the typed outputs of the goals it depends on —
+            never the user's message — so it must be self-contained: carry
+            every literal the node needs (titles, author names, numbers,
+            bounds) as the user wrote them, carry no work belonging to another
+            goal, and drop the parts of the message this node is not for.
         confidence: How confident the system is that it can fulfill this goal.
         reasoning: A short justification for choosing this goal (up to 100
             characters).
@@ -69,10 +75,13 @@ class SystemGoal(BaseModel):
         json_schema_extra={"example": ["1", "2"]},
     )
 
-    description: DescriptionStr = Field(
+    # The node's whole brief. `max_length` is the budget the planner is shown;
+    # `InstructionStr` is what enforces it, by truncating — so the cap is set
+    # generously enough that a well-formed instruction never reaches it.
+    instruction: InstructionStr = Field(
         ...,
-        max_length=MAX_STRING_LENGTH,
-        json_schema_extra={"example": "Find Dune by title"},
+        max_length=MAX_INSTRUCTION_LENGTH,
+        json_schema_extra={"example": "Find the book Dune by Frank Herbert by title"},
     )
     reasoning: ReasoningStr = Field(
         ...,

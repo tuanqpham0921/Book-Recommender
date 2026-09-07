@@ -32,7 +32,7 @@ from db.schema import BookModel
 from db.stores import DeferredBookQuery
 from db.stores.book_store import BookStore
 
-QUERY = "Recommend books like Dune and explain why they fit"
+INSTRUCTION = "Recommend books like Dune and explain why they fit"
 
 
 def _query() -> DeferredBookQuery:
@@ -51,13 +51,13 @@ def _row(isbn13="9780441013593", title="Dune"):
 
 
 def _source(
-    description="Find Dune",
+    instruction="Find Dune",
     cls=BookAnchorOutput,
     num_books=1,
     with_query=True,
 ):
     return cls(
-        goal_description=description,
+        goal_instruction=instruction,
         num_books=num_books,
         query=_query() if with_query else None,
     )
@@ -65,7 +65,7 @@ def _source(
 
 def _input(sources=None, failures=None) -> RecommendationsInput:
     return RecommendationsInput(
-        query=QUERY,
+        instruction=INSTRUCTION,
         sources=sources if sources is not None else [_source()],
         failures=failures or [],
     )
@@ -182,7 +182,7 @@ class TestTheClaim:
             record = await node(
                 _input(
                     [_source(num_books=0)],
-                    [FailedGoalOutput(goal_description="Find books like it")],
+                    [FailedGoalOutput(goal_instruction="Find books like it")],
                 )
             )
 
@@ -226,7 +226,7 @@ class TestWhatTheWriterSees:
         """The whole point of the failure artifacts: the only stage that speaks
         to the user is told why there is nothing to show."""
         failure = FailedGoalOutput(
-            goal_description="Find books like Dune",
+            goal_instruction="Find books like Dune",
             reason='it needed "Find Dune by title", which found nothing',
         )
 
@@ -238,9 +238,23 @@ class TestWhatTheWriterSees:
         assert "which found nothing" in rendered
 
     async def test_the_users_own_message_is_what_is_answered(self, node):
-        # not the goal description: the reply answers the person, and the goal
+        # not the goal instruction: the reply answers the person, and the goal
         # text is the planner's paraphrase of them
         with _reply() as llm:
             await node(_input())
 
         assert llm.await_args.args[0].messages[-1].content == node.user_message.content
+
+    async def test_the_nodes_own_instruction_is_the_brief(self, node):
+        """Being a planned goal is what lets the plan say *what to write*.
+
+        The instruction reaches the writer as the report's first line, in the
+        trusted `AssistantMessage` — a node that dropped it would make its own
+        goal decorative, which is the objection the deterministic sink stage
+        could not answer.
+        """
+        with _reply() as llm:
+            await node(_input())
+
+        rendered = llm.await_args.args[0].messages[0].content
+        assert rendered.startswith(f"What to write: {INSTRUCTION}")

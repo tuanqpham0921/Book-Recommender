@@ -15,10 +15,10 @@ from app.domains.planjane.dial.format import mermaid_id
 from app.domains.planjane import SystemGoal
 
 
-def _make_goal(id_str, target_node_type, depends_on=None, description="A goal description"):
+def _make_goal(id_str, target_node_type, depends_on=None, instruction="A goal instruction"):
     return SystemGoal(
         id=id_str,
-        description=description,
+        instruction=instruction,
         reasoning="A sufficiently long reasoning",
         confidence=1.0,
         target_node_type=target_node_type,
@@ -47,9 +47,9 @@ class TestGoalsDiagram:
         assert "Retrieve_by_Title" in diagram
         assert "system_goal" not in diagram
 
-    def test_box_carries_the_goal_description_and_reasoning(self):
+    def test_box_carries_the_goal_instruction_and_reasoning(self):
         diagram = get_goals_mermaid_diagram(
-            [_make_goal("1", "Retrieve_by_Title", description="Find Dune")]
+            [_make_goal("1", "Retrieve_by_Title", instruction="Find Dune")]
         )
 
         assert "Find Dune" in diagram

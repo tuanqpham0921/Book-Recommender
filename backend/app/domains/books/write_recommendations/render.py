@@ -8,9 +8,13 @@ the step that executes the request is
 The rendering is where the writer's whole world is decided, so two things stay
 out of it. **Identifiers**: an isbn13 is not something to say in a sentence, and
 a model that sees one will eventually print it. **Internal vocabulary**: the
-entries are numbered and labelled by their goal description, never as "goals",
+entries are numbered and labelled by their goal instruction, never as "goals",
 "nodes" or "queries" — the prompt forbids that language and the input should not
 supply it either.
+
+The report opens with this node's *own* instruction, which is the brief for the
+reply: being a planned goal is what lets the plan say "…and explain why each
+fits", and a node that never read it would make that goal decorative.
 
 One typed read reaches into a sibling slice: a source that is a
 `SimilarBooksOutput` carries the anchor books it was built from and the
@@ -20,6 +24,7 @@ domains/README.md), and widening `BookCandidateOutput` so this stays
 import-free would put two fields on a shared shape for one reader.
 """
 
+from app.common.field_types import INSTRUCTION_FALLBACK
 from app.common.prompt_loader import load_prompt
 from app.common.sse_stream import SSEStream
 from app.common.utils import truncate_str
@@ -36,9 +41,17 @@ PROMPT_PATH = "domains/books/write_recommendations/prompts/write_recommendations
 MAX_DESCRIPTION_CHARS = 400
 MAX_TOTAL_CHARS = 12000
 
-# What an entry with no goal description is headed by — an output that never
+# What an entry with no goal instruction is headed by — an output that never
 # travelled through the runner, which no registered plan produces today.
 FALLBACK_HEADER = "part of the search"
+
+# The brief line, and what stands in when the planner left the instruction
+# empty (`InstructionStr`'s fallback reaches here as prose, so it is filtered).
+BRIEF_PREFIX = "What to write:"
+DEFAULT_BRIEF = "Present the recommended books and explain why each one fits."
+
+# what separates the brief from the evidence under it
+FINDINGS_HEADER = "What I found:"
 
 
 def render_book(book: Book) -> str:
@@ -76,7 +89,7 @@ def render_source(index: int, source: BookRetrievalOutput, books: list[Book]) ->
     these fit" is only honest against that: what it was built from, and what
     was actually searched for.
     """
-    header = f"[{index}] {source.goal_description or FALLBACK_HEADER}"
+    header = f"[{index}] {source.goal_instruction or FALLBACK_HEADER}"
 
     lines = [header]
     if isinstance(source, SimilarBooksOutput):
@@ -103,7 +116,7 @@ def render_failure(index: int, failure: FailedGoalOutput) -> str:
     and appends the upstream cause ("it needed X, which found nothing") —
     which is why this renders it verbatim instead of interpreting anything.
     """
-    header = f"[{index}] {failure.goal_description or FALLBACK_HEADER}"
+    header = f"[{index}] {failure.goal_instruction or FALLBACK_HEADER}"
     line = "could not be completed"
     if failure.reason:
         line += f" — {failure.reason}"
@@ -111,19 +124,33 @@ def render_failure(index: int, failure: FailedGoalOutput) -> str:
 
 
 def render_report(
+    instruction: str,
     sources: list[BookRetrievalOutput],
     rows: list[list[Book]],
     failures: list[FailedGoalOutput],
 ) -> str:
-    """Everything the plan produced as one block: sources first, in the order
-    the plan listed them, then what could not be done.
+    """Everything the plan produced as one block: the brief, then the sources
+    in the order the plan listed them, then what could not be done.
+
+    `instruction` leads because it is what the *planner* asked this reply to
+    be — "explain why each fits" versus a plain hand-off — and it lands in the
+    report rather than in its own message because the report is already the
+    `AssistantMessage`: planner work is trusted, the user's text is not, and
+    that split is the one `build_recommendations_request` keeps.
 
     `rows` is positional against `sources` — the executor fetched them, and
     only it knows which sources it could afford to materialize, so an entry
     with an empty list here may still have matched books. That is why the count
     is rendered separately from the rows rather than inferred from them.
     """
-    blocks = [
+    brief = instruction.strip()
+    if not brief or brief == INSTRUCTION_FALLBACK:
+        brief = DEFAULT_BRIEF
+
+    # the brief is a direction and the rest is evidence, so they are labelled
+    # apart — the prompt draws its trust boundary on exactly this line
+    blocks = [f"{BRIEF_PREFIX} {brief}", FINDINGS_HEADER]
+    blocks += [
         render_source(i, source, books)
         for i, (source, books) in enumerate(zip(sources, rows), start=1)
     ]
@@ -147,9 +174,11 @@ def build_recommendations_request(
     Two messages, and the split is the trust boundary. The rendered report is an
     `AssistantMessage` because it is prior system work — matching what
     `find_similar_books` does with its documents — and the prompt tells the
-    model to read it as data. The user's own text stays a `UserMessage`: it is
-    the question being answered, and it goes last so the model is replying to it
-    rather than continuing its own turn.
+    model to read it as data. That is also why the goal's own instruction rides
+    inside it rather than in the user turn: the planner wrote it, so it is the
+    one line in there the model may treat as a direction. The user's own text
+    stays a `UserMessage`: it is the question being answered, and it goes last
+    so the model is replying to it rather than continuing its own turn.
 
     A cheap model on purpose: this call writes prose from facts it was handed,
     which is not the job accuracy was bought for on the planner.
@@ -162,7 +191,7 @@ def build_recommendations_request(
         model="gpt-5-mini",
         reasoning_effort="low",
         messages=[
-            AssistantMessage(content=f"What I found:\n\n{rendered}"),
+            AssistantMessage(content=rendered),
             UserMessage(content=user_message),
         ],
         sse_stream=sse_stream,

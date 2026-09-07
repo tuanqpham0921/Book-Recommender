@@ -10,7 +10,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Find the book Dune by title",
+                        "instruction": "Find the book Dune by title",
                         "reasoning": "Recommendation needs the anchor book first",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -18,7 +18,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "2",
-                        "description": "Find books similar to Dune",
+                        "instruction": "Find books similar to Dune",
                         "reasoning": "Similarity search seeded by the retrieved title",
                         "confidence": 1.0,
                         "target_node_type": "Analyze_Similar_Books",
@@ -26,7 +26,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "3",
-                        "description": "Present the recommended books and explain why they fit Dune",
+                        "instruction": "Present the recommended books and explain why they fit Dune",
                         "reasoning": "A recommendation chain ends with the reply that presents it",
                         "confidence": 1.0,
                         "target_node_type": "Generate_Recommendations",
@@ -58,7 +58,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Find sci-fi books",
+                        "instruction": "Find sci-fi books",
                         "reasoning": "Single-dimension genre lookup",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Lexical_Traits",
@@ -75,7 +75,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Find the book Flights by title",
+                        "instruction": "Find the book Flights by title",
                         "reasoning": "One anchor book for the comparison",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -83,7 +83,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "2",
-                        "description": "Find the book Satantango by title",
+                        "instruction": "Find the book Satantango by title",
                         "reasoning": "The other anchor book for the comparison",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -91,7 +91,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "3",
-                        "description": "Compare Flights and Satantango",
+                        "instruction": "Compare Flights and Satantango",
                         "reasoning": "Compare needs both books retrieved first",
                         "confidence": 1.0,
                         "target_node_type": "Analyze_Compare",
@@ -108,7 +108,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Find the book Dune by title",
+                        "instruction": "Find the book Dune by title",
                         "reasoning": "One retrieval covers every mention of Dune",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -116,7 +116,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "2",
-                        "description": "Find the book Neuromancer by title",
+                        "instruction": "Find the book Neuromancer by title",
                         "reasoning": "The other anchor book for the comparison",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Title",
@@ -124,7 +124,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "3",
-                        "description": "Compare Dune and Neuromancer",
+                        "instruction": "Compare Dune and Neuromancer",
                         "reasoning": "Compare reuses goal 1 instead of re-finding Dune",
                         "confidence": 1.0,
                         "target_node_type": "Analyze_Compare",
@@ -132,7 +132,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "4",
-                        "description": "Find books similar to Dune",
+                        "instruction": "Find books similar to Dune",
                         "reasoning": "The similarity search reuses the same retrieval of Dune",
                         "confidence": 1.0,
                         "target_node_type": "Analyze_Similar_Books",
@@ -140,7 +140,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "5",
-                        "description": "Present the books recommended from Dune and explain why they fit",
+                        "instruction": "Present the books recommended from Dune and explain why they fit",
                         "reasoning": "Only the recommendation chain ends in a generation goal; the comparison stands on its own",
                         "confidence": 1.0,
                         "target_node_type": "Generate_Recommendations",
@@ -156,7 +156,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Find thriller books",
+                        "instruction": "Find thriller books",
                         "reasoning": "Genre is one retrieval dimension",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Lexical_Traits",
@@ -164,7 +164,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "2",
-                        "description": "Find books by Gillian Flynn",
+                        "instruction": "Find books by Gillian Flynn",
                         "reasoning": "Author is a separate retrieval dimension",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Author",
@@ -172,7 +172,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "3",
-                        "description": "Keep only the books that are both thrillers and by Gillian Flynn",
+                        "instruction": "Keep only the books that are both thrillers and by Gillian Flynn",
                         "reasoning": "Both conditions must hold on the same book, so AND the two retrievals",
                         "confidence": 1.0,
                         "target_node_type": "Combine_Intersect",
@@ -189,7 +189,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Find books by Kazuo Ishiguro",
+                        "instruction": "Find books by Kazuo Ishiguro",
                         "reasoning": "Author is the search subject",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Author",
@@ -197,7 +197,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "2",
-                        "description": "Find books published before 2000",
+                        "instruction": "Find books published before 2000",
                         "reasoning": "The year bound is its own retrieval dimension",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_by_Numeric_Traits",
@@ -205,7 +205,7 @@ planner_example: dict[str, Any] = {
                     },
                     {
                         "id": "3",
-                        "description": "Keep only the books that are both by Kazuo Ishiguro and published before 2000",
+                        "instruction": "Keep only the books that are both by Kazuo Ishiguro and published before 2000",
                         "reasoning": "Both conditions must hold on the same book, so AND the two retrievals",
                         "confidence": 1.0,
                         "target_node_type": "Combine_Intersect",
@@ -221,7 +221,7 @@ planner_example: dict[str, Any] = {
                 "system_goals": [
                     {
                         "id": "1",
-                        "description": "Retrieve user saved memory",
+                        "instruction": "Retrieve user saved memory",
                         "reasoning": "Direct user-info lookup",
                         "confidence": 1.0,
                         "target_node_type": "Retrieve_User_Info",

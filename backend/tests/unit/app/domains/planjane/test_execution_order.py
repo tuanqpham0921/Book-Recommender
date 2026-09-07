@@ -16,7 +16,7 @@ from app.domains.planjane import PlanJaneOutput, SystemGoal
 def goal(goal_id: str, depends_on: list[str] | None = None) -> SystemGoal:
     return SystemGoal(
         id=goal_id,
-        description="Find a book about machine learning topics",
+        instruction="Find a book about machine learning topics",
         reasoning="A sufficiently long reasoning for the test",
         confidence=0.9,
         target_node_type=FindTitleNodeTypeEnum.REQUEST,

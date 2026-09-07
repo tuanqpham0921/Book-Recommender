@@ -689,6 +689,9 @@ seems like split up system goals as planner works
     * overal I do think which ever way I decide to do
         * these are about as good as it gets before I need very intensive eval
         * it does seems like the description as query normalization work
+            * DONE 2026-09-07: renamed to `instruction` end to end and given a
+              self-containment contract + its own 300-char bound. Settled in
+              docs/design/planner-shape.md, "The instruction".
         * and there are just more optimizations
             * things like book domain, project domain, or user domain
             * this can filter out some stuff

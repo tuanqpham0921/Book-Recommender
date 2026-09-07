@@ -108,8 +108,8 @@ def describe_bounds(filters: BookMetadataFilter) -> str:
     return ", ".join(part for part in parts if part)
 
 
-def build_arg_parser_request(query: str) -> OpenAIParserRequest:
-    """Ask the LLM to fill `FindByNumericTraitsArgs` in from the goal text.
+def build_arg_parser_request(instruction: str) -> OpenAIParserRequest:
+    """Ask the LLM to fill `FindByNumericTraitsArgs` in from the planner's instruction.
 
     Its own prompt rather than the shared `basic_fill_schema_prompt`, which is
     the reason every slice builds its own request. That prompt says "do not use
@@ -120,8 +120,8 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
     to an empty filter, because the model was obeying it. Literal numbers were
     unaffected, which is what made the failure look like a schema problem.
     """
-    if not query:
-        raise ValueError("No query to parse arguments from")
+    if not instruction:
+        raise ValueError("No instruction to parse arguments from")
 
     return OpenAIParserRequest(
         prompt=load_prompt(prompt_path=ARGS_PARSER_PROMPT_PATH),
@@ -137,10 +137,10 @@ def build_arg_parser_request(query: str) -> OpenAIParserRequest:
         # text; this one has to map a word onto a number, and that is the step
         # minimal cannot take.
         reasoning_effort="low",
-        # the goal text is the planner's own work, not something the user typed.
+        # the instruction is the planner's own work, not something the user typed.
         # NOTE: this should carry the previous messages too; clear and direct
         # instructions are enough while the conversation is single-turn.
-        messages=[AssistantMessage(content=query)],
+        messages=[AssistantMessage(content=instruction)],
         tool_models=[FindByNumericTraitsArgs],
         max_completion_tokens=2000,
     )
@@ -162,9 +162,9 @@ class FindByNumericTraitsExecutor(BookWorkflow[FindByNumericTraitsOutput]):
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
         # 1. parse the goal text into this node's own schema
-        query = node_input.query
+        instruction = node_input.instruction
         parsed_args: FindByNumericTraitsArgs = await self.run_llm_args_parse(
-            build_arg_parser_request(query)
+            build_arg_parser_request(instruction)
         )
         self.result.args = parsed_args
 

@@ -99,7 +99,7 @@ def _spec(executor: type | None, **overrides) -> NodeSpec:
 def _goal(goal_id: str = "1", depends_on: list[str] | None = None) -> SystemGoal:
     return SystemGoal(
         id=goal_id,
-        description="Find a book about machine learning topics",
+        instruction="Find a book about machine learning topics",
         reasoning="A sufficiently long reasoning for the test",
         confidence=0.9,
         target_node_type=NODE_TYPE,
@@ -407,7 +407,7 @@ class TestFailureArtifacts:
 
         failure = runner.result.task_results["1"]
         assert isinstance(failure, FailedGoalOutput)
-        assert failure.goal_description == _goal().description
+        assert failure.goal_instruction == _goal().instruction
 
     async def test_the_reason_names_the_dependency_that_found_nothing(self, runner):
         """How "I don't have Dune" travels two hops: the empty lookup is a
@@ -427,7 +427,7 @@ class TestFailureArtifacts:
             await runner(TaskRunnerInput(plan=plan))
 
         assert "found nothing" in runner.result.task_results["b"].reason
-        assert _goal().description in runner.result.task_results["b"].reason
+        assert _goal().instruction in runner.result.task_results["b"].reason
 
     async def test_the_reason_names_a_dependency_that_failed(self, runner):
         plan = PlanJaneOutput(
@@ -442,7 +442,7 @@ class TestFailureArtifacts:
 
         assert "could not be completed" in runner.result.task_results["b"].reason
 
-    async def test_a_successful_output_is_stamped_with_its_goal_description(
+    async def test_a_successful_output_is_stamped_with_its_goal_instruction(
         self, runner
     ):
         """Provenance for the reply: a generation node heads each entry of its
@@ -450,4 +450,4 @@ class TestFailureArtifacts:
         importing the planner's types."""
         await drive(runner, [_goal()], _spec(_OkExecutor))
 
-        assert runner.result.task_results["1"].goal_description == _goal().description
+        assert runner.result.task_results["1"].goal_instruction == _goal().instruction

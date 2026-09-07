@@ -71,7 +71,7 @@ class TestTheHappyPath:
     @pytest.mark.asyncio
     async def test_anchors_become_references_and_a_pool(self, node):
         result = await node(
-            SimilarBooksInput(query="books like Dune", anchors=[_anchor()])
+            SimilarBooksInput(instruction="books like Dune", anchors=[_anchor()])
         )
 
         assert result.ok, result.runtime_error
@@ -91,7 +91,7 @@ class TestTheHappyPath:
         `Combine_Intersect` can narrow it in SQL — and `score` carries cosine
         order through that narrowing."""
         out = (
-            await node(SimilarBooksInput(query="books like Dune", anchors=[_anchor()]))
+            await node(SimilarBooksInput(instruction="books like Dune", anchors=[_anchor()]))
         ).unwrap()
 
         assert out.query is not None
@@ -106,7 +106,7 @@ class TestTheHappyPath:
         only knowable here — which is why this node stamps `query_sql` itself
         rather than going through `count_books`."""
         out = (
-            await node(SimilarBooksInput(query="books like Dune", anchors=[_anchor()]))
+            await node(SimilarBooksInput(instruction="books like Dune", anchors=[_anchor()]))
         ).unwrap()
 
         assert out.query_sql is not None
@@ -116,7 +116,7 @@ class TestTheHappyPath:
     @pytest.mark.asyncio
     async def test_the_named_books_are_excluded_from_their_own_results(self, node):
         out = (
-            await node(SimilarBooksInput(query="books like Dune", anchors=[_anchor()]))
+            await node(SimilarBooksInput(instruction="books like Dune", anchors=[_anchor()]))
         ).unwrap()
 
         # in SQL rather than after the fact, so the excluded rows do not eat
@@ -130,7 +130,7 @@ class TestTheHappyPath:
         node.store.score_stats = AsyncMock(return_value=None)
 
         result = await node(
-            SimilarBooksInput(query="books like Dune", anchors=[_anchor()])
+            SimilarBooksInput(instruction="books like Dune", anchors=[_anchor()])
         )
 
         assert result.ok, result.runtime_error
@@ -146,7 +146,7 @@ class TestItRefusesBeforeSpending:
     async def test_an_over_cap_anchor_never_reaches_the_database(self, node):
         result = await node(
             SimilarBooksInput(
-                query="books like Dune", anchors=[_anchor(MAX_ANCHOR_BOOKS + 1)]
+                instruction="books like Dune", anchors=[_anchor(MAX_ANCHOR_BOOKS + 1)]
             )
         )
 
@@ -158,7 +158,7 @@ class TestItRefusesBeforeSpending:
     @pytest.mark.asyncio
     async def test_an_anchor_that_matched_nothing_is_refused(self, node):
         result = await node(
-            SimilarBooksInput(query="books like Dune", anchors=[_anchor(0)])
+            SimilarBooksInput(instruction="books like Dune", anchors=[_anchor(0)])
         )
 
         assert not result.ok
@@ -174,7 +174,7 @@ class TestItRefusesBeforeSpending:
         )
 
         result = await node(
-            SimilarBooksInput(query="books like Dune", anchors=[_anchor()])
+            SimilarBooksInput(instruction="books like Dune", anchors=[_anchor()])
         )
 
         assert not result.ok

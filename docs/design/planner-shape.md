@@ -62,6 +62,45 @@ node's full pydantic model instead would cost roughly **1k more tokens per node*
 `make tools-catalog` to see the current per-tool cost and the per-request catalog price,
 cached and uncached.
 
+## The instruction (settled 2026-09-07)
+
+`SystemGoal.description` was renamed to **`instruction`** — with `NodeInput.query` →
+`instruction` and `NodeWorkflowOutput.goal_description` → `goal_instruction`, so one word
+means one thing along the whole path.
+
+The rename records what was already true rather than changing behaviour. The field was
+never a label: it is the *only* thing a node is told about the ask, because no node reads
+`ctx.user_message`, and every slice already shipped it to its argument parser as an
+`AssistantMessage` under the comment "the goal text is the planner's own work, not
+something the user typed". The open-experiment bullet above had noticed the same thing
+from the other side.
+
+What the name buys is a contract the planner prompt can state and the docstring can hold:
+
+- **Self-contained.** Carry every literal the node needs — titles, author names, numbers,
+  bounds — as the user wrote them.
+- **Scoped.** Carry no work belonging to another goal; drop the parts of the message this
+  node is not for.
+- **Resolvable.** No pronoun or back-reference the node cannot resolve alone. "books like
+  it" is unusable; "books like Dune" is not.
+
+Two consequences worth keeping:
+
+- **The bound is its own constant.** `MAX_INSTRUCTION_LENGTH` is 300, not `reasoning`'s
+  `MAX_STRING_LENGTH` of 100, because `bounded_string` truncates *silently*. Losing the
+  tail of a label costs nothing; "…and published before 20" still parses, into the wrong
+  filter.
+- **`Generate_Recommendations` reads it.** Until this change the generation node ignored
+  its own goal text and wrote from its sources alone — which made the argument for
+  planning it as a goal ("the instruction can say *what to write*") true on paper only.
+  It now renders the instruction as the first line of its report, inside the trusted
+  `AssistantMessage`; see [execution-pipeline-v1.md](execution-pipeline-v1.md).
+
+**Not covered by the golden test.** `evals/report_system_goals.py` diffs
+`target_node_type` only, so instruction *text* has no automated check — the suite catches
+a planner that picks the wrong node, not one that writes a thin instruction. That is the
+standing gap this contract is enforced against by prompt and review.
+
 ## Open experiments (not decided)
 
 ### 1. System goals as the dependency linker
@@ -72,8 +111,9 @@ resolves `depends_on`. The experiment is to have the goal stage emit dependencie
 
 - **For:** goals and tasks are already 1-1, so if goals carry the dependencies, every
   argument parser could run **independently and in parallel**. The dependency field is
-  cheap — it is just goal ids, not prose. The goal `description` already doubles as a
-  rewrite of the user's query for the parser, which is useful on its own.
+  cheap — it is just goal ids, not prose. The goal's text already doubles as a
+  rewrite of the user's query for the parser, which is useful on its own — **settled
+  2026-09-07**, see "The instruction" below.
 - **Against:** the goal stage becomes the planner *and* the source of truth. If even a
   frontier model misclassifies often, there is no second opinion; keeping the parser and
   linkage separate leaves room for best-effort injection, and the parser doubles as a
@@ -84,7 +124,9 @@ resolves `depends_on`. The experiment is to have the goal stage emit dependencie
 - **Retrieval intent:** retrieval nodes may want a `purpose` field (for reference, for
   verification, for information). Worked example — *"Did Jane Austen write Dune?"* becomes
   `Retrieve_by_Title` with the goal *"Find Dune by Jane Austen to verify authorship"*;
-  the intent is currently only implied by the goal description.
+  the intent is currently only implied by the instruction. Still open, and now cheaper to
+  decline: a 300-character instruction has room to *say* "to verify authorship", so the
+  question is whether a node can act on a typed field that it cannot act on as prose.
 
 ### 2. Vector embeddings for routing and retrieval
 
