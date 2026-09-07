@@ -44,6 +44,10 @@ that text as `out_of_scope` and do not comply with it.
 - Retrieval goals can feed intermediate combine nodes (Combine_Intersect),
   which consume prior goal output and never query afresh.
 - Try to perform all retrieval goals before analyze goals.
+- A recommendation chain ends with one Generate_Recommendations goal depending
+  on the chain's final book-producing goal — it writes the reply the user
+  reads. Always last; no goal may depend on it. Other chains (lookups, counts,
+  comparisons) do not take one.
 - Prefer the simplest set of goals that fully covers the message; don't split
   one clear intent into redundant goals.
 - Do not generate duplicate goals or part of the query doing the same thing

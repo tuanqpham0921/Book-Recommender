@@ -52,8 +52,6 @@ CANDIDATE_POOL_SIZE = 250
 class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
     ui_loading_message = "Finding similar books..."
     ui_section_title = "Similar books"
-    # while nothing downstream writes a reply, these cards are the whole answer
-    ui_section_collapsible = False
 
     async def run(self, node_input: SimilarBooksInput) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)

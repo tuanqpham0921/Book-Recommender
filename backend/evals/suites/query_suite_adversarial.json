@@ -274,7 +274,8 @@
     "note": "Same recommend intent stated three ways with a shifting count. Tests whether the planner reuses the single Dune retrieval as a shared dependency across recommend goals, or re-emits a fresh Retrieve_by_Title per phrasing — and whether 'three books like Dune' becomes one Recommend with a count or three separate Recommend nodes.",
     "expected_nodes": [
       "Retrieve_by_Title",
-      "Analyze_Similar_Books"
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
     ]
   },
   {
@@ -297,7 +298,8 @@
     "note": "Misspelled genre ('sciinstific'), author ('Isac Assimov'), and the words 'novel/high/rating'. Tests robust intent parsing under noise: should still yield Analyze_Similar_Books with a semantic input and a min_rating filter, with the author kept as a hint on the node — not misfire into Retrieve_by_Traits or drop the rating because 'rateing' wasn't recognized.",
     "expected_nodes": [
       "Retrieve_by_Author",
-      "Analyze_Similar_Books"
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
     ]
   },
   {
@@ -344,7 +346,8 @@
     "note": "Recommendation anchored to an author who doesn't exist. Semantic input for Analyze_Similar_Books is free text, so the made-up name flows straight into the recommend node with nothing to ground it. Checks the planner doesn't fabricate a bibliography for the fake author or reroute to the extended Retrieve_by_Author (which isn't the intent — 'like the works of' is a taste anchor, not a catalog lookup).",
     "expected_nodes": [
       "Retrieve_by_Author",
-      "Analyze_Similar_Books"
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
     ]
   },
   {
@@ -397,7 +400,8 @@
     "query": "Find epistolary novels written in second-person present tense with an unreliable narrator and an unresolved ending.",
     "note": "All constraints are literary-form traits ('epistolary', 'second-person present tense', 'unreliable narrator', 'unresolved ending') with no corresponding filter field — every one collapses to a keyword ilike over title/authors/description, which almost never matches structural traits. Tests whether the LLM crams form descriptors into the keyword list (guaranteeing empty) or recognizes they aren't filterable.",
     "expected_nodes": [
-      "Analyze_Similar_Books"
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
     ]
   },
   {
@@ -578,7 +582,8 @@
     "note": "WRONG OUTPUT SHAPE, RIGHT SUBSTANCE (design-intent expectation, added 2026-07-28). The user asks for AUTHORS; every node in the registry returns books, a report, or a confirmation, and none returns a list of authors — Retrieve_Author_Info (extended) is about ONE named person, not similar-author discovery. Unlike #341/#343 (buy/price), no part of which any node can do, this one is fully answerable in substance: books by authors similar to Rowling ARE the answer, delivered as books whose author field is the real payload. So it must be served, not refused — Retrieve_by_Author + Analyze_Similar_Books, the same plan as base case 68 and as #333. Three failures to catch: refusing as out_of_scope because 'we don't do authors'; routing to Retrieve_Author_Info when the PLAYGROUND EXTENSION block is enabled, the same bibliography-vs-person confusion #352 tests deliberately, here as unintended bait; and returning Rowling's own books, since 'authors LIKE Rowling' excludes her — that exclusion belongs in Analyze_Similar_Books.filters.exclusion, which apply_book_filters does not currently read, so it is silently dropped even when the planner gets it right.",
     "expected_nodes": [
       "Retrieve_by_Author",
-      "Analyze_Similar_Books"
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
     ]
   },
   {
@@ -590,7 +595,8 @@
     "note": "SAME GAP, NO RECOMMEND VERB (design-intent expectation, added 2026-07-28). #358 restated as a taste statement plus an open ask: no 'recommend', no 'like X' comparative, the anchor demoted to a preamble. Identical correct plan, so the pair is the test — it isolates whether the author-shaped ask is recognised from its substance or from the word 'recommend', the same surface-vs-semantics discriminator as base cases 61/62 and 56/57. Extra failure this phrasing invites and #358 does not: reading 'I like J.K. Rowling' as feedback about the app (Provide_Feedback) or as small talk, and answering only the trailing clause with an anchorless Analyze_Similar_Books. NOTE for both cases: the goals report compares node types only, so a run where the system returns books and never names their authors passes this case while failing the user's actual question — the argument for author-level output checking, or for an author-recommendation node if this shape turns out to be common.",
     "expected_nodes": [
       "Retrieve_by_Author",
-      "Analyze_Similar_Books"
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
     ]
   }
 ]

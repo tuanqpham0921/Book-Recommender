@@ -45,8 +45,14 @@ closed in a `finally` — a node that raises still closes its section. `task.end
 carries the `count` that stamps the header after the fact, since a section opens
 before the node knows how many books it matched. Sections open expanded and fold
 themselves on `task.end`, so the finished turn shows the answer rather than the
-work; `collapsible: false` (the recommendation) stays open, and a user click
-pins the state.
+work; `collapsible: false` stays open, and a user click pins the state.
+
+**One section per turn sets `collapsible: false`: the generation node's.** Every
+other node's cards are working material, and the prose written from them is what
+the turn is for — so the recommendation section folds like the rest now that
+something downstream writes a reply about it. A turn whose plan has no
+generation goal (a plain lookup) folds everything, which is a real gap rather
+than a styling choice: see `backend/app/domains/books/write_recommendations/`.
 
 ## Conventions
 

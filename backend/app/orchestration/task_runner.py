@@ -5,7 +5,11 @@ from typing import Any
 from pydantic import Field, ValidationError
 
 from app.common.request_context import RequestContext
-from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.base_workflow import (
+    AppWorkflow,
+    FailedGoalOutput,
+    NodeWorkflowOutput,
+)
 from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.planjane import PlanJaneOutput, SystemGoal
@@ -31,8 +35,15 @@ class TaskRunnerOutput(NodeWorkflowOutput):
     failed_task: list[str] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
+        # failed goals sit in `task_results` too, as the artifacts a generation
+        # node reads — but they are already named in `failed_task`, so listing
+        # them as completed would make the summary contradict itself
         return {
-            "completed_tasks": list(self.task_results.keys()),
+            "completed_tasks": [
+                task_id
+                for task_id, output in self.task_results.items()
+                if not isinstance(output, FailedGoalOutput)
+            ],
             "failed_task": self.failed_task,
         }
 
@@ -56,6 +67,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         self.result.session_id = self.session_id
 
         order = plan.execution_order()
+        results: dict[str, NodeWorkflowOutput] = {}
+
         # Goals in a cycle, or waiting on one the planner refused. Counted as
         # failures so the turn cannot report ok after dropping part of the plan.
         for goal in order.unreachable:
@@ -63,23 +76,29 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 f"Skipping task {goal.id} ({goal.target_node_type.value}): "
                 "its dependencies can never complete"
             )
-            self.result.failed_task.append(goal.id)
+            self._record_failure(
+                goal, "it depended on work that could never run", results
+            )
 
-        results: dict[str, NodeWorkflowOutput] = {}
         for goals_layer in order.layers:
             for goal in goals_layer:
                 prepared = self._prepare(goal, results)
-                if prepared is None:
-                    self.result.failed_task.append(goal.id)
+                if isinstance(prepared, str):
+                    self._record_failure(goal, prepared, results)
                     continue
 
                 step_result = await self._run_in_task_section(goal, *prepared)
                 # an `ok` envelope with no payload is a bug in the node, not a
                 # state downstream can use — one failed goal either way
                 if not step_result.ok or step_result.result is None:
-                    self.result.failed_task.append(goal.id)
+                    self._record_failure(
+                        goal, self._upstream_context(goal, results), results
+                    )
                     continue
-                
+
+                # provenance for whoever consumes it downstream: the goal's own
+                # words, which is what a generation node's report is headed by
+                step_result.result.goal_description = goal.description
                 results[goal.id] = step_result.result
                 await self.sse_stream.send_divider()
 
@@ -88,16 +107,21 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
 
     def _prepare(
         self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
-    ) -> tuple[AppWorkflow, WorkflowInput] | None:
-        """Everything that has to be true before a goal can run, or None.
+    ) -> tuple[AppWorkflow, WorkflowInput] | str:
+        """Everything that has to be true before a goal can run, or why not.
 
-        Four ways to come back empty — no spec, a spec with no executor, a
+        Four ways to come back a `str` — no spec, a spec with no executor, a
         context that can't be narrowed, an input that can't be assembled —
         logged apart because they mean different things, but all four skip one
-        goal rather than abort the plan.
+        goal rather than abort the plan. The string is the *reason*, written as
+        prose: it becomes the goal's `FailedGoalOutput`, which a generation
+        node hands to the reply writer verbatim — so the internals (schema
+        names, missing-field lists) go to the log and `add_details`, never
+        into it.
 
-        The last is the hook for the agentic version: the named field is enough
-        to ask the planner for a goal that produces it and retry.
+        The assembly failure is the hook for the agentic version: the named
+        field is enough to ask the planner for a goal that produces it and
+        retry.
         """
         node_type = goal.target_node_type.value
         spec: NodeSpec | None = REGISTRY.spec(goal.target_node_type)
@@ -105,28 +129,22 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
             logger.warning(
                 f"Skipping task {goal.id} ({node_type}): node type is not registered"
             )
-            return None
+            return "this isn't something the system can do yet"
         if spec.executor is None:
             logger.warning(
                 f"Skipping task {goal.id} ({node_type}): "
                 f"{spec.request.__name__} has no executor"
             )
-            return None
+            return "this isn't something the system can do yet"
 
         try:
             ctx: RequestContext = spec.context.narrow(self.ctx)
         except LookupError as e:
             logger.warning(f"Skipping task {goal.id} ({node_type}): {e}")
             self.add_details(f"{goal.id}: {e}")
-            return None
+            return "a part of the system it needed was unavailable"
 
         try:
-            # NOTE: not logging or what's missing
-            # what if one failed or missing
-            # we might want to put results in the result no matter what
-            # then the actual executor will parse it out (so it knows if there is enough info)
-            # might be able to continue without some depdency (and can inform the user)
-            
             node_input = build_input(
                 spec.input, goal.description, self._dependency_outputs(goal, results)
             )
@@ -139,27 +157,71 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 f"could not assemble {spec.input.__name__} ({missing})"
             )
             self.add_details(f"{goal.id}: missing input {missing}")
-            return None
+            return (
+                self._upstream_context(goal, results)
+                or "it was missing something it needed"
+            )
 
         return spec.executor(ctx, messages=self.messages), node_input
+
+    def _record_failure(
+        self,
+        goal: SystemGoal,
+        reason: str,
+        results: dict[str, NodeWorkflowOutput],
+    ) -> None:
+        """One failed goal: counted, and left in `results` as a typed artifact.
+
+        The count (`failed_task`) is what keeps the turn from reporting ok
+        after dropping part of the plan. The artifact is what lets the plan
+        keep going *informatively*: it flows to dependents like any output, a
+        node that declares a slot for failures (the generation node) relays
+        it, and every other node's typed fields simply never match it — the
+        skip cascade is unchanged.
+        """
+        results[goal.id] = FailedGoalOutput(
+            goal_description=goal.description, reason=reason
+        )
+        self.result.failed_task.append(goal.id)
+
+    def _upstream_context(
+        self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
+    ) -> str:
+        """Why a goal may have had nothing to work with, said plainly.
+
+        Read off the artifacts rather than the plan: a dependency that failed
+        left a `FailedGoalOutput`, one that ran and matched nothing has
+        `num_books == 0` (`getattr` — the runner stays out of the book domain,
+        same as the task.end count). This is how "I don't have Dune" travels
+        two hops to the reply: the similarity goal's failure reason names the
+        empty title lookup, and the generation goal renders it.
+        """
+        notes = []
+        for dep_id in goal.depends_on:
+            output = results.get(dep_id)
+            if output is None:
+                continue
+            asked = output.goal_description or "an earlier step"
+            if isinstance(output, FailedGoalOutput):
+                notes.append(f'it needed "{asked}", which could not be completed')
+            elif getattr(output, "num_books", None) == 0:
+                notes.append(f'it needed "{asked}", which found nothing')
+        return "; ".join(notes)
 
     def _dependency_outputs(
         self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
     ) -> dict[str, NodeWorkflowOutput]:
         """What this goal's dependencies produced, keyed by their goal id.
 
-        A failed dependency is absent rather than None. The keys are provenance
-        only; `build_input` matches these onto declared fields by type.
+        A failed dependency arrives as its `FailedGoalOutput` — every goal
+        leaves *something* in `results`, so the plan is followed as written and
+        it is the input contract that decides what each node hears: a
+        generation node declares a slot for failures and narrates them, a
+        retrieval-consuming node's typed fields never match one and the goal
+        skips in `_prepare`. The keys are provenance only; `build_input`
+        matches these onto declared fields by type. Absent means the id was
+        never a goal at all (the planner refused it).
         """
-        # NOTE: relying on results as key:value mapping
-        # if one is missing then this node skip
-        # we might want to follow the plan as is
-        # then it's the node/executor responsibility to parse and inform the user
-        # exeception might be if all ok=False, then we can skip(?)
-        # might have the issue of repeating stuff
-        # like "i found no books" in one section, then another "because there's no books..., I can continue/not..."
-        # having 1 generation node at the end would be nice for this
-        # rather than answering the questions at each node
         return {
             dep_id: results[dep_id]
             for dep_id in goal.depends_on

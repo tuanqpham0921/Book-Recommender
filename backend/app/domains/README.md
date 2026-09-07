@@ -31,9 +31,11 @@ to the flow, to one call's pure half, or to the input, and naming the file for
 that is the point.
 
 - `node_spec.py` — `NodeSpec` (node_type, tier, request, output, executor) and
-  `NodeTier`. One spec per node; it is the **only** thing a slice has to export.
-  Its `__post_init__` checks the spec's name against the request schema's
-  `Literal` default, so the two cannot drift apart silently.
+  `NodeTier` (`RETRIEVAL` → `COMBINE` → `ANALYZE` → `GENERATE`, in the order
+  `format_catalog` renders them, which is also the order a plan runs in). One
+  spec per node; it is the **only** thing a slice has to export. Its
+  `__post_init__` checks the spec's name against the request schema's `Literal`
+  default, so the two cannot drift apart silently.
 - `<domain>/guide.py` — that domain's specs as a tuple, one line per node.
 - `app/registry.py` — composes the domain guides into `SPECS` and hands that
   tuple to one `Registry` (`REGISTRY`). **The specs are its only state**: it
@@ -50,7 +52,14 @@ that is the point.
   don't add a narrower variant for a single consumer — narrow at the point of
   use instead (see `Book`'s docstring).
 - `<domain>/base_workflow.py` — the domain's base, holding what every node in it
-  repeats. `books/base_workflow.py` is `BookWorkflow`: it exposes `self.store`
+  repeats. `books/base_workflow.py` holds **two** classes, split on whether the
+  output is book-shaped: `BookReaderWorkflow` (`store`, `fetch_books`,
+  `stream_books` — everything that reads the database or sends cards and writes
+  to no output field, so its bound is `NodeWorkflowOutput`) and `BookWorkflow`,
+  which is that plus `count_books` and is bound to `BookRetrievalOutput`. Every
+  book-*producing* node subclasses the second; the generation node
+  (`write_recommendations/`) is the one subclass of the reader alone, because it
+  needs rows and cards while producing prose. `BookWorkflow` exposes `self.store`
   (a property off the request context), and adds two `@task`s —
   `count_books()` (stamp a deferred query on the output and record the match
   size — no rows) and `fetch_books()` (rows off a query, handed back rather
@@ -166,9 +175,9 @@ read in one node and a write in another quietly stop sharing a transaction.
 
 ## Naming: Workflow, Executor
 
-The ladder is `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`, each in a
-`workflow.py`/`base_workflow.py` file. Concrete units of work are `*Workflow`
-too: `TriageWorkflow`, `TaskRunnerWorkflow`.
+The ladder is `airglider.Workflow` → `AppWorkflow` → `BookReaderWorkflow` →
+`BookWorkflow`, each in a `workflow.py`/`base_workflow.py` file. Concrete units
+of work are `*Workflow` too: `TriageWorkflow`, `TaskRunnerWorkflow`.
 
 The bottom rung is a **separate library**, and its rules are not restated here:
 what `ok` means, when a producer raises instead of reporting, the two verbs for

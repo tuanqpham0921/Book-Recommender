@@ -593,6 +593,22 @@ them is written:
 an oversight: the section's cards are the whole answer until a picker node exists. It is why
 `ui_section_collapsible` stays `False`.
 
+> **Closed for recommendations 2026-09-07 by `Generate_Recommendations`** — the picker's
+> first piece, as its own slice (`books/write_recommendations/`) in a new
+> `NodeTier.GENERATE` rather than as fields returning to this node. It takes the pool as a
+> `BookCandidateOutput` dependency, materializes it, streams the cards and writes the
+> reply; `ui_section_collapsible` moves with the answer, so this node's section is now
+> collapsible and the generation node's is not.
+>
+> **What it does NOT take back is the rest of the table above**: no `keywords`, no
+> `bounds`, no `exclude`, no `num_requested`, and no re-ranking — it presents the pool in
+> the order it arrives (cosine, via `materialize_stmt`) and explains it. Splitting the
+> picker that way is deliberate: writing the reply needs no argument parse at all, so it
+> ships without one, and whatever eventually re-ranks or trims is a separate decision that
+> a separate node makes before this one. The gap is closed only for turns whose plan
+> contains a recommendation — a plain lookup still gets cards and no prose. See
+> [execution-pipeline-v1.md](execution-pipeline-v1.md).
+
 **Anchors only, enforced by type.** `SimilarBooksInput.anchors` is
 `list[BookAnchorOutput] = Field(..., min_length=1)`, so only `Retrieve_by_Title` (and
 `Retrieve_by_ISBN13` when built) can feed it. A bibliography, a subject search or a numeric

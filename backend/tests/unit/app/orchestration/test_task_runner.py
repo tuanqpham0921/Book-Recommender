@@ -20,7 +20,11 @@ import pytest
 from pydantic import ValidationError
 
 from app.common.request_context import RequestContext
-from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.base_workflow import (
+    AppWorkflow,
+    FailedGoalOutput,
+    NodeWorkflowOutput,
+)
 from app.domains.books import find_by_title
 from app.domains.books.external import BookRequestContext
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
@@ -170,9 +174,11 @@ class TestSuccessfulExecution:
             runner.result.task_results["a"]
         ]
 
-    async def test_a_failed_dependency_is_absent_rather_than_none(self, runner):
-        # only successful outputs are ever passed on, so a failed dependency
-        # leaves the dependent's field empty rather than holding a None
+    async def test_a_failed_dependency_never_fills_a_book_shaped_field(self, runner):
+        # a failed goal does leave an artifact behind now (a FailedGoalOutput,
+        # so a generation node can say what went wrong), but it is a different
+        # type — so a field declared for real output stays empty rather than
+        # holding a failure the node would have to test for
         plan = PlanJaneOutput(
             accepted_goals=[_goal("a"), _goal("b", depends_on=["a"])]
         )
@@ -214,7 +220,10 @@ class TestUnreachableGoals:
         )
 
         assert sorted(runner.result.failed_task) == ["a", "b"]
-        assert runner.result.task_results == {}
+        assert all(
+            isinstance(output, FailedGoalOutput)
+            for output in runner.result.task_results.values()
+        )
         assert not runner.record.ok
 
     async def test_a_goal_waiting_on_a_refused_goal_fails(self, runner):
@@ -225,7 +234,11 @@ class TestUnreachableGoals:
         )
 
         assert runner.result.failed_task == ["b"]
-        assert list(runner.result.task_results) == ["a"]
+        assert sorted(runner.result.task_results) == ["a", "b"]
+        assert isinstance(runner.result.task_results["b"], FailedGoalOutput)
+        # the summary is what a reader sees, and it must not call a failed
+        # goal completed just because its artifact sits in the same map
+        assert runner.result.to_summary()["completed_tasks"] == ["a"]
 
     async def test_an_unreachable_goal_opens_no_ui_section(self, runner, events):
         await drive(runner, [_goal("b", depends_on=["nope"])], _spec(_OkExecutor))
@@ -240,13 +253,13 @@ class TestUnrunnableNodes:
         await drive(runner, [_goal()], None)
 
         assert runner.result.failed_task == ["1"]
-        assert runner.result.task_results == {}
+        assert isinstance(runner.result.task_results["1"], FailedGoalOutput)
 
     async def test_registered_node_without_an_executor_is_skipped(self, runner):
         await drive(runner, [_goal()], _spec(None))
 
         assert runner.result.failed_task == ["1"]
-        assert runner.result.task_results == {}
+        assert isinstance(runner.result.task_results["1"], FailedGoalOutput)
 
     async def test_skipped_node_opens_no_ui_section(self, runner, events):
         # it never ran, so a section would render as a step that is
@@ -338,7 +351,7 @@ class TestUnpreparableNodes:
         )
 
         assert runner.result.failed_task == ["1"]
-        assert runner.result.task_results == {}
+        assert isinstance(runner.result.task_results["1"], FailedGoalOutput)
         # never started, so no section is left hanging open
         assert of_type(events, "task.start") == []
 
@@ -376,4 +389,65 @@ class TestUnpreparableNodes:
             await runner(TaskRunnerInput(plan=plan))
 
         assert runner.result.failed_task == ["a"]
-        assert list(runner.result.task_results) == ["b"]
+        assert runner.result.to_summary()["completed_tasks"] == ["b"]
+
+
+class TestFailureArtifacts:
+    """A failed goal leaves a typed artifact behind, so the plan can keep going
+    *informatively*: a generation node declares a slot for failures and is the
+    only thing that speaks to the user, so a failure nothing recorded is a
+    failure nobody is told about.
+
+    The reason text is prose because the reply writer relays it — schema names
+    and missing-field lists stay in the log and `add_details`.
+    """
+
+    async def test_a_failed_goal_records_its_description_and_a_reason(self, runner):
+        await drive(runner, [_goal()], _spec(_FailingExecutor))
+
+        failure = runner.result.task_results["1"]
+        assert isinstance(failure, FailedGoalOutput)
+        assert failure.goal_description == _goal().description
+
+    async def test_the_reason_names_the_dependency_that_found_nothing(self, runner):
+        """How "I don't have Dune" travels two hops: the empty lookup is a
+        *successful* goal with num_books == 0, so only its dependent's reason
+        can explain why the chain stopped."""
+
+        class _EmptyExecutor(AppWorkflow[_Output]):
+            async def run(self, node_input: _Input) -> None:
+                self.result.num_books = 0
+                self.finalize_result(ok=True)
+
+        plan = PlanJaneOutput(
+            accepted_goals=[_goal("a"), _goal("b", depends_on=["a"])]
+        )
+        with patch("app.orchestration.task_runner.REGISTRY") as registry:
+            registry.spec.side_effect = [_spec(_EmptyExecutor), _spec(_FailingExecutor)]
+            await runner(TaskRunnerInput(plan=plan))
+
+        assert "found nothing" in runner.result.task_results["b"].reason
+        assert _goal().description in runner.result.task_results["b"].reason
+
+    async def test_the_reason_names_a_dependency_that_failed(self, runner):
+        plan = PlanJaneOutput(
+            accepted_goals=[_goal("a"), _goal("b", depends_on=["a"])]
+        )
+        with patch("app.orchestration.task_runner.REGISTRY") as registry:
+            registry.spec.side_effect = [
+                _spec(_FailingExecutor),
+                _spec(_FailingExecutor),
+            ]
+            await runner(TaskRunnerInput(plan=plan))
+
+        assert "could not be completed" in runner.result.task_results["b"].reason
+
+    async def test_a_successful_output_is_stamped_with_its_goal_description(
+        self, runner
+    ):
+        """Provenance for the reply: a generation node heads each entry of its
+        report with what the plan asked for, in the planner's words, without
+        importing the planner's types."""
+        await drive(runner, [_goal()], _spec(_OkExecutor))
+
+        assert runner.result.task_results["1"].goal_description == _goal().description

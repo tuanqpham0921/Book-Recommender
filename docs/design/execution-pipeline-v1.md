@@ -1,8 +1,10 @@
 # Execution pipeline: retrieve → filter → analyze → generate (design record)
 
 **Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
-(2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there; the combine
-tier's *schemas* exist with no executors, and there is no generation node.
+(2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there. The combine tier
+is half unparked (`Combine_Intersect`, 2026-08-24), and the generation tier now exists —
+`Generate_Recommendations`, registered 2026-09-07 as a planner goal; see the second
+attempt below.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
 [roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
@@ -408,6 +410,62 @@ branch) or one per turn owning ordering and framing across all of them
 cross-section framing or reports a failure that spans branches; one-per-turn means a
 compound message's unrelated answers get merged by a single writer. Most plans have
 exactly one sink, so the two agree except on compound messages.
+
+### Generation node, second attempt — **`Generate_Recommendations`, registered 2026-09-07**
+
+**A planner goal after all, reversing 2026-07-28** — but for one intent rather than for
+every turn, which is what makes the reversal not a re-run of the argument that removed it.
+The slice is `app/domains/books/write_recommendations/`, the first member of a new
+`NodeTier.GENERATE`, and it is registered like any other node: a fieldless request whose
+docstring is its catalog entry, a `SPEC`, one line in `books/guide.py`.
+
+**Each 2026-08-08 objection, and what answers it:**
+
+| objection | answer |
+|---|---|
+| catalog tokens | 399 tokens, 12% of the catalog (`make tools-catalog`). A fieldless request buys nothing the planner has to fill in |
+| it could be misrouted | It can — and that is now a *checkable* claim rather than an impossibility. Case 80 ("how many books by Pratchett") is the negative golden: a generation goal there is a red |
+| 160 goldens carrying a check that cannot fail | 47 carry it, not 160, and the check can fail in both directions. Scoping it to recommendation asks is the whole of the difference |
+| a plan could come back with no answer | It can, for a non-recommendation turn. **Accepted, and that gap predates this**: nothing has written prose for a plain lookup since `Analyze_Recommend` was cut down (2026-08-22) |
+
+**Why a goal is worth those costs**: the description carries *what to write* ("…and explain
+why each fits"), which a structurally-attached stage cannot express, and the sibling
+generations the owner is heading for — book QA, compare, general — arrive as their own
+slices with their own prompts and their own goldens rather than as branches inside one
+prompt that must serve every plan shape.
+
+**The alternative is built and kept.** Branch `generation_node_sink` (`b35592f`) holds the
+deterministic version: `TaskRunnerWorkflow` attaches an unregistered `AnswerWorkflow`
+(`books/write_answer/`) to every sink of `PlanJaneOutput.branches()`. It needs no planner
+change, no goldens and cannot be omitted; it cannot be *told* anything either. The two
+share their machinery — the `BookReaderWorkflow`/`BookWorkflow` split, the renderer, the
+prompt — so the branches differ only in who decides that an answer happens.
+
+**Attachment is by dependency, not by sink.** The planner points the goal at its chain's
+last book-producing goal; `build_input` fills `sources: list[BookRetrievalOutput]` by
+type. A recommendation consumed by something downstream (case 70, "recommend 2 books like
+Dune and compare them") takes no generation goal — the compare is the sink, and
+`Generate_Comparison` is the sibling that will own it.
+
+**Failure artifacts, added with it (`app/orchestration/task_runner.py`).** A goal that
+fails, is skipped in `_prepare`, or was never reachable now leaves a `FailedGoalOutput`
+(`app/domains/base_workflow.py`) in the runner's results map instead of nothing, and every
+stored output is stamped with its `goal_description`. Three consequences:
+
+- The generation node declares `failures: list[FailedGoalOutput]` and is therefore the
+  one thing that can say *why* there is nothing to show. "I don't have Dune, so I couldn't
+  line anything up against it" is written from the ancestor's artifact, not the sink's.
+- The reason text is composed as prose and already names the upstream cause
+  (`_upstream_context` reads dependencies that failed or returned `num_books == 0`), so it
+  travels two hops without the writer knowing the plan's shape.
+- Nothing else changes: `build_input` matches by type, so a `FailedGoalOutput` fills no
+  retrieval-shaped field and the skip cascade is exactly as it was. This is what the
+  standing `NOTE` comments in `_prepare`/`_dependency_outputs` were contemplating; they
+  are resolved.
+
+**Not built, deliberately:** the rest of the deleted picker (re-rank, exclusions,
+`num_requested`), and any pause — the taxonomy names this node as the HITL point, and the
+seams it leaves for one are the named-input-field skip and these artifacts.
 
 ## Open questions
 

@@ -18,7 +18,7 @@
     "difficulty": "easy",
     "query": "Recommend me a mystery book.",
     "note": "SUBJECT-ANCHORED RECOMMEND (note rewritten 2026-08-21). \"Mystery\" is a word the catalog's text contains, so it is keywords=[\"mystery\"] on Retrieve_by_Lexical_Traits, not a genre — genre is only fiction/non-fiction. That retrieval is the anchor Analyze_Similar_Books picks from. The failure to catch is Analyze_Similar_Books alone with semantic_input=\"mystery\": it has no anchor to depend on, and it sends a lexical subject through a similarity search that another node answers exactly.",
-    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 4,
@@ -39,7 +39,7 @@
     "difficulty": "easy",
     "query": "I want to read something spooky.",
     "note": "Single Recommend with mood-based semantic input. No genre enum, LLM must infer horror/thriller theme.",
-    "expected_nodes": ["Analyze_Similar_Books"]
+    "expected_nodes": ["Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 7,
@@ -74,7 +74,7 @@
     "difficulty": "easy",
     "query": "Recommend me a sci-fi novel with at least 4 stars.",
     "note": "Single Recommend with semantic input and a min_rating filter. One step up from pure semantic.",
-    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Lexical_Traits", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 12,
@@ -109,7 +109,7 @@
     "difficulty": "medium",
     "query": "I loved Dune, what should I read next?",
     "note": "FindByTitle then Recommend. Classic two-step: resolve the anchor book, then recommend based on it.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 17,
@@ -123,7 +123,7 @@
     "difficulty": "medium",
     "query": "What books are similar to ISBN 9780385333481?",
     "note": "FindByISBN13 then Recommend. Same chain as title-based recommendation but anchored on ISBN.",
-    "expected_nodes": ["Retrieve_by_ISBN13", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_ISBN13", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 19,
@@ -137,7 +137,7 @@
     "difficulty": "medium",
     "query": "Recommend me something like Harry Potter but for adults.",
     "note": "FindByTitle then Recommend with semantic modifier (adult-oriented). LLM must carry the 'but for adults' into semantic_input.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 21,
@@ -151,7 +151,7 @@
     "difficulty": "medium",
     "query": "Recommend me books like The Hitchhiker's Guide to the Galaxy sorted by rating.",
     "note": "FindByTitle then Recommend with sort_by=rating. Two-node chain where the filter travels to the recommend step.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 23,
@@ -172,14 +172,14 @@
     "difficulty": "medium",
     "query": "I want a dark fantasy epic — long, highly rated, published after 2000.",
     "note": "Single Recommend with rich semantic_input plus three filters (min_pages implied, min_rating, min_year). No reference book needed.",
-    "expected_nodes": ["Analyze_Similar_Books"]
+    "expected_nodes": ["Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 26,
     "difficulty": "medium",
     "query": "Recommend me something like Dune but shorter and more recent.",
     "note": "FindByTitle then Recommend with max_pages and min_year constraints. LLM must translate 'shorter' and 'more recent' into filter values.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 27,
@@ -193,7 +193,7 @@
     "difficulty": "medium",
     "query": "Recommend me books like The Hunger Games and Divergent.",
     "note": "Two FindByTitle then Recommend with multiple reference_books. Tests that both titles resolve before the recommendation step.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 29,
@@ -221,14 +221,14 @@
     "difficulty": "medium",
     "query": "Recommend me books like Sapiens and The Subtle Art of Not Giving a F*ck — non-fiction, high rated, under 400 pages, after 2010.",
     "note": "Two FindByTitle then Recommend with genre + min_rating + max_pages + min_year filters. Complex filter set on a two-reference recommendation.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 33,
     "difficulty": "medium",
     "query": "Recommend me books like The Name of the Wind, but exclude anything by Patrick Rothfuss.",
     "note": "FindByTitle then Recommend with an exclusion filter on author. Tests the ExclusionBookFilter path inside BooksFilter.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 34,
@@ -242,35 +242,35 @@
     "difficulty": "medium",
     "query": "What should I read after finishing The Lord of the Rings trilogy?",
     "note": "FindByTitle then Recommend. Phrasing is about 'after finishing a series' — LLM must map this to a reference-based recommendation.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 36,
     "difficulty": "hard",
     "query": "Compare 1984 and Brave New World, then recommend something similar to whichever feels darker.",
     "note": "Two FindByTitle + Compare + Recommend. Four-node chain where Recommend depends on the Compare output — tests deep dependency chain.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 37,
     "difficulty": "hard",
     "query": "Who is the developer? Also, are there any books about the technologies they used to build this app?",
     "note": "DeveloperInfo + ProjectInfo + FindByTraits/Recommend across three domains. The tech stack from ProjectInfo informs the book search — cross-domain dependency.",
-    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_Project_Info", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_Developer_Info", "Retrieve_Project_Info", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 38,
     "difficulty": "hard",
     "query": "I want fantasy books similar to both Lord of the Rings and A Song of Ice and Fire — highly rated, after 2005, not too long.",
     "note": "Two FindByTitle then Recommend with multiple filters. Tricky because 'not too long' requires LLM inference for max_pages from context of epic fantasy.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 39,
     "difficulty": "hard",
     "query": "I want something completely different — no sci-fi, no fantasy, no romance. Something literary, thought-provoking, 300-500 pages, highly rated, post-2000, and nothing by Cormac McCarthy.",
     "note": "Single Recommend with complex semantic_input, page range, min_rating, min_year, and multi-field exclusion (categories + author). Tests negative constraint handling.",
-    "expected_nodes": ["Analyze_Similar_Books"]
+    "expected_nodes": ["Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 40,
@@ -291,63 +291,63 @@
     "difficulty": "hard",
     "query": "Find me books like Dune but also like The Lord of the Rings — something epic, philosophically deep, highly rated, over 500 pages, fiction, published after 1980, and please exclude George R.R. Martin.",
     "note": "Two FindByTitle + Recommend with semantic_input, genre, min_pages, min_rating, min_year, and author exclusion. Six simultaneous constraints on a two-reference recommendation.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 43,
     "difficulty": "hard",
     "query": "Compare The Alchemist and The Little Prince on themes, then recommend a modern novel that blends both their themes but is grounded in realism.",
     "note": "Two FindByTitle + Compare + Recommend. The Recommend semantic_input must synthesize the comparison result — four-node chain with semantic chaining between Compare and Recommend.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 44,
     "difficulty": "hard",
     "query": "Compare the writing styles of The Old Man and the Sea, The Great Gatsby, and The Sound and the Fury, then recommend a modern novel (post-2000) that echoes the most impactful one, under 400 pages.",
     "note": "Three FindByTitle + Compare + Recommend. Five nodes with criteria-focused compare and filtered recommendation — tests maximum Compare fan-in before Recommend.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 45,
     "difficulty": "hard",
     "query": "Hello! What's your name? Also tell me about this project and recommend me a sci-fi book.",
     "note": "Small talk + ProjectInfo + Recommend. Tests that the planner correctly separates small_talk from two real goals without over-routing.",
-    "expected_nodes": ["Retrieve_Project_Info", "Retrieve_by_Lexical_Traits", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_Project_Info", "Retrieve_by_Lexical_Traits", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 46,
     "difficulty": "hard",
     "query": "Compare Harry Potter, Narnia, A Wizard of Earthsea, and The Magicians in terms of their magic systems — then recommend something that captures the best of all four.",
     "note": "Four FindByTitle + Compare + Recommend. Six-node chain — the largest legal fan-in for Compare; tests that all four depends_on ids are resolved before Compare runs.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 47,
     "difficulty": "hard",
     "query": "I'm a developer who uses this app. Show me my token usage, tell me about the project's tech stack, and recommend sci-fi books about distributed systems.",
     "note": "UserInfo + ProjectInfo + Recommend across all three domains simultaneously. Three parallel nodes before Recommend — tests multi-domain fan-in.",
-    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Retrieve_by_Lexical_Traits", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_User_Info", "Retrieve_Project_Info", "Retrieve_by_Lexical_Traits", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 48,
     "difficulty": "hard",
     "query": "I want to explore dystopian fiction. Compare 1984, Brave New World, and Fahrenheit 451 on their visions of government control, then recommend 3 modern novels (post-2010) from non-Western perspectives that continue this tradition — highly rated and not too long.",
     "note": "Three FindByTitle + Compare + Recommend. Five nodes with thematic comparison_criteria, geographic semantic modifier, multiple filters, and implicit limit=3. Tests the full complexity of the planner pipeline.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 49,
     "difficulty": "hard",
     "query": "Can you look up my previous conversations, then based on any books I mentioned, recommend something I haven't read yet?",
     "note": "UserInfo(previous_conversation) + Recommend. The Recommend depends on UserInfo output — cross-domain sequential dependency where book data is derived from user history, not a static reference.",
-    "expected_nodes": ["Retrieve_User_Info", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_User_Info", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 50,
     "difficulty": "hard",
     "query": "Compare Dune, Foundation, and Neuromancer on world-building and technology themes. Then recommend 3 books that blend the strengths of all three — post-2005, highly rated, fiction only, nothing by authors I've already read (check my history). Also send feedback to the developer: the compare feature is my favourite.",
     "note": "Three FindByTitle + Compare + UserInfo + Recommend + Feedback. Seven nodes across book and user domains. The Recommend exclusion depends on UserInfo output; Feedback runs in parallel. Maximum realistic complexity for this system.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_Reading_Stats", "Analyze_Similar_Books", "Provide_Feedback"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Retrieve_Reading_Stats", "Analyze_Similar_Books", "Provide_Feedback", "Generate_Recommendations"]
   },
   {
     "id": 51,
@@ -417,7 +417,7 @@
     "difficulty": "hard",
     "query": "Find me some books by Jane Austen and Neil Gaiman with 200 pages or more, in thriller, before 2020. And recommend me some books like them with rating 4.0+ and at least 1000 ratings.",
     "note": "CONSTRAINT-DENSE TWO-STAGE (design-intent expectation, added 2026-07-24). The heaviest case in the suite: two authors and five constraints split across two stages. Stage 1 is case 53's shape (two separate bibliographies, one Retrieve_by_Author each) with three constraints hung on each node — pages >= 200, thriller, before 2020 — none of which is an anchor. Stage 2 is 'like them' plus two more constraints (rating >= 4.0, ratings_count >= 1000), which is Analyze_Similar_Books depending on both retrievals. So three nodes, not five: no Retrieve_by_Lexical_Traits for thriller, no separate node for the page or year filters. Two distinct failures to catch: (a) promoting a constraint to an anchor node, which unions instead of narrowing, and (b) losing the dependency link so the recommendation runs off the raw query rather than the retrieved books. Also a live example of the argument-level blind spot — the goals report can confirm the three node types and still miss every one of the five constraints.",
-    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Author", "Retrieve_by_Author", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 61,
@@ -431,7 +431,7 @@
     "difficulty": "medium",
     "query": "Recommend me something like Neuromancer but under 300 pages.",
     "note": "RECOMMENDATION CONSTRAINT (added 2026-07-24, re-baselined 2026-08-24 \u2014 the premise reversed twice). It expected Retrieve_by_Title + Analyze_Similar_Books alone, with the bound left in the similarity goal's description for that node's own parse to route into its vector search's WHERE. Both halves of that are now gone: Analyze_Similar_Books stopped parsing anything (2026-08-22), and the argument it rested on \u2014 that filtering a ranked pool afterwards throws the ranking away \u2014 was a property of materialized ROWS, not of a scored deferred query. Combine_Intersect carries the pool's cosine score through the narrowing (compose(op=\"and\")), so the bound is its own retrieval and the ranking survives. The count then means \"of the 250 nearest, N are also under 300 pages\". The failure to catch is now the old expectation: dropping the bound entirely because the similarity node has nowhere to put it.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Retrieve_by_Numeric_Traits", "Combine_Intersect", "Generate_Recommendations"]
   },
   {
     "id": 63,
@@ -445,7 +445,7 @@
     "difficulty": "hard",
     "query": "Recommend books like The Road, then only keep the ones with at least 1000 ratings.",
     "note": "POST-FILTER PHRASING TRAP (added 2026-07-24, re-baselined 2026-08-24). The wording explicitly describes a post-filter \u2014 recommend first, THEN keep some \u2014 and the correct plan used to ignore it, because filtering a ranked list after the fact threw the ranking away. It no longer does: Combine_Intersect narrows the similarity pool in SQL and compose(op=\"and\") carries the cosine score through, so the literal reading is now the right one and the trap is defused rather than tested. What is still worth catching is the bound going nowhere \u2014 Analyze_Similar_Books parses nothing since 2026-08-22, so 'at least 1000 ratings' has no home except its own Retrieve_by_Numeric_Traits goal. Kept as a live case for that, not for the syntax-vs-semantics question it was written for.",
-    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
+    "expected_nodes": ["Retrieve_by_Title", "Analyze_Similar_Books", "Retrieve_by_Numeric_Traits", "Combine_Intersect", "Generate_Recommendations"]
   },
   {
     "id": 65,
@@ -459,7 +459,7 @@
     "difficulty": "easy",
     "query": "Recommend me a book.",
     "note": "BARE RECOMMEND (design-intent expectation, added 2026-07-28 with Retrieve_Random's promotion to V1 core). The word 'recommend' is present but no taste is: no anchor title, no mood, no genre. Analyze_Similar_Books needs a supporting retrieval and there is nothing to build one from, so the honest plan is a single Retrieve_Random and nothing after it — the node already returns a book, so there is nothing for an analyze step to rank. Tests whether the planner routes on the verb or on whether the user actually expressed a preference. Two failures to catch: Analyze_Similar_Books over an invented anchor, and Retrieve_Random + Analyze_Similar_Books.",
-    "expected_nodes": ["Retrieve_Random"]
+    "expected_nodes": ["Retrieve_Random", "Generate_Recommendations"]
   },
   {
     "id": 67,
@@ -473,14 +473,14 @@
     "difficulty": "easy",
     "query": "Recommend me a J.K. Rowling book.",
     "note": "AUTHOR-ANCHORED RECOMMEND (design-intent expectation, added 2026-07-28). The author-shaped twin of case 3 ('recommend me a mystery book' → Retrieve_by_Lexical_Traits + Analyze_Similar_Books); the suite had title anchors (16, 20, 22) and genre anchors (3, 11) but no author anchor, so this fills the last corner of the recommend triangle. The author is the taste signal: retrieve her catalog, then pick from it. TWO failures to catch, one on each side. (a) Retrieve_by_Author alone, which answers case 52's question instead — the user asked for ONE book chosen for them, not the bibliography. (b) Retrieve_Random: this query is case 66's 'Recommend me a book' with four words inserted, and 'recommend me a book' is a literal Example query in Retrieve_Random's docstring, so 66 and 68 together are the actual test of whether the planner reads the anchor or pattern-matches the phrasing. The named author is exactly the 'taste, mood or anchor' that Retrieve_Random's Do-not-use clause routes away.",
-    "expected_nodes": ["Retrieve_Random"]
+    "expected_nodes": ["Retrieve_Random", "Generate_Recommendations"]
   },
   {
     "id": 69,
     "difficulty": "hard",
     "query": "Compare Dune and IT on writing style, then recommend something based on the scarier one.",
     "note": "COMPARE ON ONE AXIS, PIVOT ON ANOTHER (added 2026-07-28). Node-wise this is case 36 again — two Retrieve_by_Title, Analyze_Compare, Analyze_Similar_Books — and it is here for what happens INSIDE the nodes, which the goals report cannot see. The compare is explicitly scoped ('on writing style') while the pivot that selects the anchor is a different attribute ('the scarier one'), so the two criteria words must land in different nodes: 'writing style' in Analyze_Compare.comparison_criteria, 'scarier' in Analyze_Similar_Books.semantic_input. Three failures to catch, only the first of which the node diff sees: dropping the recommend and answering with the comparison alone (the phrasing 'recommend on the scarier one' can be misread as 'tell me which one to read'); folding 'scarier' into comparison_criteria, which produces a report on the right books along the wrong axis; and pointing Analyze_Similar_Books at the two title retrievals instead of at the compare, which quietly recommends from BOTH books pooled rather than from whichever the report picked. Worth noting the design tension it exposes: a report scoped to writing style does not actually contain the scariness verdict the pivot needs.",
-    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Retrieve_by_Title", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 70,
@@ -537,5 +537,36 @@
     "query": "Find me fantasy books over 400 pages.",
     "note": "PAIR WITH CASE 76 (added 2026-08-20, re-baselined 2026-08-24). Same bound, one added subject. This pair used to hold the numbers-only rule \u2014 76 routes to Retrieve_by_Numeric_Traits alone, 77 must NOT. That rule is retired: 77 now uses the numeric node TOO, and what the pair holds instead is the intersect. 76 has one condition and takes no combine node; 77 has two and requires one. The failure to catch is emitting both retrievals for 77 and stopping there, which pools them and answers with every fantasy book plus every long book.",
     "expected_nodes": ["Retrieve_by_Lexical_Traits", "Retrieve_by_Numeric_Traits", "Combine_Intersect"]
+  },
+  {
+    "id": 78,
+    "difficulty": "easy",
+    "query": "Recommend books like Dune and explain why each one fits.",
+    "note": "EXPLICIT EXPLANATION (added 2026-09-07 with Generate_Recommendations). The plan is identical to case 16's — the explanation is not a separate capability, it is what the generation goal's description asks for. The failure to catch is a second goal for \"explain\", or an Analyze_Compare over the pool: nothing compares here, the reply writer is simply told to justify the picks from the anchor and the searched-for description.",
+    "expected_nodes": [
+      "Retrieve_by_Title",
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
+    ]
+  },
+  {
+    "id": 79,
+    "difficulty": "medium",
+    "query": "Do you have The Silmarillion? If so recommend something like it, and tell me why.",
+    "note": "ONE CHAIN, ONE REPLY (added 2026-09-07). A chained ask — the lookup is the anchor for the similarity search, not a separate answer — so it is ONE generation goal at the end, not one per part. This is also the case that exercises the failure path end to end when the title misses: the retrieval finds nothing, the similarity goal is skipped, and the generation goal still runs, reading the failure artifact so the reply can say why there is nothing to show.",
+    "expected_nodes": [
+      "Retrieve_by_Title",
+      "Analyze_Similar_Books",
+      "Generate_Recommendations"
+    ]
+  },
+  {
+    "id": 80,
+    "difficulty": "medium",
+    "query": "How many books do you have by Terry Pratchett?",
+    "note": "NO GENERATION GOAL (added 2026-09-07, the negative half of the pair with 78/79). A count is not a recommendation, so no Generate_Recommendations — this is what stops the node becoming a step appended to every plan, which is the objection that removed the 2026-08-08 generation node. The failure to catch is a generation goal here: it would write recommendation prose over a bibliography nobody asked to be recommended.",
+    "expected_nodes": [
+      "Retrieve_by_Author"
+    ]
   }
 ]

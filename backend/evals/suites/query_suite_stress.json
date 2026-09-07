@@ -24,7 +24,7 @@
     "category": "confusing_chain_current",
     "query": "Recommend me a book. Then compare that recommendation to Dune. Then recommend something based on that comparison. Then find a traits-matched book under 300 pages similar to that. Then compare all four of them at once. Then recommend one final book based on that big comparison.",
     "note": "A six-deep dependency chain of alternating Recommend/Compare steps, each consuming the previous step's not-yet-computed output, plus a 4-way compare in the middle. Stress-tests get_execution_levels' recursive level_of() and the cycle detector at depth, and checks the mermaid diagram stays legible. Purely current-registry node types.",
-    "expected_nodes": ["Analyze_Similar_Books", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Analyze_Similar_Books", "Analyze_Compare", "Analyze_Similar_Books"]
+    "expected_nodes": ["Analyze_Similar_Books", "Retrieve_by_Title", "Analyze_Compare", "Analyze_Similar_Books", "Analyze_Similar_Books", "Analyze_Compare", "Analyze_Similar_Books", "Generate_Recommendations"]
   },
   {
     "id": 411,

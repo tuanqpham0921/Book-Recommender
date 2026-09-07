@@ -11,17 +11,11 @@ history (`git log -p -- backend/TODO.md`).
 
 ---
 
-if you do it by slice then (steps)
-
-node1 -> node2 -> node3 -> answer
-           |
-           V 
-        answer
-
-then if a node failed
-then you have to go and find it
-
-with the sink appoarch it goes straight into the end
+Migrated 2026-09-07: the sink-vs-slice sketch ("if a node failed then you have to go and
+find it") → `docs/design/execution-pipeline-v1.md`, under the second generation-node
+attempt. Answered by the failure artifacts: a failed goal leaves a `FailedGoalOutput` and
+the runner composes the reason naming the upstream cause, so the generation node is handed
+the failure instead of having to go looking for it.
 
 ---
 
