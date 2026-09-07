@@ -30,6 +30,16 @@ outgrows `run` (`dependents.py`). Never a `utils.py` — a helper either belongs
 to the flow, to one call's pure half, or to the input, and naming the file for
 that is the point.
 
+**One slice deliberately has no `SPEC`: `books/write_answer/`.** It is the terminal
+answer stage — `AnswerWorkflow`, one reply per sink of the plan — and the planner never
+selects it. `TaskRunnerWorkflow` attaches one to each sink instead, which is why it costs
+no catalog tokens, cannot be misrouted, cannot be missing from a plan, and appears in no
+eval golden. It has no `labels.py`, no request schema and no `guide.py` line; there is
+nothing about it for `REGISTRY` to answer. It subclasses `BookReaderWorkflow` rather than
+`BookWorkflow` because it produces prose, not a count — see the naming section below.
+A second slice like this should be rare: the absence of a spec is the claim that
+*nothing chooses this*, and everything a planner can choose belongs in the registry.
+
 - `node_spec.py` — `NodeSpec` (node_type, tier, request, output, executor) and
   `NodeTier`. One spec per node; it is the **only** thing a slice has to export.
   Its `__post_init__` checks the spec's name against the request schema's
@@ -166,9 +176,17 @@ read in one node and a write in another quietly stop sharing a transaction.
 
 ## Naming: Workflow, Executor
 
-The ladder is `airglider.Workflow` → `AppWorkflow` → `BookWorkflow`, each in a
-`workflow.py`/`base_workflow.py` file. Concrete units of work are `*Workflow`
-too: `TriageWorkflow`, `TaskRunnerWorkflow`.
+The ladder is `airglider.Workflow` → `AppWorkflow` → `BookReaderWorkflow` →
+`BookWorkflow`, each in a `workflow.py`/`base_workflow.py` file. Concrete units of work
+are `*Workflow` too: `TriageWorkflow`, `TaskRunnerWorkflow`, `AnswerWorkflow`.
+
+The last two rungs split on **whether the output is book-shaped**, not on how much they
+share. `BookReaderWorkflow` is `store` + `fetch_books` + `stream_books`, none of which
+writes to an output field, so it is bound only to `NodeWorkflowOutput`. `BookWorkflow`
+adds `count_books`, which writes `query`/`query_sql`/`num_books`, so it is bound to
+`BookRetrievalOutput` — and that bound is the point: a node's output must be book-shaped.
+Every *node* subclasses `BookWorkflow`. The one subclass of the reader alone is
+`AnswerWorkflow`, which needs rows and cards while producing prose.
 
 The bottom rung is a **separate library**, and its rules are not restated here:
 what `ok` means, when a producer raises instead of reporting, the two verbs for

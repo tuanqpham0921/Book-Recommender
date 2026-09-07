@@ -24,12 +24,17 @@ from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from app.domains.books import find_by_title
 from app.domains.books.external import BookRequestContext
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
+from app.domains.books.write_answer import AnswerInput, AnswerOutput
 from app.domains.node_input import NodeInput
 from app.domains.node_spec import NodeSpec
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 
 NODE_TYPE = FindTitleNodeTypeEnum.REQUEST
+
+# The runner attaches one of these to every sink. Its id prefix is what tells a
+# reply's section apart from a node's in the event stream.
+ANSWER_PREFIX = "gen_"
 
 
 class _Output(NodeWorkflowOutput):
@@ -129,10 +134,61 @@ def of_type(events: list[dict], event_type: str) -> list:
     return [e["data"] for e in events if e["type"] == event_type]
 
 
-async def drive(runner, goals: list[SystemGoal], spec: NodeSpec | None):
+def node_sections(events: list[dict], event_type: str) -> list:
+    """Section events for *nodes* only.
+
+    Every sink also gets an answer section, which is `TestAnswerStage`'s
+    subject. Tests about plan execution filter them out so they keep asserting
+    on the thing they are named for.
+    """
+    return [
+        data
+        for data in of_type(events, event_type)
+        if not data["task_id"].startswith(ANSWER_PREFIX)
+    ]
+
+
+class _StubAnswer(AppWorkflow[AnswerOutput]):
+    """Stands in for `AnswerWorkflow` in the runner's own tests.
+
+    The runner's job is *attaching* an answer to each sink; what the answer
+    stage does with the branch is its own slice's tests. Stubbing it also keeps
+    an LLM call out of every test in this file.
+    """
+
+    ui_section_title = "Answer"
+    ui_section_collapsible = False
+    seen: list[AnswerInput] = []
+
+    async def run(self, node_input: AnswerInput) -> None:
+        type(self).seen.append(node_input)
+        self.result.text = "an answer"
+        self.finalize_result(ok=True)
+
+
+class _FailingAnswer(_StubAnswer):
+    async def run(self, node_input: AnswerInput) -> None:
+        type(self).seen.append(node_input)
+        self.finalize_result(ok=False)
+
+
+@pytest.fixture(autouse=True)
+def _reset_stub_answer():
+    _StubAnswer.seen = []
+    _FailingAnswer.seen = []
+
+
+async def drive(
+    runner,
+    goals: list[SystemGoal],
+    spec: NodeSpec | None,
+    answer: type = _StubAnswer,
+):
     """Run the plan with the registry lookup stubbed to `spec`."""
     plan = PlanJaneOutput(accepted_goals=goals)
-    with patch("app.orchestration.task_runner.REGISTRY") as registry:
+    with patch("app.orchestration.task_runner.REGISTRY") as registry, patch(
+        "app.orchestration.task_runner.AnswerWorkflow", answer
+    ):
         registry.spec.return_value = spec
         await runner(TaskRunnerInput(plan=plan))
 
@@ -176,7 +232,9 @@ class TestSuccessfulExecution:
         plan = PlanJaneOutput(
             accepted_goals=[_goal("a"), _goal("b", depends_on=["a"])]
         )
-        with patch("app.orchestration.task_runner.REGISTRY") as registry:
+        with patch("app.orchestration.task_runner.REGISTRY") as registry, patch(
+            "app.orchestration.task_runner.AnswerWorkflow", _StubAnswer
+        ):
             registry.spec.side_effect = [_spec(_FailingExecutor), _spec(_OkExecutor)]
             await runner(TaskRunnerInput(plan=plan))
 
@@ -230,7 +288,7 @@ class TestUnreachableGoals:
     async def test_an_unreachable_goal_opens_no_ui_section(self, runner, events):
         await drive(runner, [_goal("b", depends_on=["nope"])], _spec(_OkExecutor))
 
-        assert of_type(events, "task.start") == []
+        assert node_sections(events, "task.start") == []
 
 
 class TestUnrunnableNodes:
@@ -253,8 +311,8 @@ class TestUnrunnableNodes:
         # permanently empty
         await drive(runner, [_goal()], None)
 
-        assert of_type(events, "task.start") == []
-        assert of_type(events, "task.end") == []
+        assert node_sections(events, "task.start") == []
+        assert node_sections(events, "task.end") == []
 
 
 class TestTaskSectionBracketing:
@@ -263,10 +321,10 @@ class TestTaskSectionBracketing:
     ):
         await drive(runner, [_goal()], _spec(_OkExecutor))
 
-        assert of_type(events, "task.start") == [
+        assert node_sections(events, "task.start") == [
             {"task_id": "1", "title": "Looking up a title", "collapsible": True}
         ]
-        assert of_type(events, "task.end") == [
+        assert node_sections(events, "task.end") == [
             {"task_id": "1", "count": 7, "ok": True}
         ]
 
@@ -275,12 +333,12 @@ class TestTaskSectionBracketing:
     ):
         await drive(runner, [_goal()], _spec(_UntitledExecutor))
 
-        assert of_type(events, "task.start")[0]["title"] == "Retrieve by Title"
+        assert node_sections(events, "task.start")[0]["title"] == "Retrieve by Title"
 
     async def test_a_failing_node_still_closes_its_section(self, runner, events):
         await drive(runner, [_goal()], _spec(_FailingExecutor))
 
-        assert of_type(events, "task.end") == [
+        assert node_sections(events, "task.end") == [
             {"task_id": "1", "count": None, "ok": False}
         ]
 
@@ -289,7 +347,7 @@ class TestTaskSectionBracketing:
         # this exercises the failure path rather than the `finally`
         await drive(runner, [_goal()], _spec(_ExplodingExecutor))
 
-        assert of_type(events, "task.end") == [
+        assert node_sections(events, "task.end") == [
             {"task_id": "1", "count": None, "ok": False}
         ]
         assert runner.result.failed_task == ["1"]
@@ -303,7 +361,9 @@ class TestTaskSectionBracketing:
         section left open renders as a step that never finishes."""
         plan = PlanJaneOutput(accepted_goals=[_goal()])
 
-        with patch("app.orchestration.task_runner.REGISTRY") as registry:
+        with patch("app.orchestration.task_runner.REGISTRY") as registry, patch(
+            "app.orchestration.task_runner.AnswerWorkflow", _StubAnswer
+        ):
             registry.spec.return_value = _spec(_CancelledExecutor)
             with pytest.raises(asyncio.CancelledError):
                 await runner.run(TaskRunnerInput(plan=plan))
@@ -311,6 +371,106 @@ class TestTaskSectionBracketing:
         assert of_type(events, "task.end") == [
             {"task_id": "1", "count": None, "ok": False}
         ]
+
+
+class TestAnswerStage:
+    """One reply per sink, attached by the runner rather than chosen by the
+    planner. The stage is not in the registry, so nothing about a plan can make
+    it absent — which is the whole reason it is not a goal.
+
+    What the reply *says* is the write_answer slice's own tests; this is about
+    where replies come from and how many.
+    """
+
+    async def test_a_single_sink_gets_one_answer(self, runner, events):
+        await drive(runner, [_goal()], _spec(_OkExecutor))
+
+        assert [d["task_id"] for d in of_type(events, "task.start")] == [
+            "1",
+            "gen_1",
+        ]
+        assert len(_StubAnswer.seen) == 1
+
+    async def test_the_answer_section_is_not_collapsible(self, runner, events):
+        # the reply is the point of the turn; a node's cards are working
+        # material and fold away
+        await drive(runner, [_goal()], _spec(_OkExecutor))
+
+        section = of_type(events, "task.start")[-1]
+        assert section == {
+            "task_id": "gen_1",
+            "title": "Answer",
+            "collapsible": False,
+        }
+
+    async def test_a_chained_ask_is_one_answer_over_the_whole_branch(self, runner):
+        """"Do you have Dune? and recommend like it" — one sink, so one reply,
+        and it is written from the ancestor too. The ancestor is what knows
+        whether Dune was found."""
+        await drive(
+            runner, [_goal("1"), _goal("2", depends_on=["1"])], _spec(_OkExecutor)
+        )
+
+        assert len(_StubAnswer.seen) == 1
+        descriptions = [s.description for s in _StubAnswer.seen[0].steps]
+        assert len(descriptions) == 2
+
+    async def test_disjoint_asks_get_one_answer_each(self, runner):
+        """Two independent branches in one message are two intents, so two
+        replies — the compound case that decided one-per-sink over one-per-turn.
+        """
+        await drive(
+            runner,
+            [_goal("1"), _goal("2", depends_on=["1"]), _goal("3")],
+            _spec(_OkExecutor),
+        )
+
+        assert len(_StubAnswer.seen) == 2
+        assert [len(inp.steps) for inp in _StubAnswer.seen] == [2, 1]
+
+    async def test_a_branch_whose_sink_failed_is_still_answered(self, runner):
+        """The sad path, and the reason the stage does not gate on success.
+
+        With no Dune the similarity goal fails, and only its ancestor knows
+        why — so a stage that ran only on success would say nothing in exactly
+        the case that needs saying.
+        """
+        plan = PlanJaneOutput(
+            accepted_goals=[_goal("1"), _goal("2", depends_on=["1"])]
+        )
+        with patch("app.orchestration.task_runner.REGISTRY") as registry, patch(
+            "app.orchestration.task_runner.AnswerWorkflow", _StubAnswer
+        ):
+            registry.spec.side_effect = [_spec(_OkExecutor), _spec(_FailingExecutor)]
+            await runner(TaskRunnerInput(plan=plan))
+
+        assert runner.result.failed_task == ["2"]
+        assert len(_StubAnswer.seen) == 1
+        steps = _StubAnswer.seen[0].steps
+        # the sink is last, and it is marked as the thing that did not happen
+        assert [s.failed for s in steps] == [False, True]
+
+    async def test_an_unreachable_sink_is_still_answered(self, runner):
+        # a goal waiting on one the planner refused never runs, but the user
+        # still asked for it and still has to be told
+        await drive(
+            runner, [_goal("b", depends_on=["refused_1"])], _spec(_OkExecutor)
+        )
+
+        assert len(_StubAnswer.seen) == 1
+        assert [s.failed for s in _StubAnswer.seen[0].steps] == [True]
+
+    async def test_a_failed_answer_makes_the_turn_not_ok(self, runner):
+        # a branch with no reply is a branch the user never heard about
+        await drive(runner, [_goal()], _spec(_OkExecutor), answer=_FailingAnswer)
+
+        assert runner.result.failed_task == ["gen_1"]
+        assert not runner.record.ok
+
+    async def test_an_empty_plan_writes_no_answer(self, runner):
+        await drive(runner, [], _spec(_OkExecutor))
+
+        assert _StubAnswer.seen == []
 
 
 class TestPlanRequirement:
@@ -337,9 +497,13 @@ class TestUnpreparableNodes:
             runner, [_goal()], _spec(_OkExecutor, context=BookRequestContext)
         )
 
-        assert runner.result.failed_task == ["1"]
+        # the answer stage narrows the same context, so a request with no store
+        # loses the reply too — correct, and the only honest outcome: there is
+        # nothing to materialize the branch from
+        assert runner.result.failed_task == ["1", "gen_1"]
         assert runner.result.task_results == {}
         # never started, so no section is left hanging open
+        assert node_sections(events, "task.start") == []
         assert of_type(events, "task.start") == []
 
     async def test_a_node_missing_a_required_input_is_skipped(self, runner, events):
@@ -349,7 +513,7 @@ class TestUnpreparableNodes:
         await drive(runner, [_goal()], _spec(_OkExecutor, input=_NeedsAnchor))
 
         assert runner.result.failed_task == ["1"]
-        assert of_type(events, "task.start") == []
+        assert node_sections(events, "task.start") == []
 
     async def test_the_skip_records_which_field_was_missing(self, runner):
         """The detail line is the seam for asking the planner: it names the
@@ -368,7 +532,9 @@ class TestUnpreparableNodes:
         class _NeedsAnchor(NodeInput):
             anchor: _Output
 
-        with patch("app.orchestration.task_runner.REGISTRY") as registry:
+        with patch("app.orchestration.task_runner.REGISTRY") as registry, patch(
+            "app.orchestration.task_runner.AnswerWorkflow", _StubAnswer
+        ):
             registry.spec.side_effect = [
                 _spec(_OkExecutor, input=_NeedsAnchor),
                 _spec(_OkExecutor),

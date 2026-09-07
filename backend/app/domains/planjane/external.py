@@ -118,10 +118,17 @@ class ExecutionOrder(NamedTuple):
     `unreachable` is every goal no layer could contain: in a cycle, or depending
     on one the planner refused. Returned rather than dropped — omitting them is
     how a user asks for three things, gets one, and is told it succeeded.
+
+    `sinks` is every goal nothing else depends on — the ends of the DAG, and the
+    unit one answer is written per. Not a depth property: a plan can have
+    several sinks at different depths (one per independent ask in a compound
+    message), and the goal with the most dependencies is very often not
+    terminal.
     """
 
     layers: list[list[SystemGoal]]
     unreachable: list[SystemGoal]
+    sinks: list[SystemGoal]
 
 
 class PlanJaneOutput(NodeWorkflowOutput):
@@ -203,4 +210,61 @@ class PlanJaneOutput(NodeWorkflowOutput):
                 f"goal): {[goal.id for goal in unreachable]}"
             )
 
-        return ExecutionOrder(layers=layers, unreachable=unreachable)
+        # Read off the same `dependents` map the layering was built from, so
+        # "nothing depends on this" has one definition. `.get`, not `[...]`:
+        # `dependents` is a defaultdict and a sink has no key in it at all.
+        #
+        # Over every accepted goal rather than only the scheduled ones. A sink
+        # that never ran still defines a branch, and its answer is written from
+        # whichever ancestors did run plus the failure — which is how "I don't
+        # have Dune, so I couldn't find anything like it" gets written at all.
+        sinks = [goal for goal in goals.values() if not dependents.get(goal.id)]
+        if goals and not sinks:
+            # Every goal is depended on by another, i.e. a cycle. The plan is
+            # invalid, but answering from everything beats answering nothing.
+            logger.warning("No sink goals (every goal is depended on) — a cycle")
+            sinks = list(goals.values())
+
+        return ExecutionOrder(layers=layers, unreachable=unreachable, sinks=sinks)
+
+    def branches(self) -> list[list[SystemGoal]]:
+        """One list of goals per sink — what that sink's answer is written from.
+
+        A branch is a sink plus every goal it transitively depends on, in plan
+        order with the sink last. The sink alone is not enough: "do you have
+        Dune? and recommend like it" has a single sink (the similarity search),
+        and only its *ancestor* knows whether Dune was found.
+
+        Two branches sharing an ancestor both contain it. An output can be read
+        twice, and a goal feeding two answers is relevant to both.
+        """
+        goals = self.id_to_node()
+        plan_order = {goal_id: i for i, goal_id in enumerate(goals)}
+
+        branches: list[list[SystemGoal]] = []
+        for sink in self.execution_order().sinks:
+            # ancestor closure, iterative — a cycle among the ancestors would
+            # recurse forever, and `execution_order` already reports one
+            seen: set[str] = set()
+            pending = [sink.id]
+            while pending:
+                goal_id = pending.pop()
+                # an unknown id is a dependency on a refused goal: no output
+                # will exist for it, so there is nothing for the answer to read
+                if goal_id in seen or goal_id not in goals:
+                    continue
+                seen.add(goal_id)
+                pending.extend(goals[goal_id].depends_on)
+
+            members = sorted(
+                (goals[goal_id] for goal_id in seen),
+                key=lambda goal: plan_order[goal.id],
+            )
+            # Sink last regardless of plan order, which is only a convention:
+            # the answer reads its branch as a narrative and concludes with the
+            # goal the whole branch was working toward.
+            branches.append(
+                [goal for goal in members if goal.id != sink.id] + [sink]
+            )
+
+        return branches

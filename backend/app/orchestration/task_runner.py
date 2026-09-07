@@ -6,6 +6,12 @@ from pydantic import Field, ValidationError
 
 from app.common.request_context import RequestContext
 from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
+from app.domains.books.external import BookRequestContext, BookRetrievalOutput
+from app.domains.books.write_answer import (
+    AnswerInput,
+    AnswerStep,
+    AnswerWorkflow,
+)
 from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.planjane import PlanJaneOutput, SystemGoal
@@ -73,17 +79,26 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                     self.result.failed_task.append(goal.id)
                     continue
 
-                step_result = await self._run_in_task_section(goal, *prepared)
+                step_result = await self._run_in_task_section(
+                    goal.id,
+                    goal.target_node_type.value.replace("_", " "),
+                    *prepared,
+                )
                 # an `ok` envelope with no payload is a bug in the node, not a
                 # state downstream can use — one failed goal either way
                 if not step_result.ok or step_result.result is None:
                     self.result.failed_task.append(goal.id)
                     continue
-                
+
                 results[goal.id] = step_result.result
                 await self.sse_stream.send_divider()
 
         self.result.task_results = results
+
+        # Last, and unconditionally: the turn's prose. Nothing above this line
+        # speaks to the user in sentences.
+        await self._write_answers(node_input.plan, results)
+
         self.finalize_result(ok=not self.result.failed_task)
 
     def _prepare(
@@ -166,43 +181,109 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
             if dep_id in results
         }
 
+    async def _write_answers(
+        self, plan: PlanJaneOutput, results: Mapping[str, NodeWorkflowOutput]
+    ) -> None:
+        """One reply per sink — the ends of the DAG, and the turn's only prose.
+
+        A branch is a sink plus its ancestors (`PlanJaneOutput.branches`), and
+        it is answered **whether or not its sink succeeded**. That is the whole
+        point: "do you have Dune? and recommend like it" with no Dune fails at
+        the sink, and only the ancestor knows why, so a stage that ran only on
+        success would say nothing in exactly the case that needs saying.
+
+        The stage is not in the registry and the planner never chose it. What
+        decides an answer happens is this loop.
+
+        Sequential, not concurrent. The SSE queue is one ordered stream, so two
+        writers streaming at once would interleave their deltas into each
+        other's sections.
+        """
+        for index, branch in enumerate(plan.branches(), start=1):
+            steps: list[AnswerStep] = []
+            for goal in branch:
+                output = results.get(goal.id)
+                steps.append(
+                    AnswerStep(
+                        description=goal.description,
+                        # By type, the way `build_input` selects: an output
+                        # that is not book-shaped is one this stage can name
+                        # but not fetch from. None is produced today.
+                        output=(
+                            output
+                            if isinstance(output, BookRetrievalOutput)
+                            else None
+                        ),
+                        # No output means the goal failed, was skipped in
+                        # `_prepare`, or was never reachable — three routes to
+                        # the one thing the reply has to say: this didn't
+                        # happen.
+                        failed=output is None,
+                    )
+                )
+
+            task_id = f"gen_{index}"
+            try:
+                ctx = BookRequestContext.narrow(self.ctx)
+            except LookupError as e:
+                logger.warning(f"Skipping answer {task_id}: {e}")
+                self.add_details(f"{task_id}: {e}")
+                self.result.failed_task.append(task_id)
+                continue
+
+            step_result = await self._run_in_task_section(
+                task_id,
+                AnswerWorkflow.ui_section_title or "Answer",
+                AnswerWorkflow(ctx, messages=self.messages),
+                AnswerInput(steps=steps),
+            )
+            # A branch with no reply is a branch the user never heard about, so
+            # the turn cannot report ok. `failed_task` has no reader outside
+            # this file, so a `gen_N` id sitting beside goal ids is safe.
+            if not step_result.ok:
+                self.result.failed_task.append(task_id)
+
     async def _run_in_task_section(
         self,
-        goal: SystemGoal,
-        executor: AppWorkflow,
-        node_input: WorkflowInput,
+        task_id: str,
+        fallback_title: str,
+        workflow: AppWorkflow,
+        workflow_input: WorkflowInput,
     ) -> OperationResult[NodeWorkflowOutput]:
-        """Run one node bracketed by the UI's task.start / task.end events.
+        """Run one workflow bracketed by the UI's task.start / task.end events.
 
-        The runner owns both ends, not the executors, so a node that raises — or
-        a cancelled turn — can't leave a section hanging open. That is what the
+        The runner owns both ends, not the workflows, so one that raises — or a
+        cancelled turn — can't leave a section hanging open. That is what the
         `finally` and the `step_result = None` seed are for.
 
+        Takes an id and a title rather than a `SystemGoal` because both a
+        dispatched node and a sink's answer come through here, and only one of
+        them is a goal. The `finally` is the reason to share it.
+
         A bare await, never `unwrap()`: a failed node is one goal marked failed,
-        not an aborted plan, so the runner wants the envelope. The executor and
+        not an aborted plan, so the runner wants the envelope. The workflow and
         its input arrive already built, so anything that could fail earlier
         failed in `_prepare`.
         """
-        executor_cls = type(executor)
+        workflow_cls = type(workflow)
         await self.sse_stream.send_task_start(
-            task_id=goal.id,
-            title=executor_cls.ui_section_title
-            or goal.target_node_type.value.replace("_", " "),
-            collapsible=executor_cls.ui_section_collapsible,
+            task_id=task_id,
+            title=workflow_cls.ui_section_title or fallback_title,
+            collapsible=workflow_cls.ui_section_collapsible,
         )
 
         step_result = None
         try:
-            step_result = await executor(node_input)
-            
+            step_result = await workflow(workflow_input)
+
             # NOTE: probably should unwrap here
             return step_result
         finally:
             output = step_result.result if step_result else None
             await self.sse_stream.send_task_end(
-                task_id=goal.id,
+                task_id=task_id,
                 # every retrieval output carries num_books, so the header
-                # fills itself in
+                # fills itself in; an answer has none and the header stays bare
                 count=getattr(output, "num_books", None),
                 ok=bool(step_result and step_result.ok),
             )

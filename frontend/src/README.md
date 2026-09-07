@@ -45,8 +45,18 @@ closed in a `finally` — a node that raises still closes its section. `task.end
 carries the `count` that stamps the header after the fact, since a section opens
 before the node knows how many books it matched. Sections open expanded and fold
 themselves on `task.end`, so the finished turn shows the answer rather than the
-work; `collapsible: false` (the recommendation) stays open, and a user click
-pins the state.
+work; `collapsible: false` stays open, and a user click pins the state.
+
+**The one section that sets `collapsible: false` is the answer** (`gen_N`, titled
+"Answer"), and there is one per *sink* of the plan — so a compound message that asked
+two unrelated things renders two of them, each holding its own cards and prose. It is
+written by `AnswerWorkflow` (`backend/app/domains/books/write_answer/`), which the task
+runner attaches after the nodes finish; the planner never emits it, so it has no goal id
+— but it *is* drawn, as an "Answer" box hanging off each sink of the plan diagram, so
+what the user is shown up front matches what the turn will do. Its cards arrive before its text
+(`book_card` events, then `content.delta` as the reply streams). Node sections all fold,
+including the similarity search, which used to stay open only because nothing downstream
+wrote a reply.
 
 ## Conventions
 

@@ -22,8 +22,15 @@ anchors, checks its own cap and calls `fetch_books` once, which is what a
 Living below `AppWorkflow` is what puts `Book` and `BookOut` in normal import
 reach here.
 
-A node whose output is not book-shaped does not belong here: `count_books`
-writes fields only `BookRetrievalOutput` has, which is what the type bound says.
+**Two classes, split on whether the output is book-shaped.** `count_books` writes
+fields only `BookRetrievalOutput` has, so anything calling it must produce one —
+that is what `BookWorkflow`'s type bound says, and it stays said. But `store`,
+`fetch_books` and `stream_books` write to no output field at all: they read the
+database and send cards, which the terminal answer stage does too while
+producing prose rather than a count. `BookReaderWorkflow` is that half, bound
+only to `NodeWorkflowOutput`; `BookWorkflow` is it plus the counting move, and
+is what every *node* subclasses. The split is not a new layer for its own sake —
+it is the line `count_books` was already drawing, made reachable from one side.
 """
 
 from abc import ABC
@@ -32,7 +39,7 @@ from typing import Any, Sequence, TypeVar, List
 from app.api.schemas import BookOut
 from app.domains.books.external import BookRequestContext, BookRetrievalOutput
 from app.domains.books.schemas import Book
-from app.domains.base_workflow import AppWorkflow
+from app.domains.base_workflow import AppWorkflow, NodeWorkflowOutput
 from config import BookConstraints
 from db.stores import DeferredBookQuery, compile_sql
 from db.stores.book_store import BookStore
@@ -40,11 +47,19 @@ import asyncio
 
 from airglider import task
 
+ReaderOutputT = TypeVar("ReaderOutputT", bound=NodeWorkflowOutput)
 BookOutputT = TypeVar("BookOutputT", bound=BookRetrievalOutput)
 
 
-class BookWorkflow(AppWorkflow[BookOutputT], ABC):
-    """Base for every node executor in the books domain."""
+class BookReaderWorkflow(AppWorkflow[ReaderOutputT], ABC):
+    """Reads and shows books, whatever it produces.
+
+    Everything here touches the database or the wire and writes to no output
+    field, which is why the bound is `NodeWorkflowOutput` rather than
+    `BookRetrievalOutput`: a workflow can need rows and cards without being a
+    retrieval. Two subclasses — `BookWorkflow` (every node) and the terminal
+    answer stage, which materializes what the plan found and writes prose.
+    """
 
     # Narrows the inherited attribute for type checkers — a pure annotation.
     # True because every book node lists `context=BookRequestContext` on its
@@ -59,27 +74,6 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
         dispatch, so a mis-wired store fails there rather than at first query.
         """
         return self.ctx.store
-
-    @task
-    async def count_books(self, query: DeferredBookQuery) -> int:
-        """Stamp the built-but-unrun query on the output and size it.
-
-        The counts-first opening move, and for most nodes the whole of it: it
-        writes `query` (what a downstream node composes against), `query_sql`
-        (the readable stand-in that reaches `chat_runs`) and `num_books`, and
-        fetches no rows at all.
-
-        A `@task` like every other awaited unit of work: the COUNT round trip
-        is its own step, so its duration and any failure are attributed to the
-        count rather than to whatever the node did next. Callers `.unwrap()`
-        the total; what it learns is also stamped on the node's own output.
-        """
-        self.result.query = query
-        self.result.query_sql = compile_sql(query.stmt)
-
-        total = await self.store.count(query)
-        self.result.num_books = total
-        return total
 
     @task
     async def fetch_books(
@@ -126,3 +120,34 @@ class BookWorkflow(AppWorkflow[BookOutputT], ABC):
             if delay:
                 await asyncio.sleep(delay)
             sent_isbn.add(card.isbn13)
+
+
+class BookWorkflow(BookReaderWorkflow[BookOutputT], ABC):
+    """Base for every node executor in the books domain.
+
+    The reader plus the counting half of the counts-first opening move. The
+    tighter bound is the point: `count_books` writes fields only
+    `BookRetrievalOutput` has, so a node whose output is not book-shaped cannot
+    subclass this — it subclasses `BookReaderWorkflow` and does not count.
+    """
+
+    @task
+    async def count_books(self, query: DeferredBookQuery) -> int:
+        """Stamp the built-but-unrun query on the output and size it.
+
+        The counts-first opening move, and for most nodes the whole of it: it
+        writes `query` (what a downstream node composes against), `query_sql`
+        (the readable stand-in that reaches `chat_runs`) and `num_books`, and
+        fetches no rows at all.
+
+        A `@task` like every other awaited unit of work: the COUNT round trip
+        is its own step, so its duration and any failure are attributed to the
+        count rather than to whatever the node did next. Callers `.unwrap()`
+        the total; what it learns is also stamped on the node's own output.
+        """
+        self.result.query = query
+        self.result.query_sql = compile_sql(query.stmt)
+
+        total = await self.store.count(query)
+        self.result.num_books = total
+        return total

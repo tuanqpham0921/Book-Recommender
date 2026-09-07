@@ -1,8 +1,10 @@
 # Execution pipeline: retrieve → filter → analyze → generate (design record)
 
 **Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
-(2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there; the combine
-tier's *schemas* exist with no executors, and there is no generation node.
+(2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there. The combine tier
+is half unparked — `Combine_Intersect` has an executor (2026-08-24), `Combine_Union` does
+not. The **generation stage is built** (2026-08-25) as a fixed per-sink stage outside the
+registry, so all four tiers below now exist in some form.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
 [roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
@@ -367,9 +369,50 @@ open `Analyze_Compare` question in
 pending exactly this node, and the "retrieve ×2 → analyze ×2 → compare" plan shape cannot
 be evaluated until per-book analysis exists.
 
-### Generation node — **removed 2026-08-08**
+### Generation node — removed 2026-08-08, **built 2026-08-25**
 
-> **Status: reverted.** `generation_node.py`, `PlanJaneOutput.generation_nodes` and the
+> **Status: built, as `app/domains/books/write_answer/` (`AnswerWorkflow`).** The
+> 2026-07-28 resolution below held on re-examination and is what was implemented: a
+> **fixed stage, not a planner goal**, attached **per sink**. It has no `SPEC`, no
+> `NodeTypeEnum` member and no `guide.py` entry, so `make tools-catalog` is unchanged
+> at 6 tools / 2,864 catalog tokens and no golden carries it — the check the whole
+> shape was chosen for.
+>
+> **The open question below — one per sink or one per turn — resolved to per sink.**
+> The compound case decided it: *"do you have Dune by Jane Austen? and recommend
+> something like IT"* is two disjoint intents and wants two replies, while *"do you
+> have Dune? and recommend something like it"* is one chained intent and wants one. The
+> sink partition of the DAG **is** the intent partition, computed rather than declared,
+> and a single writer handed a flat prompt would have to re-derive it. The cost named
+> below is accepted unchanged: nobody writes cross-branch framing. Refusals and
+> `out_of_scope` are not that framing — they belong to the plan, and PlanJane's own
+> TODO still owns them.
+>
+> **What is new since 2026-08-08, and what makes the stage bigger than the sketch: it
+> must materialize.** Counts-first was taken the whole way on 2026-08-24, so every node
+> hands on a `DeferredBookQuery` and no rows exist anywhere. The answer stage is the
+> only thing left that can fetch them, which is why it subclasses a new
+> `BookReaderWorkflow` (store + `fetch_books` + `stream_books`, bound to
+> `NodeWorkflowOutput`) rather than `BookWorkflow` (which adds `count_books` and is
+> bound to `BookRetrievalOutput`). The split is the line `count_books` already drew.
+>
+> **A branch is a sink plus its ancestors, and it is answered whether or not the sink
+> succeeded.** That is the fix for the case `task_runner.py`'s own NOTE block
+> complained about: with no Dune, `Retrieve_by_Title` succeeds with `num_books == 0`,
+> `Analyze_Similar_Books` raises in `check_anchors`, and before this nobody said
+> anything. Only the ancestor knows why the sink failed, so a stage gated on success
+> would stay silent in exactly the case that needs speaking.
+>
+> `PlanJaneOutput.branches()` and `ExecutionOrder.sinks` are where the derivation
+> lives — read off the same `dependents` map `execution_order()` already builds, so
+> "sink" has one definition. `dial/mermaid.py` computes it a second time off the
+> inverted edges, because `dial/` imports nothing from `app/`.
+>
+> Also retired with this: `FindSimilarBooksExecutor.ui_section_collapsible = False` and
+> its *"while nothing downstream writes a reply, these cards are the whole answer"*
+> comment. Something downstream writes a reply now.
+
+> **Superseded — kept for the reasoning.** `generation_node.py`, `PlanJaneOutput.generation_nodes` and the
 > tests are deleted; recover them from git history if this is revisited. The section
 > below is kept as the record of what was decided and why, since the reasoning (a fixed
 > stage costs no catalog tokens and cannot be misrouted; every sink is the attachment
@@ -402,12 +445,16 @@ and not the one with the most dependencies: a Compare fed by four retrievals is 
 only when no Recommend consumes it, and an independent goal in a compound message is its
 own sink at depth 0.
 
-**Still open:** one generation node per sink (today's default, one answer per independent
-branch) or one per turn owning ordering and framing across all of them
-(`create_generation_nodes(..., single_answer=True)`). Per-sink means no one writes the
-cross-section framing or reports a failure that spans branches; one-per-turn means a
-compound message's unrelated answers get merged by a single writer. Most plans have
-exactly one sink, so the two agree except on compound messages.
+~~**Still open:**~~ **Resolved 2026-08-25 — one per sink.** The choice was one generation
+node per sink (one answer per independent branch) or one per turn owning ordering and
+framing across all of them. Per-sink means no one writes the cross-section framing or
+reports a failure that spans branches; one-per-turn means a compound message's unrelated
+answers get merged by a single writer. Most plans have exactly one sink, so the two agree
+except on compound messages — which is exactly where per-sink is right, and what decided
+it. The sink partition is the *intent* partition, and a single writer handed every
+output in one flat prompt would have to re-derive that split from prose. Cost accepted as
+stated: nobody writes cross-branch framing. Ordering across sections is solved by
+emitting branches in plan order rather than by a model.
 
 ## Open questions
 
@@ -419,7 +466,9 @@ exactly one sink, so the two agree except on compound messages.
   correct plan (`Retrieve_by_Author` + `Retrieve_by_Lexical_Traits` + `Combine_Intersect`), so those
   expectations describe the old world. They need re-deciding, not just re-running.
 - ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
-  stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.
+  stage, attached per sink; see above. ~~One-per-sink vs one-per-turn is still open.~~
+  Resolved 2026-08-25 — **one per sink**, and built. A branch is a sink plus its
+  ancestors, answered whether or not the sink succeeded.
 - ~~Does the CTE composition live in the executors or in `db/stores/book_store.py`?~~
   Resolved 2026-08-04 — **the store layer**. `db/stores/deferred_query.py` holds the
   carrier (`DeferredBookQuery`: a SELECT of isbn13 plus an optional `score`, with no LIMIT

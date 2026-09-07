@@ -67,7 +67,9 @@ class AppWorkflow(Workflow[OutputT], ABC):
     # these off the *class*, and a @property would silently title every section
     # "<property object at 0x…>" rather than raise.
     ui_section_title: str | None = None
-    # terminal nodes own the answer, so their section is not folded away
+    # The answer stage owns the reply, so its section is not folded away. Every
+    # node's is: a node's cards are working material, and the prose written
+    # from them is what the user is meant to read.
     ui_section_collapsible: bool = True
 
     @classmethod
