@@ -1,23 +1,34 @@
-"""The generation node's flow. `run` is the table of contents; everything else
+"""The generation stage's flow. `run` is the table of contents; everything else
 sits where the flow reaches it.
 
-Same reading rule as the other slices (domains/README.md): this file is the flow
-— `run()` plus every step, in the order `run` reaches them — and `render.py` is
+Same reading rule as a slice (domains/README.md): this file is the flow —
+`run()` plus every step, in the order `run` reaches them — and `render.py` is
 the one LLM call's pure half.
 
-This is the first slice in `NodeTier.GENERATE`: a registered node the planner
-ends every recommendation chain with, unlike the sink-attached answer stage on
-the `generation_node_sink` branch (see docs/design/execution-pipeline-v1.md for
-the comparison). Being a goal is what lets the description say *what to write*
-("…and explain why each fits") and what lets QA/compare/general generation
-arrive later as sibling slices rather than branches of one prompt.
+**Not a node** (2026-09-08). It was `Generate_Recommendations`, a registered
+`NodeTier.GENERATE` slice the planner ended a recommendation chain with; it is
+now one unregistered stage the orchestrator runs once, after the task runner,
+over everything the plan produced. That is the sink-shaped alternative in
+docs/design/execution-pipeline-v1.md, collapsed to a single sink per turn.
+Three things follow from it and are why the code below looks the way it does:
 
-It is also a terminal node, so it is the place rows are materialized to be
-kept: counts-first means every node upstream handed on a `DeferredBookQuery`
-and nothing else fetched. That is why it subclasses `BookReaderWorkflow` — it
-reads and shows books while producing prose rather than a count.
+- There is no goal, so no planner brief. The user's own message is the brief,
+  read off `ctx.user_message` — legitimate here in a way it never was for a
+  node, because this is the only stage that answers the *turn*.
+- There is no `depends_on`, so nothing pre-selects what it writes about. It
+  partitions the whole results map itself, in `_partition`.
+- It is planned for every turn, so it can no longer be scoped to
+  recommendation asks. A plain lookup now gets prose too, which closes the gap
+  named in CLAUDE.md — and costs the golden check that a *planned* generation
+  goal gave, since a stage that always runs can never be missing from a plan.
+
+It is still terminal, so it is the place rows are materialized to be kept:
+counts-first means every node upstream handed on a `DeferredBookQuery` and
+nothing else fetched. That is why it subclasses `BookReaderWorkflow` — it reads
+and shows books while producing prose rather than a count.
 """
 
+from app.domains.base_workflow import FailedGoalOutput, NodeWorkflowOutput
 from app.domains.books.base_workflow import BookReaderWorkflow
 from app.domains.books.external import BookRetrievalOutput
 from app.domains.books.schemas import Book
@@ -32,9 +43,10 @@ from .render import build_recommendations_request, render_report
 # true about the set rather than about three arbitrary members of it.
 ROWS_PER_SOURCE = 5
 
-# How many sources get a round trip. A recommendation chain usually feeds this
-# node one goal, so the cap only bites on a wide compound plan — where it stops
-# one reply turning into a dozen materializations. Sources are fetched in plan
+# How many sources get a round trip. This used to see only one chain's goals
+# and the cap rarely bit; it now sees the whole plan, so it is the thing that
+# stops a wide compound turn ("books by King, by Austen, under 200 pages, …")
+# turning one reply into a dozen materializations. Sources are in execution
 # order, so what a cap drops is the tail the planner listed last.
 MAX_MATERIALIZED_SOURCES = 4
 
@@ -46,20 +58,19 @@ CARD_DELAY = 0.03
 class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput]):
     ui_loading_message = "Writing recommendations..."
     ui_section_title = "Recommendations"
-    # the reply is the point of the chain — never folded away
+    # the reply is the point of the turn — never folded away
     ui_section_collapsible = False
 
     async def run(self, node_input: RecommendationsInput) -> None:
         await self.sse_stream.send_ui_loading(self.ui_loading_message)
 
-        sources, failures = node_input.sources, node_input.failures
-        # Both defaulted so a failed branch still reaches this node; both empty
-        # means a generation goal depending on nothing, which is a plan bug —
-        # raising surfaces it as this goal's failure instead of an empty reply.
+        sources, failures = self._partition(node_input.results)
+        # The orchestrator does not run this stage over an empty results map,
+        # so reaching here with nothing is a caller bug rather than a plan that
+        # went badly — raising surfaces it as this stage's failure instead of
+        # an empty reply.
         if not sources and not failures:
-            raise ValueError(
-                "Nothing to recommend from: no goal fed this one books or a failure"
-            )
+            raise ValueError("Nothing to write from: the plan produced no results")
 
         # 1. materialize. The one place in the app rows are fetched to be kept:
         # every source counted and handed on its query, and `materialize_stmt`
@@ -77,11 +88,41 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         # request carries the SSE stream and the client pushes each delta — so
         # what comes back is for the record, not for sending.
         self.result.text = (
-            await self.write_recommendations(node_input, rows)
+            await self.write_recommendations(sources, rows, failures)
         ).unwrap()
 
         # 4. last: ok is read off the output
         self.finalize_result()
+
+    def _partition(
+        self, results: list[NodeWorkflowOutput]
+    ) -> tuple[list[BookRetrievalOutput], list[FailedGoalOutput]]:
+        """The run split into what produced books and what did not.
+
+        What `build_input` used to do from the planner's `depends_on`, done
+        here from the whole map instead — the same `isinstance` matching, just
+        no longer able to miss a goal because nothing declared a dependency on
+        it. That is the actual behaviour change of deregistering: a title
+        lookup running alongside a recommendation chain used to be invisible to
+        the reply unless the planner wired it in, and is now always in scope.
+
+        A third case is possible and deliberately dropped rather than guessed
+        at: an output that is neither book-shaped nor a failure. Nothing
+        registered produces one today, so it is logged as a detail rather than
+        given a rendering nobody can check.
+        """
+        sources: list[BookRetrievalOutput] = []
+        failures: list[FailedGoalOutput] = []
+
+        for output in results:
+            if isinstance(output, FailedGoalOutput):
+                failures.append(output)
+            elif isinstance(output, BookRetrievalOutput):
+                sources.append(output)
+            else:
+                self.add_details(f"nothing to write from a {type(output).__name__}")
+
+        return sources, failures
 
     @task
     async def materialize(
@@ -117,7 +158,10 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
 
     @task
     async def write_recommendations(
-        self, node_input: RecommendationsInput, rows: list[list[Book]]
+        self,
+        sources: list[BookRetrievalOutput],
+        rows: list[list[Book]],
+        failures: list[FailedGoalOutput],
     ) -> str | None:
         """The reply, streamed to the browser as it is written.
 
@@ -126,15 +170,12 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         payload is a string, with no declared output type to carry.
 
         None when the model returned nothing at all, which `run` lets reach
-        `finalize_result` as a failed claim — a chain that got as far as here
+        `finalize_result` as a failed claim — a turn that got as far as here
         and produced no words has not been answered.
         """
-        rendered = render_report(
-            node_input.instruction, node_input.sources, rows, node_input.failures
-        )
+        rendered = render_report(sources, rows, failures)
         self.add_details(
-            f"writing from {len(node_input.sources)} source(s), "
-            f"{len(node_input.failures)} failure(s)"
+            f"writing from {len(sources)} source(s), {len(failures)} failure(s)"
         )
 
         req = build_recommendations_request(
@@ -144,7 +185,7 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         return message.content
 
     def finalize_result(self) -> None:
-        """ok means the chain was reported on, not that books were found.
+        """ok means the turn was reported on, not that books were found.
 
         A reply over empty sources — or over nothing but failures — is a
         correct answer: "I don't have that, so I couldn't look for anything

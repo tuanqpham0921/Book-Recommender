@@ -1,9 +1,13 @@
-"""Tests for write_recommendations/executor.py — the generation node's flow.
+"""Tests for write_recommendations/executor.py — the reply stage's flow.
 
-The node is the only thing in the app that materializes rows for the user to
+The stage is the only thing in the app that materializes rows for the user to
 read: counts-first means every node hands on a query and fetches nothing, so
 what this fetches and what it shows *is* the answer. Both halves are asserted
 against a faked store and a faked LLM call rather than mocked internals.
+
+Since it was deregistered (2026-09-08) it takes one undifferentiated
+`results` list rather than a `sources`/`failures` split assembled by
+`build_input`, so `_input` below is what does the partitioning in reverse.
 
 `fetch_books` is left real — it is the flow's own step and the thing under test
 — with `BookStore.materialize` faked underneath it.
@@ -14,26 +18,23 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy import select
 
-from app.domains.base_workflow import FailedGoalOutput
+from app.domains.base_workflow import FailedGoalOutput, NodeWorkflowOutput
 from app.domains.books.external import (
     BookAnchorOutput,
     BookCandidateOutput,
     BookRequestContext,
 )
-from app.domains.books.write_recommendations import (
+from app.orchestration.write_recommendations import (
     GenerateRecommendationsExecutor,
     RecommendationsInput,
 )
-from app.domains.books.write_recommendations.executor import (
+from app.orchestration.write_recommendations.executor import (
     MAX_MATERIALIZED_SOURCES,
 )
 from clients.messages import AssistantMessage
 from db.schema import BookModel
 from db.stores import DeferredBookQuery
 from db.stores.book_store import BookStore
-
-INSTRUCTION = "Recommend books like Dune and explain why they fit"
-
 
 def _query() -> DeferredBookQuery:
     """A real one — `BookRetrievalOutput.query` is isinstance-validated, and a
@@ -63,11 +64,20 @@ def _source(
     )
 
 
+class _PlainOutput(NodeWorkflowOutput):
+    """Neither book-shaped nor a failure — the third case `_partition` drops.
+    Nothing registered returns one today, which is the point: the stage has to
+    survive a shape it was not written for."""
+
+    def to_summary(self) -> dict:
+        return {}
+
+
 def _input(sources=None, failures=None) -> RecommendationsInput:
+    """Sources and failures in one list, the way the runner's results map
+    arrives — `_partition` is what tells them apart again."""
     return RecommendationsInput(
-        instruction=INSTRUCTION,
-        sources=sources if sources is not None else [_source()],
-        failures=failures or [],
+        results=[*(sources if sources is not None else [_source()]), *(failures or [])]
     )
 
 
@@ -196,9 +206,10 @@ class TestTheClaim:
 
         assert not record.ok
 
-    async def test_a_goal_fed_nothing_at_all_fails(self, node):
-        # a generation goal depending on nothing is a plan bug; failing here
-        # reports it instead of writing a reply about nothing
+    async def test_an_empty_results_map_fails(self, node):
+        # the orchestrator does not run this stage over an empty plan, so
+        # reaching it is a caller bug; failing here reports it instead of
+        # writing a reply about nothing
         with _reply():
             record = await node(_input(sources=[]))
 
@@ -237,24 +248,34 @@ class TestWhatTheWriterSees:
         assert "could not be completed" in rendered
         assert "which found nothing" in rendered
 
-    async def test_the_users_own_message_is_what_is_answered(self, node):
-        # not the goal instruction: the reply answers the person, and the goal
-        # text is the planner's paraphrase of them
+    async def test_the_users_own_message_is_the_brief(self, node):
+        """With no goal there is no planner brief, so the user's own message is
+        both the question and the only direction the call carries. Reading
+        `ctx.user_message` is the exception `NodeInput` documents, and it is
+        legitimate here precisely because this stage answers the turn."""
         with _reply() as llm:
             await node(_input())
 
         assert llm.await_args.args[0].messages[-1].content == node.user_message.content
 
-    async def test_the_nodes_own_instruction_is_the_brief(self, node):
-        """Being a planned goal is what lets the plan say *what to write*.
-
-        The instruction reaches the writer as the report's first line, in the
-        trusted `AssistantMessage` — a node that dropped it would make its own
-        goal decorative, which is the objection the deterministic sink stage
-        could not answer.
-        """
+    async def test_the_report_carries_no_instruction_of_its_own(self, node):
+        # the report is evidence now; nothing in the AssistantMessage is a
+        # direction, which is what lets the prompt's trust boundary be total
         with _reply() as llm:
             await node(_input())
 
         rendered = llm.await_args.args[0].messages[0].content
-        assert rendered.startswith(f"What to write: {INSTRUCTION}")
+        assert rendered.startswith("What I found:")
+
+    async def test_an_output_that_is_neither_books_nor_a_failure_is_dropped(
+        self, node
+    ):
+        """The generic list can hold anything a future node returns. Rendering
+        one it cannot read would be a guess, so it is noted and skipped — the
+        book-shaped sources beside it still get their reply."""
+        with _reply() as llm:
+            record = await node(_input([_source("Find Dune"), _PlainOutput()]))
+
+        assert record.ok
+        assert "Find Dune" in llm.await_args.args[0].messages[0].content
+        assert any("_PlainOutput" in detail for detail in record.details)

@@ -2,9 +2,10 @@
 
 **Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
 (2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there. The combine tier
-is half unparked (`Combine_Intersect`, 2026-08-24), and the generation tier now exists —
-`Generate_Recommendations`, registered 2026-09-07 as a planner goal; see the second
-attempt below.
+is half unparked (`Combine_Intersect`, 2026-08-24). The generation tier existed for one
+day: `Generate_Recommendations` was registered 2026-09-07 as a planner goal and
+**deregistered 2026-09-08** into one unregistered stage per turn. See the second attempt
+below, then the third.
 
 Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
 [roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
@@ -552,3 +553,48 @@ The planner side is settled enough to proceed (2026-07-24 baseline: 157/164, all
 attributable to the unbuilt clarification node). What is *not* settled is whether to build
 executors, generation, or human-in-the-loop first — that sequencing decision, and its
 reasoning, is recorded in [../roadmap.md](../roadmap.md) under "Next move".
+
+
+### Generation stage, third attempt — **deregistered, one per turn (2026-09-08)**
+
+**Status: built.** `Generate_Recommendations` is gone from the registry, `NodeTier.GENERATE`
+is gone with it, and the slice moved to `app/orchestration/write_recommendations/`.
+`Orchestrator._write_reply` constructs `GenerateRecommendationsExecutor` once, after the
+task runner, and feeds it `TaskRunnerOutput.task_results` — every goal's output, not one
+chain's. This is the sink-shaped alternative above, taken with `single_answer=True`: the
+"still open" question is now answered **one per turn**.
+
+**What this trades away.** The 2026-09-07 entry defended a goal on two grounds, and both
+are spent:
+
+- *The instruction carries what to write.* There is no instruction now. The user's own
+  message is the brief, and the `What to write:` line is gone from the rendered report —
+  which makes the prompt's trust boundary total rather than one-line-exempted, but does
+  mean the planner can no longer steer the reply.
+- *Siblings arrive as their own slices.* They cannot. Book QA, compare and general
+  generation are now branches inside one prompt that must serve every plan shape — the
+  exact thing that entry called the cost of the sink design.
+
+**What it buys.** Three things, and the first is why it was asked for:
+
+- **The reply sees the whole turn.** A generation goal only ever saw its own `depends_on`.
+  "Do you have It and show me books like Pride and Prejudice?" planned the title lookup and
+  the recommendation chain as *separate* branches, so the goal that wrote the reply was
+  never told what happened to `It` — and the model, seeing the ask in the user message and
+  no answer in its report, invented one. It happened to guess right. The stage now
+  partitions the entire results map (`_partition`), so both halves are evidence.
+- **Every planned turn gets prose.** The "a plan could come back with no answer" gap,
+  accepted twice above and dating to 2026-08-22, is closed.
+- **~470 catalog tokens back**, and no per-turn goal for the planner to get wrong.
+
+**What it costs the goldens.** 49 `Generate_Recommendations` entries came out of
+`expected_nodes` across the four suites, and the negative case (80, "how many books by
+Pratchett") no longer checks anything about generation — a stage that always runs cannot be
+missing from a plan, which is precisely the 2026-08-08 objection, now accepted rather than
+answered. Whether the *reply* is any good is no longer a planner-diff question at all; it
+needs an output-grading eval, which does not exist. See [eval-strategy.md](../eval-strategy.md).
+
+**Reversible.** The slice's own machinery is unchanged — same renderer, same prompt file,
+same `BookReaderWorkflow` base, same failure artifacts. Re-registering means restoring
+`labels.py`/`schemas.py`, a `SPEC`, the tier, and the `sources`/`failures` split on the
+input; the partition in `_partition` is the only logic that would become dead.

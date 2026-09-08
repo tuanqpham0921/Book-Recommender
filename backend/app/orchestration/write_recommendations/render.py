@@ -12,19 +12,22 @@ entries are numbered and labelled by their goal instruction, never as "goals",
 "nodes" or "queries" — the prompt forbids that language and the input should not
 supply it either.
 
-The report opens with this node's *own* instruction, which is the brief for the
-reply: being a planned goal is what lets the plan say "…and explain why each
-fits", and a node that never read it would make that goal decorative.
+The report is evidence and nothing else. It used to open with a `What to write:`
+brief — this stage's own goal instruction, the one line in the block the model
+was told to obey — and that line went away with the goal (2026-09-08): an
+unregistered stage has no planner text, so the *user's* message is the brief and
+it travels as the `UserMessage` in `build_recommendations_request`. That makes
+the trust split cleaner than it was, since the report no longer mixes a
+direction in with the data.
 
 One typed read reaches into a sibling slice: a source that is a
 `SimilarBooksOutput` carries the anchor books it was built from and the
 description it embedded, which are the actual "why these fit" material.
-Interpretation of upstream shapes is the consuming node's own job (rule 4 in
+Interpretation of upstream shapes is the consuming stage's own job (rule 4 in
 domains/README.md), and widening `BookCandidateOutput` so this stays
 import-free would put two fields on a shared shape for one reader.
 """
 
-from app.common.field_types import INSTRUCTION_FALLBACK
 from app.common.prompt_loader import load_prompt
 from app.common.sse_stream import SSEStream
 from app.common.utils import truncate_str
@@ -35,7 +38,7 @@ from app.domains.books.schemas import Book
 from clients import OpenAIChatRequest
 from clients.messages import AssistantMessage, UserMessage
 
-PROMPT_PATH = "domains/books/write_recommendations/prompts/write_recommendations.txt"
+PROMPT_PATH = "orchestration/write_recommendations/prompts/write_recommendations.txt"
 
 # A blurb is context for one sentence about a book, not the book's whole entry.
 MAX_DESCRIPTION_CHARS = 400
@@ -45,12 +48,7 @@ MAX_TOTAL_CHARS = 12000
 # travelled through the runner, which no registered plan produces today.
 FALLBACK_HEADER = "part of the search"
 
-# The brief line, and what stands in when the planner left the instruction
-# empty (`InstructionStr`'s fallback reaches here as prose, so it is filtered).
-BRIEF_PREFIX = "What to write:"
-DEFAULT_BRIEF = "Present the recommended books and explain why each one fits."
-
-# what separates the brief from the evidence under it
+# what the evidence is headed by
 FINDINGS_HEADER = "What I found:"
 
 
@@ -124,32 +122,23 @@ def render_failure(index: int, failure: FailedGoalOutput) -> str:
 
 
 def render_report(
-    instruction: str,
     sources: list[BookRetrievalOutput],
     rows: list[list[Book]],
     failures: list[FailedGoalOutput],
 ) -> str:
-    """Everything the plan produced as one block: the brief, then the sources
-    in the order the plan listed them, then what could not be done.
+    """Everything the plan produced as one block: the sources in the order the
+    runner ran them, then what could not be done.
 
-    `instruction` leads because it is what the *planner* asked this reply to
-    be — "explain why each fits" versus a plain hand-off — and it lands in the
-    report rather than in its own message because the report is already the
-    `AssistantMessage`: planner work is trusted, the user's text is not, and
-    that split is the one `build_recommendations_request` keeps.
+    Every entry is evidence — there is no longer a brief at the top, so nothing
+    in this block is an instruction and the prompt can say so without an
+    exception (see the module docstring).
 
     `rows` is positional against `sources` — the executor fetched them, and
     only it knows which sources it could afford to materialize, so an entry
     with an empty list here may still have matched books. That is why the count
     is rendered separately from the rows rather than inferred from them.
     """
-    brief = instruction.strip()
-    if not brief or brief == INSTRUCTION_FALLBACK:
-        brief = DEFAULT_BRIEF
-
-    # the brief is a direction and the rest is evidence, so they are labelled
-    # apart — the prompt draws its trust boundary on exactly this line
-    blocks = [f"{BRIEF_PREFIX} {brief}", FINDINGS_HEADER]
+    blocks = [FINDINGS_HEADER]
     blocks += [
         render_source(i, source, books)
         for i, (source, books) in enumerate(zip(sources, rows), start=1)
@@ -174,11 +163,11 @@ def build_recommendations_request(
     Two messages, and the split is the trust boundary. The rendered report is an
     `AssistantMessage` because it is prior system work — matching what
     `find_similar_books` does with its documents — and the prompt tells the
-    model to read it as data. That is also why the goal's own instruction rides
-    inside it rather than in the user turn: the planner wrote it, so it is the
-    one line in there the model may treat as a direction. The user's own text
-    stays a `UserMessage`: it is the question being answered, and it goes last
-    so the model is replying to it rather than continuing its own turn.
+    model to read it as data, all of it, with no line exempted. The user's own
+    text is the `UserMessage`: it is both the question being answered and, since
+    this stage was deregistered and has no planner brief, the only direction the
+    call carries. It goes last so the model is replying to it rather than
+    continuing its own turn.
 
     A cheap model on purpose: this call writes prose from facts it was handed,
     which is not the job accuracy was bought for on the planner.

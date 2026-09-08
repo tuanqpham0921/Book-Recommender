@@ -90,11 +90,13 @@ Two consequences worth keeping:
   `MAX_STRING_LENGTH` of 100, because `bounded_string` truncates *silently*. Losing the
   tail of a label costs nothing; "…and published before 20" still parses, into the wrong
   filter.
-- **`Generate_Recommendations` reads it.** Until this change the generation node ignored
-  its own goal text and wrote from its sources alone — which made the argument for
+- **`Generate_Recommendations` read it — for one day.** The generation node had ignored
+  its own goal text and written from its sources alone, which made the argument for
   planning it as a goal ("the instruction can say *what to write*") true on paper only.
-  It now renders the instruction as the first line of its report, inside the trusted
-  `AssistantMessage`; see [execution-pipeline-v1.md](execution-pipeline-v1.md).
+  Rendering the instruction at the head of its report fixed that on 2026-09-07; the node
+  was then deregistered on 2026-09-08 and there is no such goal any more. The reply stage
+  is briefed by the user's own message instead, and the `What to write:` line is gone. The
+  point survives for every *other* node: see [execution-pipeline-v1.md](execution-pipeline-v1.md).
 
 **Not covered by the golden test.** `evals/report_system_goals.py` diffs
 `target_node_type` only, so instruction *text* has no automated check — the suite catches

@@ -14,7 +14,6 @@ from app.domains.books import (
     find_by_title,
     find_similar_books,
     intersect_books,
-    write_recommendations,
 )
 from app.domains.node_spec import NodeSpec
 
@@ -23,6 +22,13 @@ from app.domains.node_spec import NodeSpec
 # deleted: bounds are a retrieval (`find_by_numeric_traits`) and combining them
 # with a subject is this node's job, so the two ways of expressing a bound
 # collapsed into one. See docs/design/node-taxonomy-v1.md.
+#
+# `write_recommendations` (Generate_Recommendations) was registered 2026-09-07
+# and DEREGISTERED 2026-09-08 — not parked. It is not a capability the planner
+# picks any more but one stage the orchestrator runs after every plan, so its
+# request schema, node type and spec are gone rather than commented out here.
+# It lives at `app/orchestration/write_recommendations/`; see
+# docs/design/execution-pipeline-v1.md.
 BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_title.SPEC,
     find_by_author.SPEC,
@@ -30,8 +36,4 @@ BOOK_SPECS: tuple[NodeSpec, ...] = (
     find_by_numeric_traits.SPEC,
     find_similar_books.SPEC,
     intersect_books.SPEC,
-    # `write_recommendations` (Generate_Recommendations) registered 2026-09-07:
-    # the first NodeTier.GENERATE slice — the planner ends every recommendation
-    # chain with it. See docs/design/execution-pipeline-v1.md.
-    write_recommendations.SPEC,
 )

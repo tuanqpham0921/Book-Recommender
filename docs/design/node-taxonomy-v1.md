@@ -600,6 +600,13 @@ an oversight: the section's cards are the whole answer until a picker node exist
 > reply; `ui_section_collapsible` moves with the answer, so this node's section is now
 > collapsible and the generation node's is not.
 >
+> **Superseded 2026-09-08**: the slice survives but the *node* does not. It was
+> deregistered into one unregistered stage the orchestrator runs after every plan
+> (`app/orchestration/write_recommendations/`), and `NodeTier.GENERATE` was removed with
+> it. The gap this note closed stays closed — wider, in fact, since a plain lookup gets
+> prose too now. What changed is who decides the reply happens: nobody plans it. See the
+> third attempt in [execution-pipeline-v1.md](execution-pipeline-v1.md).
+>
 > **What it does NOT take back is the rest of the table above**: no `keywords`, no
 > `bounds`, no `exclude`, no `num_requested`, and no re-ranking — it presents the pool in
 > the order it arrives (cosine, via `materialize_stmt`) and explains it. Splitting the

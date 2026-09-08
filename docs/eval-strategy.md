@@ -27,6 +27,16 @@ Two properties make this the right foundation:
 The intended growth loop (matches the owner's workflow): finalize nodes → build eval
 cases around them → set thresholds (golden tests) → expand nodes and coverage together.
 
+**The reply itself is outside this mechanism (2026-09-08).** `Generate_Recommendations`
+was deregistered into a stage that runs after every plan, so 49 `expected_nodes` entries
+came out of the suites and no case can check whether prose was written — a stage that
+always runs is never missing from a plan. What the diff still covers is the *finding* of
+books, which is all the planner does now. Judging the reply needs an output-grading eval
+over `chat_runs.tasks` (the stage's record, and `RecommendationsOutput.text` in it): a
+different mechanism from `target_node_type` diffing, and not built. Until it exists, reply
+quality is checked by reading `/review`. See
+[design/execution-pipeline-v1.md](design/execution-pipeline-v1.md).
+
 ## Suite inventory
 
 | Suite | Cases | Purpose |

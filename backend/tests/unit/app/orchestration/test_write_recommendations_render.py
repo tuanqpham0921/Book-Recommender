@@ -11,14 +11,12 @@ check would catch — the prose would read perfectly well.
 
 import pytest
 
-from app.common.field_types import INSTRUCTION_FALLBACK
 from app.common.sse_stream import SSEStream
 from app.domains.base_workflow import FailedGoalOutput
 from app.domains.books.external import BookAnchorOutput, BookCandidateOutput
 from app.domains.books.find_similar_books import SimilarBooksOutput
 from app.domains.books.schemas import Book
-from app.domains.books.write_recommendations.render import (
-    DEFAULT_BRIEF,
+from app.orchestration.write_recommendations.render import (
     build_recommendations_request,
     render_book,
     render_failure,
@@ -44,10 +42,6 @@ def _book(**overrides) -> Book:
 
 def _source(instruction="Find Dune by title", num_books=1) -> BookAnchorOutput:
     return BookAnchorOutput(num_books=num_books, goal_instruction=instruction)
-
-
-# this node's own goal instruction — the brief for the reply, not for a source
-BRIEF = "Present the recommendations and explain why each one fits"
 
 
 class TestRenderBook:
@@ -156,34 +150,27 @@ class TestRenderFailure:
 
 
 class TestRenderReport:
-    def test_the_brief_leads_the_report(self):
-        # being a planned goal is what lets the plan say what to write; a node
-        # that never rendered its own instruction would make that decorative
-        rendered = render_report(BRIEF, [_source()], [[]], [])
+    def test_the_report_is_evidence_only(self):
+        # the `What to write:` brief went with the goal (2026-09-08): an
+        # unregistered stage has no planner text, so nothing in this block is
+        # an instruction and the prompt's trust boundary has no exception
+        rendered = render_report([_source()], [[]], [])
 
-        assert rendered.startswith(f"What to write: {BRIEF}")
-
-    def test_a_blank_brief_falls_back_rather_than_leading_with_nothing(self):
-        # `InstructionStr`'s fallback is prose, so it reaches here as text and
-        # would otherwise be handed to the writer as if the planner meant it
-        for empty in ("", "   ", INSTRUCTION_FALLBACK):
-            rendered = render_report(empty, [_source()], [[]], [])
-
-            assert rendered.startswith(f"What to write: {DEFAULT_BRIEF}")
+        assert rendered.startswith("What I found:")
+        assert "What to write" not in rendered
 
     def test_rows_are_positional_against_sources(self):
         # a source past the materialization cap has a count and no rows; the
         # two lists must stay aligned or the books land under the wrong entry
         sources = [_source("Find Dune"), _source("Find IT", num_books=3)]
-        rendered = render_report(BRIEF, sources, [[], [_book(title="IT")]], [])
+        rendered = render_report(sources, [[], [_book(title="IT")]], [])
 
-        _brief, _header, dune_block, it_block = rendered.split("\n\n")
+        _header, dune_block, it_block = rendered.split("\n\n")
         assert "Find Dune" in dune_block and "IT" not in dune_block
         assert "Find IT" in it_block and "IT" in it_block
 
     def test_failures_are_numbered_after_the_sources(self):
         rendered = render_report(
-            BRIEF,
             [_source("first")],
             [[]],
             [FailedGoalOutput(goal_instruction="second")],
@@ -195,7 +182,7 @@ class TestRenderReport:
         # the whole point of the failure artifacts: a chain where every goal
         # failed is exactly the case the user must be told about
         rendered = render_report(
-            BRIEF, [], [], [FailedGoalOutput(goal_instruction="Find books like Dune")]
+            [], [], [FailedGoalOutput(goal_instruction="Find books like Dune")]
         )
 
         assert "Find books like Dune" in rendered
@@ -205,7 +192,7 @@ class TestRenderReport:
         sources = [_source() for _ in range(40)]
         rows = [[_book(description="word " * 200)] for _ in range(40)]
 
-        assert len(render_report(BRIEF, sources, rows, [])) <= 12001
+        assert len(render_report(sources, rows, [])) <= 12001
 
 
 class TestBuildRecommendationsRequest:

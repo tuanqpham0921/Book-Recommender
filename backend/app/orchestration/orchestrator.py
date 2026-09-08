@@ -5,10 +5,15 @@ import time
 from app.common.sse_stream import SSEStream
 from app.common.request_context import RequestContext
 
+from app.domains.books.external import BookRequestContext
 from app.domains.node_input import NodeInput
 from app.orchestration.triage import TriageWorkflow
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
 from app.orchestration.run_recorder import record_chat_run
+from app.orchestration.write_recommendations import (
+    GenerateRecommendationsExecutor,
+    RecommendationsInput,
+)
 from airglider import OperationResult, RuntimeErrorInfo
 
 from clients.messages import (
@@ -37,6 +42,7 @@ class Orchestrator:
         # place and re-raises rather than returning it.
         triage_workflow: TriageWorkflow | None = None
         task_runner: TaskRunnerWorkflow | None = None
+        writer: GenerateRecommendationsExecutor | None = None
         # Root of the turn's trace tree; the workflow envelopes are hung off it
         # in the finally block, so ok/duration/token_usage cover the whole turn.
         record = OperationResult(
@@ -75,6 +81,7 @@ class Orchestrator:
                     task_runner(TaskRunnerInput(plan=plan)),
                     timeout=CONVERSATION_TIMEOUT,
                 )
+                writer = await self._write_reply(request_context, task_runner, messages)
 
             # chat_id lets the client attach feedback to the chat_runs row
             await sse_stream.send(
@@ -110,7 +117,7 @@ class Orchestrator:
             # record their partial work too. isinstance-guarded rather than
             # letting add_step raise: a raise in this finally would replace the
             # exception in flight and skip the recording and stream close below.
-            for workflow in (triage_workflow, task_runner):
+            for workflow in (triage_workflow, task_runner, writer):
                 step = getattr(workflow, "record", None)
                 if isinstance(step, OperationResult):
                     record.add_step(step)
@@ -143,6 +150,56 @@ class Orchestrator:
                     f"cleanup cancelled for chat_id={request_context.user_message.id}, "
                     "continuing in the background"
                 )
+
+    @staticmethod
+    async def _write_reply(
+        request_context: RequestContext,
+        task_runner: TaskRunnerWorkflow,
+        messages: list[APIMessage],
+    ) -> GenerateRecommendationsExecutor | None:
+        """Write the turn's reply from everything the plan produced.
+
+        The third layer of the turn, and the only one that speaks prose. It is
+        wired here rather than reached through the registry because it is not a
+        capability: no goal targets it, nothing depends on it, and it runs once
+        per plan whatever the plan was. That is the same reason `Triage` is a
+        workflow in `orchestration/` rather than a node — and it keeps the
+        import pointing downward, since `orchestration/` may read `domains/`.
+
+        Returns the workflow so the caller can hang its record on the turn's
+        tree, matching how triage and the runner are handled; None when there
+        was nothing to write about or nowhere to write from.
+
+        Two ways to decline, both quiet:
+
+        - **No results.** A plan whose every goal was unreachable leaves an
+          empty map. There is no evidence to write from, so the stage would
+          only invent one — the same failure the `ValueError` in its `run`
+          guards against.
+        - **No book store on this request.** Narrowing is what a node's
+          `NodeSpec.context` did at dispatch; this stage has no spec, so it
+          narrows here. A `LookupError` means the services it needs are not on
+          this request, which is a deployment problem rather than a turn that
+          should die — the cards already streamed, so the user loses the prose
+          and nothing else.
+        """
+        results = list(task_runner.result.task_results.values())
+        if not results:
+            logger.warning("No task results to write a reply from")
+            return None
+
+        try:
+            ctx = BookRequestContext.narrow(request_context)
+        except LookupError as e:
+            logger.warning(f"Skipping the reply: {e}")
+            return None
+
+        writer = GenerateRecommendationsExecutor(ctx, messages=messages)
+        await asyncio.wait_for(
+            writer(RecommendationsInput(results=results)),
+            timeout=CONVERSATION_TIMEOUT,
+        )
+        return writer
 
     @staticmethod
     async def _finalize(

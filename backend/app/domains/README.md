@@ -31,8 +31,11 @@ to the flow, to one call's pure half, or to the input, and naming the file for
 that is the point.
 
 - `node_spec.py` — `NodeSpec` (node_type, tier, request, output, executor) and
-  `NodeTier` (`RETRIEVAL` → `COMBINE` → `ANALYZE` → `GENERATE`, in the order
-  `format_catalog` renders them, which is also the order a plan runs in). One
+  `NodeTier` (`RETRIEVAL` → `COMBINE` → `ANALYZE`, in the order
+  `format_catalog` renders them, which is also the order a plan runs in). A
+  `GENERATE` tier existed for one day (2026-09-07/08) and went with its one
+  member: the plan covers finding books, and the reply is written afterwards by
+  a stage no plan mentions. One
   spec per node; it is the **only** thing a slice has to export. Its
   `__post_init__` checks the spec's name against the request schema's `Literal`
   default, so the two cannot drift apart silently.
@@ -57,9 +60,10 @@ that is the point.
   `stream_books` — everything that reads the database or sends cards and writes
   to no output field, so its bound is `NodeWorkflowOutput`) and `BookWorkflow`,
   which is that plus `count_books` and is bound to `BookRetrievalOutput`. Every
-  book-*producing* node subclasses the second; the generation node
-  (`write_recommendations/`) is the one subclass of the reader alone, because it
-  needs rows and cards while producing prose. `BookWorkflow` exposes `self.store`
+  book-*producing* node subclasses the second; the reply stage
+  (`app/orchestration/write_recommendations/` — not a node, and no longer in
+  this package) is the one subclass of the reader alone, because it needs rows
+  and cards while producing prose. `BookWorkflow` exposes `self.store`
   (a property off the request context), and adds two `@task`s —
   `count_books()` (stamp a deferred query on the output and record the match
   size — no rows) and `fetch_books()` (rows off a query, handed back rather
