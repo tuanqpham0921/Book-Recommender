@@ -32,6 +32,7 @@ from app.domains.node_input import NodeInput
 from app.domains.node_spec import NodeSpec
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
+from clients.messages import AssistantMessage
 
 NODE_TYPE = FindTitleNodeTypeEnum.REQUEST
 
@@ -73,6 +74,16 @@ class _FailingExecutor(AppWorkflow[_Output]):
 class _ExplodingExecutor(AppWorkflow[_Output]):
     async def run(self, node_input: _Input) -> None:
         raise RuntimeError("node blew up")
+
+
+class _AppendingExecutor(AppWorkflow[_Output]):
+    """Stands in for a real node's LLM turn, which reaches the shared message
+    list through `run_llm_call`. Only the ordering against the brief matters
+    here, so it appends directly rather than faking a client."""
+
+    async def run(self, node_input: _Input) -> None:
+        self.messages.append(AssistantMessage(content="the node's own turn"))
+        self.finalize_result(ok=True)
 
 
 class _CancelledExecutor(AppWorkflow[_Output]):
@@ -324,6 +335,41 @@ class TestTaskSectionBracketing:
         assert of_type(events, "task.end") == [
             {"task_id": "1", "count": None, "ok": False}
         ]
+
+
+class TestMessageTrace:
+    """The goal's brief in the shared message list.
+
+    `self.messages` is the turn's recorded conversation — it lands in
+    `convo_history.json` and `chat_runs`, and is never a request's `messages`
+    — so these assert what the record reads like, not what any model is sent.
+    """
+
+    async def test_the_goals_brief_precedes_what_the_node_appends(self, runner):
+        await drive(runner, [_goal()], _spec(_AppendingExecutor))
+
+        assert [m.content for m in runner.messages] == [
+            "Find a book about machine learning topics",
+            "the node's own turn",
+        ]
+
+    async def test_one_brief_per_goal_in_execution_order(self, runner):
+        await drive(
+            runner,
+            [_goal("2", depends_on=["1"]), _goal("1")],
+            _spec(_OkExecutor),
+        )
+
+        assert [m.content for m in runner.messages] == [
+            "Find a book about machine learning topics"
+        ] * 2
+
+    async def test_a_goal_that_never_runs_leaves_no_brief(self, runner):
+        # same reasoning as the UI section: a brief with nothing after it
+        # reads as a node that was asked and then said nothing
+        await drive(runner, [_goal()], None)
+
+        assert runner.messages == []
 
 
 class TestPlanRequirement:

@@ -15,6 +15,7 @@ from app.registry import REGISTRY
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from ..domains.node_spec import NodeSpec
 from airglider import OperationResult
+from clients.messages import AssistantMessage
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +245,12 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         not an aborted plan, so the runner wants the envelope. The executor and
         its input arrive already built, so anything that could fail earlier
         failed in `_prepare`.
+
+        Opening the section also opens the goal's turn in the shared message
+        trace, for the same reason and in the same place: the executor's tool
+        call and tool result land next, and without the brief in front of them
+        the recorded conversation shows a node parsing arguments out of
+        nowhere.
         """
         executor_cls = type(executor)
         await self.sse_stream.send_task_start(
@@ -252,6 +259,11 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
             or goal.target_node_type.value.replace("_", " "),
             collapsible=executor_cls.ui_section_collapsible,
         )
+        # An `AssistantMessage` because the planner wrote it — the same shape
+        # every slice already ships its instruction to its argument parser as
+        # (planner work, not a user turn). Record only: `self.messages` is the
+        # turn's trace, never a request's `messages`, so no model reads this.
+        self.messages.append(AssistantMessage(content=goal.instruction))
 
         step_result = None
         try:
