@@ -1,204 +1,33 @@
 {
-  "id": "op_94887d70",
-  "start_time": "2026-08-06T14:22:25.815696+00:00",
-  "name": "app.domains.planner.main.PlannerWorkflow",
-  "ok": true,
-  "message": "Conversation orchestration completed successfully",
-  "steps": [
+  "goal_instruction": null,
+  "accepted_goals": [
     {
-      "id": "op_05f8a87a",
-      "start_time": "2026-08-06T14:22:25.816905+00:00",
-      "name": "app.domains.planner.parse_intent.PlanJaneExecutor",
-      "ok": true,
-      "message": "Initial parse completed successfully",
-      "steps": [
-        {
-          "id": "op_e648a6fa",
-          "start_time": "2026-08-06T14:22:28.286596+00:00",
-          "name": "clients.openai_client.OpenAIClient.execute",
-          "ok": true,
-          "message": "Task clients.openai_client.OpenAIClient.execute completed successfully",
-          "details": [
-            "output is not an operation result, creating a default one"
-          ],
-          "output": {
-            "role": "assistant",
-            "id": "chatcmpl-E9tHHSv8CV2OW5xSyPVf2ZnRR1AAb",
-            "tool_calls": [
-              {
-                "id": "call_ahlBKQEUiJkRAriIbMMXt7Rj",
-                "function": {
-                  "arguments": "{\"node_type\":\"parse_intent\",\"out_of_scope\":[],\"reasoning\":\"A named title anchors a direct similarity recommendation request.\",\"system_goals\":[{\"node_type\":\"system_goal\",\"confidence\":1,\"depends_on\":[],\"description\":\"Find the book Pride and Prejudice by title\",\"id\":\"1\",\"reasoning\":\"Retrieve the named anchor before making similar-book recommendations.\",\"target_node_type\":\"Retrieve_by_Title\"},{\"node_type\":\"system_goal\",\"confidence\":1,\"depends_on\":[\"1\"],\"description\":\"Recommend books similar to Pride and Prejudice\",\"id\":\"2\",\"reasoning\":\"Similarity recommendations use the retrieved book as an anchor.\",\"target_node_type\":\"Analyze_Recommend\"}]}",
-                  "name": "GoalParseRequest",
-                  "parsed_arguments": {
-                    "node_type": "parse_intent",
-                    "system_goals": [
-                      {
-                        "node_type": "system_goal",
-                        "id": "1",
-                        "instruction": "Find the book Pride and Prejudice by title",
-                        "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
-                        "confidence": 1.0,
-                        "target_node_type": "Retrieve_by_Title",
-                        "_refusal": false
-                      },
-                      {
-                        "node_type": "system_goal",
-                        "id": "2",
-                        "instruction": "Recommend books similar to Pride and Prejudice",
-                        "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
-                        "confidence": 1.0,
-                        "target_node_type": "Analyze_Recommend",
-                        "depends_on": [
-                          "1"
-                        ],
-                        "_refusal": false
-                      }
-                    ],
-                    "reasoning": "A named title anchors a direct similarity recommendation request."
-                  }
-                },
-                "type": "function",
-                "index": 0
-              }
-            ],
-            "created": "2026-08-06T14:22:28.286539+00:00",
-            "token_usage": {
-              "total": 3934,
-              "prompt": 3785,
-              "completion": 149,
-              "cached": 3654,
-              "reasoning_tokens": 0,
-              "model": "gpt-5.6-terra",
-              "cost_usd": 0.0,
-              "unpriced_models": [
-                "gpt-5.6-terra"
-              ]
-            }
-          },
-          "output_type": "AssistantMessage",
-          "duration": 2.47,
-          "token_usage": {
-            "total": 3934,
-            "prompt": 3785,
-            "completion": 149,
-            "cached": 3654,
-            "reasoning_tokens": 0,
-            "model": "gpt-5.6-terra",
-            "cost_usd": 0.0,
-            "unpriced_models": [
-              "gpt-5.6-terra"
-            ]
-          }
-        }
+      "node_type": "system_goal",
+      "id": "1",
+      "instruction": "Find the book Pride and Prejudice by title",
+      "reasoning": "The named book must be retrieved as a similarity anchor.",
+      "confidence": 1.0,
+      "target_node_type": "Retrieve_by_Title",
+      "depends_on": [],
+      "_refusal": false,
+      "_refusal_reasons": []
+    },
+    {
+      "node_type": "system_goal",
+      "id": "2",
+      "instruction": "Find books similar to Pride and Prejudice",
+      "reasoning": "Similarity recommendations require the retrieved title anchor.",
+      "confidence": 1.0,
+      "target_node_type": "Analyze_Similar_Books",
+      "depends_on": [
+        "1"
       ],
-      "output": {
-        "accepted_goals": [
-          {
-            "node_type": "system_goal",
-            "id": "1",
-            "instruction": "Find the book Pride and Prejudice by title",
-            "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
-            "confidence": 1.0,
-            "target_node_type": "Retrieve_by_Title",
-            "_refusal": false
-          },
-          {
-            "node_type": "system_goal",
-            "id": "2",
-            "instruction": "Recommend books similar to Pride and Prejudice",
-            "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
-            "confidence": 1.0,
-            "target_node_type": "Analyze_Recommend",
-            "depends_on": [
-              "1"
-            ],
-            "_refusal": false
-          }
-        ]
-      },
-      "output_type": "PlanJaneOutput",
-      "duration": 2.47,
-      "token_usage": {
-        "total": 3934,
-        "prompt": 3785,
-        "completion": 149,
-        "cached": 3654,
-        "reasoning_tokens": 0,
-        "by_model": {
-          "gpt-5.6-terra": {
-            "total": 3934,
-            "prompt": 3785,
-            "completion": 149,
-            "cached": 3654,
-            "reasoning_tokens": 0
-          }
-        },
-        "cost_usd": 0.0,
-        "unpriced_models": [
-          "gpt-5.6-terra"
-        ]
-      }
+      "_refusal": false,
+      "_refusal_reasons": []
     }
   ],
-  "output": {
-    "session_id": "dev_4d01d57b",
-    "parse_result": {
-      "accepted_goals": [
-        {
-          "node_type": "system_goal",
-          "id": "1",
-          "instruction": "Find the book Pride and Prejudice by title",
-          "reasoning": "Retrieve the named anchor before making similar-book recommendations.",
-          "confidence": 1.0,
-          "target_node_type": "Retrieve_by_Title",
-          "_refusal": false
-        },
-        {
-          "node_type": "system_goal",
-          "id": "2",
-          "instruction": "Recommend books similar to Pride and Prejudice",
-          "reasoning": "Similarity recommendations use the retrieved book as an anchor.",
-          "confidence": 1.0,
-          "target_node_type": "Analyze_Recommend",
-          "depends_on": [
-            "1"
-          ],
-          "_refusal": false
-        }
-      ]
-    },
-    "diagram": "flowchart LR\n\t1[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>Retrieve_by_Title</div><div style='margin-bottom:4px'><strong>Goal:</strong> 1</div><div style='margin-bottom:4px'><strong>Description:</strong> Find the book Pride and Prejudice by title</div><div style='margin-bottom:4px'><strong>Reasoning:</strong> Retrieve the named anchor before making similar-book recommendations.</div></div>\"]\n\t2[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>Analyze_Recommend</div><div style='margin-bottom:4px'><strong>Goal:</strong> 2</div><div style='margin-bottom:4px'><strong>Description:</strong> Recommend books similar to Pride and Prejudice</div><div style='margin-bottom:4px'><strong>Reasoning:</strong> Similarity recommendations use the retrieved book as an anchor.</div></div>\"]\n\tgen_1[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>generic_answer</div><div style='margin-bottom:4px'><strong>Goal:</strong> gen_1</div></div>\"]\n\t1 --> 2\n\t2 --> gen_1\n",
-    "generation_nodes": [
-      {
-        "node_type": "generic_answer",
-        "id": "gen_1",
-        "depends_on": [
-          "2"
-        ]
-      }
-    ]
-  },
-  "output_type": "PlannerOutput",
-  "duration": 2.78,
-  "token_usage": {
-    "total": 3934,
-    "prompt": 3785,
-    "completion": 149,
-    "cached": 3654,
-    "reasoning_tokens": 0,
-    "by_model": {
-      "gpt-5.6-terra": {
-        "total": 3934,
-        "prompt": 3785,
-        "completion": 149,
-        "cached": 3654,
-        "reasoning_tokens": 0
-      }
-    },
-    "cost_usd": 0.0,
-    "unpriced_models": [
-      "gpt-5.6-terra"
-    ]
-  }
+  "refused_goals": [],
+  "buffer_goals": [],
+  "out_of_scope": [],
+  "diagram": "flowchart LR\n\t1[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>Retrieve_by_Title</div><div style='margin-bottom:4px'><strong>Goal:</strong> 1</div><div style='margin-bottom:4px'><strong>Instruction:</strong> Find the book Pride and Prejudice by title</div><div style='margin-bottom:4px'><strong>Reasoning:</strong> The named book must be retrieved as a similarity anchor.</div></div>\"]\n\t2[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>Analyze_Similar_Books</div><div style='margin-bottom:4px'><strong>Goal:</strong> 2</div><div style='margin-bottom:4px'><strong>Instruction:</strong> Find books similar to Pride and Prejudice</div><div style='margin-bottom:4px'><strong>Reasoning:</strong> Similarity recommendations require the retrieved title anchor.</div></div>\"]\n\t1 --> 2\n"
 }
