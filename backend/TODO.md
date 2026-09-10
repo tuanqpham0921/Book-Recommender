@@ -66,3 +66,58 @@ Historical cleanup logs live in git history (`git log -p -- backend/TODO.md`).
   Recoverable at `git show 8b03c8e^:backend/app/domains/books/analyze_recommend/generate_response.py`
   and its `prompts/response_prompt.txt`. The tradeoff is per-book "why this fits" (needs
   blurbs) against a reply that cannot invent a plot (needs their absence). Undecided.
+
+* format the task runner result better
+    * should contain books for small input (find by titles and such)
+    * maybe the operation result is the output
+      * just have the steps summary
+    * make sure that the books data only have useful fields
+      * so no thumbnail, isbn and such
+
+* format the results better
+  * task runner should not be responsible for reasons
+  * it should not modify or anything
+  * it should only store and receive results
+  * which is how you can have the business logic into the generation node.
+
+* up to here the goal is
+  * having some structure data that can be saved into db
+  * with source id or task id
+  * this will be the source of truth for generation and continuation (for later)
+    * whatever this contain, the system can answer
+
+* make sure this work first
+  * so you can mock tasks "output"
+  * so you can eval test the generation response
+
+* then I think the idea is have this
+  * do a pre-parse in the generation workflow into
+
+class section:
+  title or query to answer
+  sources = list[task ids] <- will be send at the end
+
+then you have list[sections]
+format it into 1 generation node
+
+assistant_msg = [
+<section 1>
+  * query or title
+  * generate the answer
+  * book cards
+</section1>
+
+<section 2>
+  same thing
+</section>
+]
+
+so it's similar to the dynamic generation
+but instead of pre_assigning
+you can post assign it
+since some might fail or not
+
+so the section will choose from the work output
+into smaller sections
+
+* maybe forget about streaming for now
