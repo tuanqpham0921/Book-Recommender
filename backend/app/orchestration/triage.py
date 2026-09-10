@@ -43,19 +43,8 @@ def load_cached_parse_output(user_text: str) -> PlanJaneOutput | None:
     if not isinstance(data, dict):
         return None
 
-    payload = (data.get("output") or {}).get("parse_result")
-    if not payload:
-        logger.warning(f"Cache entry {file_name} has no output.parse_result")
-        return None
-
-    # save_file() writes with remove_empty=True, dropping empty lists, so a
-    # goal depending on nothing comes back missing its required depends_on
-    for key in ("accepted_goals", "refused_goals", "buffer_goals"):
-        for goal in payload.get(key) or []:
-            goal.setdefault("depends_on", [])
-
     try:
-        return PlanJaneOutput.model_validate(payload)
+        return PlanJaneOutput.model_validate(data)
     except Exception as e:
         logger.warning(f"Could not replay cached plan {file_name}: {e}")
         return None

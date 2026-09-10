@@ -7,10 +7,15 @@ import pytest
 from clients.messages import AssistantMessage, UserMessage
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput
-from app.orchestration.triage import TriageWorkflow, TriageOutput
+from app.orchestration import triage
+from app.orchestration.triage import (
+    TriageWorkflow,
+    TriageOutput,
+    load_cached_parse_output,
+)
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from airglider import OperationResult, Response, RuntimeErrorInfo, TokenUsage
-from common.utils import load_json, save_file
+from common.utils import load_json, save_file, to_serializable
 
 
 @pytest.fixture
@@ -71,6 +76,87 @@ class TestTriageWorkflowSteps:
         )
         orchestrator.record.add_step(step)
         assert step in orchestrator.record.steps
+
+
+CACHED_MESSAGE = "Show me books similar to Pride and Prejudice"
+
+
+@pytest.fixture
+def cache_dir(tmp_path):
+    """The dev cache, relocated to a tmp dir with one message mapped. Both
+    sides of a `cache_mapping` entry are the message itself — it is also the
+    file name."""
+    with patch.object(triage, "CACHE_DIR", tmp_path), patch.dict(
+        triage.cache_mapping, {CACHED_MESSAGE: CACHED_MESSAGE}, clear=True
+    ):
+        yield tmp_path
+
+
+class TestLoadCachedParseOutput:
+    """The dev-only plan replay.
+
+    A cache file is a bare `PlanJaneOutput` dump now — no enclosing triage
+    record, so no `output.parse_result` to reach through — and it is written
+    with `remove_empty=False`. Those two facts are what let the loader drop its
+    unwrapping and its `depends_on` backfill, so they are what these pin, along
+    with what each *unusable* file does instead: returning None is what sends
+    the turn to the real planner.
+    """
+
+    @staticmethod
+    def _write(data, path, *, remove_empty=False, name=CACHED_MESSAGE):
+        save_file(data, file_name=name, path=path, remove_empty=remove_empty)
+
+    def test_replays_a_bare_plan_dump(self, cache_dir):
+        plan = PlanJaneOutput(accepted_goals=[_make_goal()], diagram="graph TD;")
+        self._write(plan, cache_dir)
+
+        replayed = load_cached_parse_output(CACHED_MESSAGE)
+
+        assert replayed is not None
+        assert replayed.diagram == "graph TD;"
+        assert [goal.id for goal in replayed.accepted_goals] == ["1"]
+        assert replayed.accepted_goals[0].depends_on == []
+
+    def test_an_unmapped_message_is_never_read(self, cache_dir):
+        self._write(PlanJaneOutput(accepted_goals=[_make_goal()]), cache_dir)
+
+        assert load_cached_parse_output("a message nobody cached") is None
+
+    def test_a_mapped_message_with_no_file_falls_through(self, cache_dir):
+        # cache_mapping outlives the files it names — two entries are mapped
+        # with nothing on disk. load_json logs and returns None, so this is a
+        # planner call, not a crash inside triage.
+        assert load_cached_parse_output(CACHED_MESSAGE) is None
+
+    def test_a_dump_that_dropped_its_empty_lists_falls_through(self, cache_dir):
+        # save_file's default. `SystemGoal.depends_on` is required with no
+        # default, so a goal that depends on nothing loses the field and the
+        # whole plan fails to validate — which is why the file must be written
+        # with remove_empty=False now that the loader no longer backfills it.
+        self._write(
+            PlanJaneOutput(accepted_goals=[_make_goal()]), cache_dir, remove_empty=True
+        )
+
+        assert load_cached_parse_output(CACHED_MESSAGE) is None
+
+    def test_an_old_whole_record_dump_replays_as_an_empty_plan(self, cache_dir):
+        """The one stale file that does not fall through.
+
+        `PlanJaneOutput` ignores extra keys, so the old shape validates as a
+        plan with no goals rather than raising. Triage then finalizes ok=True
+        with it, and the orchestrator's `plan.accepted_goals` check skips the
+        runner and the reply — a turn that ends silently. Pinned because the
+        failure is invisible: the fix is to re-dump the file, or to have the
+        loader treat a goal-less plan as no cache.
+        """
+        plan = PlanJaneOutput(accepted_goals=[_make_goal()])
+        self._write({"output": {"parse_result": to_serializable(plan)}}, cache_dir)
+
+        replayed = load_cached_parse_output(CACHED_MESSAGE)
+
+        assert replayed is not None
+        assert replayed.accepted_goals == []
 
 
 def _make_runtime_error(message: str) -> RuntimeErrorInfo:
