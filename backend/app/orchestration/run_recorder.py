@@ -158,8 +158,33 @@ async def record_chat_run(
             # saving the convo history
             save_file(messages, file_name="convo_history", path=user_dir)
             
-            # saving the writter
-            save_file(to_serializable(writer.record), file_name="writer", path=user_dir)
+            # saving the writter. Both of these are None on a turn that never
+            # planned (small talk, a refusal) and the writer is None again when
+            # it declined — without the guards the AttributeError lands in the
+            # except below and the whole recording is logged as failed.
+            if writer is not None:
+                save_file(
+                    to_serializable(writer.record), file_name="writer", path=user_dir
+                )
+
+            # save task runner output. `task_runner.record.response` looks empty
+            # for a reason that is not a bug: `TaskRunnerOutput.task_results` is
+            # `exclude=True` (each output already lives in full on its own
+            # node's envelope in `steps`), and `to_serializable` skips excluded
+            # fields — leaving session_id, since remove_empty_values then drops
+            # the None and the empty list. The exclusion is on the *field*, so
+            # serializing the map itself is what gets the outputs.
+            if task_runner is not None:
+                dev_gen = {
+                    # exactly what the writer was fed: RecommendationsInput
+                    # takes list(task_results.values())
+                    "task_results": task_runner.result,
+                    # thin for the other reason: `record.input` is built by
+                    # to_record_input, where each result's to_summary() wins
+                    "writer_input_as_recorded": writer.record.input if writer else None,
+                }
+                save_file(dev_gen, file_name="dev_gen", path=user_dir)
+
 
 
         # async with request_context.session_factory() as session:

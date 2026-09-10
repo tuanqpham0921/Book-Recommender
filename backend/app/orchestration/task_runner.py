@@ -32,7 +32,7 @@ class TaskRunnerOutput(NodeWorkflowOutput):
     # excluded from serialization: each output already lives in full on its own
     # node's envelope in `steps`, so persisting this map would store every
     # output twice per run. It exists for dependency resolution at runtime.
-    task_results: dict[str, Any] = Field(default_factory=dict, exclude=True)
+    task_results: dict[str, Any] = Field(default_factory=dict)
     failed_task: list[str] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
