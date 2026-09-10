@@ -1,0 +1,442 @@
+{
+  "id": "op_2c27871a",
+  "parent_id": "op_ad3a5d8f",
+  "name": "app.domains.books.find_similar_books.executor.FindSimilarBooksExecutor",
+  "ok": true,
+  "timing": {
+    "start_time": "2026-09-10T19:25:57.550798+00:00",
+    "duration": 0.77
+  },
+  "input": {
+    "node_input": {
+      "instruction": "Find books similar to Pride and Prejudice",
+      "anchors": [
+        {
+          "goal_instruction": "Find the book Pride and Prejudice by title",
+          "num_books": 2,
+          "query_sql": "SELECT books.isbn13, similarity(books.title, 'Pride and Prejudice') AS score \nFROM books \nWHERE lower(books.title) LIKE lower('Pride and Prejudice') OR similarity(books.title, 'Pride and Prejudice') > 0.7",
+          "args": {
+            "title": "Pride and Prejudice"
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "result": {
+      "goal_instruction": null,
+      "num_books": 250,
+      "query_sql": "SELECT books.isbn13, 1 - (books.embedding <=> embed(search_text)) AS score \nFROM books \nWHERE books.embedding IS NOT NULL AND 1 - (books.embedding <=> embed(search_text)) >= 0.35 AND (books.isbn13 NOT IN ('9780141439518', '9780192802385')) ORDER BY score DESC\n LIMIT 250",
+      "references": [
+        {
+          "isbn13": "9780141439518",
+          "title": "Pride and Prejudice",
+          "isbn10": "0141439513",
+          "authors": "Jane Austen",
+          "categories": "Fiction",
+          "genre": "Fiction",
+          "published_year": 2003,
+          "num_pages": 480,
+          "average_rating": 4.25,
+          "ratings_count": 11552,
+          "is_children": null,
+          "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+          "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+          "title_and_subtiles": "Pride and Prejudice"
+        },
+        {
+          "isbn13": "9780192802385",
+          "title": "Pride and Prejudice",
+          "isbn10": "0192802380",
+          "authors": "Jane Austen",
+          "categories": "Fiction",
+          "genre": "Fiction",
+          "published_year": 2004,
+          "num_pages": 333,
+          "average_rating": 4.25,
+          "ratings_count": 2369,
+          "is_children": null,
+          "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+          "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+          "title_and_subtiles": "Pride and Prejudice"
+        }
+      ],
+      "search_text": "A witty, finely observed comedy of manners set in a tightly governed social world where marriage, reputation and property shape every visit and conversation. The plot unfolds through salons, country assemblies and polite calls as a pair of sharp-minded protagonists spar, misread and slowly reassess one another amid the pressures of family expectation and class-conscious neighbors. Much of the action is social choreography\u2014dinners, letters, dances, gossip and small humiliations\u2014where unsaid motives and restrained emotion carry more weight than dramatic outbursts. The tone is light, ironic and humane: the narrator gently exposes vanity and prejudice while remaining affectionate toward the characters\u2019 foibles. Conflicts are interpersonal and moral rather than violent, moving the cast toward clearer self-knowledge, humility and the renegotiation of pride and prejudice. This is a domestically scaled novel that rewards attention to dialogue and manners, offering sly social critique beneath an entertaining surface of romantic entanglement and corrective revelations.",
+      "score": {
+        "count": 250,
+        "min": 0.35756369191763626,
+        "max": 0.595304897257113,
+        "avg": 0.3943777806937277
+      }
+    },
+    "output_type": "SimilarBooksOutput"
+  },
+  "details": [
+    "anchors: {'num_queries': 1, 'num_books': 0, 'total': 2, 'empty': [], 'unknown': []}",
+    "Anchor query: SELECT books.isbn13, similarity(books.title, 'Pride and Prejudice') AS score \nFROM books \nWHERE lower(books.title) LIKE lower('Pride and Prejudice') OR similarity(books.title, 'Pride and Prejudice') > 0.7",
+    "pool of 250, similarity 0.358\u20130.595"
+  ],
+  "token_usage": {
+    "total": 193,
+    "prompt": 193,
+    "completion": 0,
+    "cached": 0,
+    "reasoning_tokens": 0,
+    "model": "",
+    "by_model": {
+      "text-embedding-3-large": {
+        "total": 193,
+        "prompt": 193,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0
+      }
+    },
+    "cost_usd": 2.5e-05,
+    "unpriced_models": []
+  },
+  "runtime_error": null,
+  "steps": [
+    {
+      "id": "op_bd8a9a8a",
+      "parent_id": "op_2c27871a",
+      "name": "app.domains.books.base_workflow.BookReaderWorkflow.fetch_books",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-09-10T19:25:57.551771+00:00",
+        "duration": 0.02
+      },
+      "input": {
+        "query": "<DeferredBookQuery>",
+        "limit": 5
+      },
+      "response": {
+        "result": [
+          {
+            "isbn13": "9780141439518",
+            "title": "Pride and Prejudice",
+            "isbn10": "0141439513",
+            "authors": "Jane Austen",
+            "categories": "Fiction",
+            "genre": "Fiction",
+            "published_year": 2003,
+            "num_pages": 480,
+            "average_rating": 4.25,
+            "ratings_count": 11552,
+            "is_children": null,
+            "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+            "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Pride and Prejudice"
+          },
+          {
+            "isbn13": "9780192802385",
+            "title": "Pride and Prejudice",
+            "isbn10": "0192802380",
+            "authors": "Jane Austen",
+            "categories": "Fiction",
+            "genre": "Fiction",
+            "published_year": 2004,
+            "num_pages": 333,
+            "average_rating": 4.25,
+            "ratings_count": 2369,
+            "is_children": null,
+            "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+            "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Pride and Prejudice"
+          }
+        ],
+        "output_type": "list"
+      },
+      "details": [
+        "wrapped a bare return value"
+      ],
+      "token_usage": {
+        "total": 0,
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0,
+        "model": "",
+        "by_model": {},
+        "cost_usd": 0.0,
+        "unpriced_models": []
+      },
+      "runtime_error": null,
+      "steps": []
+    },
+    {
+      "id": "op_f27df34e",
+      "parent_id": "op_2c27871a",
+      "name": "app.domains.books.find_similar_books.executor.FindSimilarBooksExecutor.analyze_references",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-09-10T19:25:57.571004+00:00",
+        "duration": 0.0
+      },
+      "input": {
+        "books": [
+          {
+            "isbn13": "9780141439518",
+            "title": "Pride and Prejudice",
+            "isbn10": "0141439513",
+            "authors": "Jane Austen",
+            "categories": "Fiction",
+            "genre": "Fiction",
+            "published_year": 2003,
+            "num_pages": 480,
+            "average_rating": 4.25,
+            "ratings_count": 11552,
+            "is_children": null,
+            "description": "9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.",
+            "thumbnail": "http://books.google.com/books/content?id=obMP1xBBhh8C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Pride and Prejudice"
+          },
+          {
+            "isbn13": "9780192802385",
+            "title": "Pride and Prejudice",
+            "isbn10": "0192802380",
+            "authors": "Jane Austen",
+            "categories": "Fiction",
+            "genre": "Fiction",
+            "published_year": 2004,
+            "num_pages": 333,
+            "average_rating": 4.25,
+            "ratings_count": 2369,
+            "is_children": null,
+            "description": "9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and quick-wittedness challenges sagacity, as misconceptions and hasty judgements lead to heartache and scandal, but eventually to true understanding, self-knowledge, and love. In this supremely satisfying story, Jane Austen balances comedy with seriousness, and witty observation with profound insight. If Elizabeth Bennet returns again and again to her letter from Mr Darcy, readers of the novel are drawn even more irresistibly by its captivating wisdom.",
+            "thumbnail": "http://books.google.com/books/content?id=8cp-Z_G42g4C&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Pride and Prejudice"
+          }
+        ]
+      },
+      "response": {
+        "result": "A witty, finely observed comedy of manners set in a tightly governed social world where marriage, reputation and property shape every visit and conversation. The plot unfolds through salons, country assemblies and polite calls as a pair of sharp-minded protagonists spar, misread and slowly reassess one another amid the pressures of family expectation and class-conscious neighbors. Much of the action is social choreography\u2014dinners, letters, dances, gossip and small humiliations\u2014where unsaid motives and restrained emotion carry more weight than dramatic outbursts. The tone is light, ironic and humane: the narrator gently exposes vanity and prejudice while remaining affectionate toward the characters\u2019 foibles. Conflicts are interpersonal and moral rather than violent, moving the cast toward clearer self-knowledge, humility and the renegotiation of pride and prejudice. This is a domestically scaled novel that rewards attention to dialogue and manners, offering sly social critique beneath an entertaining surface of romantic entanglement and corrective revelations.",
+        "output_type": "str"
+      },
+      "details": [
+        "wrapped a bare return value"
+      ],
+      "token_usage": {
+        "total": 0,
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0,
+        "model": "",
+        "by_model": {},
+        "cost_usd": 0.0,
+        "unpriced_models": []
+      },
+      "runtime_error": null,
+      "steps": []
+    },
+    {
+      "id": "op_6f9c79fb",
+      "parent_id": "op_2c27871a",
+      "name": "app.domains.books.find_similar_books.executor.FindSimilarBooksExecutor.build_pool",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-09-10T19:25:57.572150+00:00",
+        "duration": 0.69
+      },
+      "input": {
+        "search_text": "A witty, finely observed comedy of manners set in a tightly governed social world where marriage, reputation and property shape every visit and conversation. The plot unfolds through salons, country assemblies and polite calls as a pair of sharp-minded protagonists spar, misread and slowly reassess one another amid the pressures of family expectation and class-conscious neighbors. Much of the action is social choreography\u2014dinners, letters, dances, gossip and small humiliations\u2014where unsaid motives and restrained emotion carry more weight than dramatic outbursts. The tone is light, ironic and humane: the narrator gently exposes vanity and prejudice while remaining affectionate toward the characters\u2019 foibles. Conflicts are interpersonal and moral rather than violent, moving the cast toward clearer self-knowledge, humility and the renegotiation of pride and prejudice. This is a domestically scaled novel that rewards attention to dialogue and manners, offering sly social critique beneath an entertaining surface of romantic entanglement and corrective revelations.",
+        "exclude_isbns": [
+          "9780141439518",
+          "9780192802385"
+        ]
+      },
+      "response": {
+        "result": "<DeferredBookQuery similar>",
+        "output_type": "DeferredBookQuery"
+      },
+      "details": [
+        "wrapped a bare return value"
+      ],
+      "token_usage": {
+        "total": 193,
+        "prompt": 193,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0,
+        "model": "",
+        "by_model": {
+          "text-embedding-3-large": {
+            "total": 193,
+            "prompt": 193,
+            "completion": 0,
+            "cached": 0,
+            "reasoning_tokens": 0
+          }
+        },
+        "cost_usd": 2.5e-05,
+        "unpriced_models": []
+      },
+      "runtime_error": null,
+      "steps": [
+        {
+          "id": "op_c8a07464",
+          "parent_id": "op_6f9c79fb",
+          "name": "app.domains.base_workflow.AppWorkflow.get_embeddings",
+          "ok": true,
+          "timing": {
+            "start_time": "2026-09-10T19:25:57.572870+00:00",
+            "duration": 0.69
+          },
+          "input": {
+            "texts": [
+              "A witty, finely observed comedy of manners set in a tightly governed social world where marriage, reputation and property shape every visit and conversation. The plot unfolds through salons, country assemblies and polite calls as a pair of sharp-minded protagonists spar, misread and slowly reassess one another amid the pressures of family expectation and class-conscious neighbors. Much of the action is social choreography\u2014dinners, letters, dances, gossip and small humiliations\u2014where unsaid motives and restrained emotion carry more weight than dramatic outbursts. The tone is light, ironic and humane: the narrator gently exposes vanity and prejudice while remaining affectionate toward the characters\u2019 foibles. Conflicts are interpersonal and moral rather than violent, moving the cast toward clearer self-knowledge, humility and the renegotiation of pride and prejudice. This is a domestically scaled novel that rewards attention to dialogue and manners, offering sly social critique beneath an entertaining surface of romantic entanglement and corrective revelations."
+            ]
+          },
+          "response": {
+            "result": {
+              "token_usage": null
+            },
+            "output_type": "EmbeddingsResult"
+          },
+          "details": [
+            "wrapped a bare return value",
+            "promoted output token usage"
+          ],
+          "token_usage": {
+            "total": 193,
+            "prompt": 193,
+            "completion": 0,
+            "cached": 0,
+            "reasoning_tokens": 0,
+            "model": "",
+            "by_model": {
+              "text-embedding-3-large": {
+                "total": 193,
+                "prompt": 193,
+                "completion": 0,
+                "cached": 0,
+                "reasoning_tokens": 0
+              }
+            },
+            "cost_usd": 2.5e-05,
+            "unpriced_models": []
+          },
+          "runtime_error": null,
+          "steps": []
+        }
+      ]
+    },
+    {
+      "id": "op_c395b7ad",
+      "parent_id": "op_2c27871a",
+      "name": "app.domains.books.find_similar_books.executor.FindSimilarBooksExecutor.pool_stats",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-09-10T19:25:58.263559+00:00",
+        "duration": 0.04
+      },
+      "input": {
+        "query": "<DeferredBookQuery>"
+      },
+      "response": {
+        "result": 250,
+        "output_type": "int"
+      },
+      "details": [
+        "wrapped a bare return value"
+      ],
+      "token_usage": {
+        "total": 0,
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0,
+        "model": "",
+        "by_model": {},
+        "cost_usd": 0.0,
+        "unpriced_models": []
+      },
+      "runtime_error": null,
+      "steps": []
+    },
+    {
+      "id": "op_4c1298c0",
+      "parent_id": "op_2c27871a",
+      "name": "app.domains.books.base_workflow.BookReaderWorkflow.fetch_books",
+      "ok": true,
+      "timing": {
+        "start_time": "2026-09-10T19:25:58.306070+00:00",
+        "duration": 0.02
+      },
+      "input": {
+        "query": "<DeferredBookQuery>",
+        "limit": 3
+      },
+      "response": {
+        "result": [
+          {
+            "isbn13": "9781593080495",
+            "title": "Sense and Sensibility",
+            "isbn10": "1593080492",
+            "authors": "Jane Austen",
+            "categories": "Fiction",
+            "genre": "Fiction",
+            "published_year": 2003,
+            "num_pages": 336,
+            "average_rating": 4.07,
+            "ratings_count": 636,
+            "is_children": null,
+            "description": "9781593080495 Romantic walks through lush Devonshire and genteel dinner parties at a stately manor draw two pretty sisters into the schemes and manipulations of landed gentry determined to marry wisely and well.",
+            "thumbnail": "http://books.google.com/books/content?id=PTUH6Zg2QQYC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Sense and Sensibility"
+          },
+          {
+            "isbn13": "9780192802644",
+            "title": "Mansfield Park",
+            "isbn10": "019280264X",
+            "authors": "Jane Austen",
+            "categories": "Literary Criticism",
+            "genre": "Nonfiction",
+            "published_year": 2003,
+            "num_pages": 418,
+            "average_rating": 3.85,
+            "ratings_count": 1471,
+            "is_children": null,
+            "description": "9780192802644 '\"Me!\" cried Fanny...\"Indeed you must excuse me. I could not act any thing if you were to give me the world. No, indeed, I cannot act.\"' At the age of ten, Fanny Price leaves the poverty of her Portsmouth home to be brought up among the family of her wealthy uncle, Sir Thomas Bertram, in the chilly grandeur of Mansfield Park. There she accepts her lowly status, and gradually falls in love with her cousin Edmund. When the dazzling and sophisticated Henry and Mary Crawford arrive, Fanny watches as her cousins become embroiled in rivalry and sexual jealousy. As the company starts to rehearse a play by way of entertainment, Fanny struggles to retain her independence in the face of the Crawfords' dangerous attractions; and when Henry turns his attentions to her, the drama really begins... This new edition does full justice to Austen's complex and subtle story, placing it in its Regency context and elucidating the theatrical background that pervades the novel.",
+            "thumbnail": "http://books.google.com/books/content?id=jl6iDrN4ARwC&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Mansfield Park"
+          },
+          {
+            "isbn13": "9780192840318",
+            "title": "Evelina, Or, The History of a Young Lady's Entrance Into the World",
+            "isbn10": "0192840312",
+            "authors": "Fanny Burney",
+            "categories": "Fiction",
+            "genre": "Fiction",
+            "published_year": 2002,
+            "num_pages": 455,
+            "average_rating": 3.66,
+            "ratings_count": 11701,
+            "is_children": null,
+            "description": "9780192840318 'Lord Orville did me the honour to hand me to the coach, talking all the way of the honour I had done him! O these fashionable people!' Frances Burney's first and most enduringly popular novel is a vivid, satirical, and seductive account of the pleasures and dangers of fashionable life in late eighteenth-century London. As she describes her heroine's entry into society, womanhood and, inevitably, love, Burney exposes the vulnerability of female innocence in an image-conscious and often cruel world where social snobbery and sexual aggression are played out in the public arenas of pleasure-gardens, theatre visits, and balls. But Evelina's innocence also makes her a shrewd commentator on the excesses and absurdities of manners and social ambitions - as well as attracting the attention of the eminently eligible Lord Orville. Evelina, comic and shrewd, is at once a guide to fashionable London, a satirical attack on the new consumerism, an investigation of women's position in the late eighteenth century, and a love story. The new introduction and full notes to this edition help make this richness all the more readily available to a modern reader.",
+            "thumbnail": "http://books.google.com/books/content?id=F-aBwgEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
+            "title_and_subtiles": "Evelina, Or, The History of a Young Lady's Entrance Into the World"
+          }
+        ],
+        "output_type": "list"
+      },
+      "details": [
+        "wrapped a bare return value"
+      ],
+      "token_usage": {
+        "total": 0,
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "reasoning_tokens": 0,
+        "model": "",
+        "by_model": {},
+        "cost_usd": 0.0,
+        "unpriced_models": []
+      },
+      "runtime_error": null,
+      "steps": []
+    }
+  ]
+}
