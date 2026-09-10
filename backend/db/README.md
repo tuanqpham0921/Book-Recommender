@@ -81,7 +81,7 @@ Async SQLAlchemy database layer for PostgreSQL + pgvector.
 | Table | Purpose |
 |---|---|
 | `books` | Book catalog + pgvector embeddings |
-| `chat_runs` | One row per chat turn: user/assistant messages, planner/tasks JSONB, promoted stats (duration, tokens). PK `chat_id` |
+| `chat_runs` | One row per chat turn: user/assistant messages, planner/tasks/writer JSONB (one envelope per layer — `writer` is the reply stage, and the only stored copy of the prose), promoted stats (duration, tokens). PK `chat_id` |
 | `feedback` | One review per (chat_id, session_id), upserted whole. FK `chat_id` → `chat_runs`, CASCADE |
 | `test_runs` | Eval bookkeeping: chat_id FK → `chat_runs` (CASCADE — deleting chat_runs takes test_runs with it) + suite name + case id |
 

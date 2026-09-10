@@ -83,10 +83,14 @@ class ChatRunModel(Base):
     # not have to unpack the JSONB envelope to render it
     mermaid = Column(Text, nullable=True)
 
-    # full-fidelity envelopes: parse/strategy results live inside planner,
-    # per-task executor results (one turn can run several) live inside tasks
+    # full-fidelity envelopes, one per layer of the turn: parse/strategy
+    # results live inside planner, per-task executor results (one turn can run
+    # several) live inside tasks, and writer is the reply stage that runs once
+    # after them — the only stored copy of the prose, which otherwise exists
+    # solely as SSE deltas already sent to the browser
     planner = Column(JSONB, nullable=True)
     tasks = Column(JSONB, nullable=True)
+    writer = Column(JSONB, nullable=True)
 
     def __repr__(self):
         return f"<ChatRunModel(chat_id='{self.chat_id}', session_id='{self.session_id}')>"

@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS chat_runs (
     total_tokens INTEGER,
     mermaid TEXT,
     planner JSONB,
-    tasks JSONB
+    tasks JSONB,
+    -- the reply stage's envelope: the only stored copy of the turn's prose
+    writer JSONB
 );
 
 -- Links an eval-suite case to the chat run it produced. Written by

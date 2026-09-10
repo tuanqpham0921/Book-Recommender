@@ -22,6 +22,10 @@ from db.stores.chat_run_store import ChatRunStore
 from app.common.request_context import RequestContext
 from app.orchestration.triage import TriageWorkflow, TriageOutput
 from app.orchestration.task_runner import TaskRunnerWorkflow, TaskRunnerOutput
+from app.orchestration.write_recommendations import (
+    GenerateRecommendationsExecutor,
+    RecommendationsOutput,
+)
 
 from clients.messages import (
     APIMessage,
@@ -52,15 +56,22 @@ def build_chat_run_row(
     record: OperationResult,
     planner: OperationResult[TriageOutput] | None,
     tasks: OperationResult[TaskRunnerOutput] | None = None,
+    writer: OperationResult[RecommendationsOutput] | None = None,
 ) -> dict[str, Any]:
     """Map a finished turn onto ChatRunModel columns: promoted stats up front
     for cheap querying, full-fidelity JSONB envelopes last.
 
     The stats come from `record`, the orchestrator's root envelope, so they
     cover the whole turn. The JSONB columns stay the individual workflow
-    envelopes: the golden-test report reads accepted goals at the fixed path
+    envelopes — one per layer of the turn, `writer` being the third: the
+    golden-test report reads accepted goals at the fixed path
     `planner.response.result.parse_result`, and re-rooting the column would
     silently empty every diff.
+
+    `to_serializable`, not `to_summary()`, for all three: the reply's own
+    summary is two counts, and the prose is the point — the SSE stream that
+    carried it to the browser is not readable back, so this column is the only
+    copy of what the turn actually said.
     """
     output = planner.result if planner else None
     return {
@@ -75,6 +86,7 @@ def build_chat_run_row(
         "mermaid": output.diagram if output else None,
         "planner": to_serializable(planner) if planner is not None else None,
         "tasks": to_serializable(tasks) if tasks is not None else None,
+        "writer": to_serializable(writer) if writer is not None else None,
     }
 
 
@@ -85,6 +97,7 @@ async def record_chat_run(
     record: OperationResult,
     planner: TriageWorkflow | None = None,
     task_runner: TaskRunnerWorkflow | None = None,
+    writer: GenerateRecommendationsExecutor | None = None,
     messages: list[APIMessage] | None = None,
 ) -> None:
     """Record a chat run. Never raises — recording must not break the chat."""
@@ -115,6 +128,7 @@ async def record_chat_run(
             record=record,
             planner=planner.record if planner is not None else None,
             tasks=task_runner.record if task_runner is not None else None,
+            writer=writer.record if writer is not None else None,
         )
 
         if app_env == "development":
@@ -143,6 +157,10 @@ async def record_chat_run(
 
             # saving the convo history
             save_file(messages, file_name="convo_history", path=user_dir)
+            
+            # saving the writter
+            save_file(to_serializable(writer.record), file_name="writer", path=user_dir)
+
 
         # async with request_context.session_factory() as session:
         #     await ChatRunStore(session).insert_run(row)

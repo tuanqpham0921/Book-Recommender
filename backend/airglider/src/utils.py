@@ -109,9 +109,12 @@ def to_record_input(value: Any) -> Any:
        `<TypeName>`. Many `@task` call sites take a live handle (a DB session, a
        client), and one reaching the envelope breaks the JSONB insert.
     """
-    to_summary = getattr(value, "to_summary", None)
-    if callable(to_summary):
-        return to_summary()
+    # TODO: this should be use for summary record only
+    # don't always put it to summary when first added
+    
+    # to_summary = getattr(value, "to_summary", None)
+    # if callable(to_summary):
+    #     return to_summary()
 
     if isinstance(value, BaseModel):
         return {

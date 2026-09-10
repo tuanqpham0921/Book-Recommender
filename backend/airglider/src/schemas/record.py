@@ -194,6 +194,9 @@ class OperationResult(BaseModel, Generic[OutputT]):
         bottom without unfolding payloads. Complements the full record, never
         replaces it. `details` is omitted: it is mostly decorator bookkeeping.
         """
+        # TODO: add the input summary in here
+        # so the main record has everything
+        
         payload = self.result
         # bound rather than `hasattr`-guarded: the payload is `OutputT | None`,
         # so a checker cannot narrow the attribute access on its own

@@ -141,6 +141,7 @@ class Orchestrator:
                         record,
                         triage_workflow,
                         task_runner,
+                        writer,
                         messages,
                         sse_stream,
                     )
@@ -207,6 +208,7 @@ class Orchestrator:
         record: OperationResult,
         triage_workflow: TriageWorkflow | None,
         task_runner: TaskRunnerWorkflow | None,
+        writer: GenerateRecommendationsExecutor | None,
         messages: list[APIMessage] | None,
         sse_stream: SSEStream,
     ) -> None:
@@ -219,6 +221,7 @@ class Orchestrator:
                     record,
                     triage_workflow,
                     task_runner,
+                    writer,
                     messages,
                 ),
                 timeout=SAVE_LOG_TIMEOUT,
