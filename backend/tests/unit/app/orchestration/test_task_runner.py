@@ -36,7 +36,7 @@ from app.orchestration.task_runner import (
     TaskRunnerInput,
     TaskRunnerWorkflow,
 )
-from airglider import OperationResult, TokenUsage
+from airglider import OperationResult, RuntimeErrorInfo, StepFailure, TokenUsage
 from clients.messages import AssistantMessage
 
 NODE_TYPE = FindTitleNodeTypeEnum.REQUEST
@@ -534,6 +534,34 @@ class TestTaskResults:
             10,
         )
         assert result.error is None
+        assert result.error_message is None
+
+    def test_a_stopped_node_reports_the_error_beneath_it(self):
+        # `.unwrap()` stamps the node with a StepFailure naming the step it
+        # needed; the reply wants what actually broke, one level down
+        child = OperationResult(
+            name="count_books",
+            runtime_error=RuntimeErrorInfo.from_exception(ValueError("db down")),
+        )
+        step = OperationResult(
+            runtime_error=RuntimeErrorInfo.from_exception(
+                StepFailure("Step failed: count_books")
+            ),
+            steps=[child],
+        )
+
+        result = TaskResult.from_step(_goal(), FailedGoalOutput(), step)
+
+        assert (result.error, result.error_message) == ("ValueError", "db down")
+
+    def test_an_exception_with_no_message_is_named_instead(self):
+        step = OperationResult(
+            runtime_error=RuntimeErrorInfo.from_exception(NotImplementedError())
+        )
+
+        result = TaskResult.from_step(_goal(), FailedGoalOutput(), step)
+
+        assert result.error_message == "NotImplementedError"
 
     async def test_a_goal_that_ran_carries_its_duration(self, runner):
         await drive(runner, [_goal()], _spec(_OkExecutor))
@@ -548,6 +576,7 @@ class TestTaskResults:
         assert not result.ok
         assert result.duration is not None
         assert result.error == "RuntimeError"
+        assert result.error_message == "node blew up"
 
     async def test_a_goal_that_never_ran_has_no_metadata(self, runner):
         await drive(runner, [_goal()], None)

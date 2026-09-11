@@ -602,7 +602,7 @@ input; the partition in `_partition` is the only logic that would become dead.
 **Status update — 2026-09-11: the stage stops fetching.** Every book node keeps the preview
 it streamed on its output (`BookRetrievalOutput.preview`, `default_limit` raised to 4), and
 the runner wraps each goal as a `TaskResult` — the output plus a summary of its envelope
-(duration, total/input/output tokens, error), the way `OpenAIClient.execute` keeps a
+(duration, total/input/output tokens, error type and message), the way `OpenAIClient.execute` keeps a
 completion's content and usage and lets the raw response go. `TaskRunnerOutput.task_results`
 holds those, and they are the turn's source of truth: what the reply is written from and
 what a later turn would read. The stage's `materialize` step, `ROWS_PER_SOURCE` and

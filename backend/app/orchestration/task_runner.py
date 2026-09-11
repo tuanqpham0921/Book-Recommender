@@ -14,7 +14,7 @@ from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from ..domains.node_spec import NodeSpec
-from airglider import OperationResult
+from airglider import OperationResult, RuntimeErrorInfo, StepFailure
 from clients.messages import AssistantMessage
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,9 @@ class TaskResult(BaseModel):
     failed or never ran; `ok` is read off it rather than stored beside it, so
     the two cannot disagree. The metadata stays at its defaults for a goal
     that never ran — there was no envelope to read.
+
+    `error_message` is what the exception said, for the reply to put in plain
+    words; the traceback stays on the trace.
     """
 
     task_id: str
@@ -52,6 +55,8 @@ class TaskResult(BaseModel):
     output_tokens: int = 0
     # the exception's type name, when the node crashed rather than declined
     error: str | None = None
+    # what the exception said — never its traceback
+    error_message: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -72,9 +77,29 @@ class TaskResult(BaseModel):
             result.total_tokens = step.token_usage.total
             result.input_tokens = step.token_usage.prompt
             result.output_tokens = step.token_usage.completion
-            if step.runtime_error is not None:
-                result.error = step.runtime_error.type
+            if (error := _root_error(step)) is not None:
+                result.error = error.type
+                # a bare `raise NotImplementedError()` says nothing, and its
+                # name is still more than an empty line
+                result.error_message = error.message or error.type
         return result
+
+
+def _root_error(step: OperationResult) -> RuntimeErrorInfo | None:
+    """The exception that actually crashed a step, beneath any `StepFailure`.
+
+    A node that stops on `.unwrap()` records a `StepFailure` naming the step it
+    needed ("Step failed: count_books"), and the real error sits on that step,
+    one or more levels down. Falls back to the `StepFailure` itself when no
+    failed child carries one.
+    """
+    error = step.runtime_error
+    if error is None or error.type != StepFailure.__name__:
+        return error
+    for child in step.steps:
+        if not child.ok and (cause := _root_error(child)) is not None:
+            return cause
+    return error
 
 
 class TaskRunnerOutput(NodeWorkflowOutput):

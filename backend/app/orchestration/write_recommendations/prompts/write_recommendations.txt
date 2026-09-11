@@ -30,6 +30,7 @@ A numbered report with one entry per part of the work, then the user's message.
     [N] <what this part of the work was asked to do>
     <info>
     <how it ended: found <count> book(s) / found nothing / could not be completed>
+    error: <what broke, in the system's own words>          (when it broke)
     built from the reader's reference books: <titles>       (sometimes)
     searched for books matching: "<description>"            (sometimes)
     arguments: <how the search was set up>                  (sometimes)
@@ -51,7 +52,20 @@ different things:
 - `found nothing` — this ran correctly and there was nothing to find. That is a
   real answer about the catalog, not an error.
 - `could not be completed` — this did not run, sometimes with a plain reason
-  after a dash. Usually something it needed came back empty.
+  after a dash. Usually something it needed came back empty. When it broke
+  outright instead, an `error:` line follows with the system's own message.
+
+An `error:` line is written for the people who build the system, not for the
+user. Read it for the *kind* of problem and say that in plain words — never
+quote it, and never name an error, a code, a file or a line. Roughly:
+
+- it says something is not implemented or not supported — that isn't something
+  you can do yet;
+- it mentions the database, a connection or a timeout — something went wrong on
+  your end while searching the catalog, and it may work later;
+- anything else — something went wrong on your end with that part.
+
+Say it once, briefly, then move on to whatever did work.
 
 The `built from` and `searched for` lines, when present, are why those books
 were chosen: they sit nearest a description written from the books the user
@@ -194,3 +208,21 @@ Reply:
     No luck on It — it's not in the catalog. For Pride and Prejudice, though,
     there's plenty in the same key: Austen's own Sense and Sensibility is the
     closest, trading the same wry look at marriage, money and manners.
+
+Report:
+
+    What I found:
+
+    [1] Find books similar to Dune
+    <info>
+    could not be completed
+    error: This is not implemented
+    took 0.1s
+    </info>
+
+The user asked: recommend something like Dune
+
+Reply:
+
+    Finding books similar to one you name isn't something I can do yet, so I
+    can't line anything up against Dune for now.

@@ -20,7 +20,9 @@ goal's `TaskResult` in three parts: a header (the goal's instruction), an
   and never to call anything a goal, node or query. Known leak: `compile_sql`
   inlines literals, so a similarity search's SQL carries the anchor ISBNs.
   SQL renders last, so the info cap usually cuts it, and the prompt's
-  no-identifiers rule covers the rest.
+  no-identifiers rule covers the rest. A goal that crashed adds its exception's
+  message — the message only, never the type name or traceback — and the prompt
+  turns it into a plain cause ("that isn't something I can do yet").
 
 The report is evidence and nothing else. It used to open with a `What to write:`
 brief — this stage's own goal instruction, the one line in the block the model
@@ -118,8 +120,9 @@ def render_outcome(output: NodeWorkflowOutput) -> str:
 
 def render_info(result: TaskResult) -> str:
     """How one part of the work went and how it was done, at most
-    `MAX_INFO_CHARS`: the outcome, the similarity lines, the arguments, what it
-    cost, and the SQL — in that order, so the cap cuts the SQL first.
+    `MAX_INFO_CHARS`: the outcome, the error, the similarity lines, the
+    arguments, what it cost, and the SQL — in that order, so the cap cuts the
+    SQL first and never the error.
 
     The similarity pool gets two extra lines. Its books match a description the
     *system* wrote from the books the user named, and a reply explaining "why
@@ -132,6 +135,9 @@ def render_info(result: TaskResult) -> str:
     """
     output = result.output
     lines = [render_outcome(output)]
+
+    if result.error_message:
+        lines.append(f"error: {result.error_message}")
 
     if isinstance(output, SimilarBooksOutput):
         if output.references:

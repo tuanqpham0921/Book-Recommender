@@ -127,6 +127,23 @@ class TestRenderInfo:
 
         assert reason in render_info(_failure(reason=reason))
 
+    def test_an_error_is_relayed_as_its_message_alone(self):
+        # second line, so the cap never cuts it; the type name is the trace's
+        # vocabulary, not the reply's
+        failure = _result(
+            FailedGoalOutput(goal_instruction="Find books like Dune"),
+            error="RuntimeError",
+            error_message="connection refused",
+        )
+
+        info = render_info(failure)
+
+        assert info.splitlines()[1] == "error: connection refused"
+        assert "RuntimeError" not in info
+
+    def test_a_goal_that_did_not_break_has_no_error_line(self):
+        assert "error:" not in render_info(_failure())
+
     def test_a_similarity_pool_carries_why_those_books(self):
         """The anchors and the embedded description are the only honest
         grounding for "why this fits" — without them the writer can only
