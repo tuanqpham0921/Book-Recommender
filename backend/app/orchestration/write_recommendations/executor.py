@@ -134,9 +134,8 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         self.add_details(
             f"writing from {len(sources)} source(s), {len(failures)} failure(s)"
         )
-        self.add_details(
-            f"rendered: {rendered}"
-        )
+        self.result.render_evidence = rendered
+
 
         req = build_recommendations_request(
             rendered, self.sse_stream, self.user_message.content

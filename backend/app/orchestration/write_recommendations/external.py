@@ -56,6 +56,7 @@ class RecommendationsOutput(NodeWorkflowOutput):
     Every field needs a default; the workflow builds its output empty.
     """
 
+    render_evidence: str | None = None
     text: str | None = None
     num_books_shown: int = 0
 
