@@ -181,6 +181,11 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         req = build_recommendations_request(
             rendered, self.sse_stream, self.user_message.content
         )
+        
+        # TODO: add the assistant message into here
+        from clients.messages import AssistantMessage
+        self.messages.append(AssistantMessage(content=rendered))
+        
         message = await self.run_llm_call(req)
         return message.content
 

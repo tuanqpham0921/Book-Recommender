@@ -1,0 +1,8 @@
+----- description ----------
+
+max is 5800
+* ISBN: 9780687002825
+avg about 500
+* it doesn't get to the avg for about 1500 books
+min about 138
+===================================================

@@ -67,6 +67,24 @@ Historical cleanup logs live in git history (`git log -p -- backend/TODO.md`).
   and its `prompts/response_prompt.txt`. The tradeoff is per-book "why this fits" (needs
   blurbs) against a reply that cannot invent a plot (needs their absence). Undecided.
 
+-------------
+* task needs a completed, cancel, or fail (internal)
+
+* truncate each books to some amount
+* so mainly description ...
+  * tell the system prompt to use whatever info it can
+  * or have a pre-process thing to cap it
+  * there are a good amount of books with long description
+
+cap tasks at 10 max
+  * task at most 1000
+  * after everything materialize each at most 4
+  * each books lets say 200 tokens
+
+
+
+--------------------------
+
 * format the task runner result better
     * should contain books for small input (find by titles and such)
     * maybe the operation result is the output

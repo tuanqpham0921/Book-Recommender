@@ -197,6 +197,10 @@ class OperationResult(BaseModel, Generic[OutputT]):
         # TODO: add the input summary in here
         # so the main record has everything
         
+        # NOTE: this is to meta-data summary
+        # rather than content or response summary
+        # ideally we can have tokens and content
+        
         payload = self.result
         # bound rather than `hasattr`-guarded: the payload is `OutputT | None`,
         # so a checker cannot narrow the attribute access on its own
