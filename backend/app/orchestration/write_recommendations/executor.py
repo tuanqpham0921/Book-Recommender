@@ -34,11 +34,18 @@ the final answers first. It still subclasses `BookReaderWorkflow`, for
 from app.domains.base_workflow import FailedGoalOutput
 from app.domains.books.base_workflow import BookReaderWorkflow
 from app.domains.books.external import BookRetrievalOutput
+from app.domains.books.schemas import Book
 from app.orchestration.task_runner import TaskResult
 from airglider import task
 
-from .external import RecommendationsInput, RecommendationsOutput
-from .render import build_recommendations_request, render_report
+from .external import (
+    GenerationResult,
+    RecommendationsInput,
+    RecommendationsOutput,
+    SourceBlock,
+    TextBlock,
+)
+from .render import books_by_handle, build_recommendations_request, render_report
 
 # Cards land one at a time here, unlike a preview's instant dump: these are the
 # recommendations, and the arrival is part of reading them.
@@ -61,20 +68,22 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         # an empty reply.
         if not sources and not failures:
             raise ValueError("Nothing to write from: the plan produced no results")
+        self.add_details(
+            f"writing from {len(sources)} source(s), {len(failures)} failure(s)"
+        )
 
-        # 1. cards, before the prose. One `stream_books` call rather than one
-        # per source, because its isbn13 dedup is per call — two sources that
-        # both matched Dune must not show Dune twice.
-        shown = [book for result in sources for book in result.output.preview]
-        await self.stream_books(shown, delay=CARD_DELAY)
-        self.result.num_books_shown = len(shown)
+        # Sources first, so the report reads what was found before what could
+        # not be done. One list for the report and the handles both, so a
+        # handle the model copies resolves to the book it read.
+        ordered = [*sources, *failures]
 
-        # 2. the reply. It reaches the browser from inside this call — the
-        # request carries the SSE stream and the client pushes each delta — so
-        # what comes back is for the record, not for sending.
-        self.result.text = (
-            await self.write_recommendations(sources, failures)
-        ).unwrap()
+        # 1. the reply, as blocks — nothing reaches the browser until it is
+        # whole, because each text decides which cards follow it
+        reply = (await self.write_recommendations(ordered)).unwrap()
+        self.result.blocks = reply.blocks
+
+        # 2. each text, then the cards it talks about
+        await self._deliver(reply.blocks, books_by_handle(ordered))
 
         # 3. last: ok is read off the output
         self.finalize_result()
@@ -113,40 +122,58 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
 
     @task
     async def write_recommendations(
-        self,
-        sources: list[TaskResult],
-        failures: list[TaskResult],
-    ) -> str | None:
-        """The reply, streamed to the browser as it is written.
+        self, results: list[TaskResult]
+    ) -> GenerationResult:
+        """The reply, as text blocks and the cards each one talks about.
 
         A `@task` so the call's spend and duration are attributed to the
-        writing rather than to the cards before it. Not a `Workflow`: the
-        payload is a string, with no declared output type to carry.
-
-        Sources first, then failures, so the report reads what was found
-        before what could not be done.
-
-        None when the model returned nothing at all, which `run` lets reach
-        `finalize_result` as a failed claim — a turn that got as far as here
-        and produced no words has not been answered.
+        writing rather than to the sending after it. Not a `Workflow`: the
+        payload is the tool's parsed arguments, with no output of its own to
+        carry.
         """
-        rendered = render_report([*sources, *failures])
-        self.add_details(
-            f"writing from {len(sources)} source(s), {len(failures)} failure(s)"
-        )
+        rendered = render_report(results)
         self.result.render_evidence = rendered
 
-
-        req = build_recommendations_request(
-            rendered, self.sse_stream, self.user_message.content
-        )
+        req = build_recommendations_request(rendered, self.user_message.content)
 
         # TODO: add the assistant message into here
         from clients.messages import AssistantMessage
         self.messages.append(AssistantMessage(content=rendered))
 
-        message = await self.run_llm_call(req)
-        return message.content
+        return await self.run_llm_args_parse(req)
+
+    async def _deliver(
+        self, blocks: list[TextBlock | SourceBlock], books: dict[str, Book]
+    ) -> None:
+        """Send the reply in the order it was written: a text as characters, a
+        source as the cards it names.
+
+        The frontend needs nothing for this — a card after text opens a card
+        row, text after a card opens a paragraph. Two texts in a row land in
+        one text section, so each ends on a blank line to stay a paragraph.
+
+        `shown` spans the whole reply rather than one `stream_books` call,
+        whose isbn13 dedup is per call: Dune found by title and again as its
+        own neighbour is two handles and one card. A ref the report never
+        printed is the model naming a book it was not given, so it is dropped.
+        """
+        shown: set[str | None] = set()
+        for block in blocks:
+            if isinstance(block, TextBlock):
+                await self.sse_stream.send_chars(block.text + "\n\n")
+                continue
+
+            cards: list[Book] = []
+            for ref in block.refs:
+                book = books.get(ref)
+                if book is None:
+                    self.add_details(f"dropped ref {ref!r}: not in the report")
+                elif book.isbn13 not in shown:
+                    shown.add(book.isbn13)
+                    cards.append(book)
+            await self.stream_books(cards, delay=CARD_DELAY)
+
+        self.result.num_books_shown = len(shown)
 
     def finalize_result(self) -> None:
         """ok means the turn was reported on, not that books were found.
@@ -154,6 +181,12 @@ class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput])
         A reply over empty sources — or over nothing but failures — is a
         correct answer: "I don't have that, so I couldn't look for anything
         like it" is the reply, and marking it failed would surface the generic
-        error message instead and tell the user nothing.
+        error message instead and tell the user nothing. A reply with no words
+        — no blocks, or only cards — has not answered anything.
         """
-        super().finalize_result(ok=bool(self.result.text))
+        super().finalize_result(
+            ok=any(
+                isinstance(block, TextBlock) and block.text.strip()
+                for block in self.result.blocks
+            )
+        )

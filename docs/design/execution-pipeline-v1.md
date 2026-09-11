@@ -616,3 +616,14 @@ detail the writer is shown; the prompt says to read it and never repeat it. Know
 
 This settles the TODO question of what the writer is fed (full book entries against counts
 only): both — the counts and how each search ran in `<info>`, the books under it.
+
+**Status update — 2026-09-11: the reply comes back as blocks.** The writer no longer streams
+from the model; it fills `GenerationResult` — a list of `text` and `source` blocks — through
+an `OpenAIParserRequest`. Every book in the report carries a handle (`1.2`: section 1, book 2),
+a `source` names the handles of the books the text before it talks about, and
+`books_by_handle` resolves them against the same list the report was rendered from. The stage
+then sends the blocks in order, so the answer reads paragraph → its cards → next paragraph, and
+only books the text points at become cards in the answer (every one is still in its step's
+preview). The frontend needed nothing: it already opens a new section whenever text follows
+cards or cards follow text. Grouping books while the tasks run was considered and not built —
+the grouping depends on the whole question and every result, which only this one call sees.

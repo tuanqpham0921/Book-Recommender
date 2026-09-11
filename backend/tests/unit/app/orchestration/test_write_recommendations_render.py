@@ -11,7 +11,6 @@ check would catch — the prose would read perfectly well.
 
 import pytest
 
-from app.common.sse_stream import SSEStream
 from app.domains.base_workflow import FailedGoalOutput, NodeWorkflowOutput
 from app.domains.books.external import BookAnchorOutput, BookCandidateOutput
 from app.domains.books.find_by_title.external import FindByTitleOutput
@@ -19,9 +18,11 @@ from app.domains.books.find_by_title.schemas import FindByTitleArgs
 from app.domains.books.find_similar_books import SimilarBooksOutput
 from app.domains.books.schemas import Book
 from app.orchestration.task_runner import TaskResult
+from app.orchestration.write_recommendations import GenerationResult
 from app.orchestration.write_recommendations.render import (
     MAX_BOOK_CHARS,
     MAX_INFO_CHARS,
+    books_by_handle,
     build_recommendations_request,
     render_book,
     render_info,
@@ -66,7 +67,7 @@ def _failure(instruction="Find books like Dune", reason="") -> TaskResult:
 
 class TestRenderBook:
     def test_carries_the_facts_a_reply_is_written_from(self):
-        line = render_book(_book())
+        line = render_book("1.1", _book())
 
         assert "Dune" in line
         assert "Frank Herbert" in line
@@ -74,16 +75,20 @@ class TestRenderBook:
         assert "604 pages" in line
         assert "rated 4.25" in line
 
+    def test_is_labelled_with_its_handle(self):
+        # the handle is what a source block points at the book by
+        assert render_book("2.1", _book()).startswith("- [2.1] Dune — ")
+
     def test_never_carries_an_identifier(self):
         # an isbn13 is not something to say in a sentence, and a model that
         # sees one will eventually print it
-        assert "9780441013593" not in render_book(_book())
+        assert "9780441013593" not in render_book("1.1", _book())
 
     def test_a_missing_author_is_said_rather_than_left_blank(self):
-        assert "author unknown" in render_book(_book(authors=None))
+        assert "author unknown" in render_book("1.1", _book(authors=None))
 
     def test_a_book_with_no_description_still_renders(self):
-        line = render_book(_book(description=None))
+        line = render_book("1.1", _book(description=None))
 
         assert "Dune" in line
         assert "\n" not in line
@@ -91,7 +96,7 @@ class TestRenderBook:
     def test_the_whole_entry_is_capped(self):
         # the entry, not just the description: a long title leaves the
         # description less room
-        entry = render_book(_book(title="A Very Long Title " * 5, description="word " * 500))
+        entry = render_book("1.1", _book(title="A Very Long Title " * 5, description="word " * 500))
 
         assert len(entry) <= MAX_BOOK_CHARS
 
@@ -100,7 +105,7 @@ class TestRenderBook:
         # uncut
         description = "a sentence about the book " * 17
 
-        assert description.strip() in render_book(_book(description=description))
+        assert description.strip() in render_book("1.1", _book(description=description))
 
 
 class TestRenderInfo:
@@ -219,8 +224,8 @@ class TestRenderSection:
             1, _source(num_books=250, preview=[_book(), _book(title="IT")])
         )
 
-        assert "<books>\n- Dune" in rendered
-        assert "- IT" in rendered
+        assert "<books>\n- [1.1] Dune" in rendered
+        assert "- [1.2] IT" in rendered
         assert rendered.endswith("</books>")
 
     def test_there_is_no_showing_line(self):
@@ -267,20 +272,36 @@ class TestRenderReport:
         assert rendered.endswith("could not be completed\n</info>")
 
 
-class TestBuildRecommendationsRequest:
-    def test_the_stream_is_carried_so_the_reply_streams_itself(self):
-        # OpenAIChatRequest validates this, and it is the whole delivery
-        # mechanism — the client pushes each delta onto it
-        stream = SSEStream()
-        req = build_recommendations_request(
-            "[1] Find Dune\nfound nothing", stream, "hi"
-        )
+class TestBooksByHandle:
+    def test_every_handle_the_report_printed_resolves_to_its_book(self):
+        # the report and the lookup must number alike, or a card lands under
+        # the wrong paragraph; a failure in between still takes its number
+        results = [
+            _source("a", preview=[_book(), _book(title="IT")]),
+            _failure("b"),
+            _source("c", preview=[_book(title="Emma")]),
+        ]
 
-        assert req.sse_stream is stream
+        books = books_by_handle(results)
+        rendered = render_report(results)
+
+        assert {h: b.title for h, b in books.items()} == {
+            "1.1": "Dune",
+            "1.2": "IT",
+            "3.1": "Emma",
+        }
+        assert all(f"- [{handle}] " in rendered for handle in books)
+
+
+class TestBuildRecommendationsRequest:
+    def test_the_reply_is_asked_for_as_blocks(self):
+        req = build_recommendations_request("[1] Find Dune\nfound nothing", "hi")
+
+        assert req.tool_models == [GenerationResult]
 
     def test_the_user_message_goes_last_so_the_model_replies_to_it(self):
         req = build_recommendations_request(
-            "[1] x\nfound nothing", SSEStream(), "recommend books like Dune"
+            "[1] x\nfound nothing", "recommend books like Dune"
         )
 
         assert req.messages[-1].content == "recommend books like Dune"
@@ -288,4 +309,4 @@ class TestBuildRecommendationsRequest:
 
     def test_nothing_to_write_from_raises(self):
         with pytest.raises(ValueError):
-            build_recommendations_request("   ", SSEStream(), "hi")
+            build_recommendations_request("   ", "hi")

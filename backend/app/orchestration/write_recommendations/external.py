@@ -3,13 +3,13 @@
 Not a node's `external.py`: nothing downstream consumes a reply, and since the
 stage was deregistered (2026-09-08) nothing upstream declares it either. These
 types exist for one call — `Orchestrator` builds the input from the task
-runner's results map, and `RecommendationsOutput` is what lands in `chat_runs`
-beside the prose that already streamed to the browser.
+runner's results map, `GenerationResult` is what the writer fills in, and
+`RecommendationsOutput` is what lands in `chat_runs`.
 """
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from app.domains.base_workflow import NodeWorkflowOutput
 from app.domains.node_input import WorkflowInput
@@ -44,24 +44,47 @@ class RecommendationsInput(WorkflowInput):
     results: list[TaskResult] = Field(default_factory=list)
 
 
+class TextBlock(BaseModel):
+    type: Literal["text"]
+    text: str = Field(description="Markdown the user reads. Never a handle.")
+
+
+class SourceBlock(BaseModel):
+    type: Literal["source"]
+    refs: list[str] = Field(
+        description="Handles like `1.2` of the books the text just before talks about."
+    )
+
+
+class GenerationResult(BaseModel):
+    """The reply as the writer fills it in: prose, each part followed by the
+    cards it talks about.
+
+    An internal tool like a slice's `*Args` — never seen by the planner, so no
+    `node_type`. The wrapper exists because a tool's root must be an object.
+    """
+
+    blocks: list[TextBlock | SourceBlock]
+
+
 class RecommendationsOutput(NodeWorkflowOutput):
     """The turn's reply.
 
-    `text` is kept even though the prose already reached the browser as it was
-    generated: the stream is not readable back, and this is what lands in
-    `chat_runs` and what a later conversational turn would read. Both come from
-    the same call — `OpenAIChatRequest` streams deltas to the SSE stream and
-    still returns the assembled message.
+    `blocks` is kept even though it already reached the browser: the stream is
+    not readable back, and this is what lands in `chat_runs` and what a later
+    conversational turn would read.
 
     Every field needs a default; the workflow builds its output empty.
     """
 
     render_evidence: str | None = None
-    text: str | None = None
+    blocks: list[TextBlock | SourceBlock] = Field(default_factory=list)
     num_books_shown: int = 0
 
     def to_summary(self) -> dict[str, Any]:
         return {
             "num_books_shown": self.num_books_shown,
-            "num_chars": len(self.text) if self.text else 0,
+            "num_chars": sum(
+                len(b.text) for b in self.blocks if isinstance(b, TextBlock)
+            ),
         }

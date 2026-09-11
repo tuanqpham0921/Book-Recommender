@@ -10,7 +10,7 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.orchestration.triage import TriageOutput
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.run_recorder import build_chat_run_row, record_chat_run
-from app.orchestration.write_recommendations import RecommendationsOutput
+from app.orchestration.write_recommendations import RecommendationsOutput, TextBlock
 from airglider import OperationResult, Response, TokenUsage
 from config import FilesLocationConstants
 
@@ -92,14 +92,17 @@ class TestBuildChatRunRow:
 
     def test_writer_column_keeps_the_prose_rather_than_its_summary(self):
         # RecommendationsOutput.to_summary() is two counts. The reply itself
-        # only ever existed as SSE deltas, so a summarized column would leave
+        # only ever existed as SSE events, so a summarized column would leave
         # no record anywhere of what the turn actually said.
         planner = _make_planner_record()
         writer = OperationResult(
             ok=True,
             response=Response(
                 result=RecommendationsOutput(
-                    text="Here are three books like Dune.", num_books_shown=3
+                    blocks=[
+                        TextBlock(type="text", text="Here are three books like Dune.")
+                    ],
+                    num_books_shown=3,
                 )
             ),
         )
@@ -115,7 +118,7 @@ class TestBuildChatRunRow:
 
         assert row["writer"]["ok"] is True
         result = row["writer"]["response"]["result"]
-        assert result["text"] == "Here are three books like Dune."
+        assert result["blocks"][0]["text"] == "Here are three books like Dune."
         assert result["num_books_shown"] == 3
 
     def test_planner_column_stays_the_planner_envelope(self):

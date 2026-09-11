@@ -7,10 +7,19 @@ the task runner. See `executor.py` for why.
 """
 
 from .executor import GenerateRecommendationsExecutor
-from .external import RecommendationsInput, RecommendationsOutput
+from .external import (
+    GenerationResult,
+    RecommendationsInput,
+    RecommendationsOutput,
+    SourceBlock,
+    TextBlock,
+)
 
 __all__ = [
     "GenerateRecommendationsExecutor",
+    "GenerationResult",
     "RecommendationsInput",
     "RecommendationsOutput",
+    "SourceBlock",
+    "TextBlock",
 ]

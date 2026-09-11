@@ -12,7 +12,10 @@ goal's `TaskResult` in three parts: a header (the goal's instruction), an
 
 - **No identifiers in the books.** An isbn13 is not something to say in a
   sentence, and a model that sees one will eventually print it, so
-  `render_book` never renders one.
+  `render_book` never renders one. Each book carries a *handle* instead
+  (`1.2`: section 1, book 2) — a label for the reply's `refs`, which
+  `books_by_handle` resolves back to the book. The prompt keeps it out of the
+  text.
 - **Internals are grounding, not vocabulary.** The `<info>` block deliberately
   carries the search arguments, what the goal cost and its SQL (2026-09-11):
   they say exactly what was searched for, which the instruction only
@@ -47,7 +50,6 @@ import-free would put two fields on a shared shape for one reader.
 import json
 
 from app.common.prompt_loader import load_prompt
-from app.common.sse_stream import SSEStream
 from app.common.utils import truncate_str
 from app.domains.base_workflow import FailedGoalOutput, NodeWorkflowOutput
 from app.domains.books.external import BookRetrievalOutput
@@ -55,8 +57,10 @@ from app.domains.books.find_similar_books import SimilarBooksOutput
 from app.domains.books.schemas import Book
 from app.orchestration.task_runner import TaskResult
 from airglider import remove_empty_values
-from clients import OpenAIChatRequest
+from clients import OpenAIParserRequest
 from clients.messages import AssistantMessage, UserMessage
+
+from .external import GenerationResult
 
 PROMPT_PATH = "orchestration/write_recommendations/prompts/write_recommendations.txt"
 
@@ -74,12 +78,25 @@ FALLBACK_HEADER = "part of the search"
 FINDINGS_HEADER = "What I found:"
 
 
-def render_book(book: Book) -> str:
-    """One book as the writer sees it, at most `MAX_BOOK_CHARS`.
+def _handle(section: int, position: int) -> str:
+    """A book's label in the report, and what a `SourceBlock` names it by."""
+    return f"{section}.{position}"
+
+
+def _preview(result: TaskResult) -> list[Book]:
+    """The books one goal kept — what its section lists, and what its handles
+    resolve to."""
+    output = result.output
+    return output.preview if isinstance(output, BookRetrievalOutput) else []
+
+
+def render_book(handle: str, book: Book) -> str:
+    """One book as the writer sees it, at most `MAX_BOOK_CHARS`, labelled with
+    the handle the reply's `refs` point at it by.
 
     Fields picked by hand, which is what `Book`'s docstring asks for instead of
     a narrower model. No isbn13 and no thumbnail: the first is an identifier the
-    prose must never contain, the second already travelled to the browser on the
+    prose must never contain, the second only travels to the browser on the
     card. The cap is on the whole entry, so the description gets whatever room
     the fact line leaves.
     """
@@ -91,7 +108,7 @@ def render_book(book: Book) -> str:
     if book.average_rating:
         facts.append(f"rated {book.average_rating}")
 
-    line = f"- {book.title} — {', '.join(facts)}"
+    line = f"- [{handle}] {book.title} — {', '.join(facts)}"
     # the newline, the two-space indent and `truncate_str`'s ellipsis
     room = MAX_BOOK_CHARS - len(line) - 4
     if book.description and room > 0:
@@ -181,9 +198,12 @@ def render_section(index: int, result: TaskResult) -> str:
         f"<info>\n{render_info(result)}\n</info>",
     ]
 
-    books = output.preview if isinstance(output, BookRetrievalOutput) else []
+    books = _preview(result)
     if books:
-        rendered = "\n".join(render_book(book) for book in books)
+        rendered = "\n".join(
+            render_book(_handle(index, position), book)
+            for position, book in enumerate(books, start=1)
+        )
         parts.append(f"<books>\n{rendered}\n</books>")
 
     return "\n".join(parts)
@@ -204,15 +224,29 @@ def render_report(results: list[TaskResult]) -> str:
     return "\n\n".join(blocks)
 
 
-def build_recommendations_request(
-    rendered: str, sse_stream: SSEStream, user_message: str
-) -> OpenAIChatRequest:
-    """Ask the LLM to write the reply, streaming as it goes.
+def books_by_handle(results: list[TaskResult]) -> dict[str, Book]:
+    """Every book `render_report` listed, keyed by the handle it printed —
+    what a `SourceBlock`'s refs resolve against.
 
-    `sse_stream` is required by `OpenAIChatRequest` and is the whole delivery
-    mechanism: `OpenAIClient._chat_stream` pushes each `content.delta` to it, so
-    the reply reaches the browser as it is written and the assembled text still
-    comes back for the record.
+    Same list, same numbering: pass it exactly what the report was rendered
+    from, and a handle the model copies is always the book it read.
+    """
+    return {
+        _handle(section, position): book
+        for section, result in enumerate(results, start=1)
+        for position, book in enumerate(_preview(result), start=1)
+    }
+
+
+def build_recommendations_request(
+    rendered: str, user_message: str
+) -> OpenAIParserRequest:
+    """Ask the LLM to write the reply as `GenerationResult` blocks.
+
+    Structured rather than streamed: each text is followed by the cards it
+    talks about, and the executor sends them in that order once the reply is
+    whole. The tool description is left off — `tool_choice` already pins the
+    one tool, and the prompt carries the format.
 
     Two messages, and the split is the trust boundary. The rendered report is an
     `AssistantMessage` because it is prior system work — matching what
@@ -229,7 +263,7 @@ def build_recommendations_request(
     if not rendered.strip():
         raise ValueError("Nothing to write recommendations from")
 
-    return OpenAIChatRequest(
+    return OpenAIParserRequest(
         prompt=load_prompt(prompt_path=PROMPT_PATH),
         model="gpt-5-mini",
         reasoning_effort="low",
@@ -237,6 +271,6 @@ def build_recommendations_request(
             AssistantMessage(content=rendered),
             UserMessage(content=user_message),
         ],
-        sse_stream=sse_stream,
-        max_complete_chat_tokens=800,
+        tool_models=[GenerationResult],
+        include_tool_description=False,
     )
