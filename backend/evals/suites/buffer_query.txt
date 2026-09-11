@@ -133,3 +133,7 @@ Find Dune. Recommend 12 books similar to it, but give me exactly 3 science-ficti
 
 ----------------
 Did Jane Austen write Dune? If she did, recommend something like it. I only like book similar to Jane Austen.
+
+Do you have Dune and can you recommend me something like Dune? Also compare 1984 to Pride and Prejudice
+
+Do you have Dune and can you recommend me something like Dune? Also compare 1984 to IT

@@ -61,6 +61,12 @@ Historical cleanup logs live in git history (`git log -p -- backend/TODO.md`).
 
 --------------------------
 
+bugs
+* max completition and over limit
+  * needs a handler, maybe just a generic thing (ran out of tokens - but friendlier)
+  * look at chat chat_dea392cb in bugs
+  * might need to put in the prompt how much can complete
+
 * format the task runner result better
     * should contain books for small input (find by titles and such)
     * maybe the operation result is the output

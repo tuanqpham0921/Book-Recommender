@@ -1,0 +1,56 @@
+What I found:
+
+[1] Find the book Dune by title
+<info>
+found 1 book(s)
+arguments: {\"title\": \"Dune\"}
+took 1.23s, 423 tokens (397 in, 26 out)
+sql: SELECT books.isbn13, similarity(books.title, 'Dune') AS score FROM books WHERE lower(books.title) LIKE lower('Dune') OR similarity(books.title, 'Dune') > 0.7
+</info>
+<books>
+- Dune \u2014 Brian Herbert;Kevin J. Anderson, 2002, 667 pages, rated 3.67
+  9780553580334 Chronicles the origins of the rivalry between Duke Leto and Baron Vladimir Harkonnen, the actions that transformed Duncan Idaho and Gurney Halleck into heroes, the birth of Paul Atreides, and the creation of the tyrannical Padishah Emperor Shaddam Corrino
+</books>
+
+[2] Find the book 1984 by title
+<info>
+found 1 book(s)
+arguments: {\"title\": \"1984\"}
+took 1.08s, 424 tokens (398 in, 26 out)
+sql: SELECT books.isbn13, similarity(books.title, '1984') AS score FROM books WHERE lower(books.title) LIKE lower('1984') OR similarity(books.title, '1984') > 0.7
+</info>
+<books>
+- 1984 \u2014 George Orwell, 2003, 339 pages, rated 4.17
+  9780452284234 Portrays a terrifying vision of life in the future when a totalitarian government, considered a \"Negative Utopia,\" watches over all citizens and directs all activities, becoming more powerful as time goes by.
+</books>
+
+[3] Find the book Pride and Prejudice by title
+<info>
+found 2 book(s)
+arguments: {\"title\": \"Pride and Prejudice\"}
+took 1.49s, 428 tokens (399 in, 29 out)
+sql: SELECT books.isbn13, similarity(books.title, 'Pride and Prejudice') AS score FROM books WHERE lower(books.title) LIKE lower('Pride and Prejudice') OR similarity(books.title, 'Pride and Prejudice') > 0.7
+</info>
+<books>
+- Pride and Prejudice \u2014 Jane Austen, 2003, 480 pages, rated 4.25
+  9780141439518 In early nineteenth-century England, a spirited young woman copes with the suit of a snobbish gentleman, as well as the romantic entanglements of her four sisters.
+- Pride and Prejudice \u2014 Jane Austen, 2004, 333 pages, rated 4.25
+  9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and\u2026
+</books>
+
+[4] Find books similar to Dune
+<info>
+found 250 book(s)
+built from the reader's reference books: Dune
+searched for books matching: \"A witty, finely observed comedy of manners set in a tightly governed social world where marriage, reputation and property shape every visit and conversation. The plot unfolds through salons, country assemblies and polite calls as a pair of sharp-minded protagonists spar, misread and slowly reassess one\u2026
+</info>
+<books>
+- Sense and Sensibility \u2014 Jane Austen, 2003, 336 pages, rated 4.07
+  9781593080495 Romantic walks through lush Devonshire and genteel dinner parties at a stately manor draw two pretty sisters into the schemes and manipulations of landed gentry determined to marry wisely and well.
+- Pride and Prejudice \u2014 Jane Austen, 2004, 333 pages, rated 4.25
+  9780192802385 'his perfect indifference, and your pointed dislike, make it so delightfully absurd!' Pride and Prejudice has delighted generations of readers with its unforgettable cast of characters, carefully choreographed plot, and a hugely entertaining view of the world and its absurdities. With the arrival of eligible young men in their neighbourhood, the lives of Mr and Mrs Bennet and their five daughters are turned inside out and menide down. Pride encounters prejudice, upward-mobility confronts social disdain, and\u2026
+- Mansfield Park \u2014 Jane Austen, 2003, 418 pages, rated 3.85
+  9780192802644 '\"Me!\" cried Fanny...\"Indeed you must excuse me. I could not act any thing if you were to give me the world. No, indeed, I cannot act.\"' At the age of ten, Fanny Price leaves the poverty of her Portsmouth home to be brought up among the family of her wealthy uncle, Sir Thomas Bertram, in the chilly grandeur of Mansfield Park. There she accepts her lowly status, and gradually falls in love with her cousin Edmund. When the dazzling and sophisticated Henry and Mary Crawford arrive, Fanny watches as her cousins become\u2026
+- Evelina, Or, The History of a Young Lady's Entrance Into the World \u2014 Fanny Burney, 2002, 455 pages, rated 3.66
+  9780192840318 'Lord Orville did me the honour to hand me to the coach, talking all the way of the honour I had done him! O these fashionable people!' Frances Burney's first and most enduringly popular novel is a vivid, satirical, and seductive account of the pleasures and dangers of fashionable life in late eighteenth-century London. As she describes her heroine's entry into society, womanhood and, inevitably, love, Burney exposes the vulnerability of female innocence in an\u2026
+</books>"
