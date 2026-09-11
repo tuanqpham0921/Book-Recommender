@@ -2,7 +2,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.common.request_context import RequestContext
 from app.domains.base_workflow import (
@@ -27,23 +27,72 @@ class TaskRunnerInput(WorkflowInput):
     plan: PlanJaneOutput
 
 
+class TaskResult(BaseModel):
+    """One goal as the turn remembers it: what it produced, and what it cost.
+
+    The runner's counterpart to `AssistantMessage`. `OpenAIClient.execute`
+    keeps a completion's content and token usage and lets the raw response go;
+    `from_step` does the same to a node's envelope — the output plus a summary
+    of its metadata, with the step tree left on the trace, where it already
+    lives in full. This is what the reply is written from, and what a later
+    turn would read back.
+
+    `output` is the node's own output, or a `FailedGoalOutput` for a goal that
+    failed or never ran; `ok` is read off it rather than stored beside it, so
+    the two cannot disagree. The metadata stays at its defaults for a goal
+    that never ran — there was no envelope to read.
+    """
+
+    task_id: str
+    node_type: str
+    output: NodeWorkflowOutput
+    duration: float | None = None
+    total_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    # the exception's type name, when the node crashed rather than declined
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return not isinstance(self.output, FailedGoalOutput)
+
+    @classmethod
+    def from_step(
+        cls,
+        goal: SystemGoal,
+        output: NodeWorkflowOutput,
+        step: OperationResult | None = None,
+    ) -> "TaskResult":
+        result = cls(
+            task_id=goal.id, node_type=goal.target_node_type.value, output=output
+        )
+        if step is not None:
+            result.duration = step.duration
+            result.total_tokens = step.token_usage.total
+            result.input_tokens = step.token_usage.prompt
+            result.output_tokens = step.token_usage.completion
+            if step.runtime_error is not None:
+                result.error = step.runtime_error.type
+        return result
+
+
 class TaskRunnerOutput(NodeWorkflowOutput):
     session_id: str | None = None
-    # excluded from serialization: each output already lives in full on its own
-    # node's envelope in `steps`, so persisting this map would store every
-    # output twice per run. It exists for dependency resolution at runtime.
-    task_results: dict[str, Any] = Field(default_factory=dict)
+    # every goal's `TaskResult`, keyed by goal id — the turn's source of truth:
+    # what the reply is written from, and what is recorded for a later turn
+    task_results: dict[str, TaskResult] = Field(default_factory=dict)
     failed_task: list[str] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
-        # failed goals sit in `task_results` too, as the artifacts a generation
-        # node reads — but they are already named in `failed_task`, so listing
+        # failed goals sit in `task_results` too, as the artifacts the reply
+        # reads — but they are already named in `failed_task`, so listing
         # them as completed would make the summary contradict itself
         return {
             "completed_tasks": [
                 task_id
-                for task_id, output in self.task_results.items()
-                if not isinstance(output, FailedGoalOutput)
+                for task_id, result in self.task_results.items()
+                if result.ok
             ],
             "failed_task": self.failed_task,
         }
@@ -68,7 +117,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         self.result.session_id = self.session_id
 
         order = plan.execution_order()
-        results: dict[str, NodeWorkflowOutput] = {}
+        results: dict[str, TaskResult] = {}
 
         # Goals in a cycle, or waiting on one the planner refused. Counted as
         # failures so the turn cannot report ok after dropping part of the plan.
@@ -93,21 +142,26 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 # state downstream can use — one failed goal either way
                 if not step_result.ok or step_result.result is None:
                     self._record_failure(
-                        goal, self._upstream_context(goal, results), results
+                        goal,
+                        self._upstream_context(goal, results),
+                        results,
+                        step=step_result,
                     )
                     continue
 
                 # provenance for whoever consumes it downstream: the goal's own
-                # words, which is what a generation node's report is headed by
+                # words, which is what the reply's report is headed by
                 step_result.result.goal_instruction = goal.instruction
-                results[goal.id] = step_result.result
+                results[goal.id] = TaskResult.from_step(
+                    goal, step_result.result, step_result
+                )
                 await self.sse_stream.send_divider()
 
         self.result.task_results = results
         self.finalize_result(ok=not self.result.failed_task)
 
     def _prepare(
-        self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
+        self, goal: SystemGoal, results: Mapping[str, TaskResult]
     ) -> tuple[AppWorkflow, WorkflowInput] | str:
         """Everything that has to be true before a goal can run, or why not.
 
@@ -169,7 +223,8 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         self,
         goal: SystemGoal,
         reason: str,
-        results: dict[str, NodeWorkflowOutput],
+        results: dict[str, TaskResult],
+        step: OperationResult | None = None,
     ) -> None:
         """One failed goal: counted, and left in `results` as a typed artifact.
 
@@ -179,14 +234,17 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         node that declares a slot for failures (the generation node) relays
         it, and every other node's typed fields simply never match it — the
         skip cascade is unchanged.
+
+        `step` is the envelope of a goal that ran and then failed, so what it
+        spent getting there stays on its `TaskResult`; a goal that never ran
+        has none, and its metadata stays at the defaults.
         """
-        results[goal.id] = FailedGoalOutput(
-            goal_instruction=goal.instruction, reason=reason
-        )
+        failure = FailedGoalOutput(goal_instruction=goal.instruction, reason=reason)
+        results[goal.id] = TaskResult.from_step(goal, failure, step)
         self.result.failed_task.append(goal.id)
 
     def _upstream_context(
-        self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
+        self, goal: SystemGoal, results: Mapping[str, TaskResult]
     ) -> str:
         """Why a goal may have had nothing to work with, said plainly.
 
@@ -199,9 +257,9 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         """
         notes = []
         for dep_id in goal.depends_on:
-            output = results.get(dep_id)
-            if output is None:
+            if dep_id not in results:
                 continue
+            output = results[dep_id].output
             asked = output.goal_instruction or "an earlier step"
             if isinstance(output, FailedGoalOutput):
                 notes.append(f'it needed "{asked}", which could not be completed')
@@ -210,7 +268,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         return "; ".join(notes)
 
     def _dependency_outputs(
-        self, goal: SystemGoal, results: Mapping[str, NodeWorkflowOutput]
+        self, goal: SystemGoal, results: Mapping[str, TaskResult]
     ) -> dict[str, NodeWorkflowOutput]:
         """What this goal's dependencies produced, keyed by their goal id.
 
@@ -224,7 +282,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         never a goal at all (the planner refused it).
         """
         return {
-            dep_id: results[dep_id]
+            dep_id: results[dep_id].output
             for dep_id in goal.depends_on
             if dep_id in results
         }

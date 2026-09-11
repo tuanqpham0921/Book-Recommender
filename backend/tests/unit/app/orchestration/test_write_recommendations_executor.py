@@ -1,22 +1,18 @@
 """Tests for write_recommendations/executor.py — the reply stage's flow.
 
-The stage is the only thing in the app that materializes rows for the user to
-read: counts-first means every node hands on a query and fetches nothing, so
-what this fetches and what it shows *is* the answer. Both halves are asserted
-against a faked store and a faked LLM call rather than mocked internals.
+The stage no longer fetches (2026-09-11): every book node keeps the preview it
+streamed on its output, and the runner hands each goal over as a `TaskResult`.
+So what is asserted here is what the stage does with those — which cards it
+shows and what it tells the writer — against a faked LLM call.
 
 Since it was deregistered (2026-09-08) it takes one undifferentiated
 `results` list rather than a `sources`/`failures` split assembled by
 `build_input`, so `_input` below is what does the partitioning in reverse.
-
-`fetch_books` is left real — it is the flow's own step and the thing under test
-— with `BookStore.materialize` faked underneath it.
 """
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from sqlalchemy import select
 
 from app.domains.base_workflow import FailedGoalOutput, NodeWorkflowOutput
 from app.domains.books.external import (
@@ -24,44 +20,43 @@ from app.domains.books.external import (
     BookCandidateOutput,
     BookRequestContext,
 )
+from app.domains.books.schemas import Book
+from app.orchestration.task_runner import TaskResult
 from app.orchestration.write_recommendations import (
     GenerateRecommendationsExecutor,
     RecommendationsInput,
 )
-from app.orchestration.write_recommendations.executor import (
-    MAX_MATERIALIZED_SOURCES,
-)
 from clients.messages import AssistantMessage
-from db.schema import BookModel
-from db.stores import DeferredBookQuery
-from db.stores.book_store import BookStore
-
-def _query() -> DeferredBookQuery:
-    """A real one — `BookRetrievalOutput.query` is isinstance-validated, and a
-    stand-in would only prove the field accepts anything."""
-    return DeferredBookQuery(select(BookModel.isbn13))
 
 
-def _row(isbn13="9780441013593", title="Dune"):
-    return {
-        "isbn13": isbn13,
-        "title": title,
-        "authors": "Frank Herbert",
-        "description": "Set on the desert planet Arrakis.",
-    }
+def _book(isbn13="9780441013593", title="Dune") -> Book:
+    return Book(
+        isbn13=isbn13,
+        title=title,
+        authors="Frank Herbert",
+        description="Set on the desert planet Arrakis.",
+    )
+
+
+def _result(output: NodeWorkflowOutput) -> TaskResult:
+    return TaskResult(task_id="1", node_type="Retrieve_by_Title", output=output)
 
 
 def _source(
     instruction="Find Dune",
     cls=BookAnchorOutput,
     num_books=1,
-    with_query=True,
-):
-    return cls(
-        goal_instruction=instruction,
-        num_books=num_books,
-        query=_query() if with_query else None,
+    preview=None,
+) -> TaskResult:
+    if preview is None:
+        preview = [_book()] if num_books else []
+    return _result(
+        cls(goal_instruction=instruction, num_books=num_books, preview=preview)
     )
+
+
+def _failure(instruction="Find books like it", reason="") -> TaskResult:
+    return _result(FailedGoalOutput(goal_instruction=instruction, reason=reason))
 
 
 class _PlainOutput(NodeWorkflowOutput):
@@ -83,8 +78,6 @@ def _input(sources=None, failures=None) -> RecommendationsInput:
 
 @pytest.fixture
 def ctx(request_context):
-    store = request_context.stores[BookStore]
-    store.materialize = AsyncMock(return_value=[_row()])
     return BookRequestContext.narrow(request_context)
 
 
@@ -114,64 +107,38 @@ def _reply(text: str | None = "Dune's closest neighbours lean hard sci-fi."):
     )
 
 
-class TestMaterializing:
-    async def test_fetches_from_every_source_that_matched(self, node, ctx):
-        with _reply():
-            await node(_input([_source("a"), _source("b")]))
-
-        assert ctx.store.materialize.await_count == 2
-
-    async def test_fetches_nothing_for_a_source_that_matched_nothing(self, node, ctx):
-        # a zero count is a real answer; there is no query result to show for it
-        with _reply():
-            await node(_input([_source(num_books=0)]))
-
-        ctx.store.materialize.assert_not_awaited()
-
-    async def test_a_count_without_a_query_is_counted_not_fetched(self, node, ctx):
-        # every registered node fills `query`; one that does not is still a
-        # source the reply can report a count for
-        with _reply():
-            await node(_input([_source(with_query=False)]))
-
-        ctx.store.materialize.assert_not_awaited()
-        assert any("no query" in d for d in node.record.details)
-
-    async def test_the_round_trips_are_capped(self, node, ctx):
-        sources = [_source(f"source {i}") for i in range(MAX_MATERIALIZED_SOURCES + 3)]
-        with _reply():
-            await node(_input(sources))
-
-        assert ctx.store.materialize.await_count == MAX_MATERIALIZED_SOURCES
-        assert len([d for d in node.record.details if "cap reached" in d]) == 3
-
-
 class TestCards:
-    async def test_a_book_found_twice_is_shown_once(self, node, ctx, cards):
+    async def test_the_cards_are_the_previews_the_nodes_kept(self, node, ctx, cards):
+        """Nothing is fetched here: the rows were fetched where each goal ran."""
+        ctx.store.materialize = AsyncMock()
+        with _reply():
+            await node(
+                _input(
+                    [
+                        _source("a", preview=[_book()]),
+                        _source("b", preview=[_book("9780316769488", "IT")]),
+                    ]
+                )
+            )
+
+        assert sorted(c["title"] for c in cards) == ["Dune", "IT"]
+        ctx.store.materialize.assert_not_awaited()
+
+    async def test_a_book_found_twice_is_shown_once(self, node, cards):
         """One `stream_books` call, not one per source.
 
         Its isbn13 dedup is per call, so a chain that found Dune and then books
         like Dune would show Dune twice if each source streamed its own.
         """
-        ctx.store.materialize = AsyncMock(return_value=[_row()])
         with _reply():
             await node(_input([_source("a"), _source("b")]))
 
         assert [c["title"] for c in cards] == ["Dune"]
         assert node.result.num_books_shown == 2
 
-    async def test_distinct_books_are_all_shown(self, node, ctx, cards):
-        ctx.store.materialize = AsyncMock(
-            side_effect=[[_row()], [_row("9780316769488", "IT")]]
-        )
-        with _reply():
-            await node(_input([_source("a"), _source("b")]))
-
-        assert sorted(c["title"] for c in cards) == ["Dune", "IT"]
-
     async def test_a_chain_that_found_nothing_shows_no_cards(self, node, cards):
         with _reply():
-            await node(_input([_source(num_books=0)]))
+            await node(_input([_source(num_books=0)], [_failure()]))
 
         assert cards == []
 
@@ -189,12 +156,7 @@ class TestTheClaim:
         correct reply. Marking it failed would surface the generic error
         message and tell the user nothing."""
         with _reply("I don't have that one."):
-            record = await node(
-                _input(
-                    [_source(num_books=0)],
-                    [FailedGoalOutput(goal_instruction="Find books like it")],
-                )
-            )
+            record = await node(_input([_source(num_books=0)], [_failure()]))
 
         assert record.ok
 
@@ -217,7 +179,7 @@ class TestTheClaim:
 
 
 class TestWhatTheWriterSees:
-    async def test_the_reply_is_written_from_the_rows_it_fetched(self, node):
+    async def test_the_reply_is_written_from_the_books_each_goal_kept(self, node):
         with _reply() as llm:
             await node(_input([_source("Find Dune")]))
 
@@ -226,8 +188,8 @@ class TestWhatTheWriterSees:
         assert "Frank Herbert" in rendered
 
     async def test_a_candidate_pool_reports_its_real_size(self, node):
-        # five rows shown out of 250 — the reply must not describe the pool as
-        # five books
+        # one book listed out of 250 — the reply must not describe the pool as
+        # one book
         with _reply() as llm:
             await node(_input([_source(cls=BookCandidateOutput, num_books=250)]))
 
@@ -236,8 +198,8 @@ class TestWhatTheWriterSees:
     async def test_a_failed_chain_reaches_the_writer_with_its_reason(self, node):
         """The whole point of the failure artifacts: the only stage that speaks
         to the user is told why there is nothing to show."""
-        failure = FailedGoalOutput(
-            goal_instruction="Find books like Dune",
+        failure = _failure(
+            "Find books like Dune",
             reason='it needed "Find Dune by title", which found nothing',
         )
 
@@ -247,6 +209,17 @@ class TestWhatTheWriterSees:
         rendered = llm.await_args.args[0].messages[0].content
         assert "could not be completed" in rendered
         assert "which found nothing" in rendered
+
+    async def test_sources_are_reported_before_failures(self, node):
+        with _reply() as llm:
+            await node(
+                RecommendationsInput(
+                    results=[_failure("the failure"), _source("the source")]
+                )
+            )
+
+        rendered = llm.await_args.args[0].messages[0].content
+        assert rendered.index("[1] the source") < rendered.index("[2] the failure")
 
     async def test_the_users_own_message_is_the_brief(self, node):
         """With no goal there is no planner brief, so the user's own message is
@@ -274,7 +247,9 @@ class TestWhatTheWriterSees:
         one it cannot read would be a guess, so it is noted and skipped — the
         book-shaped sources beside it still get their reply."""
         with _reply() as llm:
-            record = await node(_input([_source("Find Dune"), _PlainOutput()]))
+            record = await node(
+                _input([_source("Find Dune"), _result(_PlainOutput())])
+            )
 
         assert record.ok
         assert "Find Dune" in llm.await_args.args[0].messages[0].content

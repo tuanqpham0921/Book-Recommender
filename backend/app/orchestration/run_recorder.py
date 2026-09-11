@@ -167,13 +167,9 @@ async def record_chat_run(
                     to_serializable(writer.record), file_name="writer", path=user_dir
                 )
 
-            # save task runner output. `task_runner.record.response` looks empty
-            # for a reason that is not a bug: `TaskRunnerOutput.task_results` is
-            # `exclude=True` (each output already lives in full on its own
-            # node's envelope in `steps`), and `to_serializable` skips excluded
-            # fields — leaving session_id, since remove_empty_values then drops
-            # the None and the empty list. The exclusion is on the *field*, so
-            # serializing the map itself is what gets the outputs.
+            # save task runner output: one `TaskResult` per goal — the node's
+            # output (with its `preview` books) plus its duration, token counts
+            # and error — which is the turn's source of truth
             if task_runner is not None:
                 dev_gen = {
                     # exactly what the writer was fed: RecommendationsInput

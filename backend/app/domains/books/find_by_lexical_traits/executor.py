@@ -117,11 +117,11 @@ class FindByLexicalTraitsExecutor(BookWorkflow[FindByLexicalTraitsOutput]):
 
         await self.sse_stream.send_chars(f"- Found {total} {described}")
 
-        # 3. Cards for the section, and nothing more: streamed and let go,
-        # never assigned to the output.
+        # 3. Cards for the section, kept on the output as `preview` for the
+        # record and the reply; downstream still composes the query.
         if total:
-            preview = await self.fetch_books(deferred)
-            await self.stream_books(preview.unwrap())
+            self.result.preview = (await self.fetch_books(deferred)).unwrap()
+            await self.stream_books(self.result.preview)
 
         # 4. last: ok is read off the output
         self.finalize_result()

@@ -31,7 +31,12 @@ from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.node_input import NodeInput
 from app.domains.node_spec import NodeSpec
 from app.domains.planjane import PlanJaneOutput, SystemGoal
-from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
+from app.orchestration.task_runner import (
+    TaskResult,
+    TaskRunnerInput,
+    TaskRunnerWorkflow,
+)
+from airglider import OperationResult, TokenUsage
 from clients.messages import AssistantMessage
 
 NODE_TYPE = FindTitleNodeTypeEnum.REQUEST
@@ -159,7 +164,7 @@ class TestSuccessfulExecution:
         assert runner.record.ok
         assert runner.result.failed_task == []
         assert list(runner.result.task_results) == ["1"]
-        assert runner.result.task_results["1"].num_books == 7
+        assert runner.result.task_results["1"].output.num_books == 7
 
     async def test_keys_each_output_by_the_goal_that_produced_it(self, runner):
         """Provenance lives in the runner's `results` map, not on the output.
@@ -181,8 +186,8 @@ class TestSuccessfulExecution:
             runner, [_goal("a"), _goal("b", depends_on=["a"])], _spec(_OkExecutor)
         )
 
-        assert runner.result.task_results["b"].saw_anchors == [
-            runner.result.task_results["a"]
+        assert runner.result.task_results["b"].output.saw_anchors == [
+            runner.result.task_results["a"].output
         ]
 
     async def test_a_failed_dependency_never_fills_a_book_shaped_field(self, runner):
@@ -197,7 +202,7 @@ class TestSuccessfulExecution:
             registry.spec.side_effect = [_spec(_FailingExecutor), _spec(_OkExecutor)]
             await runner(TaskRunnerInput(plan=plan))
 
-        assert runner.result.task_results["b"].saw_anchors == []
+        assert runner.result.task_results["b"].output.saw_anchors == []
         assert runner.result.failed_task == ["a"]
 
     async def test_dependency_runs_first_regardless_of_plan_ordering(self, runner):
@@ -208,8 +213,8 @@ class TestSuccessfulExecution:
             runner, [_goal("b", depends_on=["a"]), _goal("a")], _spec(_OkExecutor)
         )
 
-        assert runner.result.task_results["b"].saw_anchors == [
-            runner.result.task_results["a"]
+        assert runner.result.task_results["b"].output.saw_anchors == [
+            runner.result.task_results["a"].output
         ]
 
     async def test_one_failure_makes_the_whole_run_not_ok(self, runner):
@@ -232,8 +237,8 @@ class TestUnreachableGoals:
 
         assert sorted(runner.result.failed_task) == ["a", "b"]
         assert all(
-            isinstance(output, FailedGoalOutput)
-            for output in runner.result.task_results.values()
+            isinstance(result.output, FailedGoalOutput)
+            for result in runner.result.task_results.values()
         )
         assert not runner.record.ok
 
@@ -246,7 +251,7 @@ class TestUnreachableGoals:
 
         assert runner.result.failed_task == ["b"]
         assert sorted(runner.result.task_results) == ["a", "b"]
-        assert isinstance(runner.result.task_results["b"], FailedGoalOutput)
+        assert isinstance(runner.result.task_results["b"].output, FailedGoalOutput)
         # the summary is what a reader sees, and it must not call a failed
         # goal completed just because its artifact sits in the same map
         assert runner.result.to_summary()["completed_tasks"] == ["a"]
@@ -264,13 +269,13 @@ class TestUnrunnableNodes:
         await drive(runner, [_goal()], None)
 
         assert runner.result.failed_task == ["1"]
-        assert isinstance(runner.result.task_results["1"], FailedGoalOutput)
+        assert isinstance(runner.result.task_results["1"].output, FailedGoalOutput)
 
     async def test_registered_node_without_an_executor_is_skipped(self, runner):
         await drive(runner, [_goal()], _spec(None))
 
         assert runner.result.failed_task == ["1"]
-        assert isinstance(runner.result.task_results["1"], FailedGoalOutput)
+        assert isinstance(runner.result.task_results["1"].output, FailedGoalOutput)
 
     async def test_skipped_node_opens_no_ui_section(self, runner, events):
         # it never ran, so a section would render as a step that is
@@ -397,7 +402,7 @@ class TestUnpreparableNodes:
         )
 
         assert runner.result.failed_task == ["1"]
-        assert isinstance(runner.result.task_results["1"], FailedGoalOutput)
+        assert isinstance(runner.result.task_results["1"].output, FailedGoalOutput)
         # never started, so no section is left hanging open
         assert of_type(events, "task.start") == []
 
@@ -451,7 +456,7 @@ class TestFailureArtifacts:
     async def test_a_failed_goal_records_its_description_and_a_reason(self, runner):
         await drive(runner, [_goal()], _spec(_FailingExecutor))
 
-        failure = runner.result.task_results["1"]
+        failure = runner.result.task_results["1"].output
         assert isinstance(failure, FailedGoalOutput)
         assert failure.goal_instruction == _goal().instruction
 
@@ -472,8 +477,8 @@ class TestFailureArtifacts:
             registry.spec.side_effect = [_spec(_EmptyExecutor), _spec(_FailingExecutor)]
             await runner(TaskRunnerInput(plan=plan))
 
-        assert "found nothing" in runner.result.task_results["b"].reason
-        assert _goal().instruction in runner.result.task_results["b"].reason
+        assert "found nothing" in runner.result.task_results["b"].output.reason
+        assert _goal().instruction in runner.result.task_results["b"].output.reason
 
     async def test_the_reason_names_a_dependency_that_failed(self, runner):
         plan = PlanJaneOutput(
@@ -486,7 +491,9 @@ class TestFailureArtifacts:
             ]
             await runner(TaskRunnerInput(plan=plan))
 
-        assert "could not be completed" in runner.result.task_results["b"].reason
+        assert (
+            "could not be completed" in runner.result.task_results["b"].output.reason
+        )
 
     async def test_a_successful_output_is_stamped_with_its_goal_instruction(
         self, runner
@@ -496,4 +503,56 @@ class TestFailureArtifacts:
         importing the planner's types."""
         await drive(runner, [_goal()], _spec(_OkExecutor))
 
-        assert runner.result.task_results["1"].goal_instruction == _goal().instruction
+        assert (
+            runner.result.task_results["1"].output.goal_instruction
+            == _goal().instruction
+        )
+
+
+class TestTaskResults:
+    """What the runner keeps per goal: the output plus a summary of its
+    envelope — the way a client keeps a completion's content and usage and
+    lets the raw response go."""
+
+    def test_from_step_keeps_the_output_and_a_summary_of_the_envelope(self):
+        step = OperationResult(
+            ok=True,
+            token_usage=TokenUsage(total=30, prompt=20, completion=10),
+        )
+        step.timing.duration = 1.5
+
+        result = TaskResult.from_step(_goal(), _Output(num_books=7), step)
+
+        assert result.ok
+        assert result.task_id == "1"
+        assert result.node_type == NODE_TYPE.value
+        assert result.output.num_books == 7
+        assert result.duration == 1.5
+        assert (result.total_tokens, result.input_tokens, result.output_tokens) == (
+            30,
+            20,
+            10,
+        )
+        assert result.error is None
+
+    async def test_a_goal_that_ran_carries_its_duration(self, runner):
+        await drive(runner, [_goal()], _spec(_OkExecutor))
+
+        assert runner.result.task_results["1"].duration is not None
+
+    async def test_a_goal_that_crashed_keeps_its_metadata(self, runner):
+        # what a node spent before it failed is still spent
+        await drive(runner, [_goal()], _spec(_ExplodingExecutor))
+
+        result = runner.result.task_results["1"]
+        assert not result.ok
+        assert result.duration is not None
+        assert result.error == "RuntimeError"
+
+    async def test_a_goal_that_never_ran_has_no_metadata(self, runner):
+        await drive(runner, [_goal()], None)
+
+        result = runner.result.task_results["1"]
+        assert not result.ok
+        assert result.duration is None
+        assert result.total_tokens == 0

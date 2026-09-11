@@ -103,11 +103,14 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         total = (await self.pool_stats(pool)).unwrap()
 
         # 6. cards for the section: a preview, the same handful every other node
-        # shows. The pool itself travels as `query` for a later node to narrow
-        # — an empty one is a real answer, not a failure.
+        # shows, kept on the output for the record and the reply. The pool
+        # itself travels as `query` for a later node to narrow — an empty one
+        # is a real answer, not a failure.
         if total:
-            preview = await self.fetch_books(pool, BookConstraints.default_limit)
-            await self.stream_books(preview.unwrap())
+            self.result.preview = (
+                await self.fetch_books(pool, BookConstraints.default_limit)
+            ).unwrap()
+            await self.stream_books(self.result.preview)
 
         # 7. last: ok is read off the output
         self.finalize_result()

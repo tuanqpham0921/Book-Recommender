@@ -70,12 +70,13 @@ class CombineIntersectExecutor(BookWorkflow[CombineIntersectOutput]):
             f"- {total} books match all {len(upstream)} conditions"
         )
 
-        # 3. Cards for the section, streamed and let go — what travels
-        # downstream is the intersected query on `self.result`. Skipped entirely
-        # when nothing satisfied every condition.
+        # 3. Cards for the section, kept on the output as `preview` for the
+        # record and the reply — what travels downstream is the intersected
+        # query on `self.result`. Skipped entirely when nothing satisfied every
+        # condition.
         if total:
-            preview = await self.fetch_books(deferred)
-            await self.stream_books(preview.unwrap())
+            self.result.preview = (await self.fetch_books(deferred)).unwrap()
+            await self.stream_books(self.result.preview)
 
         # 4. last: ok is read off the output
         self.finalize_result()

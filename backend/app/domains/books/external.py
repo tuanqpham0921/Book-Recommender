@@ -9,22 +9,24 @@ from pydantic import ConfigDict, Field
 
 from app.common.request_context import RequestContext
 from app.domains.base_workflow import NodeWorkflowOutput
+from app.domains.books.schemas import Book
 from db.stores import DeferredBookQuery
 from db.stores.book_store import BookStore
 
 
 class BookRetrievalOutput(NodeWorkflowOutput):
-    """How many books matched, and the query that reaches them — never the rows.
+    """How many books matched, and the query that reaches them.
     `num_books == 0` is a real answer: nothing matched, not a failure.
 
     Counts-first (docs/design/execution-pipeline-v1.md), taken the whole way: a
-    retrieval or combine node fills `num_books` and `query` and stops. **There
-    is no `books` field**, so there is no second, capped representation of the
-    same set for a downstream node to reach for by accident — composing against
-    `query` is the only thing it can do. Rows are fetched at exactly two points,
-    both of them deliberate: a preview streamed straight to the browser
-    (`BookWorkflow.fetch_books`, off the output), and whatever the terminal
-    node materializes as its answer.
+    retrieval or combine node fills `num_books` and `query`, and a downstream
+    node composes against `query` — the only way to reach the whole set.
+    **`preview` is not that set.** It is the first few rows the node already
+    fetched for its section's cards (`BookConstraints.default_limit`, ranked by
+    `materialize_stmt`), kept on the output since 2026-09-11 so the turn's
+    record and the reply have books to name without a second round trip. It is
+    capped, so a node reading it instead of composing `query` would be
+    answering from four books — no `NodeInput` should take its rows from here.
 
     **Every registered node fills `query`** (since 2026-08-24). The similarity
     node used to be the exception, declaring its own `books` field for a pool it
@@ -66,6 +68,7 @@ class BookRetrievalOutput(NodeWorkflowOutput):
     num_books: int = 0
     query_sql: str | None = None
     query: DeferredBookQuery | None = Field(default=None, exclude=True)
+    preview: list[Book] = Field(default_factory=list)
 
     def to_summary(self) -> dict[str, Any]:
         # `has_query` rather than the SQL: `query_sql` is already persisted in

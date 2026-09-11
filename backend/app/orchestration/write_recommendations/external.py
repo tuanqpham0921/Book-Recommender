@@ -13,6 +13,7 @@ from pydantic import Field
 
 from app.domains.base_workflow import NodeWorkflowOutput
 from app.domains.node_input import WorkflowInput
+from app.orchestration.task_runner import TaskResult
 
 
 class RecommendationsInput(WorkflowInput):
@@ -23,9 +24,10 @@ class RecommendationsInput(WorkflowInput):
     the planner's `depends_on` onto typed fields — and there is no goal and no
     `depends_on` any more, so the partition moved into the executor where the
     whole run is visible. The list is what `TaskRunnerOutput.task_results`
-    holds: a `FailedGoalOutput` for every goal that failed or was skipped, each
-    node's own output for the rest, all of them already stamped with the
-    instruction that produced them.
+    holds: one `TaskResult` per goal, carrying the node's output (a
+    `FailedGoalOutput` for every goal that failed or was skipped), already
+    stamped with the instruction that produced it and holding the `preview`
+    books the node kept, plus what the goal cost.
 
     A `WorkflowInput` rather than a `NodeInput` for the same reason
     `TaskRunnerInput` is: this is a pipeline step, not a dispatchable
@@ -39,7 +41,7 @@ class RecommendationsInput(WorkflowInput):
     when the runner produced nothing — and the executor raises on it.
     """
 
-    results: list[NodeWorkflowOutput] = Field(default_factory=list)
+    results: list[TaskResult] = Field(default_factory=list)
 
 
 class RecommendationsOutput(NodeWorkflowOutput):

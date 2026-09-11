@@ -59,30 +59,6 @@ Historical cleanup logs live in git history (`git log -p -- backend/TODO.md`).
 
 ## In flight
 
-- **What the generation node feeds its writer.** `write_recommendations/render.py` currently
-  sends full book entries — title, author, year, rating, 400-char blurb, up to 12k chars.
-  The alternative is the old `analyze_recommend` shape: counts and ranges only (authors,
-  shelves, page span), with the books reaching the user as cards and never reaching the LLM.
-  Recoverable at `git show 8b03c8e^:backend/app/domains/books/analyze_recommend/generate_response.py`
-  and its `prompts/response_prompt.txt`. The tradeoff is per-book "why this fits" (needs
-  blurbs) against a reply that cannot invent a plot (needs their absence). Undecided.
-
--------------
-* task needs a completed, cancel, or fail (internal)
-
-* truncate each books to some amount
-* so mainly description ...
-  * tell the system prompt to use whatever info it can
-  * or have a pre-process thing to cap it
-  * there are a good amount of books with long description
-
-cap tasks at 10 max
-  * task at most 1000
-  * after everything materialize each at most 4
-  * each books lets say 200 tokens
-
-
-
 --------------------------
 
 * format the task runner result better

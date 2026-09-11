@@ -61,7 +61,7 @@ class BookConstraints:
 
     MIN_LIMIT = 1
     MAX_LIMIT = 5
-    default_limit = 3
+    default_limit = 4
 
     def __str__(self):
         """Return string representation of all constraints."""

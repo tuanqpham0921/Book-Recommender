@@ -66,13 +66,13 @@ class FindByAuthorExecutor(BookWorkflow[FindByAuthorOutput]):
 
         await self.sse_stream.send_chars(f"- Found {total} books by: {author}")
 
-        # 3. Cards for the section, and nothing more: they are streamed and
-        # let go, never assigned to the output. What travels downstream is the
-        # query on `self.result`, which reaches the whole bibliography rather
-        # than these few rows. Skipped entirely when nothing matched.
+        # 3. Cards for the section, kept on the output as `preview` for the
+        # record and the reply. What travels downstream is still the query on
+        # `self.result`, which reaches the whole bibliography rather than these
+        # few rows. Skipped entirely when nothing matched.
         if total:
-            preview = await self.fetch_books(deferred)
-            await self.stream_books(preview.unwrap())
+            self.result.preview = (await self.fetch_books(deferred)).unwrap()
+            await self.stream_books(self.result.preview)
 
         # 4. last: ok is read off the output
         self.finalize_result()

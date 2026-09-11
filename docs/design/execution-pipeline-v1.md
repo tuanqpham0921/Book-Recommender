@@ -598,3 +598,21 @@ needs an output-grading eval, which does not exist. See [eval-strategy.md](../ev
 same `BookReaderWorkflow` base, same failure artifacts. Re-registering means restoring
 `labels.py`/`schemas.py`, a `SPEC`, the tier, and the `sources`/`failures` split on the
 input; the partition in `_partition` is the only logic that would become dead.
+
+**Status update — 2026-09-11: the stage stops fetching.** Every book node keeps the preview
+it streamed on its output (`BookRetrievalOutput.preview`, `default_limit` raised to 4), and
+the runner wraps each goal as a `TaskResult` — the output plus a summary of its envelope
+(duration, total/input/output tokens, error), the way `OpenAIClient.execute` keeps a
+completion's content and usage and lets the raw response go. `TaskRunnerOutput.task_results`
+holds those, and they are the turn's source of truth: what the reply is written from and
+what a later turn would read. The stage's `materialize` step, `ROWS_PER_SOURCE` and
+`MAX_MATERIALIZED_SOURCES` are gone — that cap dropped the tail of execution order, which is
+where the final answers sit — and so is the 12k-char truncation of the whole report, which
+clipped failures because they render last. Each section is capped instead: an `<info>` block
+(≤400 chars — outcome, similarity lines, parsed arguments, cost, SQL last so the cap cuts it
+first) and up to four books of ≤600 chars each. The `<info>` block is the first internal
+detail the writer is shown; the prompt says to read it and never repeat it. Known leak:
+`compile_sql` inlines literals, so a similarity search's SQL carries the anchors' ISBNs.
+
+This settles the TODO question of what the writer is fed (full book entries against counts
+only): both — the counts and how each search ran in `<info>`, the books under it.

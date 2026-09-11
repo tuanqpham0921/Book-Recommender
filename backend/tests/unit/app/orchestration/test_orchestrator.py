@@ -17,7 +17,7 @@ from app.domains.books.external import BookAnchorOutput
 from app.domains.books.find_by_title import FindTitleNodeTypeEnum
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from app.orchestration.orchestrator import Orchestrator
-from app.orchestration.task_runner import TaskRunnerOutput
+from app.orchestration.task_runner import TaskResult, TaskRunnerOutput
 from airglider import OperationResult
 
 # request_context comes from tests/conftest.py
@@ -49,10 +49,21 @@ def _triage_with_plan(plan):
     return workflow
 
 
-def _runner_with(results):
+def _runner_with(outputs):
+    """A runner whose results map holds `outputs`, each wrapped in a
+    `TaskResult` the way the real runner wraps a goal's output."""
     runner = AsyncMock()
     runner.record = OperationResult(ok=True)
-    runner.result = TaskRunnerOutput(task_results=results)
+    runner.result = TaskRunnerOutput(
+        task_results={
+            task_id: TaskResult(
+                task_id=task_id,
+                node_type=FindTitleNodeTypeEnum.REQUEST.value,
+                output=output,
+            )
+            for task_id, output in outputs.items()
+        }
+    )
     return runner
 
 
@@ -150,7 +161,9 @@ class TestWritingTheReply:
             await Orchestrator().run(request_context)
 
         node_input = writer_cls.return_value.await_args.args[0]
-        assert node_input.results == list(results.values())
+        assert [result.output for result in node_input.results] == list(
+            results.values()
+        )
 
     async def test_no_reply_is_written_when_the_plan_produced_nothing(
         self, request_context

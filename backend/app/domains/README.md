@@ -66,11 +66,12 @@ that is the point.
   and cards while producing prose. `BookWorkflow` exposes `self.store`
   (a property off the request context), and adds two `@task`s —
   `count_books()` (stamp a deferred query on the output and record the match
-  size — no rows) and `fetch_books()` (rows off a query, handed back rather
-  than written anywhere) — plus `stream_books()` (cards to the browser,
-  validated through `BookOut`). Counting and fetching are separate calls on
-  purpose — `BookRetrievalOutput` has no `books` field, so rows a node only
-  *showed* have nowhere to masquerade as rows it produced. **What they share is
+  size — no rows) and `fetch_books()` (rows off a query, handed back for the
+  caller to place) — plus `stream_books()` (cards to the browser, validated
+  through `BookOut`). Counting and fetching are separate calls on purpose. The
+  rows a node shows are kept on its output as `preview` (since 2026-09-11) for
+  the turn's record and the reply — capped, and never an input: a downstream
+  node still composes `query` rather than reading them. **What they share is
   deliberately small**: a node needing more than "count this" or "fetch rows off
   this" composes it in its own flow rather than adding a third method here.
   `find_similar_books/` pools its anchors, checks its own cap and calls
@@ -323,8 +324,8 @@ assumed, not restated, here.
    (`getattr`) only shapes that are still reserved names — the moment a shape
    has a class, read the typed field.
 5. **Book nodes open counts-first**: parse args → build the deferred query →
-   `count_books()` → `fetch_books()` for the section's sample cards →
-   hand the *query* downstream on the output. Rows are fetched where they are
+   `count_books()` → `fetch_books()` for the section's cards, kept as
+   `self.result.preview` → hand the *query* downstream on the output. Rows are fetched where they are
    actually needed — a preview, a capped anchor, or the terminal node's
    answer — and a node that needs a count it did not compute reads it off the
    upstream output rather than running a second `COUNT` (see
