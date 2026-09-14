@@ -159,9 +159,22 @@
 @utility task-section-body {
   padding-top: 4px;
 
-  /* children already carry their own left margin from message-bubble */
+  /* One left edge for the whole step — its line, its cards, its details box.
+     The children are styled for the top level of a reply, so their own inset
+     (the bubble's margin and padding, the card row's p-4 and mb-5) comes off
+     here: the section's border already indents them. The row's inner pb-2
+     stays, as room for its horizontal scrollbar. */
   & .message-bubble {
     margin-left: 0;
+    padding-inline: 0;
+  }
+
+  & .book-cards-container {
+    margin-bottom: 0;
+
+    & > div {
+      padding: 0;
+    }
   }
 }
 
