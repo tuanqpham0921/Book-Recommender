@@ -159,7 +159,7 @@
   flex-shrink: 0;
 
   &.ok {
-    color: var(--text-muted);
+    color: var(--accent-positive);
   }
 
   &.failed {
