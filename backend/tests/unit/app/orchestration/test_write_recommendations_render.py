@@ -16,6 +16,7 @@ from app.domains.books.external import BookAnchorOutput, BookCandidateOutput
 from app.domains.books.find_by_title.external import FindByTitleOutput
 from app.domains.books.find_by_title.schemas import FindByTitleArgs
 from app.domains.books.find_similar_books import SimilarBooksOutput
+from app.domains.books.find_similar_books.external import SimilarBooksArgs
 from app.domains.books.schemas import Book
 from app.orchestration.task_runner import TaskResult
 from app.orchestration.write_recommendations import GenerationResult
@@ -157,13 +158,17 @@ class TestRenderInfo:
             num_books=250,
             goal_instruction="Find books like Dune",
             references=[_book()],
-            search_text="politics, ecology and empire on a harsh world",
+            args=SimilarBooksArgs(
+                search_text="politics, ecology and empire on a harsh world"
+            ),
         )
 
         info = render_info(_result(pool))
 
         assert "built from the reader's reference books: Dune" in info
-        assert "politics, ecology and empire" in info
+        # once, in the prompt's wording — not again as an arguments line
+        assert info.count("politics, ecology and empire") == 1
+        assert "arguments:" not in info
 
     def test_a_plain_retrieval_carries_no_such_lines(self):
         info = render_info(_source())

@@ -49,6 +49,17 @@ class ScoreStats(BaseModel):
     avg: float
 
 
+class SimilarBooksArgs(BaseModel):
+    """What the search ran on. Every other slice's `args` is what it parsed out
+    of the instruction; this node parses nothing from it and folds its anchors
+    into a description instead — but that description is still the one input
+    the search takes, so it lives where every section shows its arguments.
+    Named for the `embed(search_text)` label in the pool's recorded SQL, which
+    points at it."""
+
+    search_text: str
+
+
 class SimilarBooksOutput(BookCandidateOutput):
     """How many books sit nearest the anchor, and the query that reaches them.
 
@@ -74,14 +85,14 @@ class SimilarBooksOutput(BookCandidateOutput):
     them. Nothing enforces that; see `DeferredBookQuery`. `score` is what
     describes this output, since `num_books` mostly reports the pool size.
 
-    `references` and `search_text` are kept because "why these books" is only
-    answerable against what was pointed at and what was embedded. `search_text`
-    is the synthesized ideal-book description — what the embedding actually saw
-    — not anything the user typed.
+    `references` and `args.search_text` are kept because "why these books" is
+    only answerable against what was pointed at and what was embedded.
+    `search_text` is the synthesized ideal-book description — what the embedding
+    actually saw — not anything the user typed.
     """
 
     references: list[Book] = Field(default_factory=list)
-    search_text: str | None = None
+    args: SimilarBooksArgs | None = None
     score: ScoreStats | None = Field(
         default=None,
         description="the pool's cosine spread — None when nothing cleared the floor",

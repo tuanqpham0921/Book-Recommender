@@ -30,7 +30,12 @@ from .analyze_references import (
     build_analysis_request,
     render_documents,
 )
-from .external import ScoreStats, SimilarBooksInput, SimilarBooksOutput
+from .external import (
+    ScoreStats,
+    SimilarBooksArgs,
+    SimilarBooksInput,
+    SimilarBooksOutput,
+)
 from airglider import task
 
 # How many named books get folded into one description. Past this the node
@@ -82,11 +87,11 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         # second half to fall back on, so a fold that comes back empty is the
         # end of the node rather than a missing input to work around.
         analyzed = (await self.analyze_references(references)).unwrap()
-        self.result.search_text = analyzed
         if not analyzed:
             raise ValueError(
                 "Nothing to search on: the anchor books carry no descriptions"
             )
+        self.result.args = SimilarBooksArgs(search_text=analyzed)
 
         # 4. embed + build. The named books are excluded from their own results
         # in SQL, so the excluded rows do not eat pool slots. Nothing is fetched
@@ -207,7 +212,7 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         builder is not a store method: the vector renders as
         `embed(search_text)` rather than 1024 floats, and only this call site
         knows that label. `search_text` is not lost — it is this task's own
-        `input` (see `@task` in airglider) and `SimilarBooksOutput.search_text`,
+        `input` (see `@task` in airglider) and `SimilarBooksOutput.args`,
         so the label points at a value the record already holds twice.
         """
         # a nested @task (the AppWorkflow wrapper — the client itself is
@@ -261,5 +266,5 @@ class FindSimilarBooksExecutor(BookWorkflow[SimilarBooksOutput]):
         # in the catalog sits near what was named — so requiring `books` here
         # would mark a correct "there is nothing like this" as a failed goal.
         # What is not ok is never getting as far as the search.
-        ok = self.result.search_text is not None
+        ok = self.result.args is not None
         return super().finalize_result(ok=ok)

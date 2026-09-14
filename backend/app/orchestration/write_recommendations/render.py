@@ -160,13 +160,14 @@ def render_info(result: TaskResult) -> str:
         if output.references:
             named = ", ".join(book.title for book in output.references)
             lines.append(f"built from the reader's reference books: {named}")
-        if output.search_text:
-            lines.append(f'searched for books matching: "{output.search_text}"')
+        if output.args:
+            lines.append(f'searched for books matching: "{output.args.search_text}"')
 
     # `getattr`: every parsing slice types its own `args`, and no shared shape
-    # declares the field
+    # declares the field. The pool's args are its search text, rendered above in
+    # the wording the prompt names — a second copy would spend the info cap.
     args = getattr(output, "args", None)
-    if args is not None:
+    if args is not None and not isinstance(output, SimilarBooksOutput):
         parsed = remove_empty_values(args.model_dump(mode="json"))
         if parsed:
             lines.append(f"arguments: {json.dumps(parsed, ensure_ascii=False)}")

@@ -79,7 +79,7 @@ class TestTheHappyPath:
         # the anchor was materialized and kept — it is what the fold read
         assert [book.title for book in out.references] == ["Dune"]
         # what the fold produced is what got embedded, and it is recorded
-        assert out.search_text == "a sweeping desert epic"
+        assert out.args.search_text == "a sweeping desert epic"
         # the pool is a size and a spread, not a list of rows
         assert out.num_books == 250
         assert out.score is not None
