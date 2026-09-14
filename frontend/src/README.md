@@ -43,7 +43,12 @@ before any task opens, which is why it stays outside them.
 The pair is emitted by `TaskRunnerWorkflow`, not by individual executors, and
 closed in a `finally` — a node that raises still closes its section. `task.end`
 carries the `count` that stamps the header after the fact, since a section opens
-before the node knows how many books it matched. Sections open expanded and fold
+before the node knows how many books it matched, and `details` — the goal's
+`instruction`, the `args` its node parsed, its `sql`, `error_message`,
+`duration` and token counts (`task_details()` in
+`backend/app/orchestration/task_runner.py`, empty keys dropped). `TaskSection`
+renders them after the task's own sections, so a step reads: its line, its
+cards, then how it was done. Sections open expanded and fold
 themselves on `task.end`, so the finished turn shows the answer rather than the
 work; `collapsible: false` stays open, and a user click pins the state.
 

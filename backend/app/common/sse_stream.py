@@ -124,13 +124,23 @@ class SSEStream:
         )
 
     async def send_task_end(
-        self, task_id: str, count: int | None = None, ok: bool = True
+        self,
+        task_id: str,
+        count: int | None = None,
+        ok: bool = True,
+        details: dict[str, Any] | None = None,
     ):
-        """Close a task section. `count` stamps the header after the fact —
-        the section opens before the node knows how many books it matched."""
+        """Close a task section. `count` stamps the header and `details`
+        fills the block under the cards, both after the fact — the section
+        opens before the node has parsed, counted or spent anything."""
         await self.send(
             event_type="task.end",
-            data={"task_id": task_id, "count": count, "ok": ok},
+            data={
+                "task_id": task_id,
+                "count": count,
+                "ok": ok,
+                "details": details or {},
+            },
         )
     
     async def close(self):

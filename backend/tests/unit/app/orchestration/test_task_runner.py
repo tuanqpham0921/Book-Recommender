@@ -17,7 +17,7 @@ from dataclasses import replace
 from unittest.mock import patch
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from app.common.request_context import RequestContext
 from app.domains.base_workflow import (
@@ -147,6 +147,21 @@ def runner(request_context, events) -> TaskRunnerWorkflow:
 
 def of_type(events: list[dict], event_type: str) -> list:
     return [e["data"] for e in events if e["type"] == event_type]
+
+
+def closed_sections(events: list[dict]) -> list[dict]:
+    """`task.end` payloads without their `details` — the bracketing tests are
+    about pairing, and details carry a duration that differs every run."""
+    return [
+        {k: v for k, v in data.items() if k != "details"}
+        for data in of_type(events, "task.end")
+    ]
+
+
+def details(events: list[dict]) -> dict:
+    """The one closed section's details."""
+    (end,) = of_type(events, "task.end")
+    return end["details"]
 
 
 async def drive(runner, goals: list[SystemGoal], spec: NodeSpec | None):
@@ -295,7 +310,7 @@ class TestTaskSectionBracketing:
         assert of_type(events, "task.start") == [
             {"task_id": "1", "title": "Looking up a title", "collapsible": True}
         ]
-        assert of_type(events, "task.end") == [
+        assert closed_sections(events) == [
             {"task_id": "1", "count": 7, "ok": True}
         ]
 
@@ -309,7 +324,7 @@ class TestTaskSectionBracketing:
     async def test_a_failing_node_still_closes_its_section(self, runner, events):
         await drive(runner, [_goal()], _spec(_FailingExecutor))
 
-        assert of_type(events, "task.end") == [
+        assert closed_sections(events) == [
             {"task_id": "1", "count": None, "ok": False}
         ]
 
@@ -318,7 +333,7 @@ class TestTaskSectionBracketing:
         # this exercises the failure path rather than the `finally`
         await drive(runner, [_goal()], _spec(_ExplodingExecutor))
 
-        assert of_type(events, "task.end") == [
+        assert closed_sections(events) == [
             {"task_id": "1", "count": None, "ok": False}
         ]
         assert runner.result.failed_task == ["1"]
@@ -337,9 +352,67 @@ class TestTaskSectionBracketing:
             with pytest.raises(asyncio.CancelledError):
                 await runner.run(TaskRunnerInput(plan=plan))
 
-        assert of_type(events, "task.end") == [
+        assert closed_sections(events) == [
             {"task_id": "1", "count": None, "ok": False}
         ]
+        # no envelope to read, so the instruction is all there is to show
+        assert details(events) == {"instruction": _goal().instruction}
+
+
+class _Args(BaseModel):
+    title: str
+    author: str | None = None
+
+
+class _ParsingOutput(NodeWorkflowOutput):
+    """Stands in for a retrieval output: the two fields `task_details` reads
+    by name, since no shared shape declares `args`."""
+
+    args: _Args | None = None
+    query_sql: str | None = None
+
+    def to_summary(self) -> dict:
+        return {}
+
+
+class _ParsingExecutor(AppWorkflow[_ParsingOutput]):
+    async def run(self, node_input: _Input) -> None:
+        self.result.args = _Args(title="Dune")
+        self.result.query_sql = "SELECT count(*) FROM books"
+        self.finalize_result(ok=True)
+
+
+class _ParsesThenExplodesExecutor(AppWorkflow[_ParsingOutput]):
+    async def run(self, node_input: _Input) -> None:
+        self.result.args = _Args(title="Dune")
+        raise RuntimeError("db down")
+
+
+class TestTaskSectionDetails:
+    """What the section shows under its cards, carried on `task.end`."""
+
+    async def test_carries_the_instruction_parsed_args_sql_and_cost(
+        self, runner, events
+    ):
+        await drive(runner, [_goal()], _spec(_ParsingExecutor))
+
+        shown = details(events)
+        assert shown["instruction"] == _goal().instruction
+        # the unfilled `author` is dropped rather than shown as null
+        assert shown["args"] == {"title": "Dune"}
+        assert shown["sql"] == "SELECT count(*) FROM books"
+        assert shown["duration"] is not None
+        assert "error_message" not in shown
+
+    async def test_a_failed_node_still_shows_what_it_parsed(self, runner, events):
+        # the runner's own record swaps the output for a FailedGoalOutput, so
+        # this is why details read the envelope instead
+        await drive(runner, [_goal()], _spec(_ParsesThenExplodesExecutor))
+
+        shown = details(events)
+        assert shown["args"] == {"title": "Dune"}
+        assert shown["error_message"] == "db down"
+        assert isinstance(runner.result.task_results["1"].output, FailedGoalOutput)
 
 
 class TestMessageTrace:

@@ -239,6 +239,7 @@ function ChatBot() {
                             title: event.data.title,
                             collapsible: event.data.collapsible !== false,
                             count: null,
+                            details: null,
                             open: true,
                             closed: false,
                             ok: true,
@@ -257,6 +258,9 @@ function ChatBot() {
                             task.closed = true;
                             task.count = event.data.count ?? null;
                             task.ok = event.data.ok !== false;
+                            // instruction, parsed args, SQL, cost — rendered
+                            // under the task's cards
+                            task.details = event.data.details ?? null;
                             // stay open when there's nothing to fold away, or
                             // when this node owns the answer
                             task.open = !task.collapsible || task.sections.length === 0;

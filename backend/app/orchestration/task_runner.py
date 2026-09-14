@@ -14,7 +14,12 @@ from app.domains.node_input import WorkflowInput, build_input
 from app.registry import REGISTRY
 from app.domains.planjane import PlanJaneOutput, SystemGoal
 from ..domains.node_spec import NodeSpec
-from airglider import OperationResult, RuntimeErrorInfo, StepFailure
+from airglider import (
+    OperationResult,
+    RuntimeErrorInfo,
+    StepFailure,
+    remove_empty_values,
+)
 from clients.messages import AssistantMessage
 
 logger = logging.getLogger(__name__)
@@ -100,6 +105,35 @@ def _root_error(step: OperationResult) -> RuntimeErrorInfo | None:
         if not child.ok and (cause := _root_error(child)) is not None:
             return cause
     return error
+
+
+def task_details(goal: SystemGoal, step: OperationResult | None) -> dict[str, Any]:
+    """What a task section shows beneath its cards: the goal's instruction,
+    the arguments its node parsed, the SQL it counted with, and what it cost.
+
+    Read off the envelope rather than a finished `TaskResult`, whose output is
+    a `FailedGoalOutput` for a goal that failed — and the arguments a node
+    parsed before failing are the part most worth seeing. `getattr` for the
+    same reason as the count: every parsing slice types its own `args`, and the
+    runner stays out of the book domain. No envelope (a cancelled turn) leaves
+    the instruction alone.
+    """
+    details: dict[str, Any] = {"instruction": goal.instruction}
+    if step is not None and step.result is not None:
+        output = step.result
+        args = getattr(output, "args", None)
+        details["args"] = args.model_dump(mode="json") if args is not None else None
+        details["sql"] = getattr(output, "query_sql", None)
+        details |= TaskResult.from_step(goal, output, step).model_dump(
+            include={
+                "duration",
+                "total_tokens",
+                "input_tokens",
+                "output_tokens",
+                "error_message",
+            }
+        )
+    return remove_empty_values(details)
 
 
 class TaskRunnerOutput(NodeWorkflowOutput):
@@ -351,7 +385,7 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         step_result = None
         try:
             step_result = await executor(node_input)
-            
+
             # NOTE: probably should unwrap here
             return step_result
         finally:
@@ -362,4 +396,5 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
                 # fills itself in
                 count=getattr(output, "num_books", None),
                 ok=bool(step_result and step_result.ok),
+                details=task_details(goal, step_result),
             )

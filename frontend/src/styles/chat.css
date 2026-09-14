@@ -164,3 +164,49 @@
     margin-left: 0;
   }
 }
+
+/* The block under a task's cards — instruction, parsed args, SQL, cost. Muted
+   and small: it is how the step was done, not the answer. */
+@utility task-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 0.375rem;
+  min-width: 0;
+
+  & dt {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  & dd {
+    color: var(--text-hover);
+    overflow-wrap: anywhere;
+  }
+
+  & pre {
+    margin: 2px 0 0;
+    max-height: 12rem;
+    overflow: auto;
+    white-space: pre;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 11px;
+  }
+}
+
+@utility task-details-key {
+  font-family: 'Monaco', 'Menlo', monospace;
+  color: var(--text-muted);
+}
+
+@utility task-details-error {
+  color: var(--accent-negative);
+}
