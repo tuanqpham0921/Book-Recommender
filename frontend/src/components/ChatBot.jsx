@@ -275,10 +275,20 @@ function ChatBot() {
                         const last = draft[draft.length - 1];
                         last.response.isStreaming = true;
                         const sectionId = `${last.response.id}-section-${last.response.sections.length + 1}`;
+                        // rendered as the first step in the task list: it
+                        // arrives finished, so it is closed and ok from the
+                        // start, and stays open until the user folds it
                         last.response.sections.push({
                             id: sectionId,
                             type: 'diagram',
-                            mermaid: event.data
+                            mermaid: event.data,
+                            // a plan only ever covers finding books — the
+                            // reply is written after it, outside the plan
+                            title: "PlanJane says:",
+                            count: null,
+                            open: true,
+                            closed: true,
+                            ok: true,
                         });
                     });
                     continue;

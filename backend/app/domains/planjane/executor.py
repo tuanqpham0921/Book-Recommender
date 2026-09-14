@@ -147,7 +147,8 @@ class PlanJaneExecutor(AppWorkflow[PlanJaneOutput]):
             self.add_details(msg)
             return None
 
-        await self.sse_stream.send_chars("\n\n## My Plan for Your Request\n")
+        # no heading of its own: the UI titles the plan's section, the same way
+        # it titles every step after it
         await self.sse_stream.send_mermaid(diagram)
         self.result.diagram = diagram
         return diagram

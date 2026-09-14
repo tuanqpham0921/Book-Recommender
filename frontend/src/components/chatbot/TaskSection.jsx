@@ -55,7 +55,8 @@ function TaskDetails({ details }) {
 }
 
 /**
- * One executed node, rendered as a collapsible step in the task list.
+ * One executed node, rendered as a collapsible step in the task list. The
+ * plan diagram borrows it too, so it reads as the list's first step.
  *
  * The header is the planner's instruction for the step, beside the count the
  * node reported — the point of counts-first

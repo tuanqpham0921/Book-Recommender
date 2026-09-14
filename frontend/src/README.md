@@ -10,7 +10,7 @@ mounted once visited.
 |---|---|
 | `api.js` | **The only backend surface.** Uses `VITE_API_URL`; wraps fetch with a 120s timeout. Note: `stopChatStream`, `getTaskPlanDiagram`, and `getRecommendedBooks` are dead/unwired (docs/backlog.md) |
 | `components/ChatBot.jsx` | Chat view: sends messages, consumes the SSE stream, builds ordered response sections (`text`/`books`/`diagram`/`error`/`task`) in `use-immer` state |
-| `components/chatbot/` | `ChatInput`, `ChatMessages` (react-markdown + remark-gfm rendering), `TaskSection` (one collapsible executed node) |
+| `components/chatbot/` | `ChatInput`, `ChatMessages` (react-markdown + remark-gfm rendering), `TaskSection` (one collapsible step: an executed node, or the plan diagram) |
 | `components/MermaidDiagram.jsx` | Renders the task-plan diagram (`securityLevel: 'strict'`, pan/zoom via `@panzoom/panzoom`); shared with the review page |
 | `components/book/` | `BookCard`, `BookCover`, `BookDetailModal`, `BooksGrid` |
 | `pages/ChatReviewPage.jsx` | Review queue over recorded chat runs: expand a run → goals, goal diagram, raw envelopes; file one review per run (`PUT /feedback/review`). The diagram is read out of the `planner` JSONB envelope (`output.diagram`), not the promoted `mermaid` column. The second "parsed arguments" diagram was dropped on 2026-08-10 when PlanJane became the only backend renderer — it had also been reading the wrong envelope, so it never displayed |
@@ -38,7 +38,9 @@ inside that task's own `sections` list (`openContainer()` in `ChatBot.jsx`)
 rather than landing at the top level. That is the one level of nesting in the
 tree — a task holds text and books, never another task — so `renderSection()`
 in `ChatMessages.jsx` recurses exactly once. The plan diagram is streamed
-before any task opens, which is why it stays outside them.
+before any task opens, which is why it stays outside them — though it renders
+*as* one, a `TaskSection` titled by the frontend (PlanJane sends no heading),
+so the plan reads as the first step of the list.
 
 The pair is emitted by `TaskRunnerWorkflow`, not by individual executors, and
 closed in a `finally` — a node that raises still closes its section.

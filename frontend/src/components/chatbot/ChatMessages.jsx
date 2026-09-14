@@ -55,14 +55,14 @@ function renderSection(section, responseId, sectionIndex) {
         );
     }
 
-    // Diagram section
+    // Diagram section — the plan, framed as the first step of the task list
     if (section.type === 'diagram' && section.mermaid) {
         return (
-            <Suspense key={key} fallback={<MermaidLoading />}>
-                <div className="message-bubble response">
-                    <MermaidDiagram chart={section.mermaid} className="w-full" />
-                </div>
-            </Suspense>
+            <TaskSection key={key} section={section}>
+                <Suspense fallback={<MermaidLoading />}>
+                    <MermaidDiagram chart={section.mermaid} />
+                </Suspense>
+            </TaskSection>
         );
     }
 

@@ -7,6 +7,9 @@ function MermaidDiagram({ chart }) {
     const lastChartRef = useRef('')
     const panzoomRef = useRef(null) // { instance, handler } of the active panzoom
     const [isLoading, setIsLoading] = useState(false)
+    // Reset only shows once the view has moved — at rest it would sit on top
+    // of whichever box lands in the corner
+    const [moved, setMoved] = useState(false)
 
     useEffect(() => {
         mermaid.initialize({
@@ -80,6 +83,12 @@ function MermaidDiagram({ chart }) {
                             canvas: true,   // bind drag to the container (svg's parent),
                                             // not just the svg's own bounding box
                         });
+                        // fires on every pan, zoom and reset, so the button
+                        // hides itself again once the view is back at rest
+                        svgElement.addEventListener("panzoomchange", (event) => {
+                            const { x, y, scale } = event.detail
+                            setMoved(x !== 0 || y !== 0 || scale !== 1)
+                        })
 
                         // on the container so the whole framed area zooms the
                         // diagram; zoomWithWheel preventDefaults, which also
@@ -133,14 +142,16 @@ function MermaidDiagram({ chart }) {
     return (
         <div className="mermaid-container relative">
 
-            <button
-                type="button"
-                onClick={() => panzoomRef.current?.instance.reset()}
-                title="Reset view"
-                className="absolute bottom-2 right-2 z-10 px-2 py-1 rounded-md text-sm bg-[var(--bg-primary)]/80 text-[var(--text-inactive)] hover:text-[var(--text-active)] hover:bg-[var(--bg-primary)] transition-colors"
-            >
-                ↺ Reset
-            </button>
+            {moved && (
+                <button
+                    type="button"
+                    onClick={() => panzoomRef.current?.instance.reset()}
+                    title="Reset view"
+                    className="absolute bottom-2 right-2 z-10 px-2 py-1 rounded-md text-sm bg-[var(--bg-primary)]/80 text-[var(--text-inactive)] hover:text-[var(--text-active)] hover:bg-[var(--bg-primary)] transition-colors"
+                >
+                    ↺ Reset
+                </button>
+            )}
 
             {isLoading && (
                 <div className="loading-wrapper">
