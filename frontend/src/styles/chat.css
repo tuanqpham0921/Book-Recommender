@@ -91,6 +91,17 @@
   }
 }
 
+/* A row of cards in a reply starts where the text beside it does: the bubble's
+   12px margin plus its 12px padding. The row's own p-4 would leave the cards
+   8px left of the text. */
+@utility book-cards-container {
+  margin-left: 12px;
+
+  & > div {
+    padding-inline: 12px;
+  }
+}
+
 /* Task sections — one collapsible step per executed node. The header is the
    count the node reported; the body is the sample it fetched to back it up. */
 @utility task-section {
@@ -170,6 +181,7 @@
   }
 
   & .book-cards-container {
+    margin-left: 0;
     margin-bottom: 0;
 
     & > div {
