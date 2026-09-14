@@ -131,7 +131,7 @@ class SSEStream:
         details: dict[str, Any] | None = None,
     ):
         """Close a task section. `count` stamps the header and `details`
-        fills the block under the cards, both after the fact — the section
+        fills the block above the cards, both after the fact — the section
         opens before the node has parsed, counted or spent anything."""
         await self.send(
             event_type="task.end",

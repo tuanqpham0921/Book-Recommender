@@ -178,8 +178,8 @@
   }
 }
 
-/* The block under a task's cards — instruction, parsed args, SQL, cost. Muted
-   and small: it is how the step was done, not the answer. */
+/* The block at the top of a task's body — instruction, parsed args, SQL, cost.
+   Muted and small: it is how the step was done, not the answer. */
 @utility task-details {
   display: flex;
   flex-direction: column;
@@ -222,4 +222,15 @@
 
 @utility task-details-error {
   color: var(--accent-negative);
+}
+
+/* Heads a task's cards so they read as a sample of the count, not the answer.
+   Set like the details box's labels, so the body reads as two labelled parts. */
+@utility task-preview-label {
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }

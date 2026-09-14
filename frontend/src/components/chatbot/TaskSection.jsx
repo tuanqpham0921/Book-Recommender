@@ -17,7 +17,7 @@ function DetailRow({ label, className = '', children }) {
 }
 
 /**
- * How the step was done, under its cards: the planner's instruction, the
+ * How the step was done, above its preview: the planner's instruction, the
  * arguments the node parsed out of it, the SQL it counted with, and what it
  * cost. Arrives on task.end with empty keys already dropped, so every row is
  * optional.
@@ -61,7 +61,8 @@ function TaskDetails({ details }) {
  * The header carries the count the node reported — the point of counts-first
  * retrieval is that "1,240 matched" is known before any rows are fetched, so
  * the number is the headline and the book cards inside are a sample of it.
- * The body is what the node streamed (its line and cards), then its details.
+ * The body is its details, then what the node streamed (its line and cards)
+ * under a Preview label that says how much of the match the cards are.
  *
  * Open/closed follows the stream by default (expanded while running, folded on
  * completion) until the user clicks, after which their choice sticks.
@@ -76,6 +77,15 @@ function TaskSection({ section, children }) {
 
     const collapsible = section.collapsible !== false;
     const isOpen = collapsible ? open : true;
+
+    // cards the node streamed — the count arrives on task.end, so until then
+    // the label can only say it is a preview
+    const shown = (section.sections || [])
+        .filter(child => child.type === 'books')
+        .reduce((total, child) => total + child.books.length, 0);
+    const previewLabel = section.count != null
+        ? `Preview · ${shown} of ${section.count.toLocaleString()} books`
+        : 'Preview';
 
     const toggle = () => {
         if (!collapsible) return;
@@ -115,8 +125,9 @@ function TaskSection({ section, children }) {
 
             {isOpen && (
                 <div className="task-section-body">
-                    {children}
                     {section.details && <TaskDetails details={section.details} />}
+                    {shown > 0 && <div className="ml-2 mt-5 task-preview-label">{previewLabel}</div>}
+                    {children}
                 </div>
             )}
         </div>

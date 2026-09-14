@@ -47,8 +47,9 @@ before the node knows how many books it matched, and `details` — the goal's
 `instruction`, the `args` its node parsed, its `sql`, `error_message`,
 `duration` and token counts (`task_details()` in
 `backend/app/orchestration/task_runner.py`, empty keys dropped). `TaskSection`
-renders them after the task's own sections, so a step reads: its line, its
-cards, then how it was done. Sections open expanded and fold
+renders them before the task's own sections, which sit under a `Preview · N of
+M books` label when there are cards — so a step reads: how it was done, then
+the sample of what it matched. Sections open expanded and fold
 themselves on `task.end`, so the finished turn shows the answer rather than the
 work; `collapsible: false` stays open, and a user click pins the state.
 

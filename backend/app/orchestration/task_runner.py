@@ -108,7 +108,7 @@ def _root_error(step: OperationResult) -> RuntimeErrorInfo | None:
 
 
 def task_details(goal: SystemGoal, step: OperationResult | None) -> dict[str, Any]:
-    """What a task section shows beneath its cards: the goal's instruction,
+    """What a task section shows above its cards: the goal's instruction,
     the arguments its node parsed, the SQL it counted with, and what it cost.
 
     Read off the envelope rather than a finished `TaskResult`, whose output is

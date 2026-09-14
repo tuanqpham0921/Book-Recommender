@@ -259,7 +259,7 @@ function ChatBot() {
                             task.count = event.data.count ?? null;
                             task.ok = event.data.ok !== false;
                             // instruction, parsed args, SQL, cost — rendered
-                            // under the task's cards
+                            // above the task's preview
                             task.details = event.data.details ?? null;
                             // stay open when there's nothing to fold away, or
                             // when this node owns the answer
