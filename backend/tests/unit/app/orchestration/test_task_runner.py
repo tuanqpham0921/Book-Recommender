@@ -58,16 +58,9 @@ class _Input(NodeInput):
 
 
 class _OkExecutor(AppWorkflow[_Output]):
-    ui_section_title = "Looking up a title"
-
     async def run(self, node_input: _Input) -> None:
         self.result.num_books = 7
         self.result.saw_anchors = list(node_input.anchors)
-        self.finalize_result(ok=True)
-
-
-class _UntitledExecutor(AppWorkflow[_Output]):
-    async def run(self, node_input: _Input) -> None:
         self.finalize_result(ok=True)
 
 
@@ -302,24 +295,17 @@ class TestUnrunnableNodes:
 
 
 class TestTaskSectionBracketing:
-    async def test_opens_and_closes_the_section_with_the_node_title(
+    async def test_opens_and_closes_the_section_titled_by_the_instruction(
         self, runner, events
     ):
         await drive(runner, [_goal()], _spec(_OkExecutor))
 
         assert of_type(events, "task.start") == [
-            {"task_id": "1", "title": "Looking up a title", "collapsible": True}
+            {"task_id": "1", "title": _goal().instruction, "collapsible": True}
         ]
         assert closed_sections(events) == [
             {"task_id": "1", "count": 7, "ok": True}
         ]
-
-    async def test_falls_back_to_the_node_type_name_when_untitled(
-        self, runner, events
-    ):
-        await drive(runner, [_goal()], _spec(_UntitledExecutor))
-
-        assert of_type(events, "task.start")[0]["title"] == "Retrieve by Title"
 
     async def test_a_failing_node_still_closes_its_section(self, runner, events):
         await drive(runner, [_goal()], _spec(_FailingExecutor))
@@ -355,8 +341,8 @@ class TestTaskSectionBracketing:
         assert closed_sections(events) == [
             {"task_id": "1", "count": None, "ok": False}
         ]
-        # no envelope to read, so the instruction is all there is to show
-        assert details(events) == {"instruction": _goal().instruction}
+        # no envelope to read, so there is nothing to show
+        assert details(events) == {}
 
 
 class _Args(BaseModel):
@@ -389,15 +375,14 @@ class _ParsesThenExplodesExecutor(AppWorkflow[_ParsingOutput]):
 
 
 class TestTaskSectionDetails:
-    """What the section shows under its cards, carried on `task.end`."""
+    """What the section shows above its cards, carried on `task.end`."""
 
-    async def test_carries_the_instruction_parsed_args_sql_and_cost(
-        self, runner, events
-    ):
+    async def test_carries_the_parsed_args_sql_and_cost(self, runner, events):
         await drive(runner, [_goal()], _spec(_ParsingExecutor))
 
         shown = details(events)
-        assert shown["instruction"] == _goal().instruction
+        # already the section's title, so not repeated
+        assert "instruction" not in shown
         # the unfilled `author` is dropped rather than shown as null
         assert shown["args"] == {"title": "Dune"}
         assert shown["sql"] == "SELECT count(*) FROM books"

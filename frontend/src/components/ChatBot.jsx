@@ -67,7 +67,7 @@ function ChatBot() {
                 // { id: ..., type: 'text', content: 'Analyzing Dune...' }
                 // { id: ..., type: 'books', books: [...] }
                 // { id: ..., type: 'diagram', mermaid: 'graph TD; ...' }
-                // { id: ..., type: 'task', title: 'Found books by title',
+                // { id: ..., type: 'task', title: 'Find books by Stephen King',
                 //   count: 4, open: true, closed: false, sections: [...] }
                 //   ^ the one nesting section: text/books streamed between a
                 //     task.start and its task.end land in its own list
@@ -258,8 +258,8 @@ function ChatBot() {
                             task.closed = true;
                             task.count = event.data.count ?? null;
                             task.ok = event.data.ok !== false;
-                            // instruction, parsed args, SQL, cost — rendered
-                            // above the task's preview
+                            // parsed args, SQL, cost — rendered above the
+                            // task's preview
                             task.details = event.data.details ?? null;
                             // stay open when there's nothing to fold away, or
                             // when this node owns the answer

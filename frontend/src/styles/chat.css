@@ -178,8 +178,8 @@
   }
 }
 
-/* The block at the top of a task's body — instruction, parsed args, SQL, cost.
-   Muted and small: it is how the step was done, not the answer. */
+/* The block at the top of a task's body — parsed args, SQL, cost. Muted and
+   small: it is how the step was done, not the answer. */
 @utility task-details {
   display: flex;
   flex-direction: column;

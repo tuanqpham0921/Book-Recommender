@@ -37,7 +37,6 @@ def build_arg_parser_request(instruction: str) -> OpenAIParserRequest:
 
 class FindByTitleExecutor(BookWorkflow[FindByTitleOutput]):
     ui_loading_message = "Getting Book By Title..."
-    ui_section_title = "Found books by title"
 
     async def run(self, node_input: FindByTitleInput) -> None:
         """Count the matching titles and hand the query downstream — not the set.

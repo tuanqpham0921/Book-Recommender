@@ -148,7 +148,6 @@ def build_arg_parser_request(instruction: str) -> OpenAIParserRequest:
 
 class FindByNumericTraitsExecutor(BookWorkflow[FindByNumericTraitsOutput]):
     ui_loading_message = "Getting Books By Traits..."
-    ui_section_title = "Found books by traits"
 
     async def run(self, node_input: FindByNumericTraitsInput) -> None:
         """Count the books inside the bounds and hand the query downstream.

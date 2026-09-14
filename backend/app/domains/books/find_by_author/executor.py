@@ -35,7 +35,6 @@ def build_arg_parser_request(instruction: str) -> OpenAIParserRequest:
 
 class FindByAuthorExecutor(BookWorkflow[FindByAuthorOutput]):
     ui_loading_message = "Getting Books By Author..."
-    ui_section_title = "Found books by author"
 
     async def run(self, node_input: FindByAuthorInput) -> None:
         """Count the author's books and hand the query downstream — not the set.

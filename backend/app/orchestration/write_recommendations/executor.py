@@ -54,7 +54,6 @@ CARD_DELAY = 0.03
 
 class GenerateRecommendationsExecutor(BookReaderWorkflow[RecommendationsOutput]):
     ui_loading_message = "Writing recommendations..."
-    ui_section_title = "Recommendations"
     # the reply is the point of the turn — never folded away
     ui_section_collapsible = False
 

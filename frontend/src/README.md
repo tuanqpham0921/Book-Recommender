@@ -41,10 +41,11 @@ in `ChatMessages.jsx` recurses exactly once. The plan diagram is streamed
 before any task opens, which is why it stays outside them.
 
 The pair is emitted by `TaskRunnerWorkflow`, not by individual executors, and
-closed in a `finally` — a node that raises still closes its section. `task.end`
-carries the `count` that stamps the header after the fact, since a section opens
-before the node knows how many books it matched, and `details` — the goal's
-`instruction`, the `args` its node parsed, its `sql`, `error_message`,
+closed in a `finally` — a node that raises still closes its section.
+`task.start`'s `title` is the goal's instruction, the planner's line for that
+step. `task.end` carries the `count` that stamps the header after the fact,
+since a section opens before the node knows how many books it matched, and
+`details` — the `args` its node parsed, its `sql`, `error_message`,
 `duration` and token counts (`task_details()` in
 `backend/app/orchestration/task_runner.py`, empty keys dropped). `TaskSection`
 renders them before the task's own sections, which sit under a `Preview · N of

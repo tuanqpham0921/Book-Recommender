@@ -108,17 +108,18 @@ def _root_error(step: OperationResult) -> RuntimeErrorInfo | None:
 
 
 def task_details(goal: SystemGoal, step: OperationResult | None) -> dict[str, Any]:
-    """What a task section shows above its cards: the goal's instruction,
-    the arguments its node parsed, the SQL it counted with, and what it cost.
+    """What a task section shows above its cards: the arguments its node
+    parsed, the SQL it counted with, and what it cost. The goal's instruction
+    is not repeated here — it is the section's title, sent on `task.start`.
 
     Read off the envelope rather than a finished `TaskResult`, whose output is
     a `FailedGoalOutput` for a goal that failed — and the arguments a node
     parsed before failing are the part most worth seeing. `getattr` for the
     same reason as the count: every parsing slice types its own `args`, and the
     runner stays out of the book domain. No envelope (a cancelled turn) leaves
-    the instruction alone.
+    nothing to show.
     """
-    details: dict[str, Any] = {"instruction": goal.instruction}
+    details: dict[str, Any] = {}
     if step is not None and step.result is not None:
         output = step.result
         args = getattr(output, "args", None)
@@ -369,12 +370,12 @@ class TaskRunnerWorkflow(AppWorkflow[TaskRunnerOutput]):
         the recorded conversation shows a node parsing arguments out of
         nowhere.
         """
-        executor_cls = type(executor)
         await self.sse_stream.send_task_start(
             task_id=goal.id,
-            title=executor_cls.ui_section_title
-            or goal.target_node_type.value.replace("_", " "),
-            collapsible=executor_cls.ui_section_collapsible,
+            # the planner's brief names this step's own subject ("Find books by
+            # Stephen King"), which a per-node title could only paraphrase
+            title=goal.instruction,
+            collapsible=type(executor).ui_section_collapsible,
         )
         # An `AssistantMessage` because the planner wrote it — the same shape
         # every slice already ships its instruction to its argument parser as

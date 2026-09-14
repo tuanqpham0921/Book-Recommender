@@ -17,14 +17,14 @@ function DetailRow({ label, className = '', children }) {
 }
 
 /**
- * How the step was done, above its preview: the planner's instruction, the
- * arguments the node parsed out of it, the SQL it counted with, and what it
- * cost. Arrives on task.end with empty keys already dropped, so every row is
- * optional.
+ * How the step was done, above its preview: the arguments the node parsed out
+ * of its instruction (which is the section's title), the SQL it counted with,
+ * and what it cost. Arrives on task.end with empty keys already dropped, so
+ * every row is optional.
  */
 function TaskDetails({ details }) {
     const {
-        instruction, args, sql, error_message,
+        args, sql, error_message,
         duration, total_tokens, input_tokens, output_tokens,
     } = details;
 
@@ -36,7 +36,6 @@ function TaskDetails({ details }) {
 
     return (
         <dl className="task-details">
-            {instruction && <DetailRow label="Instruction">{instruction}</DetailRow>}
             {args && (
                 <DetailRow label="Arguments">
                     {Object.entries(args).map(([key, value]) => (
@@ -58,7 +57,8 @@ function TaskDetails({ details }) {
 /**
  * One executed node, rendered as a collapsible step in the task list.
  *
- * The header carries the count the node reported — the point of counts-first
+ * The header is the planner's instruction for the step, beside the count the
+ * node reported — the point of counts-first
  * retrieval is that "1,240 matched" is known before any rows are fetched, so
  * the number is the headline and the book cards inside are a sample of it.
  * The body is its details, then what the node streamed (its line and cards)
@@ -125,7 +125,10 @@ function TaskSection({ section, children }) {
 
             {isOpen && (
                 <div className="task-section-body">
-                    {section.details && <TaskDetails details={section.details} />}
+                    {/* a cancelled step closes with nothing to show */}
+                    {section.details && Object.keys(section.details).length > 0 && (
+                        <TaskDetails details={section.details} />
+                    )}
                     {shown > 0 && <div className="ml-2 mt-5 task-preview-label">{previewLabel}</div>}
                     {children}
                 </div>

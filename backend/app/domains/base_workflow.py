@@ -90,14 +90,11 @@ class AppWorkflow(Workflow[OutputT], ABC):
 
     ui_loading_message = "Working..."
 
-    # How this node's step is titled in the UI's task list; falls back to the
-    # node type name. PLAIN CLASS ATTRIBUTES ON PURPOSE — task_runner.py reads
-    # these off the *class*, and a @property would silently title every section
-    # "<property object at 0x…>" rather than raise.
-    ui_section_title: str | None = None
     # A generation node owns the reply, so its section is not folded away.
     # Every other node's is: its cards are working material, and the prose
-    # written from them is what the user is meant to read.
+    # written from them is what the user is meant to read. A PLAIN CLASS
+    # ATTRIBUTE ON PURPOSE — task_runner.py reads it off the *class*, and a
+    # @property there is always truthy rather than an error.
     ui_section_collapsible: bool = True
 
     @classmethod
