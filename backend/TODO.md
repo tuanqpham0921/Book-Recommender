@@ -61,7 +61,9 @@ Historical cleanup logs live in git history (`git log -p -- backend/TODO.md`).
 
 --------------------------
 
-1. get the args format to the front end for each task
+0. fix the session bookstore (should be session factory)
+00. merge this or create a new branch (clean up stuff)
+
 2. format the task runner better
 3. fix the ingestion thing with the ISBN
 4. add limit to task and such
