@@ -1,4 +1,3 @@
-import os
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,22 +69,3 @@ app.include_router(chat_router)
 app.include_router(session_router)
 app.include_router(chat_run_router)
 app.include_router(feedback_router)
-
-# Cloud Run entry point
-if __name__ == "__main__":
-    import uvicorn
-    
-    # Cloud Run provides PORT environment variable
-    port = int(os.environ.get("PORT", 8080))
-    host = os.environ.get("HOST", "0.0.0.0")
-    
-    logger.info(f"🌐 Starting server on {host}:{port}")
-    
-    uvicorn.run(
-        "app.main:app",
-        host=host,
-        port=port,
-        reload=False,  # Never use reload in production
-        access_log=True,
-        log_level="info"
-    )

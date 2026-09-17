@@ -6,6 +6,7 @@ authors = ["Tuan Pham <tuanqpham0921@gmail.com>"]
 packages = [
     { include = "airglider" },
     { include = "app" },
+    { include = "clients" },
     { include = "common" },
     { include = "db" },
     { include = "config" }
@@ -13,10 +14,9 @@ packages = [
 
 [tool.pyright]
 include = ["airglider", "app", "common", "clients", "config", "db"]
-# db/ingestion + db/readiness are legacy (old Workflow/@task patterns), reworked later
-exclude = ["**/__pycache__", "db/ingestion", "db/readiness.py"]
+exclude = ["**/__pycache__"]
 typeCheckingMode = "basic"
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -59,7 +59,3 @@ pyright = "^1.1.411"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-ingestion = "db.ingestion.main:main"
-app = "app.main:main"

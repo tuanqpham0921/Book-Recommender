@@ -1,0 +1,29 @@
+# What `gcloud run deploy --source` uploads to Cloud Build. Mirrors
+# .dockerignore, plus the Dockerfile itself — Cloud Build needs it inside the
+# tarball, whereas local `docker build` reads it out of band.
+#
+# Leading slashes are load-bearing: this file uses gitignore semantics, where a
+# bare `*` re-matches nested paths and would cancel every negation below.
+#
+# Without this file gcloud uploads ~3,900 files (~220MB) per deploy, and if it
+# is absent while .gitignore exists gcloud writes a generated one into the repo.
+/*
+
+!/Dockerfile
+!/.dockerignore
+!/pyproject.toml
+!/poetry.lock
+!/airglider/
+!/app/
+!/clients/
+!/common/
+!/config/
+!/db/
+
+# never upload real secrets
+config/.env
+config/.env.*
+
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/

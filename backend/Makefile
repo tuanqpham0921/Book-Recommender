@@ -20,11 +20,6 @@ install:
 dev:
 	LOG_LEVEL=INFO poetry run uvicorn app.main:app --reload --reload-include "*.py" --reload-include "*.env"
 
-# run the ingestion script
-.PHONY: ingestion
-ingestion:
-	LOG_LEVEL=INFO poetry run python -m db.ingestion.main
-
 # expose the local API (make dev) to the internet via ngrok.
 # copy the printed https://*.ngrok-free.dev URL into
 # `make -C ../frontend deploy-tunnel URL=<that url>`

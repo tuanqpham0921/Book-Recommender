@@ -1,0 +1,24 @@
+# What `docker build` may see. The Dockerfile COPYs an explicit whitelist, so
+# this is defence in depth plus a small build context.
+#
+# Docker's matcher does NOT cross `/`, so a bare `*` with `!name` negations
+# works here. .gcloudignore next door uses gitignore semantics and needs
+# leading slashes instead — the two files are not interchangeable.
+*
+
+!pyproject.toml
+!poetry.lock
+!airglider
+!app
+!clients
+!common
+!config
+!db
+
+# never bake real secrets into the image (re-excluded after !config above)
+config/.env
+config/.env.*
+
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
