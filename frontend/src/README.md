@@ -1,0 +1,71 @@
+# frontend/src
+
+Single-page React app (React 19 + Vite). All routes (`/`, `/blog`, `/review`) render
+`BookRecommenderPage`, which maps the path to a view; views are lazy-loaded and stay
+mounted once visited.
+
+## Map
+
+| Path | What it is |
+|---|---|
+| `api.js` | **The only backend surface.** Uses `VITE_API_URL`; wraps fetch with a 120s timeout. Note: `stopChatStream`, `getTaskPlanDiagram`, and `getRecommendedBooks` are dead/unwired (docs/backlog.md) |
+| `components/ChatBot.jsx` | Chat view: sends messages, consumes the SSE stream, builds ordered response sections (`text`/`books`/`diagram`/`error`/`task`) in `use-immer` state |
+| `components/chatbot/` | `ChatInput`, `ChatMessages` (react-markdown + remark-gfm rendering), `TaskSection` (one collapsible step: an executed node, or the plan diagram) |
+| `components/MermaidDiagram.jsx` | Renders the task-plan diagram (`securityLevel: 'strict'`, pan/zoom via `@panzoom/panzoom`); shared with the review page |
+| `components/book/` | `BookCard`, `BookCover`, `BookDetailModal`, `BooksGrid` |
+| `pages/ChatReviewPage.jsx` | Review queue over recorded chat runs: expand a run → goals, goal diagram, raw envelopes; file one review per run (`PUT /feedback/review`). The diagram is read out of the `planner` JSONB envelope (`output.diagram`), not the promoted `mermaid` column. The second "parsed arguments" diagram was dropped on 2026-08-10 when PlanJane became the only backend renderer — it had also been reading the wrong envelope, so it never displayed |
+| `pages/BookRecommenderPage.jsx` | Shell: header, view switching |
+| `design-system/` | Button, Badge, Modal, Dropdown, IconButton, ColorModeToggle, … |
+| `hooks/`, `utils/`, `styles/`, `data/` | Support code; split CSS lives in `styles/` |
+
+## SSE events the chat handles
+
+`chat.id`, `ui.loading`, `content.delta`, `book_card`, `mermaid.diagram`,
+`task.start`, `task.end`, `step.complete`, `error`, `complete` — handled in
+`ChatBot.jsx` via `parseSSEStream` from `utils/`.
+
+**`book_card.data` is pinned by `BookOut`** (`backend/app/api/schemas/external.py`):
+`isbn13`, `title`, `authors`, `categories`, `published_year`, `num_pages`,
+`average_rating`, `description`, `thumbnail`. That is the whole payload — the
+backend's internal `Book` model carries more catalog columns, and they are
+dropped at this boundary rather than shipped and ignored. A component reading
+a field outside that list gets `undefined`, so adding one means adding it to
+`BookOut` too.
+
+**Sections are flat except for tasks.** `task.start` / `task.end` bracket one
+executed node, and `content.delta` / `book_card` arriving between them nest
+inside that task's own `sections` list (`openContainer()` in `ChatBot.jsx`)
+rather than landing at the top level. That is the one level of nesting in the
+tree — a task holds text and books, never another task — so `renderSection()`
+in `ChatMessages.jsx` recurses exactly once. The plan diagram is streamed
+before any task opens, which is why it stays outside them — though it renders
+*as* one, a `TaskSection` titled by the frontend (PlanJane sends no heading),
+so the plan reads as the first step of the list.
+
+The pair is emitted by `TaskRunnerWorkflow`, not by individual executors, and
+closed in a `finally` — a node that raises still closes its section.
+`task.start`'s `title` is the goal's instruction, the planner's line for that
+step. `task.end` carries the `count` that stamps the header after the fact,
+since a section opens before the node knows how many books it matched, and
+`details` — the `args` its node parsed, its `sql`, `error_message`,
+`duration` and token counts (`task_details()` in
+`backend/app/orchestration/task_runner.py`, empty keys dropped). `TaskSection`
+renders them before the task's own sections, which sit under a `Preview · N of
+M books` label when there are cards — so a step reads: how it was done, then
+the sample of what it matched. Sections open expanded and fold
+themselves on `task.end`, so the finished turn shows the answer rather than the
+work; `collapsible: false` stays open, and a user click pins the state.
+
+**One section per turn sets `collapsible: false`: the generation node's.** Every
+other node's cards are working material, and the prose written from them is what
+the turn is for — so the recommendation section folds like the rest now that
+something downstream writes a reply about it. A turn whose plan has no
+generation goal (a plain lookup) folds everything, which is a real gap rather
+than a styling choice: see `backend/app/domains/books/write_recommendations/`.
+
+## Conventions
+
+- Complex nested state uses `use-immer`.
+- Review categories in `ChatReviewPage.jsx` must match the backend's
+  `FeedbackCategory` literal (`backend/app/api/schemas/external.py`).
+- Reduce features rather than add them — V1 direction (docs/roadmap.md).

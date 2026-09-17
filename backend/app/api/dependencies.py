@@ -1,11 +1,14 @@
 import logging
-from typing import Any, AsyncGenerator
+from typing import AsyncGenerator
 
 from fastapi import Request, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.stores.book_store import BookStore
+from db.stores.chat_run_store import ChatRunStore
+from db.stores.feedback_store import FeedbackStore
 from clients import OpenAIClient
+from app.common.sse_stream import SSEStream
 from app.orchestration.orchestrator import Orchestrator
 
 logger = logging.getLogger(__name__)
@@ -25,15 +28,6 @@ def get_orchestrator(request: Request) -> Orchestrator:
     if orchestrator is None:
         raise HTTPException(status_code=503, detail="Orchestrator not available")
     return orchestrator
-
-
-def get_sqlalchemy_engine(request: Request):
-    """Get SQLAlchemy engine from app state"""
-    engine = getattr(request.app.state, "sqlalchemy_engine", None)
-    if engine is None:
-        raise HTTPException(status_code=503, detail="SQLAlchemy engine not available")
-    return engine
-
 
 def get_sqlalchemy_session_factory(request: Request):
     """Get SQLAlchemy session maker"""
@@ -66,31 +60,56 @@ async def get_book_store(
     return BookStore(session)
 
 
+async def get_chat_run_store(
+    session: AsyncSession = Depends(get_sqlalchemy_session),
+) -> ChatRunStore:
+    """Get ChatRunStore instance with injected session."""
+    return ChatRunStore(session)
+
+
+async def get_feedback_store(
+    session: AsyncSession = Depends(get_sqlalchemy_session),
+) -> FeedbackStore:
+    """Get FeedbackStore instance with injected session."""
+    return FeedbackStore(session)
+
+
+def get_app_env(request: Request) -> str:
+    """Get the app environment"""
+    app_env = getattr(request.app.state, "app_env", None)
+    if app_env is None:
+        raise HTTPException(status_code=503, detail="App environment not available")
+    return app_env
+
+
+def get_sse_stream() -> SSEStream:
+    return SSEStream()
+
 async def get_request_context_factory(
-    # state_manager: StateManager = Depends(get_state_manager),
     llm_client=Depends(get_openai_client),
-    session=Depends(get_sqlalchemy_session),
     book_store=Depends(get_book_store),
+    sse_stream=Depends(get_sse_stream),
+    app_env: str = Depends(get_app_env),
+    session_factory=Depends(get_sqlalchemy_session_factory),
 ):
     """Factory to create request contexts with runtime arguments."""
+    from clients.messages import UserMessage
+    from app.common.request_context import RequestContext
 
-    def create_context(session_id: str, user_message, sse_stream=None):
-        from app.orchestration.request_context import RequestContext
-
+    async def create_context(session_id: str, user_message: UserMessage):
+        # The *widest* context, always — this runs before there is a plan, so
+        # it cannot know which nodes will run, and wiring per-node views here
+        # would make this module import every slice. The task runner narrows
+        # it at dispatch, via NodeSpec.context.
         return RequestContext(
+            app_env=app_env,
             session_id=session_id,
             user_message=user_message,
             llm_client=llm_client,
-            book_store=book_store,
+            # keyed by class; a domain's context narrows to its own store
+            stores={BookStore: book_store},
             sse_stream=sse_stream,
+            session_factory=session_factory,
         )
 
     return create_context
-
-
-def get_core_services(request: Request) -> tuple[Any, Any, OpenAIClient, Orchestrator]:
-    """Get all core services at once"""
-    return (
-        get_openai_client(request),
-        get_orchestrator(request),
-    )

@@ -1,0 +1,5 @@
+' OR 1=1 --
+wild card %
+
+might need the args saver after all
+    * to make sure when you load it back in

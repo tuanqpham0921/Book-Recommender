@@ -4,17 +4,31 @@ version = "0.2.0"
 description = ""
 authors = ["Tuan Pham <tuanqpham0921@gmail.com>"]
 packages = [
+    { include = "airglider" },
     { include = "app" },
     { include = "common" },
     { include = "db" },
-    { include = "config" },
-    { include = "ingestion" }
+    { include = "config" }
 ]
+
+[tool.pyright]
+include = ["airglider", "app", "common", "clients", "config", "db"]
+# db/ingestion + db/readiness are legacy (old Workflow/@task patterns), reworked later
+exclude = ["**/__pycache__", "db/ingestion", "db/readiness.py"]
+typeCheckingMode = "basic"
+pythonVersion = "3.11"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 log_cli_level = "INFO"
 log_cli = true
+# airglider ships its tests beside its source (they move with the package when
+# it is extracted); the app's own suites stay under tests/
+testpaths = ["tests", "airglider/tests"]
+markers = [
+    "unit: fast, no I/O",
+    "integration: cross-layer tests (whole API routes in-process; faked stores, no services)",
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -38,12 +52,14 @@ pytest-asyncio = "^0.23.0"
 pytest-cov = "^7.0.0"
 jupyter = "^1.1.1"
 notebook = "^7.4.7"
+ruff = "^0.15.20"
+black = "^26.5.1"
+pyright = "^1.1.411"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-load = "app.utils.loader:main"
-get-loader-stats = "app.utils.get_loader_stats:main"
-export = "app.utils.export:main"
+ingestion = "db.ingestion.main:main"
+app = "app.main:main"

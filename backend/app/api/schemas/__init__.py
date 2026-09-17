@@ -1,3 +1,17 @@
-from .external import *
+from .external import (
+    BookOut,
+    ChatIn,
+    SessionOut,
+    HealthStatus,
+    ReviewCommentIn,
+    ReviewIn,
+)
 
-__all__ = ["BooksOut", "ChatIn", "SessionOut", "HealthStatus"]
+__all__ = [
+    "BookOut",
+    "ChatIn",
+    "SessionOut",
+    "HealthStatus",
+    "ReviewCommentIn",
+    "ReviewIn",
+]

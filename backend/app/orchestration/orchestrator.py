@@ -1,408 +1,239 @@
-import json
-import logging
 import asyncio
+import logging
 import time
 
-from openai import pydantic_function_tool
-
-from clients import OpenAIRequest
 from app.common.sse_stream import SSEStream
-from app.orchestration.request_context import RequestContext
-from app.common.messages import AssistantMessage, ToolMessage, SystemMessage
+from app.common.request_context import RequestContext
 
-from app.pipeline import (
-    TaskPlan,
-    InitialParseNode,
-    InitialParseResult,
-    TaskGenerationNode,
-    BookClassificationResult,
-    BookClassificationNode,
+from app.domains.books.external import BookRequestContext
+from app.domains.node_input import NodeInput
+from app.orchestration.triage import TriageWorkflow
+from app.orchestration.task_runner import TaskRunnerInput, TaskRunnerWorkflow
+from app.orchestration.run_recorder import record_chat_run
+from app.orchestration.write_recommendations import (
+    GenerateRecommendationsExecutor,
+    RecommendationsInput,
+)
+from airglider import OperationResult, RuntimeErrorInfo
+
+from clients.messages import (
+    APIMessage,
 )
 
-from app.common.prompt_loader import format_prompt, load_prompt
-
-from app.domains.books.strategies import BOOK_STRAT_REGISTRY
-
-
 logger = logging.getLogger(__name__)
+
+SAVE_LOG_TIMEOUT = 60  # seconds
+CLOSE_SSE_STREAM_TIMEOUT = 10  # seconds
+CONVERSATION_TIMEOUT = 120  # seconds
 
 
 class Orchestrator:
     """Main orchestration engine for processing user queries through AI pipelines."""
 
     def __init__(self):
-        """Initialize the orchestrator."""
         pass
-
-    async def _handle_tool_call(
-        self, tool_calls, max_calls: int = 10, **extra_kwargs
-    ) -> list[ToolMessage]:
-        """Execute tool calls and return the results."""
-        results = []
-        for tool_call in tool_calls[:max_calls]:
-            try:
-
-                tool_name = tool_call.function.name
-                tool_id = tool_call.id
-                logger.info(f"🔧 Starting tool call: {tool_name} (id: {tool_id})")
-
-                raw_args = json.loads(tool_call.function.arguments)
-                tool_instance = tool_call.function.parsed_arguments
-
-                start = time.monotonic()
-                # logger.info(f"⚡ Executing {tool_name} with args: {raw_args}")
-                logger.info(f"⚡ Executing {tool_name}")
-
-                result = await tool_instance(**extra_kwargs)
-                elapsed = round(time.monotonic() - start, 2)
-
-                logger.info(f"✅ Tool {tool_name} completed successfully in {elapsed}s")
-
-                results.append(
-                    ToolMessage(
-                        name=tool_call.function.name,
-                        tool_call_id=tool_call.id,
-                        content=result,
-                        elapsed=elapsed,
-                    )
-                )
-            except json.JSONDecodeError as e:
-                logger.error(f"🛑 JSON parsing failed for tool {tool_name}: {e}")
-                continue
-            except Exception as e:
-                logger.error(
-                    f"🛑 Tool execution failed for {tool_name}: {e}", exc_info=True
-                )
-                continue
-
-        return results
-
-    async def _run_initial_step(self, request_context, sse_stream) -> str | None:
-        """Run the initial parsing step to determine if the query is in-scope."""
-
-        await sse_stream.send_ui_loading("Thinking...")
-
-        tool_name = InitialParseNode.__name__
-        tool = pydantic_function_tool(
-            InitialParseNode,
-            name=tool_name,
-            description=f"Fill the schema for {tool_name}",
-        )
-        tool_choice = {"type": "function", "function": {"name": tool_name}}
-        # Set current step for tracking
-        request_context.set_current_step("initial_parse")
-
-        # Use pipeline conversation for internal LLM calls
-        pipeline_messages = request_context.get_conversation_for_llm(
-            include_pipeline=True
-        )
-
-        prompt = load_prompt(prompt_path="pipeline/initial_system.txt")
-        req = OpenAIRequest(
-            system=SystemMessage(content=prompt),
-            messages=pipeline_messages,
-            tools=[tool],
-            tool_choice=tool_choice,
-            temperature=0.3,
-            top_p=0.8,
-        )
-        assistant_msg = await request_context.llm_client.execute(req)
-        # this shouldn't happen at all but raise to be safe
-        if not assistant_msg or not assistant_msg.tool_calls:
-            raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
-
-        # Add to pipeline conversation (internal)
-        request_context.add_message(assistant_msg)
-        tool_message = await self._handle_tool_call(
-            assistant_msg.tool_calls, max_calls=1
-        )
-
-        if not tool_message:
-            raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
-
-        # Add tool response to pipeline conversation
-        request_context.add_message(tool_message[0])
-
-        # Store the result for later use
-        parse_result = tool_message[0].content
-        request_context.set_step_result("initial_parse", parse_result)
-
-        no_in_domain_msg = tool_message[0].content.model_dump_json(
-            include={"small_talk", "out_of_scope", "continue_pipeline"}
-        )
-
-        prompt = load_prompt(prompt_path="pipeline/initial_parse_response.txt")
-        req = OpenAIRequest(
-            system=SystemMessage(content=prompt),
-            messages=[AssistantMessage(content=no_in_domain_msg)],
-            sse_stream=sse_stream,
-            temperature=0.7,
-            top_p=1.0,
-        )
-
-        response = await request_context.llm_client.execute(req)
-
-        await sse_stream.send_divider()
-
-        request_context.add_message(response)
-
-        return tool_message[0].content
-
-    async def _run_analyze_classification(
-        self,
-        request_context: RequestContext,
-        initial_parse_result: InitialParseResult,
-    ) -> BookClassificationResult:
-        """Classify the user query into book-related strategies."""
-        tool_name = BookClassificationNode.__name__
-        tool = pydantic_function_tool(
-            BookClassificationNode,
-            name=tool_name,
-            description=f"Fill the schema for {tool_name}",
-        )
-        tool_choice = {"type": "function", "function": {"name": tool_name}}
-
-        in_domain_msg = initial_parse_result.model_dump_json(
-            include={"user_query_domain", "continue_pipeline", "reasoning"}
-        )
-
-        from config import BookConstraints, BookGuides
-
-        prompt = format_prompt(
-            prompt_path="books/strategy_classification.txt",
-            book_constraints=str(BookConstraints()),
-            book_guides=str(BookGuides()),
-        )
-        req = OpenAIRequest(
-            system=SystemMessage(content=prompt),
-            messages=[AssistantMessage(content=in_domain_msg)],
-            tools=[tool],
-            tool_choice=tool_choice,
-            temperature=0.4,
-            top_p=0.5,
-        )
-
-        # req.export(file_name="analyze_classification")
-
-        assistant_msg = await request_context.llm_client.execute(req)
-
-        if not assistant_msg or not assistant_msg.tool_calls:
-            raise RuntimeError(
-                f"Failed to execute {tool_name} - no tool calls received"
-            )
-
-        request_context.add_message(assistant_msg)
-        tool_message = await self._handle_tool_call(
-            assistant_msg.tool_calls, max_calls=1
-        )
-        if not tool_message:
-            raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
-
-        request_context.add_message(tool_message[0])
-
-        # we know for a fact it must have the fragments here
-        return tool_message[0].content
-
-    async def _run_create_task_plan(
-        self,
-        request_context: RequestContext,
-        initial_parse_result: InitialParseResult,
-        node_ids,
-    ) -> TaskPlan:
-        """Create a task execution plan with dependency resolution."""
-
-        tool_name = TaskGenerationNode.__name__
-        tool_choice = {"type": "function", "function": {"name": tool_name}}
-        tool = pydantic_function_tool(
-            TaskGenerationNode,
-            name=tool_name,
-            description=f"Fill the schema for {tool_name}",
-        )
-        TaskGenerationNode.modify_schema(tool=tool, valid_ids=list(node_ids.keys()))
-
-        in_domain_msg = initial_parse_result.model_dump_json(
-            include={"user_query_domain", "reasoning"}
-        )
-
-        formatted_node_ids = {}
-        for id in node_ids:
-            formatted_node_ids[id] = node_ids[id].model_dump()
-
-        prompt = load_prompt(prompt_path="pipeline/dependency_resolution.txt")
-        req = OpenAIRequest(
-            system=SystemMessage(content=prompt),
-            messages=[
-                AssistantMessage(content=in_domain_msg),
-                AssistantMessage(
-                    content=json.dumps(formatted_node_ids, separators=(",", ":"))
-                ),
-            ],
-            tools=[tool],
-            tool_choice=tool_choice,
-            temperature=0.4,
-            top_p=0.5,
-        )
-
-        # req.export(file_name="task_planner")
-
-        # initial parsing, with no streaming or content (forcing tool)
-        assistant_msg = await request_context.llm_client.execute(req)
-
-        # this shouldn't happen at all but raise to be safe
-        if not assistant_msg or not assistant_msg.tool_calls:
-            raise RuntimeError(f"🛑 {tool_name} parse {tool_name} FAILED")
-
-        request_context.add_message(assistant_msg)
-        tool_message = await self._handle_tool_call(
-            assistant_msg.tool_calls, max_calls=1, node_ids=node_ids
-        )
-        if not tool_message:
-            raise RuntimeError(f"🛑 {tool_name} call {tool_message} FAILED")
-
-        request_context.add_message(tool_message[0])
-
-        return tool_message[0].content
-
-    async def run_tasks(
-        self, node_ids, task_planner_: TaskPlan, sse_stream: SSEStream, request_context
-    ):
-        """Execute tasks in the planned order with dependency resolution."""
-
-        depends_map = {cur.id: cur.depends_on for cur in task_planner_.accepted}
-        results = {}
-
-        for tid in task_planner_.execution_order:
-            task = node_ids[tid]
-            deps = {d: results[d] for d in depends_map[tid]}
-
-            node_type = task.node_type
-
-            # Create strategy instance and call it with proper arguments
-            strategy_class = BOOK_STRAT_REGISTRY[node_type]
-            strategy_instance = strategy_class()
-
-            # Pass the task data and context to the strategy
-            result = await strategy_instance(
-                task=task, dependent_results=deps, request_context=request_context
-            )
-
-            results[tid] = result
-
-        return results
-
-    async def _run_conversation_step(
-        self,
-        request_context: RequestContext,
-        sse_stream: SSEStream,
-    ):
-        """Execute the complete conversation pipeline from parsing to task execution."""
-        try:
-            initial_parse_result = await self._run_initial_step(
-                request_context, sse_stream
-            )
-            if (
-                not initial_parse_result.continue_pipeline
-                or not initial_parse_result.user_query_domain
-            ):
-                logger.info(
-                    "User query classified as out-of-scope or no domain identified. Ending pipeline."
-                )
-                return
-
-            request_context.pipeline_context["in_domain_message"] = (
-                initial_parse_result.model_dump_json(
-                    include={"user_query_domain", "continue_pipeline", "reasoning"}
-                )
-            )
-
-            await sse_stream.send_ui_loading("Classifying User Request...")
-
-            classified_strategy_ = await self._run_analyze_classification(
-                request_context=request_context,
-                initial_parse_result=initial_parse_result,
-            )
-
-            node_ids = classified_strategy_.get_accepted_node_ids()
-
-            # ----------------------------------------------------------
-            await sse_stream.send_ui_loading("Planning The Tasks...")
-            task_planner_ = await self._run_create_task_plan(
-                request_context=request_context,
-                initial_parse_result=initial_parse_result,
-                node_ids=node_ids,
-            )
-
-            if task_planner_:
-                # task_planner_.export()
-                mermaid_diagram = task_planner_.get_accepted_diagram(node_ids)
-                await sse_stream.send_chars("__My Plan for Your Request__")
-                await sse_stream.send_mermaid(mermaid_diagram)
-                await sse_stream.send_chars(
-                    "_Note:_ This flow shows how your query will run.\n"
-                )
-                await sse_stream.send_chars(
-                    "Soon, you’ll be able to edit or customize the plan before execution for full transparency!"
-                )
-                await sse_stream.send_divider()
-            else:
-                await sse_stream.send_error("Unable to generate a Task Planner")
-
-            # ----------------------------------------------------------
-            await sse_stream.send_ui_loading("Executing the tasks...")
-
-            result = await self.run_tasks(
-                node_ids,
-                task_planner_,
-                sse_stream=sse_stream,
-                request_context=request_context,
-            )
-
-        except Exception as e:
-            logger.error(f"Error in conversation step: {str(e)}")
-            raise
-        finally:
-            ...
-            # request_context.export()
-            # await request_context.persist_chat_messages()
-            # await request_context.state_manager.export_snapshot(
-            #     request_context.session_id
-            # )
 
     async def run(self, request_context: RequestContext):
         """Run orchestration with SSE streaming."""
+
         sse_stream = request_context.sse_stream
+        # Bound before the try so a cancellation mid-await still leaves them
+        # for the finally block — each workflow mutates its own .record in
+        # place and re-raises rather than returning it.
+        triage_workflow: TriageWorkflow | None = None
+        task_runner: TaskRunnerWorkflow | None = None
+        writer: GenerateRecommendationsExecutor | None = None
+        # Root of the turn's trace tree; the workflow envelopes are hung off it
+        # in the finally block, so ok/duration/token_usage cover the whole turn.
+        record = OperationResult(
+            name=f"orchestrator_{request_context.user_message.id}",
+        )
+        messages: list[APIMessage] = [request_context.user_message]
+        time_start = time.perf_counter()
+        
+        # Core work
         try:
+            # First and unconditionally: this id exists before any work
+            # starts, so the client can attach feedback even if the turn later
+            # errors, times out, or is stopped before 'complete' fires.
+            await sse_stream.send_chat_id(request_context.user_message.id)
             await sse_stream.send_ui_loading("Starting conversation...")
 
-            # Core work
+            triage_workflow = TriageWorkflow(request_context, messages=messages)
             await asyncio.wait_for(
-                self._run_conversation_step(request_context, sse_stream),
-                timeout=300.0,
+                triage_workflow(
+                    NodeInput(instruction=request_context.user_message.content),
+                    # use_caching=False,
+                ),
+                timeout=CONVERSATION_TIMEOUT,
             )
 
-            # Normal completion
-            await sse_stream.send_event("complete", {"status": "completed"})
+            # No plan when triage handled the turn without planning (small
+            # talk, a refusal, a cache miss on a failed planner): nothing for
+            # the runner to execute. A bare read, not `unwrap()` — triage has
+            # already told the user what its own failure means.
+            plan = triage_workflow.result.parse_result
+            if triage_workflow.record.ok and plan and plan.accepted_goals:
+                task_runner = TaskRunnerWorkflow(request_context, messages=messages)
+                await asyncio.wait_for(
+                    # the only place triage and the runner are wired together,
+                    # so the runner never learns a triage layer exists
+                    task_runner(TaskRunnerInput(plan=plan)),
+                    timeout=CONVERSATION_TIMEOUT,
+                )
+                writer = await self._write_reply(request_context, task_runner, messages)
+
+            # chat_id lets the client attach feedback to the chat_runs row
+            await sse_stream.send(
+                "complete",
+                {"status": "completed", "chat_id": request_context.user_message.id},
+            )
+            await sse_stream.close()
             logger.info("✅ Orchestration completed successfully")
 
-        except asyncio.TimeoutError:
-            msg = "Uhh... request timed out (5 mins) while processing your query."
-            logger.warning(msg)
-            await sse_stream.send_error(msg)
-
-        except asyncio.CancelledError:
-            # Raised if server reloads or client disconnects mid-stream
-            logger.info("🛑 Orchestration cancelled before shutdown or client abort.")
-            await sse_stream.send_error(
-                f"Oh no... orchestration server while processing your query."
+        except asyncio.CancelledError as e:
+            # client disconnected mid-turn — the finally block still records
+            # what we have, then this propagates so the task is really cancelled
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
+            logger.warning(
+                f"⚠️ Orchestration cancelled: chat_id={request_context.user_message.id}"
             )
-
+            raise
+        except TimeoutError as e:
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
+            record.add_details("Orchestration Task timed out")
+            logger.warning(
+                f"⚠️ Orchestration timed out: chat_id={request_context.user_message.id}"
+            )
+            await sse_stream.send_error("The request took too long to process.")
         except Exception as e:
+            record.runtime_error = RuntimeErrorInfo.from_exception(e)
             logger.exception(f"❌ Unhandled orchestrator error: {e}")
-            # await sse_stream.send_error(f"Internal error: {str(e)}")
             await sse_stream.send_error(
-                f"Hmm... something went wrong while processing your query."
+                "Hmm... something went wrong while processing your query."
+            )
+        finally:
+            # Here rather than after each await, so the timeout/cancel paths
+            # record their partial work too. isinstance-guarded rather than
+            # letting add_step raise: a raise in this finally would replace the
+            # exception in flight and skip the recording and stream close below.
+            for workflow in (triage_workflow, task_runner, writer):
+                step = getattr(workflow, "record", None)
+                if isinstance(step, OperationResult):
+                    record.add_step(step)
+            record.ok = (
+                record.runtime_error is None
+                and bool(record.steps)
+                and all(step.ok for step in record.steps)
+            )
+            record.timing.duration = round(time.perf_counter() - time_start, 2)
+
+            # One shielded unit, not two. A second cancellation landing on this
+            # task (EventSourceResponse re-cancels every checkpoint on
+            # disconnect) is a BaseException, so it would fly past
+            # `except Exception` mid-cleanup and skip sse_stream.close().
+            # Shielding the whole sequence means close() still runs — we just
+            # stop waiting for it here.
+            try:
+                await asyncio.shield(
+                    self._finalize(
+                        request_context,
+                        record,
+                        triage_workflow,
+                        task_runner,
+                        writer,
+                        messages,
+                        sse_stream,
+                    )
+                )
+            except asyncio.CancelledError:
+                logger.warning(
+                    f"cleanup cancelled for chat_id={request_context.user_message.id}, "
+                    "continuing in the background"
+                )
+
+    @staticmethod
+    async def _write_reply(
+        request_context: RequestContext,
+        task_runner: TaskRunnerWorkflow,
+        messages: list[APIMessage],
+    ) -> GenerateRecommendationsExecutor | None:
+        """Write the turn's reply from everything the plan produced.
+
+        The third layer of the turn, and the only one that speaks prose. It is
+        wired here rather than reached through the registry because it is not a
+        capability: no goal targets it, nothing depends on it, and it runs once
+        per plan whatever the plan was. That is the same reason `Triage` is a
+        workflow in `orchestration/` rather than a node — and it keeps the
+        import pointing downward, since `orchestration/` may read `domains/`.
+
+        Returns the workflow so the caller can hang its record on the turn's
+        tree, matching how triage and the runner are handled; None when there
+        was nothing to write about or nowhere to write from.
+
+        Two ways to decline, both quiet:
+
+        - **No results.** A plan whose every goal was unreachable leaves an
+          empty map. There is no evidence to write from, so the stage would
+          only invent one — the same failure the `ValueError` in its `run`
+          guards against.
+        - **No book store on this request.** Narrowing is what a node's
+          `NodeSpec.context` did at dispatch; this stage has no spec, so it
+          narrows here. A `LookupError` means the services it needs are not on
+          this request, which is a deployment problem rather than a turn that
+          should die — the cards already streamed, so the user loses the prose
+          and nothing else.
+        """
+        results = list(task_runner.result.task_results.values())
+        if not results:
+            logger.warning("No task results to write a reply from")
+            return None
+
+        try:
+            ctx = BookRequestContext.narrow(request_context)
+        except LookupError as e:
+            logger.warning(f"Skipping the reply: {e}")
+            return None
+
+        writer = GenerateRecommendationsExecutor(ctx, messages=messages)
+        await asyncio.wait_for(
+            writer(RecommendationsInput(results=results)),
+            timeout=CONVERSATION_TIMEOUT,
+        )
+        return writer
+
+    @staticmethod
+    async def _finalize(
+        request_context: RequestContext,
+        record: OperationResult,
+        triage_workflow: TriageWorkflow | None,
+        task_runner: TaskRunnerWorkflow | None,
+        writer: GenerateRecommendationsExecutor | None,
+        messages: list[APIMessage] | None,
+        sse_stream: SSEStream,
+    ) -> None:
+        """Record the run, then close the stream. Best-effort — never lets a
+        slow/failing step here take down the other, or the caller."""
+        try:
+            await asyncio.wait_for(
+                record_chat_run(
+                    request_context,
+                    record,
+                    triage_workflow,
+                    task_runner,
+                    writer,
+                    messages,
+                ),
+                timeout=SAVE_LOG_TIMEOUT,
+            )
+        except Exception:
+            logger.warning(
+                f"record_chat_run id: {request_context.user_message.id} timed out"
             )
 
-        finally:
-            # Important: close here to unblock endpoint's `async for`
-            await sse_stream.close()
+        try:
+            await asyncio.wait_for(sse_stream.close(), timeout=CLOSE_SSE_STREAM_TIMEOUT)
+        except Exception:
+            logger.warning(
+                f"sse_stream.close() id: {request_context.user_message.id} timed out"
+            )

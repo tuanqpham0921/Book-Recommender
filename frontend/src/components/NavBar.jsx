@@ -20,10 +20,10 @@ const NavBar = () => {
             {/* Hamburger Menu Button */}
             <button
                 onClick={toggleNavbar}
-                className=" z-35 p-2 hover:bg-gray-200 rounded-full transition-colors"
+                className=" z-35 p-2 hover:bg-[var(--bg-tertiary)] rounded-full transition-colors"
                 aria-label="Toggle navigation menu"
             >
-                <Menu size={24} strokeWidth={1.5} className="text-gray-500" />
+                <Menu size={24} strokeWidth={1.5} className="text-[var(--text-inactive)]" />
             </button>
 
             {/* Overlay */}
@@ -40,8 +40,8 @@ const NavBar = () => {
                     }`}
             >
                 {/* Navbar Header */}
-                <div className="p-6 border-b border-gray-200">
-                    <h2 className="text-xl font-semibold text-gray-800">
+                <div className="p-6 border-b border-[var(--border-light)]">
+                    <h2 className="text-xl font-semibold text-[var(--text-hover)]">
                         Navigation
                     </h2>
                 </div>
@@ -66,8 +66,8 @@ const NavBar = () => {
                 </div>
 
                 {/* Footer/Bottom Section - naturally flows to bottom */}
-                <div className="p-6 border-t border-gray-200 mt-auto">
-                    <div className="text-left space-y-2 text-gray-500">
+                <div className="p-6 border-t border-[var(--border-light)] mt-auto">
+                    <div className="text-left space-y-2 text-[var(--text-inactive)]">
                         <div className="text-sm">
                             tuanqpham0921@gmail.com
                         </div>

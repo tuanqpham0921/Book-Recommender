@@ -1,5 +1,5 @@
-from .operation import OperationResult
+from .setup_logging import setup_logging
 
 __all__ = [
-    "OperationResult",
+    "setup_logging",
 ]

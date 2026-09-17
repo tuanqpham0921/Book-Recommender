@@ -1,11 +1,24 @@
-from .base import BaseLLMClient
-from .schemas import BaseLLMRequest
+from .base import BaseLLMClient, BaseLLMRequest
 from .openai_client import OpenAIClient
-from .schemas import OpenAIRequest
+from .openai_requests import (
+    OpenAIParserRequest,
+    OpenAIBaseRequest,
+    OpenAIChatRequest,
+)
+from .messages import Role, BaseMessage, APIMessage, UserMessage, AssistantMessage, ToolMessage
 
 __all__ = [
     "BaseLLMClient",
     "BaseLLMRequest",
     "OpenAIClient",
-    "OpenAIRequest"
+    "OpenAIParserRequest",
+    "OpenAIBaseRequest",
+    "OpenAIChatRequest",
+
+    "Role",
+    "BaseMessage",
+    "APIMessage",
+    "UserMessage",
+    "AssistantMessage",
+    "ToolMessage"
 ]

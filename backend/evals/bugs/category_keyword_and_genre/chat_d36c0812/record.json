@@ -1,0 +1,405 @@
+[
+  {
+    "id": "op_d00e8913",
+    "name": "orchestrator_chat_d36c0812",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:03.049882+00:00",
+      "duration": 5.54
+    },
+    "token_usage": {
+      "total": 7582,
+      "prompt": 7060,
+      "completion": 522,
+      "cached": 6763,
+      "reasoning_tokens": 384,
+      "by_model": {
+        "gpt-5.6-terra": {
+          "total": 5201,
+          "prompt": 5102,
+          "completion": 99,
+          "cached": 4971,
+          "reasoning_tokens": 0
+        },
+        "gpt-5-nano": {
+          "total": 2381,
+          "prompt": 1958,
+          "completion": 423,
+          "cached": 1792,
+          "reasoning_tokens": 384
+        }
+      },
+      "cost_usd": 0.000186,
+      "unpriced_models": [
+        "gpt-5.6-terra"
+      ]
+    }
+  },
+  {
+    "id": "op_d6d2399d",
+    "parent_id": "op_d00e8913",
+    "name": "app.orchestration.triage.TriageWorkflow",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:03.051326+00:00",
+      "duration": 2.38
+    },
+    "input": {
+      "node_input": {
+        "query": "Find fantasy books about grief"
+      }
+    },
+    "response": {
+      "result": {
+        "session_id": "dev_d662c058",
+        "parse_result": {
+          "accepted_goals": [
+            {
+              "node_type": "system_goal",
+              "id": "1",
+              "description": "Find fiction fantasy books about grief.",
+              "reasoning": "Fantasy and grief are subject terms for a single category search.",
+              "confidence": 1.0,
+              "target_node_type": "Retrieve_by_Category",
+              "_refusal": false
+            }
+          ],
+          "diagram": "flowchart TD\n\t1[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>Retrieve_by_Category</div><div style='margin-bottom:4px'><strong>Goal:</strong> 1</div><div style='margin-bottom:4px'><strong>Description:</strong> Find fiction fantasy books about grief.</div><div style='margin-bottom:4px'><strong>Reasoning:</strong> Fantasy and grief are subject terms for a single category search.</div></div>\"]\n"
+        }
+      },
+      "output_type": "TriageOutput"
+    },
+    "token_usage": {
+      "total": 5201,
+      "prompt": 5102,
+      "completion": 99,
+      "cached": 4971,
+      "reasoning_tokens": 0,
+      "by_model": {
+        "gpt-5.6-terra": {
+          "total": 5201,
+          "prompt": 5102,
+          "completion": 99,
+          "cached": 4971,
+          "reasoning_tokens": 0
+        }
+      },
+      "cost_usd": 0.0,
+      "unpriced_models": [
+        "gpt-5.6-terra"
+      ]
+    }
+  },
+  {
+    "id": "op_02f1aa76",
+    "parent_id": "op_d6d2399d",
+    "name": "app.domains.planjane.executor.PlanJaneExecutor",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:03.055600+00:00",
+      "duration": 2.37
+    },
+    "input": {
+      "node_input": {
+        "query": "Find fantasy books about grief"
+      }
+    },
+    "response": {
+      "result": {
+        "accepted_goals": [
+          {
+            "node_type": "system_goal",
+            "id": "1",
+            "description": "Find fiction fantasy books about grief.",
+            "reasoning": "Fantasy and grief are subject terms for a single category search.",
+            "confidence": 1.0,
+            "target_node_type": "Retrieve_by_Category",
+            "_refusal": false
+          }
+        ],
+        "diagram": "flowchart TD\n\t1[\"<div style='text-align:left'><div style='font-weight:bold;margin-bottom:8px'>Retrieve_by_Category</div><div style='margin-bottom:4px'><strong>Goal:</strong> 1</div><div style='margin-bottom:4px'><strong>Description:</strong> Find fiction fantasy books about grief.</div><div style='margin-bottom:4px'><strong>Reasoning:</strong> Fantasy and grief are subject terms for a single category search.</div></div>\"]\n"
+      },
+      "output_type": "PlanJaneOutput"
+    },
+    "token_usage": {
+      "total": 5201,
+      "prompt": 5102,
+      "completion": 99,
+      "cached": 4971,
+      "reasoning_tokens": 0,
+      "by_model": {
+        "gpt-5.6-terra": {
+          "total": 5201,
+          "prompt": 5102,
+          "completion": 99,
+          "cached": 4971,
+          "reasoning_tokens": 0
+        }
+      },
+      "cost_usd": 0.0,
+      "unpriced_models": [
+        "gpt-5.6-terra"
+      ]
+    }
+  },
+  {
+    "id": "op_0497617c",
+    "parent_id": "op_02f1aa76",
+    "name": "app.domains.base_workflow.AppWorkflow.llm_execute",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:03.066740+00:00",
+      "duration": 2.04
+    },
+    "input": {
+      "req": {
+        "model": "gpt-5.6-terra",
+        "prompt_chars": 12430,
+        "num_messages": 1,
+        "streaming": false,
+        "reasoning_effort": "none",
+        "tools": [
+          "GoalParseRequest"
+        ]
+      },
+      "save_payload": false
+    },
+    "response": {
+      "result": {
+        "role": "assistant",
+        "id": "chatcmpl-EFl1APgnLW4QudsseJoC80iO1TlUU",
+        "tool_calls": [
+          {
+            "id": "call_fBebDyN2MA5M22stHV5OiIw8",
+            "function": {
+              "arguments": "{\"node_type\":\"plan_jane\",\"system_goals\":[{\"node_type\":\"system_goal\",\"id\":\"1\",\"description\":\"Find fiction fantasy books about grief.\",\"reasoning\":\"Fantasy and grief are subject terms for a single category search.\",\"confidence\":1,\"target_node_type\":\"Retrieve_by_Category\",\"depends_on\":[]}],\"reasoning\":\"Direct category search with fiction genre and grief/fantasy keywords.\",\"out_of_scope\":[]}",
+              "name": "GoalParseRequest",
+              "parsed_arguments": {
+                "node_type": "plan_jane",
+                "system_goals": [
+                  {
+                    "node_type": "system_goal",
+                    "id": "1",
+                    "description": "Find fiction fantasy books about grief.",
+                    "reasoning": "Fantasy and grief are subject terms for a single category search.",
+                    "confidence": 1.0,
+                    "target_node_type": "Retrieve_by_Category",
+                    "_refusal": false
+                  }
+                ],
+                "reasoning": "Direct category search with fiction genre and grief/fantasy keywords."
+              }
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "created": "2026-08-22T18:46:05.110916+00:00"
+      },
+      "output_type": "AssistantMessage"
+    },
+    "details": [
+      "wrapped a bare return value",
+      "promoted output token usage"
+    ],
+    "token_usage": {
+      "total": 5201,
+      "prompt": 5102,
+      "completion": 99,
+      "cached": 4971,
+      "reasoning_tokens": 0,
+      "by_model": {
+        "gpt-5.6-terra": {
+          "total": 5201,
+          "prompt": 5102,
+          "completion": 99,
+          "cached": 4971,
+          "reasoning_tokens": 0
+        }
+      },
+      "cost_usd": 0.0,
+      "unpriced_models": [
+        "gpt-5.6-terra"
+      ]
+    }
+  },
+  {
+    "id": "op_9fbbc7c5",
+    "parent_id": "op_d00e8913",
+    "name": "app.orchestration.task_runner.TaskRunnerWorkflow",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:05.430839+00:00",
+      "duration": 3.16
+    },
+    "input": {
+      "node_input": {
+        "plan": {
+          "accepted_types": [
+            "Retrieve_by_Category"
+          ],
+          "num_rejected_system": 0
+        }
+      }
+    },
+    "response": {
+      "result": {
+        "session_id": "dev_d662c058"
+      },
+      "output_type": "TaskRunnerOutput"
+    },
+    "token_usage": {
+      "total": 2381,
+      "prompt": 1958,
+      "completion": 423,
+      "cached": 1792,
+      "reasoning_tokens": 384,
+      "by_model": {
+        "gpt-5-nano": {
+          "total": 2381,
+          "prompt": 1958,
+          "completion": 423,
+          "cached": 1792,
+          "reasoning_tokens": 384
+        }
+      },
+      "cost_usd": 0.000186
+    }
+  },
+  {
+    "id": "op_09a169ec",
+    "parent_id": "op_9fbbc7c5",
+    "name": "app.domains.books.find_by_category.executor.FindByCategoryExecutor",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:05.433340+00:00",
+      "duration": 3.16
+    },
+    "input": {
+      "node_input": {
+        "query": "Find fiction fantasy books about grief."
+      }
+    },
+    "response": {
+      "result": {
+        "num_books": 0,
+        "query_sql": "SELECT books.isbn13, ts_rank(to_tsvector('english', coalesce(books.title, '') || ' ' || coalesce(books.categories, '') || ' ' || coalesce(books.description, '')), plainto_tsquery('english', 'grief fantasy')) AS score \nFROM books \nWHERE (to_tsvector('english', coalesce(books.title, '') || ' ' || coalesce(books.categories, '') || ' ' || coalesce(books.description, '')) @@ plainto_tsquery('english', 'grief fantasy')) AND books.genre IN ('Children''s Fiction', 'Fiction')",
+        "args": {
+          "keywords": [
+            "grief",
+            "fantasy"
+          ],
+          "genre": "fiction"
+        }
+      },
+      "output_type": "FindByCategoryOutput"
+    },
+    "token_usage": {
+      "total": 2381,
+      "prompt": 1958,
+      "completion": 423,
+      "cached": 1792,
+      "reasoning_tokens": 384,
+      "by_model": {
+        "gpt-5-nano": {
+          "total": 2381,
+          "prompt": 1958,
+          "completion": 423,
+          "cached": 1792,
+          "reasoning_tokens": 384
+        }
+      },
+      "cost_usd": 0.000186
+    }
+  },
+  {
+    "id": "op_558a9738",
+    "parent_id": "op_09a169ec",
+    "name": "app.domains.base_workflow.AppWorkflow.llm_execute",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:05.441432+00:00",
+      "duration": 2.61
+    },
+    "input": {
+      "req": {
+        "model": "gpt-5-nano",
+        "prompt_chars": 4252,
+        "num_messages": 1,
+        "streaming": false,
+        "reasoning_effort": "low",
+        "tools": [
+          "FindByCategoryArgs"
+        ]
+      },
+      "save_payload": false
+    },
+    "response": {
+      "result": {
+        "role": "assistant",
+        "id": "chatcmpl-EFl1ChAq9n1EuEZackZprCfI5h8zc",
+        "tool_calls": [
+          {
+            "id": "call_Bkilo3AZFasNw6YM2Ravm5UR",
+            "function": {
+              "arguments": "{\"keywords\":[\"grief\",\"fantasy\"],\"genre\":\"fiction\",\"audience\":null}",
+              "name": "FindByCategoryArgs",
+              "parsed_arguments": {
+                "keywords": [
+                  "grief",
+                  "fantasy"
+                ],
+                "genre": "fiction"
+              }
+            },
+            "type": "function",
+            "index": 0
+          }
+        ],
+        "created": "2026-08-22T18:46:08.053511+00:00"
+      },
+      "output_type": "AssistantMessage"
+    },
+    "details": [
+      "wrapped a bare return value",
+      "promoted output token usage"
+    ],
+    "token_usage": {
+      "total": 2381,
+      "prompt": 1958,
+      "completion": 423,
+      "cached": 1792,
+      "reasoning_tokens": 384,
+      "by_model": {
+        "gpt-5-nano": {
+          "total": 2381,
+          "prompt": 1958,
+          "completion": 423,
+          "cached": 1792,
+          "reasoning_tokens": 384
+        }
+      },
+      "cost_usd": 0.000186
+    }
+  },
+  {
+    "id": "op_87287f94",
+    "parent_id": "op_09a169ec",
+    "name": "app.domains.books.base_workflow.BookWorkflow.count_books",
+    "ok": true,
+    "timing": {
+      "start_time": "2026-08-22T18:46:08.055609+00:00",
+      "duration": 0.11
+    },
+    "input": {
+      "query": "<DeferredBookQuery>"
+    },
+    "response": {
+      "result": 0,
+      "output_type": "int"
+    },
+    "details": [
+      "wrapped a bare return value"
+    ]
+  }
+]

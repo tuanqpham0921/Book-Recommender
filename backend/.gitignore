@@ -2,13 +2,15 @@
 __pycache__/
 venv/
 .venv/
+.pytest_cache/
+.ruff_cache/
 
 # Environment & Config
 config/.env*
 !config/.env.example
 
-# Data
-data/backup.sql
+# Backup Data
+*backup.sql
 
 # Data & Exports
 *.csv
@@ -16,3 +18,13 @@ data/backup.sql
 # Logs
 logs/
 *.log
+
+# Test coverage
+.coverage*
+
+# Evals
+chat_runs*.sql
+chat*.json
+feedback_*.sql
+chat_run*
+log.txt

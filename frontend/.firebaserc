@@ -1,10 +1,12 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "tuanqpham0921"
+  },
   "targets": {
     "tuanqpham0921": {
       "hosting": {
         "book-rec": [
-          "book-recommender-tuanqpham0921"
+          "tuanqpham0921"
         ]
       }
     }

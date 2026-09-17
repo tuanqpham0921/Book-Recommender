@@ -1,0 +1,629 @@
+# Execution pipeline: retrieve → filter → analyze → generate (design record)
+
+**Date:** 2026-07-24 · **Status:** counts-only retrieval and CTE composition are **built**
+(2026-08-04) on `minimal_end_to_end_v1`, for the nodes registered there. The combine tier
+is half unparked (`Combine_Intersect`, 2026-08-24). The generation tier existed for one
+day: `Generate_Recommendations` was registered 2026-09-07 as a planner goal and
+**deregistered 2026-09-08** into one unregistered stage per turn. See the second attempt
+below, then the third.
+
+Graduated from `backend/TODO.md`. This is the shape execution is expected to take once
+[roadmap Phase 3](../roadmap.md) starts, and it defines three nodes that do not exist
+today. The node set as currently registered is in [node-taxonomy-v1.md](node-taxonomy-v1.md);
+the pause points this shape creates are in [human-in-the-loop.md](human-in-the-loop.md).
+
+## Where execution stands today
+
+- `EXECUTORS_CLS_MAPPING` in `backend/app/registry.py` still points at the **mock**
+  executors in `playground/app_mock/`.
+- `TaskRunnerWorkflow` is implemented but **commented out** in `Orchestrator.run`
+  (`app/orchestration/orchestrator.py`), so today's request flow stops after the planner
+  renders its diagram.
+- Nothing turns executor output into prose. The final assistant message has no owner.
+
+So the pipeline below is being designed on a clean slate — the argument this record makes
+is about *what shape to build*, before any of it is written.
+
+## The proposed shape
+
+Four tiers, each with one job:
+
+| Tier | Job | Returns |
+|---|---|---|
+| **Retrieval** | Resolve one dimension; **count and metadata only** | How many books match, plus the query to reach them — not the rows |
+| **Filter / combine** *(new)* | Apply cross-cutting constraints by composing the upstream queries into a CTE | A narrowed query, still not materialized |
+| **Analyze** | Execute the composed query with its own step; interpret the result | Structured output data |
+| **Generation** *(new)* | Turn the collected outputs into the user-facing answer | Prose / frontend sections |
+
+The load-bearing idea is that **retrieval does not materialize rows**. `Retrieve_by_Lexical_Traits`
+for horror runs a `COUNT` and hands the query downstream; a `WITH` clause (CTE) composes
+it with whatever comes next; the analyze step is the first thing that actually executes
+for rows.
+
+### Why this shape
+
+1. **It creates a natural human-in-the-loop moment.** Counts are known before any large
+   result set is built, so the system can ask *"that's 4,000 horror books — narrow it
+   down?"* or *"nothing matched — did you mean…?"* at **each step**, not only at the end.
+   This is the concrete reason the pipeline is worth designing before executors are
+   written; see [human-in-the-loop.md](human-in-the-loop.md).
+2. **It gives cross-column queries somewhere to go.** The node taxonomy deliberately made
+   every retrieval node single-dimension and single-valued, which left *"sci-fi books over
+   300 pages"* with no node to route to. A filter/combine node serves that shape without
+   adding a combinatorial pile of retrieval nodes, and without putting a `BooksFilter`
+   object back on a planner-facing schema — the thing the taxonomy decision explicitly
+   removed.
+3. **It matches the columns already deferred.** `published_year`, `average_rating`,
+   `num_pages`, `ratings_count`, `is_children`, and `categories` are real `BookModel`
+   columns that live in `db/schema/filter_schemas.py`'s `BooksFilter` for store queries but
+   are not exposed to the planner. The filter node is where they become reachable, in one
+   node instead of six.
+
+> **Amended 2026-08-20.** Points 2 and 3 hold for bounds as a *narrowing*, which is all the
+> filter node can do — it requires an anchor. They do not cover a request that is *only*
+> bounds ("books under 200 pages"), which has no anchor to narrow and so reached nothing.
+> `Retrieve_by_Numeric_Traits` is where the four numeric columns became reachable as a
+> **subject**: `BookStore.numeric_traits_query()` is `filter_query()` with the catalog as
+> its base, sharing `metadata_predicates` so the two readings of a bound cannot diverge in
+> SQL. The split is only whether the request has another subject in it — with one, point 2
+> still applies unchanged. The planner-facing schema still carries no filter object: under
+> rule 1a the request is fieldless and the `BookMetadataFilter` sits on an internal `*Args`
+> model. See [node-taxonomy-v1.md](node-taxonomy-v1.md).
+>
+> **`categories` dimensioned 2026-08-21** by `Retrieve_by_Lexical_Traits`, on the same reasoning:
+> point 3's last unexposed column became reachable as a *subject*, not as a narrowing. Its
+> args model is internal too, so the planner still sees no filter object anywhere.
+
+**Accepted cost:** many more database round trips per request (one per retrieval count,
+plus the analyze execution). Fine for V1 — the demo is the planner, not throughput.
+
+## The new nodes
+
+### Filter / combine nodes — **registered 2026-07-24**
+
+Built as **two** nodes rather than the one this record originally sketched, because
+"combine" turned out to be two different operations that must not be confused:
+
+| node type | class | operation | `depends_on` | carries `filters` |
+|---|---|---|---|---|
+| `Combine_Union` | `UnionRetrieval` | OR — pool books from *any* input (dedup by ISBN13) | ≥ 2 | no |
+| `Combine_Intersect` | `IntersectRetrievals` | AND — keep books in *every* input | ≥ 2 | no |
+| `Filter_Retrieval` | `FilterRetrieval` | narrow by metadata bounds | ≥ 1 | **yes, required** |
+
+All three sit in their own catalog section (`NodeTier.COMBINE`) and consume prior task
+output only — none of them runs a lookup of its own.
+
+**`Filter_Retrieval` is built and registered (2026-08-17).** It is a vertical slice like
+every other node now — `app/domains/books/filter_books/`, on the single-call
+`find_by_title/` template — rather than a schema in a shared `request_schemas.py`; the two
+`Combine_*` nodes are still parked.
+
+> **Superseded 2026-08-24.** This node and its slice were deleted, and `Combine_Intersect`
+> registered in their place — an n-ary AND over upstream queries, parsing nothing. The whole
+> record from here to the end of this section describes a node that no longer exists; what
+> replaced it, and why replacement rather than another unparking, is in
+> node-taxonomy-v1.md (2026-08-24). One line of the original sketch did not survive
+counts-first: "neither queries the database" was written when a filter would delete from a
+materialized list. The executor instead pools its anchors' deferred queries and hands them
+to `BookStore.filter_query()`, which ANDs the `BookMetadataFilter` bounds onto that query;
+the node then counts the narrowed set. So the narrowing happens in SQL over the *whole*
+upstream match, and what travels downstream is the narrowed query rather than a shortened
+list. What the sketch was actually drawing still holds — the node searches for nothing and
+can only shrink what the step it depends on found. An empty filter is refused at the store
+rather than passed through, because a no-op narrowing step reports a count the user reads
+as filtered.
+
+**`Analyze_Recommend` applies its own bounds, inside its own search
+(2026-08-19).** ~~Implemented~~ **REVERSED 2026-08-22** — see the note at the end of this
+entry. The reasoning below is kept because it is still the argument for where a bound on a
+similarity ask has to go; what changed is that the node no longer parses one.
+
+Case 62/64's expectation — bounds on a recommendation belong *in* the
+recommend node — is implemented there rather than by delegating to `Filter_Retrieval`.
+The node's argument parse is a **decomposition** into three parts, split by where each
+one lands: `keywords` join the text that gets embedded, `bounds` (a `BookMetadataFilter`)
+become WHERE clauses on the vector search itself, and `exclude` (an `ExclusionBookFilter`
+— authors, titles, categories the ask ruled out by name) is a pure predicate over what
+comes back.
+
+The reason the bounds go *into* the search rather than onto its result is what
+`search_by_embedding` actually does: it does not select a subset, it orders the whole
+table by cosine distance and truncates at `limit`. A bound applied afterwards therefore
+cuts an already-capped 50, and "like Dune, under 300 pages" can be left with two books,
+because most Dune-adjacent books are long. Applied inside, all 50 fit and the ranking has
+a real pool to choose from. The exclusions stay in Python on purpose — they are names the
+model wrote from the user's phrasing, and a casefolded substring match finds "Frank
+Herbert" from "Herbert" where SQL equality would silently exclude nothing.
+
+This replaced a **delegation** (2026-08-17 – 2026-08-19) in which the parse produced a
+natural-language `filter_query` and the executor ran `FilterRetrievalExecutor` as a
+sub-workflow over its pool, wrapped as a query by `BookStore.isbn13_query()`. Three things
+went wrong with it. The ask was parsed twice, with nothing happening between the two calls
+— the filter node's parse read only what the recommend parse had written. The sub-workflow
+carried UI it should not have: sections are opened by the *task runner*, so the filter
+node's own `- N books left after: …` line and its preview cards landed inside the
+Recommendation section, ahead of the recommendations. And it still filtered a capped pool.
+`isbn13_query` and `keep_ranked` existed only to serve that hand-off and went with it.
+
+The property that survives unchanged, and the one the taxonomy actually rests on: the
+narrowing happens *before* the choice rather than after it, which is the whole objection to
+a trailing `Filter_Retrieval`. The tool catalog is also unchanged — `RecommendationStrategy`
+is fieldless and its docstring is still selection prose, while `RecommendationArgs` is an
+internal tool the planner never sees.
+
+**Cost, and a reversal.** Under the delegation, an ask whose bounds excluded everything
+near the anchor *failed the goal*. It no longer does: `Analyze_Recommend` is the turn's
+answer, so an empty match is a sentence it writes ("nothing that short sits near those
+books") and the node still finalizes `ok`. `ok` claims *parsed and answered*, not *books
+chosen* — the same way `num_books == 0` is a real answer for `Filter_Retrieval`. Raising
+there would surface as the generic failure message and tell the user nothing about which
+constraint was too tight. The reply is given the bounds in words and the pre-exclusion pool
+size so it can say which.
+
+> **Reversed 2026-08-22, when `Analyze_Recommend` became `Analyze_Similar_Books`.** The node
+> was cut down to one job — anchors in, a ranked candidate pool out — so it parses nothing at
+> all: no `keywords`, no `bounds`, no `exclude`, and no reply. "Books like Dune but under 300
+> pages" now drops the bound silently. Everything above about *where* a bound has to go
+> survives intact and is the reason it cannot simply move to `Filter_Retrieval`: narrowing a
+> ranked pool after the fact throws the ranking away. `embedding_search_stmt` keeps its
+> `filters` parameter, unused, waiting for the node that re-ranks and picks. The `ok`
+> reversal survives in spirit — an empty pool still finalizes `ok` — but the claim narrowed
+> with the node, from *parsed and answered* to *anchors folded and search run*. See
+> [node-taxonomy-v1.md](node-taxonomy-v1.md).
+>
+> **Amended 2026-08-24.** "Everything above about *where* a bound has to go survives intact"
+> did not survive. It holds for a bound applied to *rows*; it does not hold for one ANDed
+> onto a scored query, because `score` is propagated through `filter_query` and
+> `materialize_stmt` orders by it. `embedding_search_stmt` no longer keeps its `filters`
+> parameter — it was deleted, because the node it was waiting for does not need it. See the
+> counts-first entry below.
+
+**The similarity pool became a deferred query (2026-08-24).** `Analyze_Similar_Books` was the
+last node handing on rows: it ran `embedding_search_stmt`, materialized 50 books into
+`SimilarBooksOutput.books`, and left `query` None. It now stamps a `DeferredBookQuery` like
+every other retrieval, and `books` / `BookStore.search_similar` / `Book.similarity_score` are
+deleted. Counts-first is now taken by every registered node without exception.
+
+**What made it possible was a mistake in the record, not new machinery.** Three places said
+a bound could not move to `Filter_Retrieval` because *filtering a ranked pool after the fact
+throws the ranking away*. That is true of a materialized list and false of a scored query:
+`BookStore.filter_query` already copies the `score` column through a narrowing, and
+`DeferredBookQuery.materialize_stmt` already orders by it. Compiled and checked — a capped
+vector search narrowed by `max_pages` materializes as `ORDER BY final.score DESC`. So cosine
+order survives a metadata bound end to end, and the bound belongs in a second node after all.
+
+**What it cost: one invariant, deliberately.** `DeferredBookQuery` promised *no LIMIT and no
+ORDER BY*, and the vector search needs both — it does not select a subset, it orders the
+whole table and truncates, so the cap **is** the pool rather than a shrunk view of one. The
+exception is carried by the SQL alone; nothing on the class marks it (see the reversal
+below):
+
+- `count_stmt()` is degenerate on this query: it reports `min(cap, matches)`. The new
+  `score_stats_stmt()` is its replacement here — count plus min/max/avg of `score` in one
+  aggregate, which is what actually describes a pool whose size is mostly its own cap.
+- `CANDIDATE_POOL_SIZE` went 50 → **250**, ~5% of the 5,197-row catalog. 50 was sized for a
+  node that would re-rank it; a node that will *filter* it needs more, because a bound over
+  50 near-neighbours can leave two (the 2026-08-19 entry above measured exactly this with
+  "like Dune, under 300 pages"). At 250 the accepted reading is that nothing passing the
+  bound is a fact about the request rather than an artifact of the cap.
+
+**Cost paid.** Two round trips where there was one: the stats aggregate, then the preview
+`materialize` — two ivfflat scans of 5,197 rows instead of one query returning rows. That is
+the same two-trip shape every other retrieval node already has, and the 2026-08-17 entry
+below already accepted it as the price of counts-first.
+
+**Still open.** `MIN_SIMILARITY = 0.35` has never been tuned against the real distribution
+(`config/constants.py` says so). `SimilarBooksOutput.score` is the instrument for it: a `min`
+resting on 0.35 means the floor never binds and the cap is choosing the pool. If a tuned
+threshold turns out to bound below 250, the LIMIT can go and the invariant returns outright.
+
+> **Reversed the same day (2026-08-24): the `capped` attribute and the `compose()` guard are
+> gone; the LIMIT stays.** Owner's call, on the ground that the concept was not carrying its
+> weight. The two are separable and only the bookkeeping was removed — `embedding_search_stmt`
+> still truncates, `filter_query` still propagates `score`, and cosine order still survives a
+> narrowing, which was the point of the change.
+>
+> **What the guard was protecting is real and is now unprotected.** A pool composed with
+> another retrieval is wrong twice: the LIMIT applies *before* the union or intersect, so it
+> changes which books qualify rather than only how many are shown, and `compose()` then drops
+> the `score` that chose them. Union skews the branch proportions (250 of ~1200 similar
+> against all 358 lexical matches); intersect compounds, and can report 0 where the true
+> answer is substantial — indistinguishable from a real empty result. Truncation commutes with
+> *ordering*, which is why `materialize_stmt(limit=10)` is safe; it does not commute with
+> *set operations*, which is why this is not.
+>
+> **Why removing it is nonetheless defensible.** Nothing reaches it. `Combine_Union` and
+> `Combine_Intersect` are unregistered, `Filter_Retrieval` is parked, and its call is the
+> single-input passthrough, which was never the unsafe path. Under rule 3 the guard was
+> machinery for a caller that does not exist. The honest asymmetry is that `filter_query` on
+> a pool is lossy *too* — "of the 250 nearest, N pass" — and that was already accepted, so
+> the guard drew a line that correctness alone does not draw; it drew it at where the loss
+> stops being statable in a sentence.
+>
+> **What must be true before the combine tier is unparked**: either the floor is tuned so the
+> pool needs no LIMIT (which dissolves the problem rather than guarding it — the "still open"
+> above), or the guard comes back. Registering `Combine_Union` without doing one of those
+> ships the failure described here. `tests/unit/db/stores/test_deferred_query.py::TestTheVectorQueryException::test_composing_it_drops_the_ranking_that_chose_the_pool`
+> pins the behaviour so the reversal is visible in compiled SQL rather than only here.
+>
+> > **Half met, 2026-08-24, by `Combine_Intersect`.** The tier *was* unparked, and neither of
+> > the two options above is what made it safe — a third one was taken, and it only works for
+> > `"and"`. `compose(op="and")` now **carries one `score` through** when exactly one input
+> > has one, because an intersect result is a subset of every input, so that column is
+> > defined on every output row and orders the result honestly. A union result contains rows
+> > the scored input never matched, so the same move is unavailable there and nothing about
+> > `"or"` changed.
+> >
+> > That splits the paragraph above in two. **The intersect half is no longer "wrong twice"
+> > but once**: the LIMIT still applies before the membership test, so the count means "of the
+> > 250 nearest, N also match" — which is the *same* lossiness `filter_query` on a pool always
+> > had and which was already accepted — while the ranking that chose the pool now survives.
+> > The honest-asymmetry paragraph above was therefore pointing at the real answer: the line
+> > the guard drew was about the loss being statable in a sentence, and this makes the
+> > intersect's loss statable in exactly one.
+> >
+> > **The union half stands unchanged and is still unguarded.** `Combine_Union` does not
+> > exist; before it does, tune the floor or restore the guard. The test named above was
+> > narrowed to `"or"` and renamed
+> > (`test_pooling_it_still_drops_the_ranking_that_chose_the_pool`), with
+> > `TestScoredIntersect` and
+> > `TestTheVectorQueryException::test_intersecting_it_keeps_cosine_order_reachable` pinning
+> > the new behaviour. `filter_query` itself is gone — see node-taxonomy-v1.md, 2026-08-24.
+
+**No combine node may depend on `Retrieve_Random` (2026-07-28).** That node returns
+one arbitrarily chosen book, so narrowing it afterwards discards the pick far more often
+than not, and the empty result is indistinguishable from "nothing matched". Bounds on a
+surprise belong in `Retrieve_Random`'s own `filters`, where the pick is drawn from inside
+them. Convention only — nothing in the schema rejects the edge, so it lives in both
+docstrings and in the golden expectations.
+
+> **Transferred 2026-08-24** from `Filter_Retrieval` to `Combine_Intersect`, unchanged in
+> substance: intersecting a one-book pick against anything discards it just as reliably as
+> filtering it did. Neither node is currently reachable from `Retrieve_Random`, which is
+> unregistered.
+
+**Union is both implicit and an explicit node.** `Combine_Union` / `UnionRetrieval` was
+registered, removed the same day, then re-added (2026-07-24). The removal argument still
+holds for the *implicit* case: listing several task ids in *any* node's `depends_on`
+already means "pool what all of these found" — that is what the base suite's
+two-bibliography cases (53, 60) and the compare cases rely on, with no union node in the
+plan and the right answer. So `Combine_Union` is deliberately **not** required for pooling.
+It earns its place only when the pooled set is itself a step something downstream consumes
+— one ranked/sorted answer drawn from several sources, or a single list handed to one
+analyze step. Its "Do not use" section says exactly this, to steer the planner away from
+emitting it for plain side-by-side bibliographies.
+
+**Accepted cost of re-adding it:** the ambiguity the "one operation per node" rule below
+guards against comes partly back — a pooling request now has two defensible spellings
+(implicit edges, or an explicit `Combine_Union`). The docstring narrows when to reach for
+the node, but eval expectations that pin `Combine_Union` vs. bare edges have to pick one
+and the golden test will hold the planner to it.
+
+**The pooling rule stays load-bearing for executors.** A step with two or more
+`depends_on` entries must union its inputs (dedup by ISBN13) before doing its own work,
+whether or not an explicit `Combine_Union` sits in the plan. Nothing in the schema enforces
+this — it is stated in the goal-generator prompt's rules block and in the combine nodes'
+docstrings, and the executors have to honor it. A plan still cannot distinguish "meant to
+pool" from "forgot to intersect" when it uses bare edges: both look like two edges into one
+node, so `expected_nodes` diffing in `report_system_goals.py` cannot catch a dropped
+intersect. That is a known blind spot, not an oversight.
+
+The open question above ("one node with a filter object, or a family of single-dimension
+filter nodes?") resolved to **one node with a filter object**, but a deliberately narrow
+one. `Filter_Retrieval` carries `BookMetadataFilter`
+(`db/schema/filter_schemas.py`) — pages, year, rating, ratings count, is_children — which
+is `BooksFilter` minus every field that could serve as a search subject. No authors, no
+categories, and critically **no `keywords` free-text field**: that field is what blurred
+the old `Retrieve_by_Traits` into `Analyze_Recommend`, and leaving it out is what keeps
+this node a narrowing operator instead of a second recommender.
+
+> **Amended 2026-08-21.** `Retrieve_by_Lexical_Traits` has a `keywords` field, so the sentence
+> above needs saying more precisely: what it rules out is keywords **on a narrowing
+> operator**, which is still true — `Filter_Retrieval` has none and will not get one.
+> Keywords blurred `Retrieve_by_Traits` because nothing structural chose between it and
+> the recommend node; both took free text and both searched. The category node is
+> separated from `Analyze_Similar_Books` (renamed 2026-08-22) by *mechanism*, not by prose
+> about subject matter: it asks whether the catalog's **text contains these words** (a
+> tsquery over title, shelf and blurb) and hands on a composable query over the whole match,
+> where the similarity node asks which books are **near an embedding** and hands back a
+> ranked pool. That is checkable from the outside — "cozy mysteries" splits into
+> *mystery* (a word the text contains) and *cozy* (a feel no word search can find), where
+> the "shelf vs. mood" wording the original genre sketch used could not place either.
+>
+> **Amended again 2026-08-22**: the two no longer split one ask between them. The similarity
+> node takes only *named* books, so "cozy mysteries" is the category retrieval alone with the
+> feel dropped — the split above describes a plan the type system now refuses.
+> See [node-taxonomy-v1.md](node-taxonomy-v1.md).
+
+**One operation per node.** `Combine_Intersect` carries no filters — an earlier cut gave
+the set operators an optional `BookMetadataFilter` applied after the set operation, and
+that was removed. Two reasons: every constraint then had two legal homes (inline on the
+combine node, or a downstream `Filter_Retrieval`), which is precisely the kind of "either
+parse is defensible" ambiguity the taxonomy decision was meant to eliminate; and it made
+the combine nodes' catalog entries carry filter documentation that `Filter_Retrieval`
+already owns. The cost is longer plans — "fantasy books by Sanderson over 400 pages" is
+now four nodes — traded for one unambiguous home per operation.
+
+`depends_on` moved from `AnalyzeBaseRequest` up to a new `DependentRequest` base, since
+these nodes consume task output without analyzing it. The planner's dependency remapping
+and topological sort gate on `DependentRequest`.
+
+**Known limitation, plumbing now exists (2026-08-04):** `compose(queries, op="and")` pushes
+the predicate into SQL as an `INTERSECT` over CTEs, which is what the paragraph below asks
+for. The `Combine_Intersect` executor still has to be written, and the node is not
+registered on `minimal_end_to_end_v1`. Original statement of the problem:
+
+`Combine_Intersect` intersects *materialized* result sets,
+and retrieval today returns a `limit`-capped list (default 3). Intersecting two capped
+lists is usually empty — "fantasy books by Sanderson" would intersect a 3-book author page
+against a 3-book genre page and return nothing. The node is semantically right and
+operationally wrong until retrieval returns counts/queries rather than rows, which is
+exactly the counts-only change described above. Whoever writes the intersect executor has
+to push the predicate into the upstream query rather than intersect two result lists.
+
+### Analyze-book node
+
+Needed for question-answering about a specific book ("what is Dune about?", "is it
+appropriate for a 12-year-old?") — retrieval alone answers nothing. It also unblocks the
+open `Analyze_Compare` question in
+[node-taxonomy-v1.md](node-taxonomy-v1.md#future-considerations): compare was parked
+pending exactly this node, and the "retrieve ×2 → analyze ×2 → compare" plan shape cannot
+be evaluated until per-book analysis exists.
+
+### Generation node — **removed 2026-08-08**
+
+> **Status: reverted.** `generation_node.py`, `PlanJaneOutput.generation_nodes` and the
+> tests are deleted; recover them from git history if this is revisited. The section
+> below is kept as the record of what was decided and why, since the reasoning (a fixed
+> stage costs no catalog tokens and cannot be misrouted; every sink is the attachment
+> point; 160 goldens would have to carry it as a goal) is what any second attempt should
+> start from. What the plan renders today is goals only.
+>
+> The generic hook it used — `extra_nodes` on `get_goals_mermaid_diagram` /
+> `get_parsed_mermaid_diagram` — was removed on 2026-08-10, along with
+> `get_parsed_mermaid_diagram` itself: PlanJane is now the only thing in the app that
+> renders a diagram, and the parsed-arguments one had no live caller. A future
+> planner-attached node needs no hook to replace it, since the goal diagram builds a
+> `list[MermaidBox]` — appending one more box is the seam. See
+> `app/domains/planjane/dial/`.
+
+Owns the final answer. Sketched fields: the **portion of the query** it is answering
+(`str`), plus the upstream outputs it renders. Every retrieval and analyze node just
+returns output data; generation is what the user reads, and it maps to the sections the
+frontend already renders.
+
+**Resolved 2026-07-28 — a fixed stage, not a planner goal.** `PlannerWorkflow` attaches
+the answer stage itself (`app/domains/planner/generation_node.py`), so the LLM never
+selects it: no catalog tokens, no misroute, and no plan can come back without an answer.
+It is still drawn in both Mermaid diagrams, so the visibility a goal would have bought is
+kept for free. The decider was the eval suites — as a goal, all 160 non-empty
+`expected_nodes` would need it appended, for a check that cannot fail. Promoting a fixed
+stage to a goal later is easy; demoting one after 160 goldens carry it is not.
+
+**Attachment point: every sink** — a goal nothing else depends on. Not the deepest goal
+and not the one with the most dependencies: a Compare fed by four retrievals is terminal
+only when no Recommend consumes it, and an independent goal in a compound message is its
+own sink at depth 0.
+
+**Still open:** one generation node per sink (today's default, one answer per independent
+branch) or one per turn owning ordering and framing across all of them
+(`create_generation_nodes(..., single_answer=True)`). Per-sink means no one writes the
+cross-section framing or reports a failure that spans branches; one-per-turn means a
+compound message's unrelated answers get merged by a single writer. Most plans have
+exactly one sink, so the two agree except on compound messages.
+
+### Generation node, second attempt — **`Generate_Recommendations`, registered 2026-09-07**
+
+**A planner goal after all, reversing 2026-07-28** — but for one intent rather than for
+every turn, which is what makes the reversal not a re-run of the argument that removed it.
+The slice is `app/domains/books/write_recommendations/`, the first member of a new
+`NodeTier.GENERATE`, and it is registered like any other node: a fieldless request whose
+docstring is its catalog entry, a `SPEC`, one line in `books/guide.py`.
+
+**Each 2026-08-08 objection, and what answers it:**
+
+| objection | answer |
+|---|---|
+| catalog tokens | 399 tokens, 12% of the catalog (`make tools-catalog`). A fieldless request buys nothing the planner has to fill in |
+| it could be misrouted | It can — and that is now a *checkable* claim rather than an impossibility. Case 80 ("how many books by Pratchett") is the negative golden: a generation goal there is a red |
+| 160 goldens carrying a check that cannot fail | 47 carry it, not 160, and the check can fail in both directions. Scoping it to recommendation asks is the whole of the difference |
+| a plan could come back with no answer | It can, for a non-recommendation turn. **Accepted, and that gap predates this**: nothing has written prose for a plain lookup since `Analyze_Recommend` was cut down (2026-08-22) |
+
+**Why a goal is worth those costs**: the instruction carries *what to write* ("…and explain
+why each fits"), which a structurally-attached stage cannot express, and the sibling
+generations the owner is heading for — book QA, compare, general — arrive as their own
+slices with their own prompts and their own goldens rather than as branches inside one
+prompt that must serve every plan shape.
+
+**The alternative is built and kept.** Branch `generation_node_sink` (`b35592f`) holds the
+deterministic version: `TaskRunnerWorkflow` attaches an unregistered `AnswerWorkflow`
+(`books/write_answer/`) to every sink of `PlanJaneOutput.branches()`. It needs no planner
+change, no goldens and cannot be omitted; it cannot be *told* anything either. The two
+share their machinery — the `BookReaderWorkflow`/`BookWorkflow` split, the renderer, the
+prompt — so the branches differ only in who decides that an answer happens.
+
+**The node reads its instruction — since 2026-09-07.** For its first month it did not:
+`write_recommendations/executor.py` rendered from its sources and failures and passed the
+user's message through, never touching `node_input.query`. The argument above was
+therefore true on paper only — the plan *could* say "explain why each fits" and nothing
+downstream listened. The instruction now leads the rendered report as
+`What to write: …`, inside the same `AssistantMessage` as the evidence, because the
+planner wrote it and the trust split already puts planner work there. It is the one line
+in that block the prompt lets the model treat as a direction. The rename that made this
+legible (`SystemGoal.description` → `instruction`, end to end) is recorded in
+[planner-shape.md](planner-shape.md).
+
+**Attachment is by dependency, not by sink.** The planner points the goal at its chain's
+last book-producing goal; `build_input` fills `sources: list[BookRetrievalOutput]` by
+type. A recommendation consumed by something downstream (case 70, "recommend 2 books like
+Dune and compare them") takes no generation goal — the compare is the sink, and
+`Generate_Comparison` is the sibling that will own it.
+
+**Failure artifacts, added with it (`app/orchestration/task_runner.py`).** A goal that
+fails, is skipped in `_prepare`, or was never reachable now leaves a `FailedGoalOutput`
+(`app/domains/base_workflow.py`) in the runner's results map instead of nothing, and every
+stored output is stamped with its `goal_description`. Three consequences:
+
+- The generation node declares `failures: list[FailedGoalOutput]` and is therefore the
+  one thing that can say *why* there is nothing to show. "I don't have Dune, so I couldn't
+  line anything up against it" is written from the ancestor's artifact, not the sink's.
+- The reason text is composed as prose and already names the upstream cause
+  (`_upstream_context` reads dependencies that failed or returned `num_books == 0`), so it
+  travels two hops without the writer knowing the plan's shape.
+- Nothing else changes: `build_input` matches by type, so a `FailedGoalOutput` fills no
+  retrieval-shaped field and the skip cascade is exactly as it was. This is what the
+  standing `NOTE` comments in `_prepare`/`_dependency_outputs` were contemplating; they
+  are resolved.
+
+**Not built, deliberately:** the rest of the deleted picker (re-rank, exclusions,
+`num_requested`), and any pause — the taxonomy names this node as the HITL point, and the
+seams it leaves for one are the named-input-field skip and these artifacts.
+
+## Open questions
+
+- ~~One filter node with a filter object, or several single-dimension filter nodes?~~
+  Resolved 2026-07-24 — one node, one narrow filter object; see above.
+- **Do the base suite's multi-anchor expectations still hold?** Cases 56, 57 and 59 were
+  written on 2026-07-24 expecting a *single* `Retrieve_by_Author` with the genre silently
+  dropped, because no combine operator existed. `Combine_Intersect` now gives that shape a
+  correct plan (`Retrieve_by_Author` + `Retrieve_by_Lexical_Traits` + `Combine_Intersect`), so those
+  expectations describe the old world. They need re-deciding, not just re-running.
+- ~~Is generation a planner goal or a fixed terminal stage?~~ Resolved 2026-07-28 — fixed
+  stage, attached per sink; see above. One-per-sink vs one-per-turn is still open.
+- ~~Does the CTE composition live in the executors or in `db/stores/book_store.py`?~~
+  Resolved 2026-08-04 — **the store layer**. `db/stores/deferred_query.py` holds the
+  carrier (`DeferredBookQuery`: a SELECT of isbn13 plus an optional `score`, with no LIMIT
+  and no ORDER BY — the two invariants that make it composable), and `db/stores/utils.py`
+  holds `build_title_query` / `build_count` / `compose` / `build_materialize`. Executors
+  pass the object around and never write SQLAlchemy; otherwise every combine node grows
+  its own copy of the composition rules.
+  - **Revised 2026-08-17 — `utils.py` is gone; the derivations moved onto the carrier.**
+    A count travelled executor → workflow helper → store method → builder function —
+    two of those hops were pure plumbing. Now everything derivable from a built query
+    is a method on `DeferredBookQuery` (`count_stmt()`, `materialize_stmt()`,
+    `compose()`, which returns a wrapped query rather than a bare statement), and
+    `BookStore` keeps only what a derivation can't do: build from a dimension
+    (needs the model) and execute (needs the session). Executors still never write
+    SQLAlchemy — the 2026-08-04 point stands, one file smaller.
+- ~~Does retrieval-returns-counts change the retrieval **output contracts**?~~ Resolved
+  2026-08-04 — yes, minimally. `BookRetrievalOutput` (`app/domains/books/schemas.py`) gains
+  `num_books` (promoted off `FindByTitleOutput`, since every retrieval and combine node now
+  reports one), `query_sql` (persisted, readable), and `query` (the carrier,
+  `exclude=True`). `books` stays and stays empty until something materializes, so
+  `num_books` is the size of the match and `len(books)` the size of the fetch.
+  **The `exclude=True` is load-bearing:** `to_serializable` skips excluded fields but does
+  walk `__pydantic_private__`, so a statement stashed as a private attr instead would reach
+  the JSONB insert in `record_chat_run` and break it.
+  - **Revised 2026-08-17 — `books` is gone from `BookRetrievalOutput` entirely.** "Stays and
+    stays empty" did not survive contact: `BookWorkflow.preflight()` returned the count and a
+    sample together, so every retrieval node had a few rows in hand and a field to put them
+    in, and `num_books` vs `len(books)` was the only thing marking them as a preview rather
+    than an answer. `preflight` is now split — `count_books()` stamps `query`/`query_sql`/
+    `num_books` and fetches nothing; `fetch_books()` (named `preview_books` until
+    2026-08-22) is a `@task` returning rows the caller uses as it likes — and the output shape
+    carries no rows at all, so composing against `query` is the only thing a downstream node
+    *can* do. A node that genuinely chooses rows declares its own field for them
+    (`SimilarBooksOutput.books` — **removed 2026-08-24**; no node does this now), which reads as the different claim it is. Cost: a node wanting both a count and cards pays two round trips
+    instead of one. The store-level halves of the old move went with it (also 2026-08-17):
+    `BookStore.preview()` / `build_preview` (the one-round-trip `(total, sample)`) and the
+    row-fetching `search_by_title` are deleted, so `count()` and `materialize()` are the
+    only ways a deferred query meets the database.
+  - **Revised 2026-08-24 — no node declares its own rows any more.**
+    `SimilarBooksOutput.books` is gone with the similarity node's move to a deferred query,
+    and `score_stats()` joins `count()`/`materialize()` as a third way one meets the
+    database. The 2026-08-17 shape now has no exception: every registered output is a count
+    and a query.
+- How does a mock executor represent "a query I have not run yet" so this can be tested
+  before real executors exist? **Still open** — a mock leaves `query` as `None` today, and
+  the terminal node then materializes nothing rather than falling back to `books`.
+- **New, from building it:** `compose()` drops `score`, because a per-dimension similarity
+  score means nothing across dimensions. So a pooled query ranks by rating, and a small
+  `limit` on the pool can rank the actual anchor below its own sequels — "Dune" comes third
+  behind two better-rated books in the Dune+Neuromancer pool. Carrying `max(score)` through
+  the union would fix it; not built. **Sharpened 2026-08-24**: this bites hardest on a
+  similarity pool, where the dropped `score` is the entire reason the truncation was taken,
+  so the degradation is not a worse ranking but no ranking at all. A `compose()` guard on
+  exactly that case was built and then removed the same day (see the reversal above), so
+  nothing prevents it. Building `max(score)` would remove this half of the objection; the
+  lopsided-branch half would remain.
+
+## Before building this
+
+The planner side is settled enough to proceed (2026-07-24 baseline: 157/164, all reds
+attributable to the unbuilt clarification node). What is *not* settled is whether to build
+executors, generation, or human-in-the-loop first — that sequencing decision, and its
+reasoning, is recorded in [../roadmap.md](../roadmap.md) under "Next move".
+
+
+### Generation stage, third attempt — **deregistered, one per turn (2026-09-08)**
+
+**Status: built.** `Generate_Recommendations` is gone from the registry, `NodeTier.GENERATE`
+is gone with it, and the slice moved to `app/orchestration/write_recommendations/`.
+`Orchestrator._write_reply` constructs `GenerateRecommendationsExecutor` once, after the
+task runner, and feeds it `TaskRunnerOutput.task_results` — every goal's output, not one
+chain's. This is the sink-shaped alternative above, taken with `single_answer=True`: the
+"still open" question is now answered **one per turn**.
+
+**What this trades away.** The 2026-09-07 entry defended a goal on two grounds, and both
+are spent:
+
+- *The instruction carries what to write.* There is no instruction now. The user's own
+  message is the brief, and the `What to write:` line is gone from the rendered report —
+  which makes the prompt's trust boundary total rather than one-line-exempted, but does
+  mean the planner can no longer steer the reply.
+- *Siblings arrive as their own slices.* They cannot. Book QA, compare and general
+  generation are now branches inside one prompt that must serve every plan shape — the
+  exact thing that entry called the cost of the sink design.
+
+**What it buys.** Three things, and the first is why it was asked for:
+
+- **The reply sees the whole turn.** A generation goal only ever saw its own `depends_on`.
+  "Do you have It and show me books like Pride and Prejudice?" planned the title lookup and
+  the recommendation chain as *separate* branches, so the goal that wrote the reply was
+  never told what happened to `It` — and the model, seeing the ask in the user message and
+  no answer in its report, invented one. It happened to guess right. The stage now
+  partitions the entire results map (`_partition`), so both halves are evidence.
+- **Every planned turn gets prose.** The "a plan could come back with no answer" gap,
+  accepted twice above and dating to 2026-08-22, is closed.
+- **~470 catalog tokens back**, and no per-turn goal for the planner to get wrong.
+
+**What it costs the goldens.** 49 `Generate_Recommendations` entries came out of
+`expected_nodes` across the four suites, and the negative case (80, "how many books by
+Pratchett") no longer checks anything about generation — a stage that always runs cannot be
+missing from a plan, which is precisely the 2026-08-08 objection, now accepted rather than
+answered. Whether the *reply* is any good is no longer a planner-diff question at all; it
+needs an output-grading eval, which does not exist. See [eval-strategy.md](../eval-strategy.md).
+
+**Reversible.** The slice's own machinery is unchanged — same renderer, same prompt file,
+same `BookReaderWorkflow` base, same failure artifacts. Re-registering means restoring
+`labels.py`/`schemas.py`, a `SPEC`, the tier, and the `sources`/`failures` split on the
+input; the partition in `_partition` is the only logic that would become dead.
+
+**Status update — 2026-09-11: the stage stops fetching.** Every book node keeps the preview
+it streamed on its output (`BookRetrievalOutput.preview`, `default_limit` raised to 4), and
+the runner wraps each goal as a `TaskResult` — the output plus a summary of its envelope
+(duration, total/input/output tokens, error type and message), the way `OpenAIClient.execute` keeps a
+completion's content and usage and lets the raw response go. `TaskRunnerOutput.task_results`
+holds those, and they are the turn's source of truth: what the reply is written from and
+what a later turn would read. The stage's `materialize` step, `ROWS_PER_SOURCE` and
+`MAX_MATERIALIZED_SOURCES` are gone — that cap dropped the tail of execution order, which is
+where the final answers sit — and so is the 12k-char truncation of the whole report, which
+clipped failures because they render last. Each section is capped instead: an `<info>` block
+(≤400 chars — outcome, similarity lines, parsed arguments, cost, SQL last so the cap cuts it
+first) and up to four books of ≤600 chars each. The `<info>` block is the first internal
+detail the writer is shown; the prompt says to read it and never repeat it. Known leak:
+`compile_sql` inlines literals, so a similarity search's SQL carries the anchors' ISBNs.
+
+This settles the TODO question of what the writer is fed (full book entries against counts
+only): both — the counts and how each search ran in `<info>`, the books under it.
+
+**Status update — 2026-09-11: the reply comes back as blocks.** The writer no longer streams
+from the model; it fills `GenerationResult` — a list of `text` and `source` blocks — through
+an `OpenAIParserRequest`. Every book in the report carries a handle (`1.2`: section 1, book 2),
+a `source` names the handles of the books the text before it talks about, and
+`books_by_handle` resolves them against the same list the report was rendered from. The stage
+then sends the blocks in order, so the answer reads paragraph → its cards → next paragraph, and
+only books the text points at become cards in the answer (every one is still in its step's
+preview). The frontend needed nothing: it already opens a new section whenever text follows
+cards or cards follow text. Grouping books while the tasks run was considered and not built —
+the grouping depends on the whole question and every result, which only this one call sees.
